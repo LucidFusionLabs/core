@@ -265,18 +265,17 @@ extern "C" int AndroidGPlusAccept() {
   return 0;
 }
 
-string Application::GetClipboardText() { return ""; }
-void Application::SetClipboardText(const string &s) {}
-int  Application::SetExtraScale(bool v) {}
-int  Application::SetMultisample(bool v) {}
-void Application::CloseTouchKeyboardAfterReturn(bool v) {} 
-Box  Application::GetTouchKeyboardBox() { return Box(); }
-void Application::AddToolbar(const vector<pair<string, string>>&items) {}
-void Application::ToggleToolbarButton(const string &n) {}
-void Application::GrabMouseFocus() {}
-void Application::ReleaseMouseFocus() {}
 void Application::CloseWindow(Window *W) {}
 void Application::MakeCurrentWindow(Window *W) {}
+
+void Application::GrabMouseFocus() {}
+void Application::ReleaseMouseFocus() {}
+
+string Application::GetClipboardText() { return ""; }
+void Application::SetClipboardText(const string &s) {}
+
+void Application::AddToolbar(const vector<pair<string, string>>&items) {}
+void Application::ToggleToolbarButton(const string &n) {}
 
 void Application::OpenTouchKeyboard() {
   static jmethodID jni_activity_method_show_keyboard =
@@ -289,6 +288,14 @@ void Application::CloseTouchKeyboard() {
     jni->env->GetMethodID(jni->activity_class, "hideKeyboard", "()V");
   jni->env->CallVoidMethod(jni->activity, jni_activity_method_hide_keyboard);
 }
+
+void Application::CloseTouchKeyboardAfterReturn(bool v) {} 
+void Application::SetTouchKeyboardTiled(bool v) {}
+bool Application::GetTouchKeyboardOpened() { return false; }
+Box Application::GetTouchKeyboardBox() { return Box(); }
+
+int  Application::SetExtraScale(bool v) {}
+int  Application::SetMultisample(bool v) {}
 
 void Window::SetCaption(const string &v) {}
 void Window::SetResizeIncrements(float x, float y) {}

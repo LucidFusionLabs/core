@@ -496,27 +496,8 @@ void Application::CloseWindow(Window *W) {
   screen = 0;
 }
 
-void Application::OpenTouchKeyboard() {}
-void Application::LaunchNativeContextMenu(const vector<MenuItem>&items) {
-  vector<const char *> k, n, v;
-  for (auto &i : items) { k.push_back(tuple_get<0>(i).c_str()); n.push_back(tuple_get<1>(i).c_str()); v.push_back(tuple_get<2>(i).c_str()); }
-  OSXLaunchNativeContextMenu(screen->id, screen->mouse.x, screen->mouse.y, items.size(), &k[0], &n[0], &v[0]);
-}
-
-void Application::SetClipboardText(const string &s) {
-  NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
-  [pasteboard clearContents];
-  [pasteboard declareTypes:[NSArray arrayWithObject:NSPasteboardTypeString] owner:nil];
-  [pasteboard setString:[[NSString alloc] initWithUTF8String:s.c_str()] forType:NSPasteboardTypeString];
-}
-
-string Application::GetClipboardText() { 
-  NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
-  NSString *v = [pasteboard stringForType:NSPasteboardTypeString];
-  return [v UTF8String];
-}
-
 void Application::LoseFocus() { [GetTyped<GameView*>(GetNativeWindow()->id) clearKeyModifiers]; }
+
 void Application::ReleaseMouseFocus() { 
   CGDisplayShowCursor(kCGDirectMainDisplay);
   CGAssociateMouseAndMouseCursorPosition(true);
@@ -533,6 +514,29 @@ void Application::GrabMouseFocus() {
     (NSPointToCGPoint([[GetTyped<GameView*>(screen->id) window] convertRectToScreen:
                       NSMakeRect(screen->width / 2, screen->height / 2, 0, 0)].origin));
 }
+
+void Application::SetClipboardText(const string &s) {
+  NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
+  [pasteboard clearContents];
+  [pasteboard declareTypes:[NSArray arrayWithObject:NSPasteboardTypeString] owner:nil];
+  [pasteboard setString:[[NSString alloc] initWithUTF8String:s.c_str()] forType:NSPasteboardTypeString];
+}
+
+string Application::GetClipboardText() { 
+  NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
+  NSString *v = [pasteboard stringForType:NSPasteboardTypeString];
+  return [v UTF8String];
+}
+
+void Application::LaunchNativeContextMenu(const vector<MenuItem>&items) {
+  vector<const char *> k, n, v;
+  for (auto &i : items) { k.push_back(tuple_get<0>(i).c_str()); n.push_back(tuple_get<1>(i).c_str()); v.push_back(tuple_get<2>(i).c_str()); }
+  OSXLaunchNativeContextMenu(screen->id, screen->mouse.x, screen->mouse.y, items.size(), &k[0], &n[0], &v[0]);
+}
+
+void Application::OpenTouchKeyboard() {}
+void Application::SetTouchKeyboardTiled(bool v) {}
+int Application::SetExtraScale(bool v) { return false; }
 
 void Window::SetCaption(const string &v) { 
   [GetTyped<GameView*>(id) window].title = [NSString stringWithUTF8String:v.c_str()];

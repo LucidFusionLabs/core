@@ -16,7 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef LFL_IPHONESIM 
+#ifndef LFL_IOS_SIM 
 #import <AVFoundation/AVFoundation.h>
 #endif
 
@@ -28,14 +28,14 @@ int Application::GetVolume() { return 0; }
 void Application::SetVolume(int v) {}
 
 void Application::PlaySoundEffect(SoundAsset *sa, const v3&, const v3&) {
-#ifndef LFL_IPHONESIM
+#ifndef LFL_IOS_SIM
   AVAudioPlayer *audioPlayer = static_cast<AVAudioPlayer*>(sa->handle);
   [audioPlayer play];
 #endif
 }
 
 void Application::PlayBackgroundMusic(SoundAsset *sa) {
-#ifndef LFL_IPHONESIM
+#ifndef LFL_IOS_SIM
   AVAudioPlayer *audioPlayer = static_cast<AVAudioPlayer*>(sa->handle);
   audioPlayer.numberOfLoops = -1;
   [audioPlayer play];

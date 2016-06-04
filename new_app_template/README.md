@@ -33,7 +33,7 @@ Next iOS simulator because no key signing setup is needed.
         cd ../.. back to FooFighter root
         mkdir iphonesim
         cd iphonesim
-        cmake -DCMAKE_TOOLCHAIN_FILE=../core/CMake/iPhoneToolchain.cmake -DLFL_IPHONESIM=1 ..
+        cmake -DCMAKE_TOOLCHAIN_FILE=../core/CMake/iOSSimulatorToolchain.cmake ..
         cd foo
         make
         make foo_run

@@ -2,7 +2,7 @@
 
 lfl_add_target(app_null_camera STATIC_LIBRARY SOURCES null_camera.cpp)
 
-if(LFL_IPHONE)
+if(LFL_IOS)
   lfl_add_target(app_avcapture_camera STATIC_LIBRARY SOURCES avcapture_camera.mm
                  COMPILE_OPTIONS -fobjc-abi-version=2 -fobjc-legacy-dispatch)
 endif()

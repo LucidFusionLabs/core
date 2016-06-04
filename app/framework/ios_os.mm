@@ -21,7 +21,7 @@
 
 #include "core/app/app.h"
 #include "core/app/framework/apple_common.h"
-#include "core/app/framework/iphone_common.h"
+#include "core/app/framework/ios_common.h"
 
 @interface NativeMenu : NSObject
 @end
@@ -71,10 +71,13 @@
 @implementation NativePicker
   - (id)init {
     self = [super init];
-    _picker = [[UIPickerView alloc] initWithFrame:CGRectMake(139,50,161,30)];    
+    _picker = [[UIPickerView alloc] init];
     _picker.delegate = self;
     _picker.showsSelectionIndicator = YES;
     _picker.hidden = NO;
+    _picker.layer.borderColor = [UIColor grayColor].CGColor;
+    _picker.layer.borderWidth = 4;
+    [_picker setBackgroundColor:[UIColor whiteColor]];
     return self;
   }
 
@@ -172,6 +175,7 @@
 @end
 
 namespace LFL {
+void Application::AddNativeEditMenu(const vector<MenuItem>&items) {}
 void Application::AddNativeMenu(const string &title, const vector<MenuItem>&items) {
   [NativeMenu addMenu:title.c_str() items:items];
 }
@@ -184,14 +188,6 @@ void Application::LaunchNativeFontChooser(const FontDesc &cur_font, const string
   static FontChooser *font_chooser = [[FontChooser alloc] init];
   [font_chooser selectFont:cur_font.name size:cur_font.size cmd:choose_cmd];
   [[LFUIApplication sharedAppDelegate].view addSubview: font_chooser.picker];
-
-#if 0
-  UIActionSheet *actions = [[UIActionSheet alloc] initWithTitle:@"Font chooser" delegate:nil
-    cancelButtonTitle:@"Cancel" destructiveButtonTitle:nil otherButtonTitles:nil];
-  [actions addSubview: font_chooser.picker];
-  [actions showInView:[UIApplication sharedApplication].keyWindow];
-  [actions release];
-#endif
 }
 
 void Application::OpenSystemBrowser(const string &url_text) {

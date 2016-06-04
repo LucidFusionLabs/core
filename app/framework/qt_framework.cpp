@@ -224,6 +224,7 @@ void Application::LoseFocus() {}
 void Application::GrabMouseFocus()    { GetTyped<QtWindow*>(screen->impl)->grabbed=1; GetTyped<QWindow*>(screen->id)->setCursor(Qt::BlankCursor); app->grab_mode.On();  screen->cursor_grabbed=true;  }
 void Application::ReleaseMouseFocus() { GetTyped<QtWindow*>(screen->impl)->grabbed=0; GetTyped<QWindow*>(screen->id)->unsetCursor();              app->grab_mode.Off(); screen->cursor_grabbed=false; }
 void Application::OpenTouchKeyboard() {}
+void Application::SetTouchKeyboardTiled(bool v) {}
 
 string Application::GetClipboardText() { QByteArray v = QApplication::clipboard()->text().toUtf8(); return string(v.constData(), v.size()); }
 void Application::SetClipboardText(const string &s) { QApplication::clipboard()->setText(QString::fromUtf8(s.data(), s.size())); }

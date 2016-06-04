@@ -40,7 +40,7 @@ elseif(LFL_ANDROID)
 
   function(lfl_post_build_start target binname pkgname)
     add_custom_command(TARGET ${target} POST_BUILD WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${target}-android/jni
-      COMMAND ${ANDROIDNDK}/ndk-build
+      COMMAND ${LFL_ANDROID_NDK}/ndk-build
       COMMAND mkdir -p ${CMAKE_CURRENT_SOURCE_DIR}/${target}-android/res/raw
       COMMAND cp ${LFL_APP_ASSET_FILES} ${CMAKE_CURRENT_SOURCE_DIR}/assets
       COMMAND if [ -f ${CMAKE_CURRENT_SOURCE_DIR}/assets/*.wav ]; then cp ${CMAKE_CURRENT_SOURCE_DIR}/assets/*.wav ../res/raw\; fi
@@ -48,14 +48,14 @@ elseif(LFL_ANDROID)
       COMMAND if [ -f ${CMAKE_CURRENT_SOURCE_DIR}/assets/*.ogg ]; then cp ${CMAKE_CURRENT_SOURCE_DIR}/assets/*.ogg ../res/raw\; fi)
 
     add_custom_target(${target}_debug WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${target}-android DEPENDS ${target}
-      COMMAND "ANDROID_HOME=${ANDROIDSDK}" ${GRADLEBIN} uninstallDebug
-      COMMAND "ANDROID_HOME=${ANDROIDSDK}" ${GRADLEBIN}   installDebug
-      COMMAND ${ANDROIDSDK}/platform-tools/adb shell am start -n `${ANDROIDSDK}/build-tools/19.1.0/aapt dump badging ./build/outputs/apk/${target}-android-debug.apk | grep package | cut -d\\' -f2`/`${ANDROIDSDK}/build-tools/19.1.0/aapt dump badging ./build/outputs/apk/${target}-android-debug.apk | grep launchable-activity | cut -d\\' -f2`
-      COMMAND ${ANDROIDSDK}/platform-tools/adb logcat | tee ${CMAKE_CURRENT_BINARY_DIR}/debug.txt)
+      COMMAND "ANDROID_HOME=${LFL_ANDROID_SDK}" ${LFL_GRADLE_BIN} uninstallDebug
+      COMMAND "ANDROID_HOME=${LFL_ANDROID_SDK}" ${LFL_GRADLE_BIN}   installDebug
+      COMMAND ${LFL_ANDROID_SDK}/platform-tools/adb shell am start -n `${LFL_ANDROID_SDK}/build-tools/19.1.0/aapt dump badging ./build/outputs/apk/${target}-android-debug.apk | grep package | cut -d\\' -f2`/`${LFL_ANDROID_SDK}/build-tools/19.1.0/aapt dump badging ./build/outputs/apk/${target}-android-debug.apk | grep launchable-activity | cut -d\\' -f2`
+      COMMAND ${LFL_ANDROID_SDK}/platform-tools/adb logcat | tee ${CMAKE_CURRENT_BINARY_DIR}/debug.txt)
 
     add_custom_target(${target}_debug_start WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${target}-android DEPENDS ${target}
-      COMMAND ${ANDROIDSDK}/platform-tools/adb shell am start -n `${ANDROIDSDK}/build-tools/19.1.0/aapt dump badging ./build/outputs/apk/${target}-android-debug.apk | grep package | cut -d\\' -f2`/`${ANDROIDSDK}/build-tools/19.1.0/aapt dump badging ./build/outputs/apk/${target}-android-debug.apk | grep launchable-activity | cut -d\\' -f2`
-      COMMAND ${ANDROIDSDK}/platform-tools/adb logcat | tee ${CMAKE_CURRENT_BINARY_DIR}/debug.txt)
+      COMMAND ${LFL_ANDROID_SDK}/platform-tools/adb shell am start -n `${LFL_ANDROID_SDK}/build-tools/19.1.0/aapt dump badging ./build/outputs/apk/${target}-android-debug.apk | grep package | cut -d\\' -f2`/`${LFL_ANDROID_SDK}/build-tools/19.1.0/aapt dump badging ./build/outputs/apk/${target}-android-debug.apk | grep launchable-activity | cut -d\\' -f2`
+      COMMAND ${LFL_ANDROID_SDK}/platform-tools/adb logcat | tee ${CMAKE_CURRENT_BINARY_DIR}/debug.txt)
   endfunction()
 
   function(lfl_add_package target)
@@ -63,7 +63,7 @@ elseif(LFL_ANDROID)
     set_target_properties(${target} PROPERTIES OUTPUT_NAME app)
   endfunction()
 
-elseif(LFL_IPHONE)
+elseif(LFL_IOS)
   function(lfl_post_build_copy_bin target binname pkgname)
   endfunction()
 
@@ -75,12 +75,13 @@ elseif(LFL_IPHONE)
     add_custom_command(TARGET ${target} POST_BUILD WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
       COMMAND rm -rf i${pkgname}.app
       COMMAND mkdir  i${pkgname}.app
-      COMMAND cp  ${info_plist} i${pkgname}.app/Info.plist
+      COMMAND cp ${info_plist} i${pkgname}.app/Info.plist
       COMMAND cp -r ${CMAKE_CURRENT_SOURCE_DIR}/assets i${pkgname}.app
       COMMAND cp ${LFL_APP_ASSET_FILES} i${pkgname}.app/assets
-      COMMAND cp ${CMAKE_CURRENT_SOURCE_DIR}/${target}-iphone/Images/Icon*.png i${pkgname}.app
+      COMMAND cp ${CMAKE_CURRENT_SOURCE_DIR}/${target}-iphone/Images/* i${pkgname}.app
+      COMMAND for f in ${CMAKE_CURRENT_SOURCE_DIR}/${target}-iphone/Resources/\*\; do o=`basename $$f | sed s/xib$$/nib/`\; ${LFL_APPLE_DEVELOPER}/usr/bin/ibtool --warnings --errors --notices --compile ${CMAKE_CURRENT_BINARY_DIR}/i${pkgname}.app/$$o $$f\; done
       COMMAND cp ${target} i${pkgname}.app
-      COMMAND if ! [ ${LFL_IPHONESIM} ]\; then codesign -f -s \"${IPHONECERT}\" --entitlements ${entitlements_plist} i${pkgname}.app\; fi)
+      COMMAND if ! [ ${LFL_IOS_SIM} ]\; then codesign -f -s \"${LFL_IOS_CERT}\" --entitlements ${entitlements_plist} i${pkgname}.app\; fi)
 
     add_custom_target(${target}_pkg WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
       COMMAND rm -rf   Payload
@@ -88,7 +89,7 @@ elseif(LFL_IPHONE)
       COMMAND cp -rp i${pkgname}.app Payload
       COMMAND zip -r i${pkgname}.ipa Payload)
 
-    if(LFL_IPHONESIM)
+    if(LFL_IOS_SIM)
       add_custom_target(${target}_run WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} DEPENDS ${target}
         COMMAND if pgrep iOS\ Simulator\; then echo\; else nohup /Applications/Xcode.app/Contents/Developer/Applications/iOS\ Simulator.app/Contents/MacOS/iOS\ Simulator & sleep 5\; fi
         COMMAND xcrun simctl install booted i${pkgname}.app || { tail -1 $ENV{HOME}/Library/Logs/CoreSimulator/CoreSimulator.log && false\; }
@@ -132,7 +133,7 @@ elseif(LFL_OSX)
       COMMAND install_name_tool -change /usr/local/lib/libmp3lame.0.dylib @loader_path/../Libraries/libmp3lame.0.dylib ${bin}
       COMMAND install_name_tool -change lib/libopencv_core.3.1.dylib @loader_path/../Libraries/libopencv_core.3.1.dylib ${bin}
       COMMAND install_name_tool -change lib/libopencv_imgproc.3.1.dylib @loader_path/../Libraries/libopencv_imgproc.3.1.dylib ${bin}
-      COMMAND codesign -f -s \"${OSXCERT}\" ${pkgname}.app/Contents/MacOS/${target})
+      COMMAND codesign -f -s \"${LFL_OSX_CERT}\" ${pkgname}.app/Contents/MacOS/${target})
   endfunction()
 
   function(lfl_post_build_start target binname pkgname)
@@ -172,7 +173,7 @@ elseif(LFL_OSX)
       COMMAND install_name_tool -change lib/libopencv_imgproc.3.1.dylib @loader_path/../Libraries/libopencv_imgproc.3.1.dylib ${bin})
 
     add_custom_target(${target}_pkg WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-      COMMAND codesign -f -s \"${OSXCERT}\" ${pkgname}.app/Contents/MacOS/${binname}
+      COMMAND codesign -f -s \"${LFL_OSX_CERT}\" ${pkgname}.app/Contents/MacOS/${binname}
       COMMAND if [ -d /Volumes/${pkgname} ]; then umount /Volumes/${pkgname}\; fi
       COMMAND rm -rf ${pkgname}.dmg ${pkgname}.sparseimage
       COMMAND hdiutil create -size 60m -type SPARSE -fs HFS+ -volname ${pkgname} -attach ${pkgname}.sparseimage
@@ -181,7 +182,7 @@ elseif(LFL_OSX)
       COMMAND ln -s /Applications /Volumes/${pkgname}/.
       COMMAND hdiutil eject /Volumes/${pkgname}
       COMMAND hdiutil convert ${pkgname}.sparseimage -format UDBZ -o ${pkgname}.dmg
-      COMMAND codesign -f -s \"${OSXCERT}\" ${pkgname}.dmg)
+      COMMAND codesign -f -s \"${LFL_OSX_CERT}\" ${pkgname}.dmg)
 
     add_custom_target(${target}_run WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} DEPENDS ${target}
       COMMAND ${pkgname}.app/Contents/MacOS/${target})

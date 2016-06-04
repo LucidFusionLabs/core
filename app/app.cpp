@@ -116,10 +116,17 @@ extern "C" void CloseSystemConsole() {
 
 namespace LFL {
 #ifdef LFL_DEBUG
-DEFINE_int(loglevel, 7, "Log level: [Fatal=-1, Error=0, Info=3, Debug=7]");
+bool DEBUG = true;
 #else
-DEFINE_int(loglevel, 0, "Log level: [Fatal=-1, Error=0, Info=3, Debug=7]");
+bool DEBUG = false;
 #endif
+#ifdef LFL_MOBILE
+bool MOBILE = true;
+#else
+bool MOBILE = false;
+#endif
+
+DEFINE_int(loglevel, DEBUG ? 7 : 0, "Log level: [Fatal=-1, Error=0, Info=3, Debug=7]");
 DEFINE_string(logfile, "", "Log file name");
 DEFINE_bool(enable_audio, false, "Enable audio in/out");
 DEFINE_bool(enable_video, false, "Enable OpenGL");
@@ -132,11 +139,7 @@ DEFINE_bool(max_rlimit_core, true, "Max core dump rlimit");
 DEFINE_bool(max_rlimit_open_files, false, "Max number of open files rlimit");
 DEFINE_int(threadpool_size, 0, "Threadpool size");
 DEFINE_int(target_fps, 0, "Max frames per second");
-#ifdef LFL_MOBILE
-DEFINE_int(peak_fps, 30, "Peak FPS");
-#else
-DEFINE_int(peak_fps, 60, "Peak FPS");
-#endif
+DEFINE_int(peak_fps, MOBILE ? 30 : 60, "Peak FPS");
 DEFINE_unsigned(rand_seed, 0, "Random number generator seed");
 DEFINE_bool(open_console, 0, "Open console on win32");
 DEFINE_bool(cursor_grabbed, false, "Center cursor every frame");
@@ -152,7 +155,7 @@ void NSLogString(const string&);
 string GetNSDocumentDirectory();
 #endif
 
-#ifdef LFL_IPHONE
+#ifdef LFL_IOS
 static pthread_key_t tls_key;
 void ThreadLocalStorage::Init() { pthread_key_create(&tls_key, 0); ThreadInit(); }
 void ThreadLocalStorage::Free() { ThreadFree(); pthread_key_delete(tls_key); }
@@ -304,7 +307,7 @@ void Application::WriteLogLine(const char *tbuf, const char *message, const char
     fprintf(logfile, "%s %s (%s:%d)\r\n", tbuf, message, file, line);
     fflush(logfile);
   }
-#ifdef LFL_IPHONE
+#ifdef LFL_IOS
   NSLogString(StringPrintf("%s (%s:%d)", message, file, line));
 #endif
 #ifdef LFL_ANDROID
@@ -464,7 +467,7 @@ int Application::Create(const char *source_filename) {
     jstring path = jstring(jni->env->CallObjectMethod(jni->activity, mid));
     dldir = jni->GetJNIString(path);
     jni->env->DeleteLocalRef(path);
-#elif defined(LFL_APPLE) && !defined(LFL_IPHONESIM)
+#elif defined(LFL_APPLE) && !defined(LFL_IOS_SIM)
     dldir = StrCat(GetNSDocumentDirectory(), "/");
 #elif defined(LFL_WINDOWS)
     char path[MAX_PATH] = { 0 };
@@ -633,7 +636,7 @@ int Application::TimerDrivenFrame(bool got_wakeup) {
 
 int Application::Main() {
   ONCE({ scheduler.Start(); });
-#ifdef LFL_IPHONE
+#ifdef LFL_IOS
   ONCE({ return 0; });
 #endif
   if (Start()) return -1;
@@ -787,7 +790,7 @@ int Window::Frame(unsigned clicks, int flag) {
 
   if (FLAGS_enable_video) {
     if (!frame_init && (frame_init = true))  {
-#ifdef LFL_IPHONE
+#ifdef LFL_IOS
       gd->GetIntegerv(GraphicsDevice::FramebufferBinding, &gd->default_framebuffer);
       INFO("default_framebuffer = ", gd->default_framebuffer);
 #endif

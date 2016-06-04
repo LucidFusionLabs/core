@@ -26,12 +26,12 @@
 #import <OpenGLES/ES1/gl.h>
 #import <OpenGLES/ES1/glext.h>
 #import <QuartzCore/QuartzCore.h>
-#ifndef LFL_IPHONESIM 
+#ifndef LFL_IOS_SIM 
 #import <AVFoundation/AVFoundation.h>
 #endif
 
 #include "core/app/app.h"
-#include "core/app/framework/iphone_common.h"
+#include "core/app/framework/ios_common.h"
 
 namespace LFL {
 const int Key::Escape     = -1;
@@ -186,6 +186,7 @@ const int Key::End        = -34;
   }
 
   - (CGRect) getKeyboardFrame { return keyboard_frame; }
+  - (bool)isKeyboardFirstResponder { return [self.textField isFirstResponder]; }
   - (void)showKeyboard { [self.textField becomeFirstResponder]; }
   - (void)hideKeyboard { [self.textField resignFirstResponder]; }
   - (void)keyboardWillHide:(NSNotification *)notification {
@@ -382,6 +383,7 @@ const int Key::End        = -34;
 
   - (void)glkViewControllerUpdate:(GLKViewController *)controller {}
   - (BOOL)shouldAutorotateToInterfaceOrientation:(UIInterfaceOrientation)interfaceOrientation { return YES; }
+  - (void)setOverlapKeyboard:(bool)v { overlap_keyboard = v; }
 
   - (void)addToolbar:(int)n key:(const char**)k val:(const char**)v {
     if (toolbar) FATALf("addToolbar w toolbar=%p", toolbar);
@@ -519,32 +521,32 @@ struct iPhoneAssetLoader : public SimpleAssetLoader {
   virtual void UnloadAudioFile(void *h) {}
   virtual void *LoadAudioFile(File*) { return 0; }
   virtual void *LoadAudioFileNamed(const string &filename) {
-#ifdef LFL_IPHONESIM
+#ifdef LFL_IOS_SIM
     return 0;
-#else // LFL_IPHONESIM
+#else // LFL_IOS_SIM
     NSError *error;
     NSString *fn = [NSString stringWithCString:filename.c_str() encoding:NSASCIIStringEncoding];
     NSURL *url = [NSURL fileURLWithPath:[NSString stringWithFormat:@"%@/%@", [[NSBundle mainBundle] resourcePath], fn]];
     AVAudioPlayer *audio_player = [[AVAudioPlayer alloc] initWithContentsOfURL:url error:&error];
     if (audio_player == nil) NSLog(@"%@", [error description]);
     return audio_player;
-#endif // LFL_IPHONESIM
+#endif // LFL_IOS_SIM
   }
 
   virtual void LoadAudio(void *handle, SoundAsset *a, int seconds, int flag) { a->handle = handle; }
   virtual int RefillAudio(SoundAsset *a, int reset) { return 0; }
 };
 
+void Application::MakeCurrentWindow(Window *W) {}
+void Application::CloseWindow(Window *W) {}
+
+void Application::GrabMouseFocus() {}
+void Application::ReleaseMouseFocus() {}
+
 string Application::GetClipboardText() { return [[UIPasteboard generalPasteboard].string UTF8String]; }
 void Application::SetClipboardText(const string &s) {
   [UIPasteboard generalPasteboard].string = [NSString stringWithUTF8String:s.c_str()];
 }
-
-int  Application::SetExtraScale(bool v) { return [[LFUIApplication sharedAppDelegate] updateScale:v]; }
-int  Application::SetMultisample(bool v) { return [[LFUIApplication sharedAppDelegate] updateGLKMultisample:v]; }
-void Application::OpenTouchKeyboard() { [[LFUIApplication sharedAppDelegate] showKeyboard]; }
-void Application::CloseTouchKeyboard() { [[LFUIApplication sharedAppDelegate] hideKeyboard]; }
-void Application::CloseTouchKeyboardAfterReturn(bool v) { [LFUIApplication sharedAppDelegate].resign_textfield_on_return = v; }
 
 void Application::AddToolbar(const vector<pair<string, string>>&items) {
   vector<const char *> k, v;
@@ -556,11 +558,11 @@ void Application::ToggleToolbarButton(const string &n) {
   [[LFUIApplication sharedAppDelegate].controller toggleToolbarButtonWithTitle:n.c_str()];
 }
 
-void Application::GrabMouseFocus() {}
-void Application::ReleaseMouseFocus() {}
-void Application::CloseWindow(Window *W) {}
-void Application::MakeCurrentWindow(Window *W) {}
-
+void Application::OpenTouchKeyboard() { [[LFUIApplication sharedAppDelegate] showKeyboard]; }
+void Application::CloseTouchKeyboard() { [[LFUIApplication sharedAppDelegate] hideKeyboard]; }
+void Application::CloseTouchKeyboardAfterReturn(bool v) { [LFUIApplication sharedAppDelegate].resign_textfield_on_return = v; }
+void Application::SetTouchKeyboardTiled(bool v) { [[LFUIApplication sharedAppDelegate].controller setOverlapKeyboard: !v]; }
+bool Application::GetTouchKeyboardOpened() { return [[LFUIApplication sharedAppDelegate] isKeyboardFirstResponder]; }
 Box Application::GetTouchKeyboardBox() {
   Box ret; 
   LFUIApplication *uiapp = [LFUIApplication sharedAppDelegate];
@@ -571,6 +573,9 @@ Box Application::GetTouchKeyboardBox() {
              scale * rect.size.width,
              scale * rect.size.height);
 }
+
+int Application::SetExtraScale(bool v) { return [[LFUIApplication sharedAppDelegate] updateScale:v]; }
+int Application::SetMultisample(bool v) { return [[LFUIApplication sharedAppDelegate] updateGLKMultisample:v]; }
 
 void Window::SetResizeIncrements(float x, float y) {}
 void Window::SetTransparency(float v) {}

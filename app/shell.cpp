@@ -130,7 +130,7 @@ void Shell::screenshot(const vector<string> &a) {
 }
 
 void Shell::fillmode(const vector<string>&) {
-#if !defined(LFL_IPHONE) && !defined(LFL_ANDROID)
+#ifndef LFL_MOBILE
   // glPolygonMode(GL_FRONT_AND_BACK, app->fillMode.next());
 #endif
 }

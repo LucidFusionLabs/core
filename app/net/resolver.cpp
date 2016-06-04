@@ -250,7 +250,7 @@ void Resolver::NSLookup(const string &host, const ResponseCB &cb) {
 }
 
 bool Resolver::QueueResolveRequest(const Request &req) {
-#if defined(LFL_ANDROID) || defined(LFL_IPHONE)
+#ifdef LFL_MOBILE
   IPV4::Addr ipv4_addr = SystemNetwork::GetHostByName(req.query);
   INFO("resolved ", req.query, " to ", IPV4::Text(ipv4_addr));
   req.cb(ipv4_addr, NULL);
@@ -300,7 +300,7 @@ bool SystemResolver::HandleNoConnections() {
   else IPV4::ParseCSV(FLAGS_nameserver, &nameservers);
   if (nameservers == last_nameservers) return false;
   vector<IPV4::Addr> connect_nameservers = nameservers; 
-  if (!first) FilterValues(&connect_nameservers, conn);
+  if (!first) FilterValueSet(&connect_nameservers, conn);
   for (auto &n : connect_nameservers) if (Connect(n)) ret = true;
   return ret;
 }

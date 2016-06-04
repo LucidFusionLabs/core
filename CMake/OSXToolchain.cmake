@@ -1,0 +1,18 @@
+set(LFL_APPLE_DEVELOPER "/Applications/Xcode.app/Contents/Developer")
+
+#set(CMAKE_OSX_ARCHITECTURES i686 CACHE string "arch")
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+if(CMAKE_GENERATOR MATCHES Xcode)
+  set(CMAKE_MACOSX_BUNDLE YES)
+  set(OSX_VERSION_MIN)
+else()
+  set(OSX_VERSION_MIN "-mmacosx-version-min=10.9")
+endif()
+
+set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OSX_VERSION_MIN}")
+add_definitions("${OSX_VERSION_MIN}")
+
+set(ENV{CFLAGS}   "${OSX_VERSION_MIN}")
+set(ENV{CXXFLAGS} "${OSX_VERSION_MIN}")
+set(ENV{LDFLAGS}  "${OSX_VERSION_MIN}")

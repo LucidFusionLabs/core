@@ -135,9 +135,11 @@ struct Widget {
   };
   
   struct Divider : public Interface {
-    int size=0, start=0, start_size=0;
+    int size=0, start=0, start_size=0, min_size=0, max_size=-1;
     bool horizontal=1, direction=0, changing=0, changed=0;
     Divider(GUI *G, bool H, int S) : Interface(G), size(S), horizontal(H) {}
+    void ApplyConstraints();
+    void LayoutDivideTop   (const Box &in, Box *top,  Box *bottom, int offset=0);
     void LayoutDivideBottom(const Box &in, Box *top,  Box *bottom, int offset=0);
     void LayoutDivideLeft  (const Box &in, Box *left, Box *right,  int offset=0);
     void LayoutDivideRight (const Box &in, Box *left, Box *right,  int offset=0);

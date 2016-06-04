@@ -1,5 +1,5 @@
 /*
- * $Id: iphone_common.h 1336 2014-12-08 09:29:59Z justin $
+ * $Id: ios_common.h 1336 2014-12-08 09:29:59Z justin $
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -21,6 +21,7 @@
 
 @interface LFViewController : GLKViewController<GLKViewControllerDelegate, UIActionSheetDelegate> {}
   - (void)updateToolbarFrame;
+  - (CGRect)getKeyboardToolbarFrame;
 @end
 
 @interface LFUIApplication : NSObject <UIApplicationDelegate, GLKViewDelegate, UITextFieldDelegate> {}
@@ -31,4 +32,7 @@
   @property (nonatomic, retain) UITextField *textField;
   @property BOOL resign_textfield_on_return, frame_on_keyboard_input, frame_on_mouse_input;
   + (LFUIApplication *) sharedAppDelegate;
+  - (CGFloat)getScale;
+  - (CGRect)getFrame;
+  - (CGRect)getKeyboardFrame;
 @end

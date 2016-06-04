@@ -88,7 +88,7 @@ See [new_app_template/README.txt](new_app_template/README.txt) to quick start yo
 
         cd lfl
         mkdir linux && cd linux
-        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=../core/CMake/LinuxToolChain.cmake ..
+        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=../core/CMake/LinuxToolchain.cmake ..
 
         cd term
         make lterm_run
@@ -103,7 +103,7 @@ See [new_app_template/README.txt](new_app_template/README.txt) to quick start yo
 
         cd lfl
         mkdir osx && cd osx
-        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=../core/CMake/OSXToolChain.cmake ..
+        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=../core/CMake/OSXToolchain.cmake ..
 
         cd term
         make lterm_run
@@ -133,15 +133,15 @@ then cmake -DCMAKE_INSTALL_PREFIX=~/llvm -P cmake_install.cmake
 * Check logs with: idevicesyslog
 
         cd lfl
-        mkdir iphone && cd iphone
-        ** Modify IPHONEROOT in ../core/CMake/iPhoneToolChain.cmake
-        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=../core/CMake/iPhoneToolChain.cmake ..
+        mkdir ios && cd ios
+        ** Modify LFL_IOS_ROOT in ../core/CMake/iOSToolchain.cmake
+        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=../core/CMake/iOSToolchain.cmake ..
 
         cd term
         make lterm_run
         make lterm_pkg
 
-* iPhone Installer iLTerminal.ipa results
+* iOS Installer iLTerminal.ipa results
 
 ### Build Android
 
@@ -153,8 +153,8 @@ then cmake -DCMAKE_INSTALL_PREFIX=~/llvm -P cmake_install.cmake
 
         cd lfl
         mkdir android && cd android
-        ** Modify ANDROIDROOT in ../core/CMake/AndroidToolChain.cmake
-        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=../core/CMake/AndroidToolChain.cmake ..
+        ** Modify LFL_ANDROID_ROOT in ../core/CMake/AndroidToolchain.cmake
+        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=../core/CMake/AndroidToolchain.cmake ..
 
         cd term
         make lterm_debug

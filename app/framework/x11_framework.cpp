@@ -122,13 +122,16 @@ void Application::MakeCurrentWindow(Window *W) {
   glXMakeCurrent(GetTyped<Display*>(W->surface), ::Window(W->id.v), GetTyped<GLXContext>(W->gl));
 }
 
-void Application::SetClipboardText(const string &s) {}
-string Application::GetClipboardText() { return string(); }
 void Application::ReleaseMouseFocus() {}
 void Application::GrabMouseFocus() {}
 
-void Application::OpenTouchKeyboard() {}
+void Application::SetClipboardText(const string &s) {}
+string Application::GetClipboardText() { return string(); }
 void Application::LaunchNativeContextMenu(const vector<MenuItem>&items) {}
+
+void Application::OpenTouchKeyboard() {}
+void Application::SetTouchKeyboardTiled(bool v) {}
+bool Application::GetTouchKeyboardOpened() { return false; }
 
 void Window::SetCaption(const string &v) {}
 void Window::SetResizeIncrements(float x, float y) {}

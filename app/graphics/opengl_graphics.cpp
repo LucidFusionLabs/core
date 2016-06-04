@@ -24,7 +24,7 @@
 #endif
 #endif
 
-#if defined(LFL_IPHONE)
+#if defined(LFL_IOS)
 #ifdef LFL_GLES2
 #include <OpenGLES/ES2/gl.h>
 #include <OpenGLES/ES2/glext.h>

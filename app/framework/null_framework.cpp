@@ -61,13 +61,6 @@ struct NullFrameworkModule : public Module {
   }
 };
 
-string Application::GetClipboardText() { return ""; }
-void Application::SetClipboardText(const string &s) {}
-void Application::LoseFocus() {}
-void Application::GrabMouseFocus() {}
-void Application::ReleaseMouseFocus() {}
-void Application::OpenTouchKeyboard() {}
-void Application::LaunchNativeContextMenu(const vector<MenuItem>&items) {}
 void Application::MakeCurrentWindow(Window *W) {}
 void Application::CloseWindow(Window *W) {
   windows.erase(W->id.v);
@@ -75,6 +68,18 @@ void Application::CloseWindow(Window *W) {
   if (app->window_closed_cb) app->window_closed_cb(W);
   screen = 0;
 }
+
+void Application::LoseFocus() {}
+void Application::GrabMouseFocus() {}
+void Application::ReleaseMouseFocus() {}
+
+string Application::GetClipboardText() { return ""; }
+void Application::SetClipboardText(const string &s) {}
+void Application::LaunchNativeContextMenu(const vector<MenuItem>&items) {}
+
+void Application::OpenTouchKeyboard() {}
+void Application::SetTouchKeyboardTiled(bool v) {}
+bool Application::GetTouchKeyboardOpened() { return false; }
 
 void Window::SetCaption(const string &v) {}
 void Window::SetResizeIncrements(float x, float y) {}

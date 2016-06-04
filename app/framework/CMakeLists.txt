@@ -8,23 +8,23 @@ if(LFL_ANDROID)
   lfl_add_target(app_android_framework STATIC_LIBRARY SOURCES android_framework.cpp)
 endif()
 
-if(LFL_IPHONE)
-  add_library(app_iphone_os STATIC iphone_os.mm)
-  target_include_directories(app_iphone_os PUBLIC ${LFL_APP_INCLUDE})
-  target_compile_definitions(app_iphone_os PUBLIC ${LFL_APP_DEF})
-  target_compile_options(app_iphone_os PUBLIC -fobjc-abi-version=2 -fobjc-legacy-dispatch)
-  target_link_libraries(app_iphone_os -liconv -lz "-framework Foundation" "-framework CoreText"
+if(LFL_IOS)
+  add_library(app_ios_os STATIC ios_os.mm)
+  target_include_directories(app_ios_os PUBLIC ${LFL_APP_INCLUDE})
+  target_compile_definitions(app_ios_os PUBLIC ${LFL_APP_DEF})
+  target_compile_options(app_ios_os PUBLIC -fobjc-abi-version=2 -fobjc-legacy-dispatch)
+  target_link_libraries(app_ios_os -liconv -lz "-framework Foundation" "-framework CoreText"
                         "-framework CoreGraphics" "-framework OpenGLES" "-framework UIKit"
                         "-framework QuartzCore" "-framework GLKit" "-framework Security"
                         "-framework AVFoundation")
-  if(NOT LFL_IPHONESIM)
-    target_link_libraries(app_iphone_os "-framework CoreVideo" "-framework CoreMedia")
+  if(NOT LFL_IOS_SIM)
+    target_link_libraries(app_ios_os "-framework CoreVideo" "-framework CoreMedia")
   endif()
 
-  add_library(app_iphone_framework STATIC iphone_framework.mm)
-  target_include_directories(app_iphone_framework PUBLIC ${LFL_APP_INCLUDE})
-  target_compile_definitions(app_iphone_framework PUBLIC ${LFL_APP_DEF})
-  target_compile_options(app_iphone_framework PUBLIC -fobjc-abi-version=2 -fobjc-legacy-dispatch)
+  add_library(app_ios_framework STATIC ios_framework.mm)
+  target_include_directories(app_ios_framework PUBLIC ${LFL_APP_INCLUDE})
+  target_compile_definitions(app_ios_framework PUBLIC ${LFL_APP_DEF})
+  target_compile_options(app_ios_framework PUBLIC -fobjc-abi-version=2 -fobjc-legacy-dispatch)
 endif()
 
 if(LFL_OSX)

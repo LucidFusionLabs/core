@@ -180,7 +180,24 @@ void Widget::Slider::AttachContentBox(Box *b, Slider *vs, Slider *hs) {
   if (vs) b->w -= vs->dot_size;
 }
 
+void Widget::Divider::ApplyConstraints() {
+  if (max_size >= 0) size = min(size, max_size);
+  if (min_size >  0) size = max(size, min_size);
+}
+
+void Widget::Divider::LayoutDivideTop(const Box &in, Box *top, Box *bottom, int offset) {
+  ApplyConstraints();
+  changed = 0;
+  direction = 1;
+  *top = *bottom = in;
+  bottom->h -= (top->h = size);
+  top->y = bottom->top();
+  AddDragBox(Box(bottom->x, bottom->top()-1 + offset, bottom->w, 3),
+             MouseController::CoordCB(bind(&Widget::Divider::DragCB, this, _1, _2, _3, _4)));
+}
+
 void Widget::Divider::LayoutDivideBottom(const Box &in, Box *top, Box *bottom, int offset) {
+  ApplyConstraints();
   changed = 0;
   *top = *bottom = in;
   MinusPlus(&top->h, &top->y, size);
@@ -190,6 +207,7 @@ void Widget::Divider::LayoutDivideBottom(const Box &in, Box *top, Box *bottom, i
 }
 
 void Widget::Divider::LayoutDivideLeft(const Box &in, Box *right, Box *left, int offset) {
+  ApplyConstraints();
   changed = 0;
   direction = 1;
   *left = *right = in;
@@ -200,6 +218,7 @@ void Widget::Divider::LayoutDivideLeft(const Box &in, Box *right, Box *left, int
 }
 
 void Widget::Divider::LayoutDivideRight(const Box &in, Box *left, Box *right, int offset) {
+  ApplyConstraints();
   changed = 0;
   *left = *right = in;
   left->w -= (right->w = size);
@@ -788,7 +807,12 @@ void TextArea::DrawSelection() {
 
 void TextArea::DragCB(int, int, int, int down) {
   if (!line.ring.size) return;
-  if (down && !Active()) Activate();
+  if (down) {
+    if (!Active()) Activate();
+#ifdef LFL_MOBILE
+    app->ToggleTouchKeyboard();
+#endif
+  }
   Selection *s = &selection;
   bool start = s->Update(screen->mouse - box.BottomLeft() + point(line_left, 0), down);
   if (start) { GetGlyphFromCoords(s->beg_click, &s->beg); s->end=s->beg; if (selection_cb) selection_cb(s->beg); }

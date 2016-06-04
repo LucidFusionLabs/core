@@ -129,6 +129,7 @@ string Application::GetClipboardText()                { return glfwGetClipboardS
 void   Application::SetClipboardText(const string &s) {        glfwSetClipboardString(GetTyped<GLFWwindow*>(screen->id), s.c_str()); }
 void Application::GrabMouseFocus()    { glfwSetInputMode(GetTyped<GLFWwindow*>(screen->id), GLFW_CURSOR, GLFW_CURSOR_DISABLED); app->grab_mode.On();  screen->cursor_grabbed=true;  }
 void Application::ReleaseMouseFocus() { glfwSetInputMode(GetTyped<GLFWwindow*>(screen->id), GLFW_CURSOR, GLFW_CURSOR_NORMAL);   app->grab_mode.Off(); screen->cursor_grabbed=false; }
+void Application::SetTouchKeyboardTiled(bool v) {}
 void Application::OpenTouchKeyboard() {}
 void Application::LoseFocus() {}
 

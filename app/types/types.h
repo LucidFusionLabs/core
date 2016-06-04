@@ -338,14 +338,21 @@ template <class X> void SetComplement(X *v, const X &x) {
 template <class X> void FilterByValue(X *v, const typename X::value_type &val) {
   for (typename X::iterator i = v->begin(); i != v->end(); /**/) {
     if (*i == val) i = v->erase(i);
-    else i++;
+    else ++i;
   }
 }
 
-template <class X, class Y> void FilterValues(X *v, const Y &f) {
+template <class X> void FilterValues(X *v, const function<bool(const typename X::value_type&)> &f) {
+  for (typename X::iterator i = v->begin(); i != v->end(); /**/) {
+    if (f(*i)) i = v->erase(i);
+    else ++i;
+  }
+}
+
+template <class X, class Y> void FilterValueSet(X *v, const Y &f) {
   for (typename X::iterator i = v->begin(); i != v->end(); /**/) {
     if (Contains(f, *i)) i = v->erase(i);
-    else i++;
+    else ++i;
   }
 }
 

@@ -234,6 +234,7 @@ void Log(int level, const char *file, int line, const string &m);
 namespace LFL {
 extern Window *screen;
 extern Application *app;
+extern bool DEBUG, MOBILE;
 
 struct Allocator {
   virtual ~Allocator() {}
@@ -631,7 +632,10 @@ struct Application : public ::LFApp {
   void OpenTouchKeyboard();
   void CloseTouchKeyboard();
   void CloseTouchKeyboardAfterReturn(bool);
+  void SetTouchKeyboardTiled(bool);
+  bool GetTouchKeyboardOpened();
   Box GetTouchKeyboardBox();
+  void ToggleTouchKeyboard() { if (GetTouchKeyboardOpened()) CloseTouchKeyboard(); else OpenTouchKeyboard(); }
 
   int SetExtraScale(bool on); /// e.g. Retina display
   int SetMultisample(bool on);

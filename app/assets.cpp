@@ -177,7 +177,7 @@ void SoundAsset::Load(int Secs, bool unload) {
 
   Load(handle, filename.c_str(), Secs);
 
-#if !defined(LFL_IPHONE) && !defined(LFL_ANDROID) /* XXX */
+#ifndef LFL_MOBILE /* XXX */
   if (!refill && handle && unload) {
     app->asset_loader->default_audio_loader->UnloadAudioFile(handle);
     handle = 0;

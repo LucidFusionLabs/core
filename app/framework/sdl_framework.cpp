@@ -21,7 +21,7 @@ extern "C" {
 #ifdef LFL_ANDROID
 #include "SDL_androidvideo.h"
 #endif
-#ifdef LFL_IPHONE
+#ifdef LFL_IOS
 #include "SDL_uikitkeyboard.h"
 #endif
 };
@@ -166,12 +166,12 @@ void Application::CloseWindow(Window *W) {
 string Application::GetClipboardText() { return SDL_GetClipboardText(); }
 void Application::SetClipboardText(const string &s) { SDL_SetClipboardText(s.c_str()); }
 void Application::CloseTouchKeyboard() {
-#ifdef LFL_IPHONE 
+#ifdef LFL_IOS
   SDL_iPhoneKeyboardHide((SDL_Window*)screen->id);
 #endif
 }
 void Application::OpenTouchKeyboard() {
-#ifdef LFL_IPHONE 
+#ifdef LFL_IOS
   SDL_iPhoneKeyboardShow((SDL_Window*)screen->id);
 #endif
 }

@@ -1,12 +1,12 @@
 cmake_minimum_required(VERSION 3.2)
-set(OSXCERT OSX Developer \(FFFFFFFFFF\))
-set(IPHONECERT iPhone Developer \(FFFFFFFFFF\))
-set(IPHONEPROVISION /Users/developer/Downloads/developer.mobileprovision)
+set(LFL_OSX_CERT OSX Developer \(FFFFFFFFFF\))
+set(LFL_IOS_CERT iPhone Developer \(FFFFFFFFFF\))
+set(LFL_IOS_PROVISION /Users/developer/Downloads/developer.mobileprovision)
 
 # configure
 set(LFL_OPENSSL 1)
 
-if(LFL_IPHONE)
+if(LFL_IOS)
   set(LFL_GLES2 1)
   set(LFL_AUDIOUNIT 1)
   set(LFL_OPENCV 1)
@@ -55,7 +55,7 @@ else()
   #set(LFL_GLFW 1)
   #set(LFL_SDL 1)
   #set(LFL_CUDA 1)
-endif(LFL_IPHONE)
+endif()
 
 if(NOT WIN32)
   set(LFL_ICONV 1)
