@@ -7,6 +7,10 @@ lfl_add_target(app_null_sregex STATIC_LIBRARY SOURCES null_sregex.cpp)
 lfl_add_target(app_stdregex_regex STATIC_LIBRARY SOURCES stdregex_regex.cpp
                INCLUDE_DIRECTORIES ${REGEX_INCLUDE} LINK_LIBRARIES ${REGEX_LIB})
 
+if(LFL_ICU)
+  lfl_add_target(app_icu_regex STATIC_LIBRARY SOURCES icu_regex.cpp)
+endif()
+
 if(LFL_RE2)
   lfl_add_target(app_re2_regex STATIC_LIBRARY SOURCES re2_regex.cpp
                  INCLUDE_DIRECTORIES ${RE2_INCLUDE} LINK_LIBRARIES ${RE2_LIB})

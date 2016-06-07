@@ -80,7 +80,7 @@ struct FontDesc {
   FontDesc(const IPC::FontDescription&);
   FontDesc(const string &n="", const string &fam="", int s=0,
            const Color &fgc=Color::white,
-           const Color &bgc=Color::clear, int f=-1, bool U=1, int E=0) :
+           const Color &bgc=Color::clear, int f=0, bool U=1, int E=0) :
     family(fam), size(s), flag(f == -1 ? FLAGS_font_flag : f), engine(E), fg(fgc), bg(bgc), unicode(U)
     {
       string engine_proto;

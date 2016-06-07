@@ -1,12 +1,11 @@
-![lfl](www/lfl/lfl.png)
-
 ## Overview
 
 [![Build Status](https://travis-ci.org/LucidFusionLabs/core.svg?branch=master)](https://travis-ci.org/LucidFusionLabs/core)
 
-The core API consists of the: `Application`, `Window` classes,
-the `Audio`, `Video`, `Input`, `Network`, `Camera`, `CUDA` Modules,
-and the `Fonts`, `GUI`, `AssetLoader`, `Scene` subsystems. 
+The core API consists of the: `Application`, and `Window` classes,
+the `Audio`, `Video`, `Input`, `Network`, `Camera`, and `CUDA` Modules,
+the `Framework`, `Fonts`, `GUI`, `Loader`, `Scene`, `IPC`, and `Crypto` subsystems,
+and runs on OS X, Windows, Linux, iOS, and Android.
 
 The key implementation files are:
 [app/app.h](app/app.h)
@@ -18,9 +17,9 @@ The key implementation files are:
 * **[editor](http://lucidfusionlabs.com/editor)**:          LEditor, a text editor and IDE
 * **[browser](http://lucidfusionlabs.com/browser)**:        LBrowser, a HTML4/CSS2 web browser with V8 javascript
 * **[chess](http://lucidfusionlabs.com/chess)**:            LChess, a magic bitboard chess engine and FICS client
-* **[quake](http://github.com/LucidFusionLabs/quake)**:     LQuake, a quake clone
-* **[spaceball](http://spaceballfuture.com)**:              Spaceball Future, a multiplayer 3d game
 * **[fs](http://lucidfusionlabs.com/fs)**:                  Fusion Sensor, a speech and image recognition client/server
+* **[spaceball](http://spaceballfuture.com)**:              Spaceball Future, a multiplayer 3d game
+* **[quake](http://github.com/LucidFusionLabs/quake)**:     LQuake, a quake clone
 
 The following build procedures apply to any app cloned from [new_app_template](new_app_template).
 Replace "LTerminal" and "lterm" with "YourPackage" and "YourApp" to build other apps.

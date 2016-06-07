@@ -1576,8 +1576,8 @@ void Terminal::Resized(const Box &b, bool font_size_changed) {
   if      (height_dy > 0) TextArea::Write(string(height_dy, '\n'), 0);
   else if (height_dy < 0 && term_cursor.y < old_term_height) line.PopBack(-height_dy);
 
-  term_cursor.x = min(term_cursor.x, term_width);
-  term_cursor.y = min(term_cursor.y, term_height);
+  term_cursor.x = min(term_cursor.x, max(1, term_width));
+  term_cursor.y = min(term_cursor.y, max(1, term_height));
   TextArea::Resized(b, font_size_changed);
   if (clip) clip = UpdateClipBorder();
   ResizedLeftoverRegion(b.w, b.h);
@@ -1630,8 +1630,8 @@ void Terminal::SetScrollRegion(int b, int e, bool release_fb) {
 }
 
 void Terminal::SetTerminalDimension(int w, int h) {
-  term_width  = w;
-  term_height = h;
+  term_width  = max(0, w);
+  term_height = max(0, h);
   ScopedClearColor scc(line_fb.fb.gd, bg_color);
   if (!line.Size()) TextArea::Write(string(term_height, '\n'), 0);
 }
