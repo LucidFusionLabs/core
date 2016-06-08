@@ -74,7 +74,7 @@ string Asset::FileContents(const string &asset_fn) {
 
 File *Asset::OpenFile(const string &asset_fn) {
   auto i = app->asset_cache.find(asset_fn);
-  if (i != app->asset_cache.end()) return new BufferFile(StringPiece(i->second));
+  if (i != app->asset_cache.end()) return new BufferFile(StringPiece(i->second), asset_fn.c_str());
   if (asset_fn[0] == '/') return new LocalFile(asset_fn, "r");
 #ifdef LFL_ANDROID
   int l=0;

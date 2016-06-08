@@ -156,6 +156,7 @@ struct OpenALAudioModule : public Module {
 
   void PlaySoundEffect(SoundAsset *sa, const v3 &pos, const v3 &vel) {
     if (fx_free.empty()) return;
+    if (!sa->wav) return ERROR(sa->name, " missing wav");
     int num_samples = sa->wav->ring.size;
     EnsureSize(samples, num_samples);
     RingSampler::Handle H(sa->wav.get());
