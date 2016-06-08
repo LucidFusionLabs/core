@@ -575,8 +575,9 @@ void FrameBuffer::Attach(int ct, int dt, bool update_viewport) {
   if (ct) { if (tex  .ID != ct) tex.owner   = false; screen->gd->FrameBufferTexture     ((tex.ID   = ct)); }
   if (dt) { if (depth.ID != dt) depth.owner = false; screen->gd->FrameBufferDepthTexture((depth.ID = dt)); }
   if (update_viewport) {
-    screen->gd->ViewPort(Box(width, height));
-    screen->gd->DrawMode(DrawMode::_2D, width, height, true);
+    Box b(width, height);
+    screen->gd->ViewPort(b);
+    screen->gd->DrawMode(DrawMode::_2D, b, true);
   }
 }
 
@@ -739,10 +740,10 @@ void GraphicsDevice::PopColor() {
   else FATAL("no color state");
   UpdateColor();
 }
-void GraphicsDevice::RestoreViewport(int dm) { ViewPort(screen->Box()); DrawMode(dm); }
+void GraphicsDevice::RestoreViewport(int dm) { ViewPort(Box(screen->x + screen->width, screen->y + screen->height)); DrawMode(dm); }
 void GraphicsDevice::TranslateRotateTranslate(float a, const Box &b) { float x=b.x+b.w/2.0, y=b.y+b.h/2.0; Translate(x,y,0); Rotatef(a,0,0,1); Translate(-x,-y,0); }
-void GraphicsDevice::DrawMode(int dm, bool flush) { return DrawMode(dm, screen->width, screen->height, flush); }
-void GraphicsDevice::DrawMode(int dm, int W, int H, bool flush) {
+void GraphicsDevice::DrawMode(int dm, bool flush) { return DrawMode(dm, screen->Box(), flush); }
+void GraphicsDevice::DrawMode(int dm, const Box &b, bool flush) {
   if (draw_mode == dm && !flush) return;
   bool _2D = (draw_mode = dm) == DrawMode::_2D;
   Color4f(1,1,1,1);
@@ -750,9 +751,9 @@ void GraphicsDevice::DrawMode(int dm, int W, int H, bool flush) {
   LoadIdentity();
   if (FLAGS_rotate_view) Rotatef(FLAGS_rotate_view,0,0,1);
 
-  if (_2D) Ortho(0, W, 0, H, 0, 100);
+  if (_2D) Ortho(0, b.right(), 0, b.top(), 0, 100);
   else {
-    float aspect=float(W)/H;
+    float aspect=float(b.w)/b.h;
     double top = tan(FLAGS_field_of_view * M_PI/360.0) * FLAGS_near_plane;
     screen->gd->Frustum(aspect*-top, aspect*top, -top, top, FLAGS_near_plane, FLAGS_far_plane);
   }
@@ -794,7 +795,7 @@ void GraphicsDevice::PopScissor() {
   auto &ss = scissor_stack.back();
   if (ss.size()) ss.pop_back();
   if (ss.size()) Scissor(ss.back());
-  else { ClearDeferred(); DisableScissor(); }
+  else { Scissor(screen->Box()); DisableScissor(); }
 }
 
 void GraphicsDevice::PushScissorStack() {
@@ -808,7 +809,7 @@ void GraphicsDevice::PopScissorStack() {
   scissor_stack.pop_back();
   auto &ss = scissor_stack.back();
   if (ss.size()) Scissor(ss.back());
-  else { ClearDeferred(); DisableScissor(); }
+  else { Scissor(screen->Box()); DisableScissor(); }
 }
 
 Box GraphicsDevice::GetScissorBox() const {

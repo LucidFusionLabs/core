@@ -498,17 +498,17 @@ struct Window : public ::NativeWindow {
   Window();
   virtual ~Window();
 
-  LFL::Box Box()                   const { return LFL::Box(width, height); }
+  LFL::Box Box()                   const { return LFL::Box(x, y, width, height); }
   LFL::Box Box(float xs, float ys) const { return LFL::Box(width*xs, height*ys); }
   LFL::Box Box(float xp, float yp, float xs, float ys,
                float xbl=0, float ybt=0, float xbr=-INFINITY, float ybb=-INFINITY) const;
 
-  void SetSize(const point &d);
+  void SetBox(const LFL::Box &b);
   void SetCaption(const string &c);
   void SetResizeIncrements(float x, float y);
   void SetTransparency(float v);
   void Reshape(int w, int h);
-  void Reshaped(int w, int h);
+  void Reshaped(const LFL::Box&);
   void Minimized()   { minimized=1; }
   void UnMinimized() { minimized=0; }
   void ResetGL();
@@ -590,8 +590,7 @@ struct Application : public ::LFApp {
   double CamFPS() const { return camera->fps.FPS(); }
   Window *GetWindow(void *id) const { return FindOrNull(windows, id); }
   int LoadModule(Module *m) { return m ? PushBack(modules, m)->Init() : 0; }
-  void Log(int level, const char *file, int line, const string &message);
-  void WriteLogLine(const char *tbuf, const char *message, const char *file, int line);
+  void Log(int level, const char *file, int line, const char *message);
   void MakeCurrentWindow(Window*);
   void CloseWindow(Window*);
   void CreateNewWindow();
@@ -668,6 +667,8 @@ struct Application : public ::LFApp {
   static void Daemonize(FILE *fout, FILE *ferr);
   static void *GetSymbol(const string &n);
   static StringPiece LoadResource(int id);
+  static void WriteLogLine(const char *tbuf, const char *message, const char *file, int line);
+  static void WriteDebugLine(const char *message, const char *file, int line);
 };
 
 unique_ptr<Module> CreateFrameworkModule();

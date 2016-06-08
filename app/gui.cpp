@@ -420,8 +420,10 @@ TextBox::LinesFrameBuffer *TextBox::LinesFrameBuffer::Attach(TextBox::LinesFrame
 }
 
 int TextBox::LinesFrameBuffer::SizeChanged(int W, int H, Font *font, const Color *bgc) {
-  lines = partial_last_line ? RoundUp(float(H) / font->Height()) : (H / font->Height());
-  return RingFrameBuffer::SizeChanged(W, lines * font->Height(), font, bgc);
+  lines = max(only_grow ? lines : 0,
+              partial_last_line ? RoundUp(float(H) / font->Height()) : (H / font->Height()));
+  return RingFrameBuffer::SizeChanged(max(only_grow ? w : 0, W),
+                                      max(only_grow ? h : 0, lines * font->Height()), font, bgc);
 }
 
 void TextBox::LinesFrameBuffer::Update(TextBox::Line *l, int flag) {
@@ -1501,7 +1503,7 @@ bool Editor::ScrollTo(int line_index, int x) {
 
 #ifdef  LFL_TERMINAL_DEBUG
 #define TerminalDebug(...) ERRORf(__VA_ARGS__)
-#define TerminalTrace(...) printf("%s", StrCat(logtime(Now()), " ", StringPrintf(__VA_ARGS__)).c_str())
+#define TerminalTrace(...) DebugPrintf("%s", StrCat(logtime(Now()), " ", StringPrintf(__VA_ARGS__)).c_str())
 #else
 #define TerminalDebug(...)
 #define TerminalTrace(...)
@@ -1568,13 +1570,19 @@ Terminal::Terminal(ByteSink *O, GraphicsDevice *D, const FontRef &F, const point
 void Terminal::Resized(const Box &b, bool font_size_changed) {
   int old_term_width = term_width, old_term_height = term_height;
   SetTerminalDimension(b.w / style.font->FixedWidth(), b.h / style.font->Height());
-  TerminalDebug("Resized %d, %d <- %d, %d\n", term_width, term_height, old_term_width, old_term_height);
+  TerminalDebug("Resized %d, %d <- %d, %d", term_width, term_height, old_term_width, old_term_height);
   bool grid_changed = term_width != old_term_width || term_height != old_term_height;
   if (grid_changed || first_resize) if (sink) sink->IOCtlWindowSize(term_width, term_height); 
 
   int height_dy = term_height - old_term_height;
-  if      (height_dy > 0) TextArea::Write(string(height_dy, '\n'), 0);
-  else if (height_dy < 0 && term_cursor.y < old_term_height) line.PopBack(-height_dy);
+  if (!line_fb.only_grow) {
+    if      (height_dy > 0) TextArea::Write(string(height_dy, '\n'), 0);
+    else if (height_dy < 0 && term_cursor.y < old_term_height) line.PopBack(-height_dy);
+  } else {
+    if      (height_dy > 0) { for (int i=0; i<height_dy; i++) line.PushFront(); }
+    else if (height_dy < 0) line.PopFront(-height_dy);
+    term_cursor.y += height_dy;
+  }
 
   term_cursor.x = min(term_cursor.x, max(1, term_width));
   term_cursor.y = min(term_cursor.y, max(1, term_height));
@@ -1607,7 +1615,7 @@ void Terminal::MoveToOrFromScrollRegion(TextBox::LinesFrameBuffer *fb, TextBox::
 }
 
 void Terminal::SetScrollRegion(int b, int e, bool release_fb) {
-  if (b<0 || e<0 || e>term_height || b>e) { TerminalDebug("%d-%d outside 1-%d\n", b, e, term_height); return; }
+  if (b<0 || e<0 || e>term_height || b>e) { TerminalDebug("%d-%d outside 1-%d", b, e, term_height); return; }
   int prev_region_beg = scroll_region_beg, prev_region_end = scroll_region_end, font_height = style.font->Height();
   scroll_region_beg = b;
   scroll_region_end = e;
@@ -1630,8 +1638,8 @@ void Terminal::SetScrollRegion(int b, int e, bool release_fb) {
 }
 
 void Terminal::SetTerminalDimension(int w, int h) {
-  term_width  = max(0, w);
-  term_height = max(0, h);
+  term_width  = max(line_fb.only_grow ? term_width  : 0, w);
+  term_height = max(line_fb.only_grow ? term_height : 0, h);
   ScopedClearColor scc(line_fb.fb.gd, bg_color);
   if (!line.Size()) TextArea::Write(string(term_height, '\n'), 0);
 }
@@ -1705,7 +1713,7 @@ void Terminal::Draw(const Box &b, int flag, Shader *shader) {
 
 void Terminal::Write(const StringPiece &s, bool update_fb, bool release_fb) {
   if (!app->MainThread()) return app->RunInMainThread(bind(&Terminal::WriteCB, this, s.str(), update_fb, release_fb));
-  TerminalTrace("Terminal: Write('%s', %zd)\n", CHexEscapeNonAscii(s.str()).c_str(), s.size());
+  TerminalTrace("Terminal: Write('%s', %zd)", CHexEscapeNonAscii(s.str()).c_str(), s.size());
   screen->gd->DrawMode(DrawMode::_2D, 0);
   ScopedClearColor scc(line_fb.fb.gd, bg_color);
   last_fb = 0;
@@ -1714,7 +1722,7 @@ void Terminal::Write(const StringPiece &s, bool update_fb, bool release_fb) {
     if (c == 0x18 || c == 0x1a) { /* CAN or SUB */ parse_state = State::TEXT; continue; }
     if (parse_state == State::ESC) {
       parse_state = State::TEXT; // default next state
-      TerminalTrace("ESC %c\n", c);
+      TerminalTrace("ESC %c", c);
       if (c >= '(' && c <= '+') {
         parse_state = State::CHARSET;
         parse_charset = c;
@@ -1733,10 +1741,10 @@ void Terminal::Write(const StringPiece &s, bool update_fb, bool release_fb) {
         case '7': saved_term_cursor = term_cursor; break;
         case '8': term_cursor = point(Clamp(saved_term_cursor.x, 1, term_width),
                                       Clamp(saved_term_cursor.y, 1, term_height));
-        default: TerminalDebug("unhandled escape %c (%02x)\n", c, c);
+        default: TerminalDebug("unhandled escape %c (%02x)", c, c);
       }
     } else if (parse_state == State::CHARSET) {
-      TerminalTrace("charset G%d %c\n", 1+parse_charset-'(', c);
+      TerminalTrace("charset G%d %c", 1+parse_charset-'(', c);
       parse_state = State::TEXT;
 
     } else if (parse_state == State::OSC) {
@@ -1744,16 +1752,16 @@ void Terminal::Write(const StringPiece &s, bool update_fb, bool release_fb) {
         if (c == 0x1b) { parse_osc_escape = 1; continue; }
         if (c != 0x07) { parse_osc       += c; continue; }
       }
-      else if (c != 0x5c) { TerminalDebug("within-OSC-escape %c (%02x)\n", c, c); parse_state = State::TEXT; continue; }
+      else if (c != 0x5c) { TerminalDebug("within-OSC-escape %c (%02x)", c, c); parse_state = State::TEXT; continue; }
       parse_state = State::TEXT;
 
       if (parse_osc.size() > 2 && parse_osc[1] == ';' && Within(parse_osc[0], '0', '2')) screen->SetCaption(parse_osc.substr(2));
-      else TerminalDebug("unhandled OSC %s\n", parse_osc.c_str());
+      else TerminalDebug("unhandled OSC %s", parse_osc.c_str());
 
     } else if (parse_state == State::CSI) {
       // http://en.wikipedia.org/wiki/ANSI_escape_code#CSI_codes
       if (c < 0x40 || c > 0x7e) { parse_csi += c; continue; }
-      TerminalTrace("CSI %s%c (cur=%d,%d)\n", parse_csi.c_str(), c, term_cursor.x, term_cursor.y);
+      TerminalTrace("CSI %s%c (cur=%d,%d)", parse_csi.c_str(), c, term_cursor.x, term_cursor.y);
       parse_state = State::TEXT;
 
       int parsed_csi=0, parse_csi_argc=0, parse_csi_argv[16];
@@ -1808,7 +1816,7 @@ void Terminal::Write(const StringPiece &s, bool update_fb, bool release_fb) {
           int beg_y = term_cursor.y, end_y = X_or_Y(scroll_region_end, term_height);
           if (beg_y == X_or_1(scroll_region_beg)) { Scroll(sl); break; }
           if (clip && beg_y < scroll_region_beg)
-          { TerminalDebug("y=%s scrollregion=%d-%d\n", term_cursor.DebugString().c_str(), scroll_region_beg, scroll_region_end); break; }
+          { TerminalDebug("y=%s scrollregion=%d-%d", term_cursor.DebugString().c_str(), scroll_region_beg, scroll_region_end); break; }
           MoveLines(beg_y, end_y, sl, false);
           GetPrimaryFrameBuffer();
           for (int i=beg_y; i<=end_y; i++) LineUpdate(GetTermLine(i), &line_fb);
@@ -1828,7 +1836,7 @@ void Terminal::Write(const StringPiece &s, bool update_fb, bool release_fb) {
           else if (parse_csi_argv00 == '?' && mode ==   47) { /* alternate screen buffer */ }
           else if (parse_csi_argv00 == '?' && mode == 1034) { /* meta mode: 8th bit on */   }
           else if (parse_csi_argv00 == '?' && mode == 1049) { /* save screen */             }
-          else TerminalDebug("unhandled CSI-h mode = %d av00 = %c i= %s\n", mode, parse_csi_argv00, intermed.str().c_str());
+          else TerminalDebug("unhandled CSI-h mode = %d av00 = %c i= %s", mode, parse_csi_argv00, intermed.str().c_str());
         } break;
         case 'l': { // reset mode
           int mode = parse_csi_argv[0];
@@ -1841,7 +1849,7 @@ void Terminal::Write(const StringPiece &s, bool update_fb, bool release_fb) {
           else if (parse_csi_argv00 == '?' && mode ==   25) { cursor_enabled = false;              }
           else if (parse_csi_argv00 == '?' && mode ==   47) { /* normal screen buffer */           }
           else if (parse_csi_argv00 == '?' && mode == 1049) { /* restore screen */                 }
-          else TerminalDebug("unhandled CSI-l mode = %d av00 = %c i= %s\n", mode, parse_csi_argv00, intermed.str().c_str());
+          else TerminalDebug("unhandled CSI-l mode = %d av00 = %c i= %s", mode, parse_csi_argv00, intermed.str().c_str());
         } break;
         case 'm':
         for (int i=0; i<parse_csi_argc; i++) {
@@ -1862,7 +1870,7 @@ void Terminal::Write(const StringPiece &s, bool update_fb, bool release_fb) {
             case 27:        cursor.attr &= ~Style::Reverse;   break;
             case 39:        cursor.attr = Style::SetFGColorIndex(cursor.attr, style.colors->normal_index);     break;
             case 49:        cursor.attr = Style::SetBGColorIndex(cursor.attr, style.colors->background_index); break;
-            default:        TerminalDebug("unhandled SGR %d\n", sgr);
+            default:        TerminalDebug("unhandled SGR %d", sgr);
           }
         } break;
         case 'p':
@@ -1870,21 +1878,21 @@ void Terminal::Write(const StringPiece &s, bool update_fb, bool release_fb) {
             insert_mode = false;
             SetScrollRegion(1, term_height);
           }
-          else TerminalDebug("Unhandled CSI-p %c\n", parse_csi_argv00);
+          else TerminalDebug("Unhandled CSI-p %c", parse_csi_argv00);
           break;
         case 'r':
           if (parse_csi_argc == 2) SetScrollRegion(parse_csi_argv[0], parse_csi_argv[1]);
-          else TerminalDebug("invalid scroll region argc %d\n", parse_csi_argc);
+          else TerminalDebug("invalid scroll region argc %d", parse_csi_argc);
           break;
         default:
-          TerminalDebug("unhandled CSI %s%c\n", parse_csi.c_str(), c);
+          TerminalDebug("unhandled CSI %s%c", parse_csi.c_str(), c);
       }
     } else {
       // http://en.wikipedia.org/wiki/C0_and_C1_control_codes#C0_.28ASCII_and_derivatives.29
       bool C0_control = (c >= 0x00 && c <= 0x1f) || c == 0x7f;
       bool C1_control = (c >= 0x80 && c <= 0x9f);
       if (C0_control || C1_control) {
-        TerminalTrace("C0/C1 control: %02x\n", c);
+        TerminalTrace("C0/C1 control: %02x", c);
         FlushParseText();
       }
       if (C0_control) switch(c) {
@@ -1895,10 +1903,10 @@ void Terminal::Write(const StringPiece &s, bool update_fb, bool release_fb) {
         case '\x1b': parse_state = State::ESC;                        break;
         case '\x14': case '\x15': case '\x7f':                        break; // shift charset in, out, delete
         case '\n':   case '\v':   case '\f':   Newline(newline_mode); break; // line feed, vertical tab, form feed
-        default:                               TerminalDebug("unhandled C0 control %02x\n", c);
+        default:                               TerminalDebug("unhandled C0 control %02x", c);
       } else if (0 && C1_control) {
         if (0) {}
-        else TerminalDebug("unhandled C1 control %02x\n", c);
+        else TerminalDebug("unhandled C1 control %02x", c);
       } else {
         parse_text += c;
       }
@@ -1917,7 +1925,7 @@ void Terminal::FlushParseText() {
   CHECK_GT(term_cursor.x, 0);
   style.font.ptr = style.GetAttr(cursor.attr)->font;
   String16 input_text = String::ToUTF16(parse_text, &consumed);
-  TerminalTrace("Terminal: (cur=%d,%d) FlushParseText('%s').size = [%zd, %d]\n", term_cursor.x, term_cursor.y,
+  TerminalTrace("Terminal: (cur=%d,%d) FlushParseText('%s').size = [%zd, %d]", term_cursor.x, term_cursor.y,
                 StringPiece(parse_text.data(), consumed).str().c_str(), input_text.size(), consumed);
   for (int wrote = 0; wrote < input_text.size(); wrote += write_size) {
     if (wrote || term_cursor.x > term_width) Newline(true);
@@ -1927,7 +1935,7 @@ void Terminal::FlushParseText() {
     write_size = min(remaining, term_width - o);
     String16Piece input_piece(input_text.data() + wrote, write_size);
     update_size = l->UpdateText(o, input_piece, cursor.attr, term_width, &append);
-    TerminalTrace("Terminal: FlushParseText: UpdateText(%d, %d, '%s').size = [%d, %d] attr=%d\n",
+    TerminalTrace("Terminal: FlushParseText: UpdateText(%d, %d, '%s').size = [%d, %d] attr=%d",
                   term_cursor.x, term_cursor.y, String::ToUTF8(input_piece).c_str(), write_size, update_size, cursor.attr);
     if (!update_size) continue;
     l->Layout();
@@ -1955,7 +1963,7 @@ void Terminal::NewTopline() {
 
 void Terminal::TabNext(int n) { term_cursor.x = min(NextMultipleOfN(term_cursor.x, tab_width) + 1, term_width); }
 void Terminal::TabPrev(int n) {
-  if (tab_stop.size()) TerminalDebug("%s\n", "variable tab stop not implemented");
+  if (tab_stop.size()) TerminalDebug("%s", "variable tab stop not implemented");
   else if ((term_cursor.x = max(PrevMultipleOfN(term_cursor.x - max(0, n-1)*tab_width - 2, tab_width), 1)) != 1) term_cursor.x++;
 }
 

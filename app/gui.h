@@ -254,7 +254,7 @@ struct TextBox : public GUI, public KeyboardController {
     struct Flag { enum { NoLayout=1, NoVWrap=2, Flush=4 }; };
     PaintCB paint_cb = &LinesFrameBuffer::PaintCB;
     int lines=0;
-    bool align_top_or_bot=1, partial_last_line=1, wrap=0;
+    bool align_top_or_bot=1, partial_last_line=1, wrap=0, only_grow=0;
     LinesFrameBuffer(GraphicsDevice *d) : RingFrameBuffer(d) {}
     LinesFrameBuffer *Attach(LinesFrameBuffer **last_fb);
     virtual int SizeChanged(int W, int H, Font *font, const Color *bgc);
@@ -667,7 +667,7 @@ struct Terminal : public TextArea {
   virtual void Home       () { char k[] = "\x1bOH";  sink->Write(StringPiece( k, 3)); }
   virtual void End        () { char k[] = "\x1bOF";  sink->Write(StringPiece( k, 3)); }
   virtual void MoveToOrFromScrollRegion(LinesFrameBuffer *fb, Line *l, const point &p, int flag);
-  virtual int UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int *first_len) { return 0; }
+  // virtual int UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int *first_len) { return 0; }
   virtual void UpdateCursor() { cursor.p = point(GetCursorX(term_cursor.x, term_cursor.y), GetCursorY(term_cursor.y)); }
   virtual void UpdateToken(Line*, int word_offset, int word_len, int update_type, const TokenProcessor<DrawableBox>*);
   virtual bool GetGlyphFromCoords(const point &p, Selection::Point *out) { return GetGlyphFromCoordsOffset(p, out, clip ? 0 : start_line, 0); }

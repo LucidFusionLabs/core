@@ -197,7 +197,7 @@ LRESULT APIENTRY WinApp::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
   switch (message) {
   case WM_CREATE:                      return 0;
   case WM_DESTROY:                     LFAppShutdown(); PostQuitMessage(0); return 0;
-  case WM_SIZE:                        if ((w = LOWORD(lParam)) != screen->width && (h = HIWORD(lParam)) != screen->height) { WindowReshaped(w, h); app->scheduler.Wakeup(screen); } return 0;
+  case WM_SIZE:                        if ((w = LOWORD(lParam)) != screen->width && (h = HIWORD(lParam)) != screen->height) { WindowReshaped(0, 0, w, h); app->scheduler.Wakeup(screen); } return 0;
   case WM_KEYUP:   case WM_SYSKEYUP:   if (KeyPress(WinFrameworkModule::GetKeyCode(wParam), 0) && win->frame_on_keyboard_input) app->scheduler.Wakeup(screen); return 0;
   case WM_KEYDOWN: case WM_SYSKEYDOWN: if (KeyPress(WinFrameworkModule::GetKeyCode(wParam), 1) && win->frame_on_keyboard_input) app->scheduler.Wakeup(screen); return 0;
   case WM_LBUTTONDOWN:                 if (MouseClick(1, 1, win->prev_mouse_pos.x, win->prev_mouse_pos.y) && win->frame_on_mouse_input) app->scheduler.Wakeup(screen); return 0;

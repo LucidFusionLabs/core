@@ -31,6 +31,7 @@
   @property (nonatomic, retain) UIView *lview, *rview;
   @property (nonatomic, retain) UITextField *textField;
   @property BOOL resign_textfield_on_return, frame_on_keyboard_input, frame_on_mouse_input;
+  @property int screen_y, screen_width, screen_height;
   + (LFUIApplication *) sharedAppDelegate;
   - (CGFloat)getScale;
   - (CGRect)getFrame;

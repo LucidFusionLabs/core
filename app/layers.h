@@ -27,6 +27,7 @@ template <class Line> struct RingFrameBuffer {
   point p;
   int w=0, h=0, font_size=0, font_height=0;
   RingFrameBuffer(GraphicsDevice *d) : fb(d) {}
+  virtual ~RingFrameBuffer() {}
 
   void ResetGL() { w=h=0; fb.ResetGL(); }
   virtual void SizeChangedDone() { fb.gd->PopScissorStack(); fb.Release(); scroll=v2(); p=point(); }

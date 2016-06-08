@@ -73,8 +73,10 @@
 #define FATALf(fmt, ...) { LFAppLog(LFApp::Log::Fatal, __FILE__, __LINE__, fmt, __VA_ARGS__); throw(0); }
 #ifdef LFL_DEBUG
 #define DEBUGf(fmt, ...) ((::LFApp::Log::Debug <= ::LFL::FLAGS_loglevel) ? LFAppLog(LFApp::Log::Debug, __FILE__, __LINE__, fmt, __VA_ARGS__) : void())
+#define DebugPrintf(...) LFAppDebug(__FILE__, __LINE__, __VA_ARGS__)
 #else
 #define DEBUGf(fmt, ...)
+#define DebugPrintf(fmt, ...)
 #endif
 
 #define DECLARE_FLAG(name, type) extern type FLAGS_ ## name
@@ -225,7 +227,7 @@ struct LFApp {
 
 struct NativeWindow {
   typed_ptr id, gl, surface, glew_context, impl, user1, user2, user3;
-  int width, height, pow2_width, pow2_height, target_fps;
+  int x, y, width, height, pow2_width, pow2_height, target_fps;
   bool started, minimized, cursor_grabbed, frame_init, animating;
   int gesture_swipe_up, gesture_swipe_down, gesture_tap[2], gesture_dpad_stop[2];
   float gesture_dpad_x[2], gesture_dpad_y[2], gesture_dpad_dx[2], gesture_dpad_dy[2], multitouch_keyboard_x;
@@ -252,6 +254,7 @@ int LFAppMainLoop();
 int LFAppFrame(bool handle_events);
 void LFAppTimerDrivenFrame();
 void LFAppLog(int level, const char *file, int line, const char *fmt, ...);
+void LFAppDebug(const char *file, int line, const char *fmt, ...);
 void LFAppWakeup();
 void LFAppFatal();
 void LFAppResetGL();
@@ -259,7 +262,7 @@ void LFAppShutdown();
 void LFAppAtExit();
 void SetLFAppMainThread();
 unsigned LFAppNextRandSeed();
-void WindowReshaped(int w, int h);
+void WindowReshaped(int x, int y, int w, int h);
 void WindowMinimized(); 
 void WindowUnMinimized(); 
 bool WindowClosed();

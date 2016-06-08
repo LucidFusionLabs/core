@@ -436,7 +436,7 @@ struct GraphicsDevice {
   static const int One, SrcAlpha, OneMinusSrcAlpha, OneMinusDstColor, TextureWrapS, TextureWrapT, ClampToEdge;
   static const int VertexShader, FragmentShader, ShaderVersion, Extensions;
   static const int GLEWVersion, Version, Vendor, DepthBits;
-  static const int ActiveUniforms, ActiveAttributes, MaxVertexAttributes, MaxVertexUniformComp, MaxViewportDims;
+  static const int ActiveUniforms, ActiveAttributes, MaxVertexAttributes, MaxVertexUniformComp, MaxViewportDims, ViewportDims;
   static const int Fill, Line, Point, GLPreferredBuffer, GLInternalFormat;
 
   int default_draw_mode = DrawMode::_2D, draw_mode = 0, default_framebuffer = 0;
@@ -562,7 +562,7 @@ struct GraphicsDevice {
   void RestoreViewport(int drawmode);
   void TranslateRotateTranslate(float a, const Box&);
   void DrawMode(int drawmode, bool flush=1);
-  void DrawMode(int drawmode, int W, int H, bool flush=1);
+  void DrawMode(int drawmode, const Box&, bool flush=1);
   void EnableLayering() { DisableDepthTest(); DisableLighting(); EnableBlend(); EnableTexture(); }
   void LookAt(const v3 &pos, const v3 &targ, const v3 &up);
   void PushScissorOffset(const Box &t, const Box &w) { PushScissor(Box(w.x-t.x, w.y-t.y, w.w, w.h)); }

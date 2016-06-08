@@ -53,14 +53,14 @@ extern "C" void LFAppResetGL()             { return LFL::app->ResetGL(); }
 extern "C" const char *LFAppDownloadDir()  { return LFL::app->dldir.c_str(); }
 extern "C" void LFAppAtExit()              { delete LFL::app; }
 extern "C" void LFAppShutdown()                   { LFL::app->run=0; LFAppWakeup(); }
-extern "C" void WindowReshaped(int w, int h)      { LFL::screen->Reshaped(w, h); }
-extern "C" void WindowMinimized()                 { LFL::screen->Minimized(); }
-extern "C" void WindowUnMinimized()               { LFL::screen->UnMinimized(); }
-extern "C" bool WindowClosed()                    { LFL::app->CloseWindow(LFL::screen); return LFL::app->windows.empty(); }
-extern "C" void QueueWindowReshaped(int w, int h) { LFL::app->RunInMainThread(LFL::bind(&LFL::Window::Reshaped,    LFL::screen, w, h)); }
-extern "C" void QueueWindowMinimized()            { LFL::app->RunInMainThread(LFL::bind(&LFL::Window::Minimized,   LFL::screen)); }
-extern "C" void QueueWindowUnMinimized()          { LFL::app->RunInMainThread(LFL::bind(&LFL::Window::UnMinimized, LFL::screen)); }
-extern "C" void QueueWindowClosed()               { LFL::app->RunInMainThread(LFL::bind([=](){ LFL::app->CloseWindow(LFL::screen); })); }
+extern "C" void WindowReshaped(int x, int y, int w, int h)  { LFL::screen->Reshaped(LFL::Box(x, y, w, h)); }
+extern "C" void WindowMinimized()                           { LFL::screen->Minimized(); }
+extern "C" void WindowUnMinimized()                         { LFL::screen->UnMinimized(); }
+extern "C" bool WindowClosed()                              { LFL::app->CloseWindow(LFL::screen); return LFL::app->windows.empty(); }
+extern "C" void QueueWindowReshaped(int w, int h)           { LFL::app->RunInMainThread(LFL::bind(&LFL::Window::Reshaped,    LFL::screen, LFL::Box(0, 0, w, h))); }
+extern "C" void QueueWindowMinimized()                      { LFL::app->RunInMainThread(LFL::bind(&LFL::Window::Minimized,   LFL::screen)); }
+extern "C" void QueueWindowUnMinimized()                    { LFL::app->RunInMainThread(LFL::bind(&LFL::Window::UnMinimized, LFL::screen)); }
+extern "C" void QueueWindowClosed()                         { LFL::app->RunInMainThread(LFL::bind([=](){ LFL::app->CloseWindow(LFL::screen); })); }
 extern "C" int  KeyPress  (int b, int d)                    { return LFL::app->input->KeyPress  (b, d); }
 extern "C" int  MouseClick(int b, int d, int x,  int y)     { return LFL::app->input->MouseClick(b, d, LFL::point(x, y)); }
 extern "C" int  MouseMove (int x, int y, int dx, int dy)    { return LFL::app->input->MouseMove (LFL::point(x, y), LFL::point(dx, dy)); }
@@ -148,7 +148,7 @@ DEFINE_bool(rcon_debug, false, "Print game protocol commands");
 
 Application *app = nullptr;
 Window *screen = nullptr;
-void Log(int level, const char *file, int line, const string &m) { app->Log(level, file, line, m); }
+void Log(int level, const char *file, int line, const string &m) { app->Log(level, file, line, m.c_str()); }
 
 #ifdef LFL_APPLE
 void NSLogString(const string&);
@@ -286,7 +286,7 @@ Application::Application(int ac, const char* const* av) : argc(ac), argv(av), te
   fonts = make_unique<Fonts>();
 }
 
-void Application::Log(int level, const char *file, int line, const string &message) {
+void Application::Log(int level, const char *file, int line, const char *message) {
   {
     ScopedMutex sm(log_mutex);
     char tbuf[64];
@@ -294,7 +294,7 @@ void Application::Log(int level, const char *file, int line, const string &messa
     logtime(tbuf, sizeof(tbuf), &log_time);
     if (DayChanged(log_time, last_log_time)) 
       WriteLogLine(tbuf, StrCat("Date changed to ", logfileday(log_time)).c_str(), __FILE__, __LINE__);
-    WriteLogLine(log_pid ? StrCat("[", pid, "] ", tbuf).c_str() : tbuf, message.c_str(), file, line);
+    WriteLogLine(log_pid ? StrCat("[", pid, "] ", tbuf).c_str() : tbuf, message, file, line);
   }
   if (level == LFApp::Log::Fatal) LFAppFatal();
   if (run && FLAGS_enable_video && screen && screen->console) screen->console->Write(message);
@@ -303,15 +303,25 @@ void Application::Log(int level, const char *file, int line, const string &messa
 void Application::WriteLogLine(const char *tbuf, const char *message, const char *file, int line) {
   fprintf(stdout, "%s %s (%s:%d)\r\n", tbuf, message, file, line);
   fflush(stdout);
-  if (logfile) {
-    fprintf(logfile, "%s %s (%s:%d)\r\n", tbuf, message, file, line);
-    fflush(logfile);
+  if (app && app->logfile) {
+    fprintf(app->logfile, "%s %s (%s:%d)\r\n", tbuf, message, file, line);
+    fflush(app->logfile);
   }
 #ifdef LFL_IOS
   NSLogString(StringPrintf("%s (%s:%d)", message, file, line));
 #endif
 #ifdef LFL_ANDROID
-  __android_log_print(ANDROID_LOG_INFO, app->name.c_str(), "%s (%s:%d)", message, file, line);
+  __android_log_print(ANDROID_LOG_INFO, app ? app->name.c_str() : "", "%s (%s:%d)", message, file, line);
+#endif
+}
+
+void Application::WriteDebugLine(const char *message, const char *file, int line) {
+  fprintf(stderr, "%s (%s:%d)\n", message, file, line);
+#ifdef LFL_IOS
+  NSLogString(StringPrintf("%s (%s:%d)", message, file, line));
+#endif
+#ifdef LFL_ANDROID
+  __android_log_print(ANDROID_LOG_INFO, app ? app->name.c_str() : "", "%s (%s:%d)", message, file, line);
 #endif
 }
 
@@ -699,7 +709,7 @@ Window::Window() : caption(app->name), fps(128) {
   target_fps = FLAGS_target_fps;
   multitouch_keyboard_x = .93; 
   cam = make_unique<Entity>(v3(5.54, 1.70, 4.39), v3(-.51, -.03, -.49), v3(-.03, 1, -.03));
-  SetSize(point(640, 480));
+  SetBox(LFL::Box(0, 0, 640, 480));
 }
 
 Window::~Window() {
@@ -713,8 +723,8 @@ Window::~Window() {
 Box Window::Box(float xp, float yp, float xs, float ys, float xbl, float ybt, float xbr, float ybb) const {
   if (isinf(xbr)) xbr = xbl;
   if (isinf(ybb)) ybb = ybt;
-  return LFL::Box(width  * (xp + xbl),
-                  height * (yp + ybb),
+  return LFL::Box(x + width  * (xp + xbl),
+                  y + height * (yp + ybb),
                   width  * xs - width  * (xbl + xbr),
                   height * ys - height * (ybt + ybb), false);
 }
@@ -758,16 +768,17 @@ void Window::DrawDialogs() {
   }
 }
 
-void Window::SetSize(const point &d) {
-  pow2_width  = NextPowerOfTwo((width  = d.x));
-  pow2_height = NextPowerOfTwo((height = d.y));
+void Window::SetBox(const LFL::Box &b) {
+  Assign(&x, &y, b.x, b.y);
+  pow2_width  = NextPowerOfTwo((width  = b.w));
+  pow2_height = NextPowerOfTwo((height = b.h));
 }
 
-void Window::Reshaped(int w, int h) {
-  INFO("Window::Reshaped(", w, ", ", h, ")");
-  SetSize(point(w, h));
+void Window::Reshaped(const LFL::Box &b) {
+  INFO("Window::Reshaped(", b.DebugString(), ")");
+  SetBox(b);
   if (!gd) return;
-  gd->ViewPort(LFL::Box(width, height));
+  gd->ViewPort(LFL::Box(b.right(), b.top()));
   gd->DrawMode(gd->default_draw_mode);
   for (auto g = gui.begin(); g != gui.end(); ++g) (*g)->Layout();
   if (reshaped_cb) reshaped_cb();
@@ -782,7 +793,7 @@ void Window::ResetGL() {
 void Window::SwapAxis() {
   FLAGS_rotate_view = FLAGS_rotate_view ? 0 : -90;
   FLAGS_swap_axis = FLAGS_rotate_view != 0;
-  Reshaped(height, width);
+  Reshaped(LFL::Box(y, x, height, width));
 }
 
 int Window::Frame(unsigned clicks, int flag) {

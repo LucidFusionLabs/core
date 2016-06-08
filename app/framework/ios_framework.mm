@@ -148,8 +148,14 @@ const int Key::End        = -34;
 
   - (void)applicationWillResignActive:(UIApplication*)application {}
   - (void)applicationDidBecomeActive:(UIApplication*)application {}
+
   - (void)glkView:(GLKView *)v drawInRect:(CGRect)rect {
+    if (!_screen_width || !_screen_height) return;
+    if (LFL::screen->width != _screen_width || LFL::screen->height != _screen_height)
+      WindowReshaped(0, _screen_y, _screen_width, _screen_height);
+
     LFAppFrame(true); 
+
     if (wait_forever_fh && restart_wait_forever_fh && !(restart_wait_forever_fh=0))
         [wait_forever_fh waitForDataInBackgroundAndNotify];
   }
@@ -284,7 +290,7 @@ const int Key::End        = -34;
     LFL::screen->gesture_tap[dpind] = 1;
     LFL::screen->gesture_dpad_x[dpind] = position.x;
     LFL::screen->gesture_dpad_y[dpind] = position.y;
-    int fired = MouseClick(1, 1, (int)position.x, LFL::screen->height - (int)position.y);
+    int fired = MouseClick(1, 1, (int)position.x, LFL::screen->y + LFL::screen->height - (int)position.y);
     if (fired && _frame_on_mouse_input) [self.view setNeedsDisplay];
   }
 
@@ -360,25 +366,27 @@ const int Key::End        = -34;
     uiapp = [LFUIApplication sharedAppDelegate];
   }
 
+  - (void)viewDidLoad {
+    [super viewDidLoad];
+  }
+
   - (void)viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
   }
 
-  - (void)viewDidLayoutSubviews { [uiapp.view setNeedsDisplay]; }
   - (void)viewWillLayoutSubviews {
     [super viewWillLayoutSubviews];
-    GLKView *view = [LFUIApplication sharedAppDelegate].view;
-    if (!overlap_keyboard) {
-      CGRect b = [self getKeyboardToolbarFrame];
-      CGRect bounds = [[UIScreen mainScreen] bounds];
-      [view setFrame: CGRectMake(0, 0, bounds.size.width, bounds.size.height - b.size.height)];
-    }
-
-    CGFloat scale = [uiapp getScale];
-    CGRect rect = [uiapp getFrame];
-    WindowReshaped(rect.size.width * scale, rect.size.height * scale);
-    INFOf("viewWillLayoutSubviews %d %d vs %d %d",
-          LFL::screen->width, LFL::screen->height, view.drawableWidth, view.drawableHeight);
+  }
+  
+  - (void)viewDidLayoutSubviews {
+    CGFloat s     = [uiapp getScale];
+    CGRect bounds = [[UIScreen mainScreen] bounds];
+    int y = overlap_keyboard ? 0 : (s * [self getKeyboardToolbarFrame].size.height);
+    uiapp.screen_y      = y;
+    uiapp.screen_width  = s * bounds.size.width;
+    uiapp.screen_height = s * bounds.size.height - y;
+    [uiapp.view setNeedsDisplay];
+    [super viewDidLayoutSubviews];
   }
 
   - (void)glkViewControllerUpdate:(GLKViewController *)controller {}
@@ -466,7 +474,7 @@ const int Key::End        = -34;
     else        position = CGPointMake(scale * position.x, scale * position.y);
     LFL::screen->gesture_dpad_x[dpind] = position.x;
     LFL::screen->gesture_dpad_y[dpind] = position.y;
-    int fired = MouseClick(1, 1, (int)position.x, LFL::screen->height - (int)position.y);
+    int fired = MouseClick(1, 1, (int)position.x, LFL::screen->y + LFL::screen->height - (int)position.y);
     if (fired && uiapp.frame_on_mouse_input) [self.superview setNeedsDisplay];
   }
 
@@ -481,7 +489,7 @@ const int Key::End        = -34;
     LFL::screen->gesture_dpad_stop[dpind] = 1;
     LFL::screen->gesture_dpad_x[dpind] = 0;
     LFL::screen->gesture_dpad_y[dpind] = 0;
-    int fired = MouseClick(1, 0, (int)position.x, LFL::screen->height - (int)position.y);
+    int fired = MouseClick(1, 0, (int)position.x, LFL::screen->y + LFL::screen->height - (int)position.y);
     if (fired && uiapp.frame_on_mouse_input) [self.superview setNeedsDisplay];
   }
 

@@ -194,7 +194,7 @@
     [context update];
     SetNativeWindow(screen);
     float screen_w = [self frame].size.width, screen_h = [self frame].size.height;
-    WindowReshaped(int(screen_w), int(screen_h));
+    WindowReshaped(0, 0, int(screen_w), int(screen_h));
   }
 
   - (BOOL)windowShouldClose:(id)sender { return should_close; }

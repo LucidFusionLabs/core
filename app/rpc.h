@@ -20,7 +20,7 @@
 #define LFL_CORE_APP_RPC_H__
 
 #ifdef LFL_IPC_DEBUG
-#define IPCTrace(...) fprintf(stderr, __VA_ARGS__)
+#define IPCTrace(...) DebugPrintf(stderr, __VA_ARGS__)
 #else
 #define IPCTrace(...)
 #endif

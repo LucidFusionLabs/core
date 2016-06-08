@@ -75,7 +75,7 @@
 #ifdef LFL_GDDEBUG
 #define GDDebug(...) { \
   if (screen) screen->gd->CheckForError(__FILE__, __LINE__); \
-  if (FLAGS_gd_debug) printf("%s\n", StrCat(__VA_ARGS__).c_str()); }
+  if (FLAGS_gd_debug) DebugPrintf("%s", StrCat(__VA_ARGS__).c_str()); }
 #else 
 #define GDDebug(...)
 #endif
@@ -120,6 +120,7 @@ const int GraphicsDevice::ActiveUniforms       = GL_ACTIVE_UNIFORMS;
 const int GraphicsDevice::ActiveAttributes     = GL_ACTIVE_ATTRIBUTES;
 const int GraphicsDevice::MaxVertexAttributes  = GL_MAX_VERTEX_ATTRIBS;
 const int GraphicsDevice::MaxViewportDims      = GL_MAX_VIEWPORT_DIMS;
+const int GraphicsDevice::ViewportDims         = GL_VIEWPORT;
 #if defined(LFL_MOBILE) || defined(LFL_EMSCRIPTEN)
 const int GraphicsDevice::Fill                 = 0;
 const int GraphicsDevice::Line                 = 0;

@@ -56,6 +56,7 @@ const int GraphicsDevice::ActiveAttributes = 0;
 const int GraphicsDevice::MaxVertexAttributes = 0;
 const int GraphicsDevice::MaxVertexUniformComp = 0;
 const int GraphicsDevice::MaxViewportDims = 0;
+const int GraphicsDevice::ViewportDims = 0;
 const int GraphicsDevice::Fill = 0;
 const int GraphicsDevice::Line = 0;
 const int GraphicsDevice::Point = 0;
