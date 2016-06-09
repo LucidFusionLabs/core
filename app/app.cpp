@@ -316,13 +316,19 @@ void Application::WriteLogLine(const char *tbuf, const char *message, const char
 }
 
 void Application::WriteDebugLine(const char *message, const char *file, int line) {
+  bool write_to_logfile = false;
   fprintf(stderr, "%s (%s:%d)\n", message, file, line);
 #ifdef LFL_IOS
+  write_to_logfile = true;
   NSLogString(StringPrintf("%s (%s:%d)", message, file, line));
 #endif
 #ifdef LFL_ANDROID
   __android_log_print(ANDROID_LOG_INFO, app ? app->name.c_str() : "", "%s (%s:%d)", message, file, line);
 #endif
+  if (write_to_logfile && app && app->logfile) {
+    fprintf(app->logfile, "%s (%s:%d)\r\n", message, file, line);
+    fflush(app->logfile);
+  }
 }
 
 void Application::CreateNewWindow() {
@@ -670,6 +676,7 @@ int Application::MainLoop() {
 }
 
 void Application::ResetGL() {
+  INFO("Application::ResetGL");
   for (auto &w : windows) w.second->ResetGL();
   fonts->ResetGL();
 }
@@ -770,8 +777,9 @@ void Window::DrawDialogs() {
 
 void Window::SetBox(const LFL::Box &b) {
   Assign(&x, &y, b.x, b.y);
-  pow2_width  = NextPowerOfTwo((width  = b.w));
-  pow2_height = NextPowerOfTwo((height = b.h));
+  Assign(&width, &height, b.w, b.h);
+  pow2_width  = NextPowerOfTwo(b.right());
+  pow2_height = NextPowerOfTwo(b.top());
 }
 
 void Window::Reshaped(const LFL::Box &b) {
@@ -785,6 +793,7 @@ void Window::Reshaped(const LFL::Box &b) {
 }
 
 void Window::ResetGL() {
+  INFO("Window::ResetGL");
   gd->Init(Box());
   for (auto &g : gui    ) g->ResetGL();
   for (auto &g : dialogs) g->ResetGL();

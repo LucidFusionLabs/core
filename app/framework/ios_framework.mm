@@ -120,10 +120,11 @@ const int Key::End        = -34;
     // self.rview.backgroundColor = [UIColor blueColor];
     // self.rview.alpha = 0.3f;
     [self.view addSubview:self.rview];
+    [self initNotifications];
 
     // text view for keyboard display
     _resign_textfield_on_return = YES;
-    self.textField = [[[UITextField alloc] initWithFrame: CGRectZero] autorelease];
+    self.textField = [[[MyTextField alloc] initWithFrame: CGRectZero] autorelease];
     self.textField.delegate = self;
     self.textField.text = [NSString stringWithFormat:@"default"];
     self.textField.autocorrectionType = UITextAutocorrectionTypeNo;
@@ -136,7 +137,6 @@ const int Key::End        = -34;
     INFOf("didFinishLaunchingWithOptions, views: %p, %p, %p, csf=%f", self.view, self.lview, self.rview, scale);
 
     [self.window makeKeyAndVisible];
-    [self initNotifications];
     [self initGestureRecognizers];
     return YES;
   }
@@ -170,7 +170,7 @@ const int Key::End        = -34;
   - (CGRect)getFrame { return self.view.frame; }
   - (CGFloat)getScale { return (want_extra_scale ? scale : 1); }
   - (int)updateScale: (bool)v { want_extra_scale=v; [self updateGLKViewScale]; return v ? scale : 1; }
-  - (void)updateGLKViewScale { self.view.contentScaleFactor = target_fps ? 1 : [self getScale]; }
+  - (void)updateGLKViewScale { self.view.contentScaleFactor = (target_fps && _downscale_animation) ? 1 : [self getScale]; }
   - (int)updateGLKMultisample: (bool)v { 
     self.view.drawableMultisample = v ? GLKViewDrawableMultisample4X : GLKViewDrawableMultisampleNone;
     return v ? 4 : 0;
@@ -181,7 +181,7 @@ const int Key::End        = -34;
     NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
     INFOf("init notifications %p", center);
     [center addObserver:self selector:@selector(orientationChanged:) name:@"UIDeviceOrientationDidChangeNotification" object:nil];
-    [center addObserver:self selector:@selector(keyboardDidShow:)    name:@"UIKeyboardDidShowNotification"            object:nil];
+    [center addObserver:self selector:@selector(keyboardWillShow:)   name:@"UIKeyboardWillShowNotification"           object:nil];
     [center addObserver:self selector:@selector(keyboardWillHide:)   name:@"UIKeyboardWillHideNotification"           object:nil];
   }
 
@@ -200,7 +200,7 @@ const int Key::End        = -34;
     [self.controller updateToolbarFrame];
   }
 
-  - (void)keyboardDidShow:(NSNotification *)notification {
+  - (void)keyboardWillShow:(NSNotification *)notification {
     NSDictionary *userInfo = [notification userInfo];
     CGRect rect = [[userInfo objectForKey:UIKeyboardFrameEndUserInfoKey] CGRectValue];
     keyboard_frame = [self.window convertRect:rect toView:nil];
@@ -209,7 +209,7 @@ const int Key::End        = -34;
 
   - (BOOL)textField: (UITextField *)textField shouldChangeCharactersInRange:(NSRange)range replacementString:(NSString *)string {
     int l = [string length];
-    if (!l) [self handleKey: LFL::Key::Backspace];
+    // if (!l) [self handleKey: LFL::Key::Backspace];
     for (int i = 0, l = [string length]; i < l; i++) {
       unichar k = [string characterAtIndex: i];
       [self handleKey: k];
@@ -390,7 +390,7 @@ const int Key::End        = -34;
   }
 
   - (void)glkViewControllerUpdate:(GLKViewController *)controller {}
-  - (BOOL)shouldAutorotateToInterfaceOrientation:(UIInterfaceOrientation)interfaceOrientation { return YES; }
+  - (BOOL)shouldAutorotate { return _autorotate; }
   - (void)setOverlapKeyboard:(bool)v { overlap_keyboard = v; }
 
   - (void)addToolbar:(int)n key:(const char**)k val:(const char**)v {
@@ -505,6 +505,13 @@ const int Key::End        = -34;
   }
 @end
 
+@implementation MyTextField
+  - (void)deleteBackward {
+    [super deleteBackward];
+    [[LFUIApplication sharedAppDelegate] handleKey: LFL::Key::Backspace];
+  }
+@end
+
 namespace LFL {
 struct iPhoneFrameworkModule : public Module {
   int Init() {
@@ -582,8 +589,10 @@ Box Application::GetTouchKeyboardBox() {
              scale * rect.size.height);
 }
 
-int Application::SetExtraScale(bool v) { return [[LFUIApplication sharedAppDelegate] updateScale:v]; }
+void Application::SetAutoRotateOrientation(bool v) { [LFUIApplication sharedAppDelegate].controller.autorotate = v; }
 int Application::SetMultisample(bool v) { return [[LFUIApplication sharedAppDelegate] updateGLKMultisample:v]; }
+int Application::SetExtraScale(bool v) { return [[LFUIApplication sharedAppDelegate] updateScale:v]; }
+void Application::SetDownScaleAnimation(bool v) { [LFUIApplication sharedAppDelegate].downscale_animation = v; }
 
 void Window::SetResizeIncrements(float x, float y) {}
 void Window::SetTransparency(float v) {}

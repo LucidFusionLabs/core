@@ -27,6 +27,7 @@ DECLARE_bool(draw_grid);
 DECLARE_bool(console);
 DECLARE_string(console_font);
 DECLARE_int(console_font_flag);
+DECLARE_FLAG(testbox, Box);
 
 struct HAlign { enum { Left  =1, Center=2, Right=3 }; };
 struct VAlign { enum { Bottom=1, Center=2, Top  =3 }; };
@@ -41,8 +42,8 @@ struct GUI {
   GUI(const Box &B=Box()) : box(B) {}
   virtual ~GUI() {}
 
-  DrawableBoxArray *Reset() { Clear(); return &child_box; }
-  void Clear() { child_box.Clear(); mouse.Clear(); }
+  DrawableBoxArray *ResetGUI() { ClearGUI(); return &child_box; }
+  void ClearGUI() { child_box.Clear(); mouse.Clear(); }
   void UpdateBox(const Box &b, int draw_box_ind, int input_box_ind);
   void UpdateBoxX(int x, int draw_box_ind, int input_box_ind);
   void UpdateBoxY(int y, int draw_box_ind, int input_box_ind);
@@ -673,25 +674,18 @@ struct Terminal : public TextArea {
   virtual bool GetGlyphFromCoords(const point &p, Selection::Point *out) { return GetGlyphFromCoordsOffset(p, out, clip ? 0 : start_line, 0); }
   virtual void ScrollUp  () { TextArea::PageDown(); }
   virtual void ScrollDown() { TextArea::PageUp(); }
-  int GetCursorX(int x, int y) const {
-    const Line *l = GetTermLine(y);
-    return x <= l->Size() ? l->data->glyphs.Position(x-1).x : ((x-1) * style.font->FixedWidth());
-  }
-  int GetCursorY(int y) const { return (term_height - y + 1) * style.font->Height(); }
+  int GetFrameY(int y) const;
+  int GetCursorY(int y) const;
+  int GetCursorX(int x, int y) const;
   int GetTermLineIndex(int y) const { return -term_height + y-1; }
   const Line *GetTermLine(int y) const { return &line[GetTermLineIndex(y)]; }
   /**/  Line *GetTermLine(int y)       { return &line[GetTermLineIndex(y)]; }
   Line *GetCursorLine() { return GetTermLine(term_cursor.y); }
   LinesFrameBuffer *GetPrimaryFrameBuffer()   { return line_fb.Attach(&last_fb); }
   LinesFrameBuffer *GetSecondaryFrameBuffer() { return cmd_fb .Attach(&last_fb); }
-  LinesFrameBuffer *GetFrameBuffer(const Line *l) {
-    int i = line.IndexOf(l);
-    return ((-i-1 < start_line || term_height+i < skip_last_lines) ? cmd_fb : line_fb).Attach(&last_fb);
-  }
+  LinesFrameBuffer *GetFrameBuffer(const Line *l);
   void PushBackLines (int n) { TextArea::Write(string(n, '\n'), true, false); }
-  void PushFrontLines(int n) {
-    for (int i=0; i<n; ++i) LineUpdate(line.InsertAt(-term_height, 1, start_line_adjust), GetPrimaryFrameBuffer(), LineUpdate::PushFront);
-  }
+  void PushFrontLines(int n) { for (int i=0; i<n; ++i) LineUpdate(line.InsertAt(-term_height, 1, start_line_adjust), GetPrimaryFrameBuffer(), LineUpdate::PushFront); }
   Border *UpdateClipBorder();
   void MoveLines(int sy, int ey, int dy, bool move_fb_p);
   void Scroll(int sl);
@@ -700,17 +694,17 @@ struct Terminal : public TextArea {
   void NewTopline();
   void TabNext(int n);
   void TabPrev(int n);
-  void Clear();
   void Redraw(bool attach=true, bool relayout=false);
-  void Reset();
+  void ResetTerminal();
+  void ClearTerminal();
 };
 
 struct Console : public TextArea {
   Color color=Color(25,60,130,120);
-  double screen_percent=.4;
   Callback animating_cb;
   Time anim_time=Time(333), anim_begin=Time(0);
   bool animating=0, drawing=0, bottom_or_top=0, blend=1;
+  int full_height = screen->height * .4;
   Box *scissor=0, scissor_buf;
 
   Console(GraphicsDevice *D, const FontRef &F, const Callback &C=Callback());

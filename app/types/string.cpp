@@ -63,6 +63,7 @@ Printable::Printable(const Color                 &x) : string(x.DebugString()) {
 Printable::Printable(const String16              &x) : string(String::ToUTF8(x)) {}
 Printable::Printable(const Void                  &x) : string(StringPrintf("%p", x)) {}
 Printable::Printable(const void                  *x) : string(StringPrintf("%p", x)) {}
+Box Scannable::Scan(const Box &b, const char *v) { StringWordIter w(StringPiece::Unbounded(v), isint2<' ', ','>); return Box(atoi(w.NextString()), atoi(w.NextString()), atoi(w.NextString()), atoi(w.NextString())); }
 
 String16 String::ToUTF16(const StringPiece &text, int *consumed) {
   int input = text.Length(), output = 0, c_bytes, c;

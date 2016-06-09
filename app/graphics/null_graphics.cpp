@@ -51,12 +51,14 @@ const int GraphicsDevice::GLEWVersion = 0;
 const int GraphicsDevice::Version = 0;
 const int GraphicsDevice::Vendor = 0;
 const int GraphicsDevice::DepthBits = 0;
+const int GraphicsDevice::ScissorTest = 0;
 const int GraphicsDevice::ActiveUniforms = 0;
 const int GraphicsDevice::ActiveAttributes = 0;
 const int GraphicsDevice::MaxVertexAttributes = 0;
 const int GraphicsDevice::MaxVertexUniformComp = 0;
 const int GraphicsDevice::MaxViewportDims = 0;
-const int GraphicsDevice::ViewportDims = 0;
+const int GraphicsDevice::ViewportBox = 0;
+const int GraphicsDevice::ScissorBox = 0;
 const int GraphicsDevice::Fill = 0;
 const int GraphicsDevice::Line = 0;
 const int GraphicsDevice::Point = 0;
@@ -69,7 +71,8 @@ int Pixel::OpenGLID(int p) { return 0; }
 
 struct NullGraphicsDevice : public GraphicsDevice {
   void Init(const Box&) {}
-  bool ShaderSupport() { return 0; }
+  bool ShaderSupport() const { return 0; }
+  bool GetEnabled(int) const { return 0; }
   void EnableTexture() {}
   void DisableTexture() {}
   void EnableLighting() {}
@@ -158,8 +161,8 @@ struct NullGraphicsDevice : public GraphicsDevice {
   void DelShader(int shader) {}
   void BindAttribLocation(int prog, int loc, const string &name) {}
   void LinkProgram(int prog) {}
-  void GetProgramiv(int p, int t, int *out) {}
-  void GetIntegerv(int t, int *out) {}
+  void GetProgramiv(int p, int t, int *out) const {}
+  void GetIntegerv(int t, int *out) const {}
   int GetAttribLocation (int prog, const string &name) { return 0; }
   int GetUniformLocation(int prog, const string &name) { return 0; }
   void Uniform1i(int u, int v) {}

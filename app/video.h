@@ -435,8 +435,8 @@ struct GraphicsDevice {
   static const int Ambient, Diffuse, Specular, Emission, Position;
   static const int One, SrcAlpha, OneMinusSrcAlpha, OneMinusDstColor, TextureWrapS, TextureWrapT, ClampToEdge;
   static const int VertexShader, FragmentShader, ShaderVersion, Extensions;
-  static const int GLEWVersion, Version, Vendor, DepthBits;
-  static const int ActiveUniforms, ActiveAttributes, MaxVertexAttributes, MaxVertexUniformComp, MaxViewportDims, ViewportDims;
+  static const int GLEWVersion, Version, Vendor, DepthBits, ScissorTest;
+  static const int ActiveUniforms, ActiveAttributes, MaxVertexAttributes, MaxVertexUniformComp, MaxViewportDims, ViewportBox, ScissorBox;
   static const int Fill, Line, Point, GLPreferredBuffer, GLInternalFormat;
 
   int default_draw_mode = DrawMode::_2D, draw_mode = 0, default_framebuffer = 0;
@@ -452,7 +452,8 @@ struct GraphicsDevice {
   GraphicsDevice() : scissor_stack(1) {}
   virtual ~GraphicsDevice() {}
   virtual void Init(const Box&) = 0;
-  virtual bool ShaderSupport() = 0;
+  virtual bool ShaderSupport() const = 0;
+  virtual bool GetEnabled(int) const = 0;
   virtual void EnableTexture() = 0;
   virtual void DisableTexture() = 0;
   virtual void EnableLighting() = 0;
@@ -542,8 +543,8 @@ struct GraphicsDevice {
   virtual void DelShader(int shader) = 0;
   virtual void BindAttribLocation(int prog, int loc, const string &name) = 0;
   virtual void LinkProgram(int prog) = 0;
-  virtual void GetProgramiv(int p, int t, int *out) = 0;
-  virtual void GetIntegerv(int t, int *out) = 0;
+  virtual void GetProgramiv(int p, int t, int *out) const = 0;
+  virtual void GetIntegerv(int t, int *out) const = 0;
   virtual int GetAttribLocation(int prog, const string &name) = 0;
   virtual int GetUniformLocation(int prog, const string &name) = 0;
   virtual void Uniform1i(int u, int v) = 0;

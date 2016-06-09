@@ -19,7 +19,11 @@
 @interface MyTouchView : UIView {}
 @end
 
+@interface MyTextField : UITextField {}
+@end
+
 @interface LFViewController : GLKViewController<GLKViewControllerDelegate, UIActionSheetDelegate> {}
+  @property BOOL autorotate;
   - (void)updateToolbarFrame;
   - (CGRect)getKeyboardToolbarFrame;
 @end
@@ -29,8 +33,8 @@
   @property (nonatomic, retain) LFViewController *controller;
   @property (nonatomic, retain) GLKView *view;
   @property (nonatomic, retain) UIView *lview, *rview;
-  @property (nonatomic, retain) UITextField *textField;
-  @property BOOL resign_textfield_on_return, frame_on_keyboard_input, frame_on_mouse_input;
+  @property (nonatomic, retain) MyTextField *textField;
+  @property BOOL resign_textfield_on_return, frame_on_keyboard_input, frame_on_mouse_input, downscale_animation;
   @property int screen_y, screen_width, screen_height;
   + (LFUIApplication *) sharedAppDelegate;
   - (CGFloat)getScale;

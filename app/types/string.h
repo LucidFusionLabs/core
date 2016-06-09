@@ -114,6 +114,7 @@ struct Scannable {
   static double   Scan(const double&,   const char     *v) { return atof(v); }
   static string   Scan(const string&,   const char     *v) { return string(v); }
   static String16 Scan(const String16&, const char16_t *v) { return String16(v); }
+  static Box      Scan(const Box&,      const char     *v);
 };
 
 struct PieceIndex {

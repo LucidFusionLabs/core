@@ -28,6 +28,7 @@ DEFINE_bool(console, false, "Enable dropdown lfapp console");
 DEFINE_string(console_font, "", "Console font, blank for default_font");
 DEFINE_int(console_font_flag, FontDesc::Mono, "Console font flag");
 DEFINE_bool(draw_grid, false, "Draw lines intersecting mouse x,y");
+DEFINE_FLAG(testbox, Box, Box(), "Test box; change via console: testbox x,y,w,h");
 
 void GUI::UpdateBox(const Box &b, int draw_box_ind, int input_box_ind) {
   if (draw_box_ind  >= 0) child_box.data[draw_box_ind ].box = b;
@@ -469,7 +470,6 @@ point TextBox::LinesFrameBuffer::Paint(TextBox::Line *l, point lp, const Box &b,
 }
 
 void TextBox::LinesFrameBuffer::DrawAligned(const Box &b, point adjust) {
-  Scissor scissor(screen->gd, b);
   RingFrameBuffer::Draw(align_top_or_bot ? (b.TopLeft() - point(0, h)) : b.Position(), adjust, false);
 }
 
@@ -665,7 +665,7 @@ void TextArea::Resized(const Box &b, bool font_size_changed) {
 void TextArea::CheckResized(const Box &b) {
   LinesFrameBuffer *fb = GetFrameBuffer();
   if (int c = fb->SizeChanged(b.w, b.h, style.font, bg_color)) { Resized(b, c > 1); fb->SizeChangedDone(); }
-  else if (box.w != b.w || box.h != b.h) SetDimension(b.w, b.h);
+  else if (box.w != b.w || box.h != b.h) { SetDimension(b.w, b.h); UpdateCursor(); }
 }
 
 void TextArea::Redraw(bool attach, bool relayout) {
@@ -762,8 +762,9 @@ void TextArea::Draw(const Box &b, int flag, Shader *shader) {
   LinesFrameBuffer *fb = GetFrameBuffer();
   if (flag & DrawFlag::CheckResized) CheckResized(b);
   if (clip) screen->gd->PushScissor(Box::DelBorder(b, *clip));
+  else if (extra_height) screen->gd->PushScissor(b);
   fb->DrawAligned(b, point(0, max(0, CommandLines()-1) * font_height));
-  if (clip) screen->gd->PopScissor();
+  if (clip || extra_height) screen->gd->PopScissor();
   if (flag & DrawFlag::DrawCursor) DrawCursor(b.Position() + cursor.p);
   if (selection.enabled) box.SetPosition(b.Position());
   if (selection.changing) DrawSelection();
@@ -1567,6 +1568,18 @@ Terminal::Terminal(ByteSink *O, GraphicsDevice *D, const FontRef &F, const point
   Activate();
 }
 
+int Terminal::GetFrameY(int y) const { return (term_height - y + 1) * style.font->Height(); }
+int Terminal::GetCursorY(int y) const { return GetFrameY(y) + (line_fb.align_top_or_bot ? extra_height : 0); }
+int Terminal::GetCursorX(int x, int y) const {
+  const Line *l = GetTermLine(y);
+  return x <= l->Size() ? l->data->glyphs.Position(x-1).x : ((x-1) * style.font->FixedWidth());
+}
+
+Terminal::LinesFrameBuffer *Terminal::GetFrameBuffer(const Line *l) {
+  int i = line.IndexOf(l);
+  return ((-i-1 < start_line || term_height+i < skip_last_lines) ? cmd_fb : line_fb).Attach(&last_fb);
+}
+
 void Terminal::Resized(const Box &b, bool font_size_changed) {
   int old_term_width = term_width, old_term_height = term_height;
   SetTerminalDimension(b.w / style.font->FixedWidth(), b.h / style.font->Height());
@@ -1594,8 +1607,8 @@ void Terminal::Resized(const Box &b, bool font_size_changed) {
 void Terminal::ResizedLeftoverRegion(int w, int h, bool update_fb) {
   if (!cmd_fb.SizeChanged(w, h, style.font, bg_color)) return;
   if (update_fb) {
-    for (int i=0; i<start_line;      i++) MoveToOrFromScrollRegion(&cmd_fb, &line[-i-1],           point(0,GetCursorY(term_height-i)), LinesFrameBuffer::Flag::Flush);
-    for (int i=0; i<skip_last_lines; i++) MoveToOrFromScrollRegion(&cmd_fb, &line[-term_height+i], point(0,GetCursorY(i+1)),           LinesFrameBuffer::Flag::Flush);
+    for (int i=0; i<start_line;      i++) MoveToOrFromScrollRegion(&cmd_fb, &line[-i-1],           point(0, GetFrameY(term_height-i)), LinesFrameBuffer::Flag::Flush);
+    for (int i=0; i<skip_last_lines; i++) MoveToOrFromScrollRegion(&cmd_fb, &line[-term_height+i], point(0, GetFrameY(i+1)),           LinesFrameBuffer::Flag::Flush);
   }
   cmd_fb.SizeChangedDone();
   last_fb = 0;
@@ -1632,8 +1645,8 @@ void Terminal::SetScrollRegion(int b, int e, bool release_fb) {
   for (int i =   prev_end_or_ht; i < scroll_end_or_ht; i++) MoveToOrFromScrollRegion(&line_fb, GetTermLine(i+1), line_fb.BackPlus(point(0, (term_height-i)  *font_height)), LinesFrameBuffer::Flag::NoLayout);
 
   if (prev_beg_or_1 < scroll_beg_or_1 || scroll_end_or_ht < prev_end_or_ht) GetSecondaryFrameBuffer();
-  for (int i =    prev_beg_or_1; i < scroll_beg_or_1; i++) MoveToOrFromScrollRegion(&cmd_fb, GetTermLine(i),   point(0, GetCursorY(i)),   LinesFrameBuffer::Flag::NoLayout);
-  for (int i = scroll_end_or_ht; i <  prev_end_or_ht; i++) MoveToOrFromScrollRegion(&cmd_fb, GetTermLine(i+1), point(0, GetCursorY(i+1)), LinesFrameBuffer::Flag::NoLayout);
+  for (int i =    prev_beg_or_1; i < scroll_beg_or_1; i++) MoveToOrFromScrollRegion(&cmd_fb, GetTermLine(i),   point(0, GetFrameY(i)),   LinesFrameBuffer::Flag::NoLayout);
+  for (int i = scroll_end_or_ht; i <  prev_end_or_ht; i++) MoveToOrFromScrollRegion(&cmd_fb, GetTermLine(i+1), point(0, GetFrameY(i+1)), LinesFrameBuffer::Flag::NoLayout);
   if (release_fb) { cmd_fb.fb.Release(); last_fb=0; }
 }
 
@@ -1648,7 +1661,8 @@ Border *Terminal::UpdateClipBorder() {
   int font_height = style.font->Height();
   clip_border.bottom = font_height * start_line_adjust;
   clip_border.top    = font_height * skip_last_lines;
-  if (clip_border.top) clip_border.top += extra_height;
+  if (line_fb.align_top_or_bot) { if (clip_border.bottom) clip_border.bottom += extra_height; }
+  else                          { if (clip_border.top)    clip_border.top    += extra_height; }
   return &clip_border;
 }
 
@@ -1702,12 +1716,15 @@ void Terminal::Draw(const Box &b, int flag, Shader *shader) {
   TextArea::Draw(b, flag & ~DrawFlag::DrawCursor, shader);
   if (shader) shader->SetUniform2f("iScroll", 0, XY_or_Y(shader->scale, -b.y));
   if (clip) {
-    { Scissor s(line_fb.fb.gd, Box::TopBorder(b, *clip)); cmd_fb.Draw(b.Position(), point(), false); }
-    { Scissor s(line_fb.fb.gd, Box::BotBorder(b, *clip)); cmd_fb.Draw(b.Position(), point(), false); }
+    { Scissor s(line_fb.fb.gd, Box::TopBorder(b, *clip)); cmd_fb.DrawAligned(b, point()); }
+    { Scissor s(line_fb.fb.gd, Box::BotBorder(b, *clip)); cmd_fb.DrawAligned(b, point()); }
     if (hover_control) DrawHoverLink(b);
   }
   if (flag & DrawFlag::DrawCursor) TextBox::DrawCursor(b.Position() + cursor.p);
-  if (extra_height) { ScopedFillColor c(screen->gd, *bg_color); Box(b.x, b.y+line_fb.h, b.w, extra_height).Draw(); }
+  if (extra_height && !shader) {
+    ScopedFillColor c(screen->gd, *bg_color);
+    Box(b.x, b.y + (line_fb.align_top_or_bot ? 0 : line_fb.h), b.w, extra_height).Draw();
+  }
   if (selection.changing) DrawSelection();
 }
 
@@ -1735,7 +1752,7 @@ void Terminal::Write(const StringPiece &s, bool update_fb, bool release_fb) {
           parse_osc.clear();
           parse_osc_escape = false; break;
         case '=': case '>':                        break; // application or normal keypad
-        case 'c': Reset();                         break;
+        case 'c': ResetTerminal();                 break;
         case 'D': Newline();                       break;
         case 'M': NewTopline();                    break;
         case '7': saved_term_cursor = term_cursor; break;
@@ -1801,7 +1818,7 @@ void Terminal::Write(const StringPiece &s, bool update_fb, bool release_fb) {
           int clear_beg_y = 1, clear_end_y = term_height;
           if      (parse_csi_argv[0] == 0) { LineUpdate(GetCursorLine(), fb_cb)->Erase(term_cursor.x-1);  clear_beg_y = term_cursor.y; }
           else if (parse_csi_argv[0] == 1) { LineUpdate(GetCursorLine(), fb_cb)->Erase(0, term_cursor.x); clear_end_y = term_cursor.y; }
-          else if (parse_csi_argv[0] == 2) { Clear(); break; }
+          else if (parse_csi_argv[0] == 2) { ClearTerminal(); break; }
           for (int i = clear_beg_y; i <= clear_end_y; i++) LineUpdate(GetTermLine(i), fb_cb)->Clear();
         } break;
         case 'K': {
@@ -1967,11 +1984,6 @@ void Terminal::TabPrev(int n) {
   else if ((term_cursor.x = max(PrevMultipleOfN(term_cursor.x - max(0, n-1)*tab_width - 2, tab_width), 1)) != 1) term_cursor.x++;
 }
 
-void Terminal::Clear() {
-  for (int i=1; i<=term_height; ++i) GetTermLine(i)->Clear();
-  Redraw(true);
-}
-
 void Terminal::Redraw(bool attach, bool relayout) {
   bool prev_clip = clip;
   int prev_scroll_beg = scroll_region_beg, prev_scroll_end = scroll_region_end;
@@ -1980,11 +1992,16 @@ void Terminal::Redraw(bool attach, bool relayout) {
   if (prev_clip) SetScrollRegion(prev_scroll_beg, prev_scroll_end, true);
 }
 
-void Terminal::Reset() {
+void Terminal::ResetTerminal() {
   term_cursor.x = term_cursor.y = 1;
   scroll_region_beg = scroll_region_end = 0;
   clip = 0;
-  Clear();
+  ClearTerminal();
+}
+
+void Terminal::ClearTerminal() {
+  for (int i=1; i<=term_height; ++i) GetTermLine(i)->Clear();
+  Redraw(true);
 }
 
 /* Console */
@@ -2009,7 +2026,7 @@ void Console::Draw() {
   drawing = 1;
   Time now = Now(), elapsed;
   bool active = Active(), last_animating = animating;
-  int full_height = screen->height * screen_percent, h = active ? full_height : 0;
+  int h = active ? full_height : 0;
   if ((animating = (elapsed = now - anim_begin) < anim_time)) {
     if (active) h = full_height * (  double(elapsed.count())/anim_time.count());
     else        h = full_height * (1-double(elapsed.count())/anim_time.count());
@@ -2018,8 +2035,8 @@ void Console::Draw() {
     if (last_animating && animating_cb) animating_cb();
     if (!active) { drawing = 0; return; }
   }
-  scissor = (animating && bottom_or_top) ? &(scissor_buf = Box(0, 0, screen->width, h)) : 0;
-  Draw(Box(0, bottom_or_top ? 0 : screen->height - h, screen->width, full_height));
+  scissor = (animating && bottom_or_top) ? &(scissor_buf = Box(0, screen->y, screen->width, h)) : 0;
+  Draw(Box(0, screen->y + (bottom_or_top ? 0 : screen->height - h), screen->width, full_height));
 }
 
 void Console::Draw(const Box &b, int flag, Shader *shader) {
@@ -2054,7 +2071,7 @@ void Dialog::LayoutTabbed(int tab, const Box &b, const point &tab_dim, MouseCont
 }
 
 void Dialog::Layout() {
-  Reset();
+  ResetGUI();
   int fh = font->Height();
   content = Box(0, -box.h, box.w, box.h + ((fullscreen && !tabbed) ? 0 : -fh));
   if (fullscreen) return;

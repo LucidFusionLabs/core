@@ -740,20 +740,22 @@ void GraphicsDevice::PopColor() {
   else FATAL("no color state");
   UpdateColor();
 }
+
 void GraphicsDevice::RestoreViewport(int dm) { ViewPort(Box(screen->x + screen->width, screen->y + screen->height)); DrawMode(dm); }
 void GraphicsDevice::TranslateRotateTranslate(float a, const Box &b) { float x=b.x+b.w/2.0, y=b.y+b.h/2.0; Translate(x,y,0); Rotatef(a,0,0,1); Translate(-x,-y,0); }
+
 void GraphicsDevice::DrawMode(int dm, bool flush) { return DrawMode(dm, screen->Box(), flush); }
 void GraphicsDevice::DrawMode(int dm, const Box &b, bool flush) {
   if (draw_mode == dm && !flush) return;
   bool _2D = (draw_mode = dm) == DrawMode::_2D;
-  Color4f(1,1,1,1);
+  Color4f(1, 1, 1, 1);
   MatrixProjection();
   LoadIdentity();
-  if (FLAGS_rotate_view) Rotatef(FLAGS_rotate_view,0,0,1);
+  if (FLAGS_rotate_view) Rotatef(FLAGS_rotate_view, 0, 0, 1);
 
   if (_2D) Ortho(0, b.right(), 0, b.top(), 0, 100);
   else {
-    float aspect=float(b.w)/b.h;
+    float aspect = float(b.w) / b.h;
     double top = tan(FLAGS_field_of_view * M_PI/360.0) * FLAGS_near_plane;
     screen->gd->Frustum(aspect*-top, aspect*top, -top, top, FLAGS_near_plane, FLAGS_far_plane);
   }
@@ -814,7 +816,12 @@ void GraphicsDevice::PopScissorStack() {
 
 Box GraphicsDevice::GetScissorBox() const {
   auto &ss = scissor_stack.back();
-  return ss.size() ? ss.back() : Box(-1,-1);
+  Box ret = ss.size() ? ss.back() : Box(-1,-1);
+#ifdef LFL_DEBUG
+  if (GetEnabled(ScissorTest)) { Box glb; GetIntegerv(ScissorBox, &glb.x); CHECK_EQ(glb,         ret); }
+  else                                                                   { CHECK_EQ(Box(-1, -1), ret); }
+#endif
+  return ret;
 }
   
 void GraphicsDevice::DrawPixels(const Box &b, const Texture &tex) {

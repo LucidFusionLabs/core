@@ -635,9 +635,11 @@ struct Application : public ::LFApp {
   bool GetTouchKeyboardOpened();
   Box GetTouchKeyboardBox();
   void ToggleTouchKeyboard() { if (GetTouchKeyboardOpened()) CloseTouchKeyboard(); else OpenTouchKeyboard(); }
+  void SetAutoRotateOrientation(bool);
 
-  int SetExtraScale(bool on); /// e.g. Retina display
   int SetMultisample(bool on);
+  int SetExtraScale(bool on); /// e.g. Retina display
+  void SetDownScaleAnimation(bool on);
 
   bool LoadPassword(const string &host, const string &user,       string *pw_out);
   void SavePassword(const string &host, const string &user, const string &pw);

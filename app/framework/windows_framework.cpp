@@ -251,6 +251,8 @@ void Application::ReleaseMouseFocus() {}
 void Application::GrabMouseFocus() {}
 void Application::OpenTouchKeyboard() {}
 void Application::SetTouchKeyboardTiled(bool v) {}
+void Application::SetAutoRotateOrientation(bool v) {}
+
 void Application::SetClipboardText(const string &in) {
   String16 s = String::ToUTF16(in);
   if (!OpenClipboard(NULL)) return;

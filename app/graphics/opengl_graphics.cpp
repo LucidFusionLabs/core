@@ -116,11 +116,13 @@ const int GraphicsDevice::GLEWVersion          = 0;
 const int GraphicsDevice::Version              = GL_VERSION;
 const int GraphicsDevice::Vendor               = GL_VENDOR;
 const int GraphicsDevice::DepthBits            = GL_DEPTH_BITS;
+const int GraphicsDevice::ScissorTest          = GL_SCISSOR_TEST;
 const int GraphicsDevice::ActiveUniforms       = GL_ACTIVE_UNIFORMS;
 const int GraphicsDevice::ActiveAttributes     = GL_ACTIVE_ATTRIBUTES;
 const int GraphicsDevice::MaxVertexAttributes  = GL_MAX_VERTEX_ATTRIBS;
 const int GraphicsDevice::MaxViewportDims      = GL_MAX_VIEWPORT_DIMS;
-const int GraphicsDevice::ViewportDims         = GL_VIEWPORT;
+const int GraphicsDevice::ViewportBox          = GL_VIEWPORT;
+const int GraphicsDevice::ScissorBox           = GL_SCISSOR_BOX;
 #if defined(LFL_MOBILE) || defined(LFL_EMSCRIPTEN)
 const int GraphicsDevice::Fill                 = 0;
 const int GraphicsDevice::Line                 = 0;
@@ -206,7 +208,7 @@ struct OpenGLES1 : public GraphicsDevice, public QOpenGLFunctions {
   }
 
   void UpdateColor() { const Color &c = default_color.back(); glColor4f(c.r(), c.g(), c.b(), c.a()); }
-  bool ShaderSupport() {
+  bool ShaderSupport() const {
 #ifdef LFL_MOBILE
     return false;
 #endif
@@ -368,7 +370,7 @@ struct OpenGLES2 : public GraphicsDevice, public QOpenGLFunctions {
     LogVersion();
   }
 
-  bool ShaderSupport()      { return true; }
+  bool ShaderSupport() const { return true; }
   void EnableLighting()     { lighting_on=1; GDDebug("Lighting=1"); }
   void DisableLighting()    { lighting_on=0; GDDebug("Lighting=0"); }
   void EnableTexture()      { if (Changed(&texture_on,    true))  { ClearDeferred(); UpdateTexture();    } GDDebug("Texture=1"); }

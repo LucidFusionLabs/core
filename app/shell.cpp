@@ -24,6 +24,7 @@
 namespace LFL {
 Shell::Shell(AssetMap *AM, SoundAssetMap *SAM, MovieAssetMap *MAM) : assets(AM), soundassets(SAM), movieassets(MAM) {
   command.emplace_back("quit",         bind(&Shell::quit,          this, _1));
+  command.emplace_back("console",      bind(&Shell::console,       this, _1));
   command.emplace_back("cmds",         bind(&Shell::cmds,          this, _1));
   command.emplace_back("binds",        bind(&Shell::binds,         this, _1));
   command.emplace_back("flags",        bind(&Shell::flags,         this, _1));
