@@ -164,13 +164,13 @@ const int Key::End        = -34;
     target_fps = fps;
     INFOf("updateTargetFPS: %d", target_fps);
     [self.controller setPaused:(!target_fps)];
-    [self updateGLKViewScale];
   }
 
   - (CGRect)getFrame { return self.view.frame; }
   - (CGFloat)getScale { return (want_extra_scale ? scale : 1); }
   - (int)updateScale: (bool)v { want_extra_scale=v; [self updateGLKViewScale]; return v ? scale : 1; }
-  - (void)updateGLKViewScale { self.view.contentScaleFactor = (target_fps && _downscale_animation) ? 1 : [self getScale]; }
+  - (void)downScale: (bool)v { _downscale=v; [self updateGLKViewScale]; }
+  - (void)updateGLKViewScale { self.view.contentScaleFactor = _downscale ? 1 : [self getScale]; }
   - (int)updateGLKMultisample: (bool)v { 
     self.view.drawableMultisample = v ? GLKViewDrawableMultisample4X : GLKViewDrawableMultisampleNone;
     return v ? 4 : 0;
@@ -592,7 +592,7 @@ Box Application::GetTouchKeyboardBox() {
 void Application::SetAutoRotateOrientation(bool v) { [LFUIApplication sharedAppDelegate].controller.autorotate = v; }
 int Application::SetMultisample(bool v) { return [[LFUIApplication sharedAppDelegate] updateGLKMultisample:v]; }
 int Application::SetExtraScale(bool v) { return [[LFUIApplication sharedAppDelegate] updateScale:v]; }
-void Application::SetDownScaleAnimation(bool v) { [LFUIApplication sharedAppDelegate].downscale_animation = v; }
+void Application::SetDownScale(bool v) { [[LFUIApplication sharedAppDelegate] downScale:v]; }
 
 void Window::SetResizeIncrements(float x, float y) {}
 void Window::SetTransparency(float v) {}

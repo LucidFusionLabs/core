@@ -139,7 +139,7 @@ struct FFMpegAssetLoader : public AssetLoaderInterface {
       int pf = PixelFromFFMpegId(avctx->pix_fmt);
       out->width  = avctx->width;
       out->height = avctx->height;
-      out->LoadGL(*frame->data, point(out->width, out->height), pf, frame->linesize[0]);
+      out->LoadGL(*frame->data, point(out->width, out->height), pf, frame->linesize[0], (load_flag & Flag::RepeatGL) ? Texture::Flag::RepeatGL : 0);
       if (!(load_flag & Flag::Clear)) out->LoadBuffer(frame->data[0], point(out->width, out->height), pf, frame->linesize[0]);
       // av_frame_unref(frame);
     }

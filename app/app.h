@@ -219,11 +219,14 @@ using LFL_STL11_NAMESPACE::isinf;
 using LFL_STL11_NAMESPACE::isnan;
 #define tuple_get LFL_STL11_NAMESPACE::get
 
+template <class X> struct Singleton { static X *Get() { static X instance; return &instance; } };
+template <class X> struct V2;
+typedef V2<float> v2;
+typedef V2<int> point;
+typedef vector<string> StringVec;
 typedef lock_guard<mutex> ScopedMutex;
 typedef function<void()> Callback;
 typedef function<void(const string&)> StringCB;
-typedef vector<string> StringVec;
-template <class X> struct Singleton { static X *Get() { static X instance; return &instance; } };
 void Log(int level, const char *file, int line, const string &m);
 }; // namespace LFL
 
@@ -234,7 +237,7 @@ void Log(int level, const char *file, int line, const string &m);
 namespace LFL {
 extern Window *screen;
 extern Application *app;
-extern bool DEBUG, MOBILE;
+extern const bool DEBUG, MOBILE, IOS, ANDROID;
 
 struct Allocator {
   virtual ~Allocator() {}
@@ -315,7 +318,7 @@ template <class X> struct FlagOfType : public Flag {
   FlagOfType(const char *N, const char *D, const char *F, int L, X *V)
     : Flag(N, D, F, L), v(V) { Singleton<FlagMap>::Get()->Add(this); } 
 
-  string Get() const { return ToString(*v); }
+  string Get() const { return Printable(*v); }
   bool IsBool() const { return TypeId<X>() == TypeId<bool>(); }
   void Update(const char *text) { if (text) *v = Scannable::Scan(*v, text); }
 };
@@ -639,7 +642,7 @@ struct Application : public ::LFApp {
 
   int SetMultisample(bool on);
   int SetExtraScale(bool on); /// e.g. Retina display
-  void SetDownScaleAnimation(bool on);
+  void SetDownScale(bool on);
 
   bool LoadPassword(const string &host, const string &user,       string *pw_out);
   void SavePassword(const string &host, const string &user, const string &pw);

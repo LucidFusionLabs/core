@@ -104,9 +104,10 @@ struct Asset {
   void Unload();
 
   static void Load(vector<Asset> *assets) { for (int i=0; i<assets->size(); ++i) (*assets)[i].Load(); }
-  static void LoadTexture(         const string &asset_fn, Texture *out, VideoAssetLoader *l=0) { LoadTexture(0, asset_fn, out, l); }
-  static void LoadTexture(void *h, const string &asset_fn, Texture *out, VideoAssetLoader *l=0);
+  static void LoadTexture(         const string &asset_fn, Texture *out, VideoAssetLoader *l=0, int flag=VideoAssetLoader::Flag::Default) { LoadTexture(0, asset_fn, out, l, flag); }
+  static void LoadTexture(void *h, const string &asset_fn, Texture *out, VideoAssetLoader *l=0, int flag=VideoAssetLoader::Flag::Default);
   static void LoadTexture(const void *from_buf, const char *fn, int size, Texture *out, int flag=VideoAssetLoader::Flag::Default);
+  static void LoadTextureArray(const string &fmt, const string &prefix, const string &suffix, int N, TextureArray*out, int flag=VideoAssetLoader::Flag::Default);
   static Texture *LoadTexture(const MultiProcessFileResource &file, int max_image_size = 1000000);
   static string FileName(const string &asset_fn);
   static string FileContents(const string &asset_fn);

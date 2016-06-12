@@ -208,6 +208,7 @@ bool MultiProcessBuffer::Open() {
 #else /* LFL_WINDOWS */
 
 int ProcessPipe::Open(const char* const* argv, const char *startdir) {
+  INFO("ProcessPipe::Open(", Join(argv, " "), ") in \"", BlankNull(startdir), "\"");
   int pipein[2], pipeout[2], ret;
   if (pipe(pipein) < 0) return -1;
   if (pipe(pipeout) < 0) { close(pipein[0]); close(pipein[1]); return -1; }

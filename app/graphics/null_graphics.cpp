@@ -155,13 +155,12 @@ struct NullGraphicsDevice : public GraphicsDevice {
   int CreateProgram() { return 0; }
   void DelProgram(int p) {}
   int CreateShader(int t) { return 0; }
-  void ShaderSource(int shader, int count, const char **source, int *len) {}
-  void CompileShader(int shader) {}
+  void CompileShader(int shader, vector<const char*> source) {}
   void AttachShader(int prog, int shader) {}
   void DelShader(int shader) {}
   void BindAttribLocation(int prog, int loc, const string &name) {}
   void LinkProgram(int prog) {}
-  void GetProgramiv(int p, int t, int *out) const {}
+  void GetProgramiv(int p, int t, int *out) {}
   void GetIntegerv(int t, int *out) const {}
   int GetAttribLocation (int prog, const string &name) { return 0; }
   int GetUniformLocation(int prog, const string &name) { return 0; }

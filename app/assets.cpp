@@ -102,7 +102,7 @@ void Asset::Load(void *h, VideoAssetLoader *l) {
   if (!texture.empty() || h) LoadTexture(h, texture, &tex, l);
 }
 
-void Asset::LoadTexture(void *h, const string &asset_fn, Texture *out, VideoAssetLoader *l) {
+void Asset::LoadTexture(void *h, const string &asset_fn, Texture *out, VideoAssetLoader *l, int flag) {
   if (!FLAGS_enable_video) return;
   auto i = app->asset_cache.find(asset_fn);
   if (i != app->asset_cache.end()) return LoadTexture(i->second.data(), asset_fn.c_str(), i->second.size(), out);
@@ -112,7 +112,7 @@ void Asset::LoadTexture(void *h, const string &asset_fn, Texture *out, VideoAsse
   if      (!h && 0) handle = l->LoadVideoFile(Asset::OpenFile(asset_fn));
   else if (!h)      handle = l->LoadVideoFileNamed(asset_fn);
   if (!handle) return ERROR("load: ", asset_fn);
-  l->LoadVideo(handle, out);
+  l->LoadVideo(handle, out, flag);
   if (!h) l->UnloadVideoFile(handle);
 }
 
@@ -141,6 +141,12 @@ Texture *Asset::LoadTexture(const MultiProcessFileResource &file, int max_image_
 
   if (!tex->buf || !tex->width || !tex->height) return 0;
   return tex.release();
+}
+
+void Asset::LoadTextureArray(const string &fmt, const string &prefix, const string &suffix, int N, TextureArray*out, int flag) {
+  out->a.resize(N);
+  for (int i=0, l=out->a.size(); i<l; i++)
+    Asset::LoadTexture(StringPrintf(fmt.c_str(), prefix.c_str(), i, suffix.c_str()), &out->a[i], 0, flag);
 }
 
 void SoundAsset::Unload() {
@@ -292,7 +298,7 @@ void glShadertoyShader(Shader *shader, const Texture *tex) {
   shader->SetUniform1f("iGlobalTime", ToFSeconds(Now() - app->time_started).count());
   shader->SetUniform1f("iBlend", FLAGS_shadertoy_blend);
   shader->SetUniform4f("iMouse", screen->mouse.x, screen->mouse.y, app->input->MouseButton1Down(), 0);
-  shader->SetUniform3f("iResolution", XY_or_Y(scale, screen->pow2_width), XY_or_Y(scale, screen->pow2_height), 0);
+  shader->SetUniform3f("iResolution", XY_or_Y(scale, screen->x + screen->width), XY_or_Y(scale, screen->y + screen->height), 0);
   if (tex) shader->SetUniform3f("iChannelResolution", XY_or_Y(scale, tex->width), XY_or_Y(scale, tex->height), 1);
 }
 
@@ -450,7 +456,7 @@ void glSpectogram(Matrix *m, Texture *t, float *max, float clip, int pd) {
   if (!t->ID) t->CreateBacked(m->N, m->M);
   else {
     if (t->width < m->N || t->height < m->M) t->Resize(m->N, m->M);
-    else Texture::Coordinates(t->coord, m->N, m->M, NextPowerOfTwo(t->width), NextPowerOfTwo(t->height));
+    else Texture::Coordinates(t->coord, m->N, m->M, screen->gd->TextureDim(t->width), screen->gd->TextureDim(t->height));
   }
 
   if (clip == -INFINITY) clip = -65;

@@ -34,7 +34,7 @@ struct VideoAssetLoader {
   virtual void *LoadVideoFileNamed(const string &fn) = 0;
   virtual void UnloadVideoFile(void *h) = 0;
 
-  struct Flag { enum { LoadGL=1, Clear=2, Default=LoadGL|Clear }; };
+  struct Flag { enum { LoadGL=1, Clear=2, RepeatGL=4, Default=LoadGL|Clear }; };
   virtual void LoadVideo(void *h, Texture *out, int flag=Flag::Default) = 0;
 };
 

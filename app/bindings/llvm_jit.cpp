@@ -33,8 +33,10 @@ struct JIT {
   vector<string> buffer_data;
   LLVMExecutionEngineRef engine=0;
   bool lazy=false, own_module=true;
+  const char* const* argv;
+  int argc;
 
-  JIT() {}
+  JIT(int ac, const char* const *av) : argc(ac), argv(av) {}
   virtual ~JIT() {
     if (engine) LLVMDisposeExecutionEngine(engine);
     if (own_module) FreeModule();
@@ -86,7 +88,7 @@ struct JIT {
     return true;
   }
 
-  int Run(int argc, const char* const *argv) {
+  int Run() {
     LLVMValueRef app_create = LLVMGetNamedFunction(module[0], "MyAppCreate");
     LLVMValueRef app_main   = LLVMGetNamedFunction(module[0], "MyAppMain");
     if (!app_create) { fprintf(stderr, "LLVMGetNamedFunction MyAppCreate"); return -1; }
@@ -109,10 +111,12 @@ struct JIT {
 }; // namespace LFL
 using namespace LFL;
 
-extern "C" void MyAppCreate() {}
-extern "C" int MyAppMain(int argc, const char* const* argv) {
-  if (argc < 2) { fprintf(stderr, "usage: %s <bitcode file> [args]\n", argv[0]); return -1; }
-  my_jit = new JIT();
-  if (!my_jit->LoadBitcode(argv[1])) return -1;
-  return my_jit->Run(argc, argv);
+extern "C" void MyAppCreate(int argc, const char* const* argv) {
+  my_jit = new JIT(argc, argv);
+}
+
+extern "C" int MyAppMain() {
+  if (my_jit->argc < 2) { fprintf(stderr, "usage: %s <bitcode file> [args]\n", my_jit->argv[0]); return -1; }
+  if (!my_jit->LoadBitcode(my_jit->argv[1])) return -1;
+  return my_jit->Run();
 }

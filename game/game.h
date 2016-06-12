@@ -1039,7 +1039,7 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
   }
 
   void LayoutTopbar() {
-    Flow topbarflow(&topbar.box, font, topbar.Reset());
+    Flow topbarflow(&topbar.box, font, topbar.ResetGUI());
     tab1.box = tab2.box = tab3.box = tab4.box = Box(topbar.box.w/4, topbar.box.h);
     tab1.Layout(&topbarflow, (selected == 1) ? glow_font : font);
     tab2.Layout(&topbarflow, (selected == 2) ? glow_font : font);
@@ -1050,7 +1050,7 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
   void LayoutMenu() {
     Box b;
     int fh = font->Height(), scrolled = 0;
-    Flow menuflow(&box, bright_font, Reset());
+    Flow menuflow(&box, bright_font, ResetGUI());
     mouse.AddClickBox(Box(0, -box.h, box.w-tab1_options.dot_size, box.h),
                       MouseController::CB(bind(&GameMenuGUI::MenuLineClicked, this)));
 

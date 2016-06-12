@@ -116,14 +116,24 @@ extern "C" void CloseSystemConsole() {
 
 namespace LFL {
 #ifdef LFL_DEBUG
-bool DEBUG = true;
+const bool DEBUG = true;
 #else
-bool DEBUG = false;
+const bool DEBUG = false;
 #endif
 #ifdef LFL_MOBILE
-bool MOBILE = true;
+const bool MOBILE = true;
 #else
-bool MOBILE = false;
+const bool MOBILE = false;
+#endif
+#ifdef LFL_IOS
+const bool IOS = true;
+#else
+const bool IOS = false;
+#endif
+#ifdef LFL_ANDROID
+const bool ANDROID = true;
+#else
+const bool ANDROID = false;
 #endif
 
 DEFINE_int(loglevel, DEBUG ? 7 : 0, "Log level: [Fatal=-1, Error=0, Info=3, Debug=7]");
@@ -778,8 +788,6 @@ void Window::DrawDialogs() {
 void Window::SetBox(const LFL::Box &b) {
   Assign(&x, &y, b.x, b.y);
   Assign(&width, &height, b.w, b.h);
-  pow2_width  = NextPowerOfTwo(b.right());
-  pow2_height = NextPowerOfTwo(b.top());
 }
 
 void Window::Reshaped(const LFL::Box &b) {

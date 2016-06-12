@@ -342,6 +342,7 @@ struct OpenGLES2 : public GraphicsDevice, public QOpenGLFunctions {
 
   void Init(const Box &b) {
     done_init = true;
+    have_npot_textures = false;
     GDDebug("Init");
     memzero(vertex_attr); memzero(tex_attr); memzero(color_attr); memzero(normal_attr); memzero(bound_texture);
     deferred.prim_type = deferred.vertex_size = deferred.vertexbuffer_len = deferred.draw_calls = 0;

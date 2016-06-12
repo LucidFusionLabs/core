@@ -408,12 +408,14 @@ void Texture::Resize(int W, int H, int PF, int flag) {
     } else if (cubemap == CubeMap::PX) {
       screen->gd->ActiveTexture(0);
       screen->gd->GenTextures(GraphicsDevice::TextureCubeMap, 1, &ID);
-      screen->gd->TexParameter(GraphicsDevice::TextureCubeMap, GraphicsDevice::TextureWrapS, 
-                               GraphicsDevice::ClampToEdge);
+    }
+    if (!(flag & Flag::RepeatGL)) {
+      screen->gd->TexParameter(GraphicsDevice::Texture2D, GraphicsDevice::TextureWrapS, GraphicsDevice::ClampToEdge);
+      screen->gd->TexParameter(GraphicsDevice::Texture2D, GraphicsDevice::TextureWrapT, GraphicsDevice::ClampToEdge);
     }
   }
   if (ID || cubemap) {
-    int opengl_width = NextPowerOfTwo(width), opengl_height = NextPowerOfTwo(height);
+    int opengl_width = screen->gd->TextureDim(width), opengl_height = screen->gd->TextureDim(height);
     int gl_tt = GLTexType(), gl_pt = GLPixelType(), gl_bt = GLBufferType();
     if (ID) screen->gd->BindTexture(gl_tt, ID);
     screen->gd->TexImage2D(gl_tt, 0, GraphicsDevice::GLInternalFormat, opengl_width, opengl_height, 0, gl_pt, gl_bt, 0);
@@ -455,7 +457,7 @@ void Texture::LoadGL(const unsigned char *B, const point &dim, int PF, int lines
   Texture temp;
   temp .Resize(dim.x, dim.y, preferred_pf, Flag::CreateBuf);
   temp .UpdateBuffer(B, dim, PF, linesize, Flag::FlipY);
-  this->Resize(dim.x, dim.y, preferred_pf, Flag::CreateGL);
+  this->Resize(dim.x, dim.y, preferred_pf, Flag::CreateGL | (flag & Flag::RepeatGL));
   this->UpdateGL(temp.buf, LFL::Box(dim), flag);
 }
 
@@ -502,12 +504,6 @@ HBITMAP Texture::CreateGDIBitMap(HDC dc) {
 }
 #endif
 
-void TextureArray::Load(const string &fmt, const string &prefix, const string &suffix, int N) {
-  a.resize(N);
-  for (int i=0, l=a.size(); i<l; i++)
-    Asset::LoadTexture(StringPrintf(fmt.c_str(), prefix.c_str(), i, suffix.c_str()), &a[i]);
-}
-
 void TextureArray::DrawSequence(Asset *out, Entity *e, int *ind) {
   *ind = (*ind + 1) % a.size();
   const Texture *in = &a[*ind];
@@ -521,7 +517,7 @@ void DepthTexture::Resize(int W, int H, int DF, int flag) {
   if (DF) df = DF;
   width=W; height=H;
   if (!ID && (flag & Flag::CreateGL)) screen->gd->GenRenderBuffers(1, &ID);
-  int opengl_width = NextPowerOfTwo(width), opengl_height = NextPowerOfTwo(height);
+  int opengl_width = screen->gd->TextureDim(width), opengl_height = screen->gd->TextureDim(height);
   if (ID) {
     screen->gd->BindRenderBuffer(ID);
     screen->gd->RenderBufferStorage(Depth::OpenGLID(df), opengl_width, opengl_height);
@@ -542,7 +538,7 @@ void FrameBuffer::Resize(int W, int H, int flag) {
   width=W; height=H;
   if (!ID && (flag & Flag::CreateGL)) {
     screen->gd->GenFrameBuffers(1, &ID);
-    if (flag & Flag::CreateTexture)      AllocTexture(&tex, !(flag & Flag::NoClampToEdge));
+    if (flag & Flag::CreateTexture)      AllocTexture(&tex);
     if (flag & Flag::CreateDepthTexture) AllocDepthTexture(&depth);
   } else {
     tex.Resize(width, height);
@@ -555,14 +551,10 @@ void FrameBuffer::Resize(int W, int H, int flag) {
 }
 
 void FrameBuffer::AllocDepthTexture(DepthTexture *out) { CHECK_EQ(out->ID, 0); out->Create(width, height); }
-void FrameBuffer::AllocTexture(unsigned *out, bool clamp) { Texture t; AllocTexture(&t, clamp); *out = t.ReleaseGL(); } 
-void FrameBuffer::AllocTexture(Texture *out, bool clamp_to_edge) {
+void FrameBuffer::AllocTexture(unsigned *out) { Texture t; AllocTexture(&t); *out = t.ReleaseGL(); } 
+void FrameBuffer::AllocTexture(Texture *out) {
   CHECK_EQ(out->ID, 0);
   out->Create(width, height); 
-  if (clamp_to_edge) {
-    screen->gd->TexParameter(GraphicsDevice::Texture2D, GraphicsDevice::TextureWrapT, GraphicsDevice::ClampToEdge);
-    screen->gd->TexParameter(GraphicsDevice::Texture2D, GraphicsDevice::TextureWrapS, GraphicsDevice::ClampToEdge);
-  }
 }
 
 void FrameBuffer::Release(bool update_viewport) {
@@ -621,18 +613,14 @@ int Shader::Create(const string &name, const string &vertex_shader, const string
 
   if (vertex_shader.size()) {
     int vs = screen->gd->CreateShader(GraphicsDevice::VertexShader);
-    const char *vss[] = { hdr.c_str(), vertex_shader.c_str(), 0 };
-    screen->gd->ShaderSource(vs, 2, vss, 0);
-    screen->gd->CompileShader(vs);
+    screen->gd->CompileShader(vs, { hdr.c_str(), vertex_shader.c_str() });
     screen->gd->AttachShader(p, vs);
     screen->gd->DelShader(vs);
   }
 
   if (fragment_shader.size()) {
     int fs = screen->gd->CreateShader(GraphicsDevice::FragmentShader);
-    const char *fss[] = { hdr.c_str(), fragment_shader.c_str(), 0 };
-    screen->gd->ShaderSource(fs, 2, fss, 0);
-    screen->gd->CompileShader(fs);
+    screen->gd->CompileShader(fs, { hdr.c_str(), fragment_shader.c_str() });
     screen->gd->AttachShader(p, fs);
     screen->gd->DelShader(fs);
   }
@@ -696,14 +684,15 @@ int Shader::CreateShaderToy(const string &name, const string &pixel_shader, Shad
   static string header =
     "uniform float iGlobalTime, iBlend;\r\n"
     "uniform vec3 iResolution;\r\n"
-    "uniform vec2 iScroll;\r\n"
     "uniform vec4 iMouse;\r\n"
     "uniform sampler2D iChannel0;\r\n"
     "uniform vec3 iChannelResolution[1];\r\n"
+    "uniform vec2 iChannelScroll[1], iChannelModulus[1];\r\n"
     "#define SampleChannelAtPointAndModulus(c, p, m) texture2D(c, mod((p), (m)))\r\n"
-    "#define SampleChannelAtPoint(c, p) SampleChannelAtPointAndModulus(c, p, iChannelResolution[0].xy/iResolution.xy)\r\n"
-    "#define SamplePoint() ((fragCoord.xy + iScroll)/iResolution.xy)\r\n"
-    "#define SamplePointFlipY() vec2((fragCoord.x+iScroll.x)/iResolution.x, (iResolution.y-fragCoord.y-iScroll.y)/iResolution.y)\r\n"
+    "#define SampleChannelAtPoint(c, p) SampleChannelAtPointAndModulus(c, p, iChannelModulus[0])\r\n"
+    "#define SamplePoint() ((fragCoord.xy + iChannelScroll[0]) / iChannelResolution[0].xy)\r\n"
+    "#define SamplePointFlipY() vec2((fragCoord.x + iChannelScroll[0].x) / iChannelResolution[0].x, \\\r\n"
+    "                                (iChannelResolution[0].y - fragCoord.y - iChannelScroll[0].y) / iChannelResolution[0].y)\r\n"
     "#define SampleChannel(c) SampleChannelAtPoint(c, SamplePoint())\r\n"
     "#define BlendChannels(c1,c2) ((c1)*iBlend + (c2)*(1.0-iBlend))\r\n";
 
@@ -814,6 +803,7 @@ void GraphicsDevice::PopScissorStack() {
   else { Scissor(screen->Box()); DisableScissor(); }
 }
 
+Box GraphicsDevice::GetViewport() const { Box vp; GetIntegerv(ViewportBox, &vp.x); return vp; }
 Box GraphicsDevice::GetScissorBox() const {
   auto &ss = scissor_stack.back();
   Box ret = ss.size() ? ss.back() : Box(-1,-1);

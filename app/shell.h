@@ -83,6 +83,7 @@ struct Shell {
   void cmds (const vector<string>&);
   void flags(const vector<string>&);
   void binds(const vector<string>&);
+  void constants(const vector<string>&);
 };
 
 }; // namespace LFL

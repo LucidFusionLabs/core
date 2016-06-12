@@ -28,6 +28,7 @@ Shell::Shell(AssetMap *AM, SoundAssetMap *SAM, MovieAssetMap *MAM) : assets(AM),
   command.emplace_back("cmds",         bind(&Shell::cmds,          this, _1));
   command.emplace_back("binds",        bind(&Shell::binds,         this, _1));
   command.emplace_back("flags",        bind(&Shell::flags,         this, _1));
+  command.emplace_back("constants",    bind(&Shell::constants,     this, _1));
   command.emplace_back("conscolor",    bind(&Shell::consolecolor,  this, _1));
   command.emplace_back("clipboard",    bind(&Shell::clipboard,     this, _1));
   command.emplace_back("dldir",        bind(&Shell::dldir,         this, _1));
@@ -338,7 +339,15 @@ void Shell::cmds(const vector<string>&) {
 
 void Shell::flags(const vector<string>&) { Singleton<FlagMap>::Get()->Print(); }
 
-void Shell::binds(const vector<string>&) { }
+void Shell::binds(const vector<string>&) {
+  auto bm = screen->GetInputController<BindMap>(0);
+  if (!bm) return;
+  for (auto &b : bm->data) {}
+}
+
+void Shell::constants(const vector<string>&) {
+  INFO("DEBUG=", DEBUG, ", MOBILE=", MOBILE, ", IOS=", IOS, ", ANDROID=", ANDROID);
+}
 
 void Shell::AddBrowserCommands(Browser *b) {
   Add("image_cache_info", [=](const vector<string>&){ INFO(b->doc.parser->image_cache.DebugString()); });

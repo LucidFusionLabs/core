@@ -29,6 +29,7 @@ DEFINE_string(console_font, "", "Console font, blank for default_font");
 DEFINE_int(console_font_flag, FontDesc::Mono, "Console font flag");
 DEFINE_bool(draw_grid, false, "Draw lines intersecting mouse x,y");
 DEFINE_FLAG(testbox, Box, Box(), "Test box; change via console: testbox x,y,w,h");
+DEFINE_FLAG(testcolor, Color, Color::red, "Test color; change via console: testcolor hexval");
 
 void GUI::UpdateBox(const Box &b, int draw_box_ind, int input_box_ind) {
   if (draw_box_ind  >= 0) child_box.data[draw_box_ind ].box = b;
@@ -754,9 +755,12 @@ void TextArea::Draw(const Box &b, int flag, Shader *shader) {
   if (shader) {
     float scale = shader->scale;
     glShadertoyShader(shader);
-    shader->SetUniform3f("iChannelResolution", XY_or_Y(scale, b.w), XY_or_Y(scale, b.h), 1);
-    shader->SetUniform2f("iScroll", XY_or_Y(scale, -line_fb.scroll.x * line_fb.w),
-                                    XY_or_Y(scale, -line_fb.scroll.y * line_fb.h - b.y));
+    shader->SetUniform3f("iChannelResolution", XY_or_Y(scale, screen->gd->TextureDim(line_fb.w)), 
+                                               XY_or_Y(scale, screen->gd->TextureDim(line_fb.h)), 1);
+    shader->SetUniform2f("iChannelScroll", XY_or_Y(scale, -line_fb.scroll.x * line_fb.w),
+                                           XY_or_Y(scale, -line_fb.scroll.y * line_fb.h - line_fb.align_top_or_bot * extra_height) - b.y);
+    shader->SetUniform2f("iChannelModulus", line_fb.fb.tex.coord[Texture::maxx_coord_ind],
+                                            line_fb.fb.tex.coord[Texture::maxy_coord_ind]);
   }
   int font_height = style.font->Height();
   LinesFrameBuffer *fb = GetFrameBuffer();
@@ -814,6 +818,7 @@ void TextArea::DragCB(int, int, int, int down) {
     if (!Active()) Activate();
 #ifdef LFL_MOBILE
     app->ToggleTouchKeyboard();
+    return;
 #endif
   }
   Selection *s = &selection;

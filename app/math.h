@@ -83,8 +83,6 @@ template <class X> struct V2 {
   bool Zero() const { return !x && !y; }
   string DebugString() const { return StrCat("v(", x, ", ", y, ")"); }
 };
-typedef V2<float> v2;
-typedef V2<int> point;
 
 struct v3 {
   float x, y, z;

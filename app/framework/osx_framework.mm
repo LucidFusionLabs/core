@@ -537,6 +537,7 @@ void Application::LaunchNativeContextMenu(const vector<MenuItem>&items) {
 void Application::OpenTouchKeyboard() {}
 void Application::SetTouchKeyboardTiled(bool v) {}
 int Application::SetExtraScale(bool v) { return false; }
+void Application::SetDownScale(bool v) {}
 void Application::SetAutoRotateOrientation(bool v) {}
 
 void Window::SetCaption(const string &v) { 

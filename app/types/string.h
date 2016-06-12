@@ -94,6 +94,9 @@ struct Printable : public string {
   Printable(const unsigned short &x) : string(ToString(x)) {}
   Printable(const unsigned long &x) : string(ToString(x)) {}
   Printable(const unsigned long long &x) : string(ToString(x)) {}
+  Printable(const point &x) : string(ToString(x)) {}
+  Printable(const Box &x) : string(ToString(x)) {}
+  Printable(const Color &x);
   Printable(const pair<int, int> &x);
   Printable(const vector<pair<int, int>> &x);
   Printable(const vector<string> &x);
@@ -101,7 +104,6 @@ struct Printable : public string {
   Printable(const vector<float> &x);
   Printable(const vector<int> &x);
   Printable(const vector<uint16_t> &x);
-  Printable(const Color &x);
   template <size_t N> Printable(const char (&x)[N]) : string(x) {}
   template <class X> Printable(const X& x) : string(StringPrintf("%s(%p)", typeid(X).name(), &x)) {}
 };
@@ -114,7 +116,9 @@ struct Scannable {
   static double   Scan(const double&,   const char     *v) { return atof(v); }
   static string   Scan(const string&,   const char     *v) { return string(v); }
   static String16 Scan(const String16&, const char16_t *v) { return String16(v); }
+  static point    Scan(const point&,    const char     *v);
   static Box      Scan(const Box&,      const char     *v);
+  static Color    Scan(const Color&,    const char     *v);
 };
 
 struct PieceIndex {
@@ -519,6 +523,8 @@ void Join(string *out, const vector<string> &in, int inB, int inE);
 string Join(const vector<const char *> &strs, const string &separator);
 string Join(const vector<string> &strs, const string &separator);
 string Join(const vector<string> &strs, const string &separator, int beg_ind, int end_ind);
+string Join(const char* const*, const string &separator);
+string Join(const char* const*, const string &separator, int beg_ind, int end_ind);
 string strip(const char *s, int (*stripchar)(int), int (*stripchar2)(int)=0);
 string togrep(const char *s, int (*grepchar)(int), int (*grepchar2)(int)=0);
 string   toconvert(const char     *text, int (*tochar)(int), int (*ischar)(int)=0);

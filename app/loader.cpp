@@ -269,7 +269,7 @@ void SimpleAssetLoader::LoadVideo(void *h, Texture *out, int load_flag) {
   }
   else return ERROR("load ", fn, " : failed");
 
-  if (load_flag & Flag::LoadGL) out->LoadGL();
+  if (load_flag & Flag::LoadGL) out->LoadGL((load_flag & Flag::RepeatGL) ? Texture::Flag::RepeatGL : 0);
   if (load_flag & Flag::Clear)  out->ClearBuffer();
 }
 

@@ -149,12 +149,17 @@ const char *GetGLEWString(int t) {
 int CreateProgram() { int p=glCreateProgram(); GDDebug("CreateProgram ", p); return p; }
 void DelProgram(int p) { glDeleteProgram(p); GDDebug("DelProgram ", p); }
 int CreateShader(int t) { return glCreateShader(t); }
-void ShaderSource(int shader, int count, const char **source, int *len) { glShaderSource(shader, count, source, len); }
-void CompileShader(int shader) {
-  char buf[1024] = {0}; int l=0;
+void CompileShader(int shader, vector<const char*> source) {
+  int l = 0;
+  char buf[1024] = {0};
+  glShaderSource(shader, source.size(), &source[0], nullptr);
   glCompileShader(shader);
   glGetShaderInfoLog(shader, sizeof(buf), &l, buf);
-  if (l) INFO(buf);
+  if (l) {
+    INFO(buf);
+    INFO("Source:");
+    for (auto &s : source) INFO(s);
+  }
 }
 void AttachShader(int prog, int shader) { glAttachShader(prog, shader); }
 void DelShader(int shader) { glDeleteShader(shader); }
@@ -168,7 +173,7 @@ void LinkProgram(int prog) {
   glGetProgramiv(prog, GL_LINK_STATUS, &link_status);
   if (link_status != GL_TRUE) FATAL("link failed");
 }
-void GetProgramiv(int p, int t, int *out) const { glGetProgramiv(p, t, out); }
+void GetProgramiv(int p, int t, int *out) { glGetProgramiv(p, t, out); }
 void GetIntegerv(int t, int *out) const { glGetIntegerv(t, out); }
 int GetAttribLocation (int prog, const string &name) { return glGetAttribLocation (prog, name.c_str()); }
 int GetUniformLocation(int prog, const string &name) { return glGetUniformLocation(prog, name.c_str()); }

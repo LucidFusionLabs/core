@@ -110,7 +110,7 @@ void CoreTextFontEngine::SetDefault() {
   FLAGS_font_engine = "coretext";
 #ifdef LFL_IOS
   FLAGS_font = "Menlo-Bold";
-  FLAGS_font_size = 12;
+  FLAGS_font_size = 15;
 #else
   FLAGS_font = "Monaco";
   FLAGS_font_size = 15;

@@ -304,7 +304,7 @@ struct Texture : public Drawable {
   unsigned char *RenewBuffer() { ClearBuffer(); buf = NewBuffer(); return buf; }
   unsigned char *ReleaseBuffer() { unsigned char *ret=0; swap(ret, buf); ClearBuffer(); return ret; }
 
-  struct Flag { enum { CreateGL=1, CreateBuf=2, FlipY=4, Resample=8 }; };
+  struct Flag { enum { CreateGL=1, CreateBuf=2, FlipY=4, Resample=8, RepeatGL=16 }; };
   void Create      (int PF=0)               { Create(width, height, PF); }
   void Create      (int W, int H, int PF=0) { Resize(W, H, PF, Flag::CreateGL); }
   void CreateBacked(int W, int H, int PF=0) { Resize(W, H, PF, Flag::CreateGL | Flag::CreateBuf); }
@@ -322,7 +322,7 @@ struct Texture : public Drawable {
   void UpdateGL(const unsigned char *B, const ::LFL::Box &box, int flag=0);
   void UpdateGL(const ::LFL::Box &b, int flag=0) { return UpdateGL(buf ? (buf+(b.y*width+b.x)*PixelSize()) : 0, b, flag); }
   void UpdateGL() { UpdateGL(LFL::Box(0, 0, width, height)); }
-  void LoadGL() { LoadGL(buf, point(width, height), pf, LineSize()); }
+  void LoadGL(int flag=0) { LoadGL(buf, point(width, height), pf, LineSize(), flag); }
 
   virtual int Id() const { return 0; }
   virtual int LayoutAtPoint(const point &p, LFL::Box *out) const { *out = LFL::Box(p, width, height); return width; } 
@@ -344,7 +344,6 @@ struct Texture : public Drawable {
 struct TextureArray {
   vector<Texture> a;
   void ClearGL() { for (auto &i : a) i.ClearGL(); }
-  void Load(const string &fmt, const string &prefix, const string &suffix, int N);
   void DrawSequence(Asset *out, Entity *e, int *ind);
 };
 
@@ -373,12 +372,12 @@ struct FrameBuffer {
   ~FrameBuffer() { if (owner) ClearGL(); }
   void ResetGL() { ID=width=height=0; tex.owner=depth.owner=0; tex=Texture(); depth=DepthTexture(); }
 
-  struct Flag { enum { CreateGL=1, CreateTexture=2, CreateDepthTexture=4, ReleaseFB=8, NoClampToEdge=16 }; };
+  struct Flag { enum { CreateGL=1, CreateTexture=2, CreateDepthTexture=4, ReleaseFB=8, RepeatGL=16 }; };
   void Create(int W, int H, int flag=0) { Resize(W, H, Flag::CreateGL | flag); }
   void Resize(int W, int H, int flag=0);
 
-  void AllocTexture(Texture *out, bool clamp_to_edge=true);
-  void AllocTexture(unsigned *out, bool clamp_to_edge=true);
+  void AllocTexture(Texture *out);
+  void AllocTexture(unsigned *out);
   void AllocDepthTexture(DepthTexture *out);
 
   void Attach(int ct=0, int dt=0, bool update_viewport=1);
@@ -440,7 +439,8 @@ struct GraphicsDevice {
   static const int Fill, Line, Point, GLPreferredBuffer, GLInternalFormat;
 
   int default_draw_mode = DrawMode::_2D, draw_mode = 0, default_framebuffer = 0;
-  bool done_init = 0, have_framebuffer = 1, have_cubemap = 1, blend_enabled = 0, invert_view_matrix = 0, track_model_matrix = 0;
+  bool done_init = 0, have_framebuffer = 1, have_cubemap = 1, have_npot_textures = 1;
+  bool blend_enabled = 0, invert_view_matrix = 0, track_model_matrix = 0;
   string vertex_shader, pixel_shader;
   Shader *shader = 0;
   v3 camera_pos;
@@ -537,13 +537,12 @@ struct GraphicsDevice {
   virtual int CreateProgram() = 0;
   virtual void DelProgram(int p) = 0;
   virtual int CreateShader(int t) = 0;
-  virtual void ShaderSource(int shader, int count, const char **source, int *len) = 0;
-  virtual void CompileShader(int shader) = 0;
+  virtual void CompileShader(int shader, vector<const char*> source) = 0;
   virtual void AttachShader(int prog, int shader) = 0;
   virtual void DelShader(int shader) = 0;
   virtual void BindAttribLocation(int prog, int loc, const string &name) = 0;
   virtual void LinkProgram(int prog) = 0;
-  virtual void GetProgramiv(int p, int t, int *out) const = 0;
+  virtual void GetProgramiv(int p, int t, int *out) = 0;
   virtual void GetIntegerv(int t, int *out) const = 0;
   virtual int GetAttribLocation(int prog, const string &name) = 0;
   virtual int GetUniformLocation(int prog, const string &name) = 0;
@@ -555,6 +554,7 @@ struct GraphicsDevice {
   virtual void Uniform3fv(int u, int n, const float *v) = 0;
 
   void DelTexture(unsigned id) { DelTextures(1, &id); }
+  int TextureDim(int x) { return have_npot_textures ? x : NextPowerOfTwo(x); }
   void FillColor(const Color &c) { DisableTexture(); SetColor(c); };
   void SetColor(const Color &c) { Color4f(c.r(), c.g(), c.b(), c.a()); }
   void PushColor(const Color &c) { PushColor(); SetColor(c); }
@@ -571,6 +571,7 @@ struct GraphicsDevice {
   void PopScissor();
   void PushScissorStack();
   void PopScissorStack();
+  Box GetViewport() const;
   Box GetScissorBox() const;
   void DrawPixels(const Box &b, const Texture &tex);
 

@@ -34,7 +34,7 @@
   @property (nonatomic, retain) GLKView *view;
   @property (nonatomic, retain) UIView *lview, *rview;
   @property (nonatomic, retain) MyTextField *textField;
-  @property BOOL resign_textfield_on_return, frame_on_keyboard_input, frame_on_mouse_input, downscale_animation;
+  @property BOOL resign_textfield_on_return, frame_on_keyboard_input, frame_on_mouse_input, downscale;
   @property int screen_y, screen_width, screen_height;
   + (LFUIApplication *) sharedAppDelegate;
   - (CGFloat)getScale;
