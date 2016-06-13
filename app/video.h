@@ -186,9 +186,9 @@ struct Box {
   point  TopRight  () const { return point(right(), top()); }
   point BottomLeft () const { return point(x,       y);     }
   point BottomRight() const { return point(right(), y);     }
-  void Draw(const float *texcoord=0) const;
-  void DrawGradient(const Color*) const;
-  void DrawCrimped(const float *texcoord, int orientation, float scrollX=0, float scrollY=0) const;
+  void Draw(GraphicsDevice*, const float *texcoord=0) const;
+  void DrawGradient(GraphicsDevice*, const Color*) const;
+  void DrawCrimped(GraphicsDevice*, const float *texcoord, int orientation, float scrollX=0, float scrollY=0) const;
 
   static float ScrollCrimped(float tex0, float tex1, float scroll, float *min, float *mid1, float *mid2, float *max);
   static bool   VerticalIntersect(const Box &w1, const Box &w2) { return w1.y < (w2.y + w2.h) && w2.y < (w1.y + w1.h); }
@@ -222,7 +222,7 @@ struct Box3 {
   void AddBorder(const Border &b, Box3 *out) const { for (int i=0; i<3; i++) if (!i || v[i].h) out->v[i] = Box::AddBorder(v[i], b); }
   void DelBorder(const Border &b, Box3 *out) const { for (int i=0; i<3; i++) if (!i || v[i].h) out->v[i] = Box::DelBorder(v[i], b); }
   bool VerticalIntersect(const Box &w) const { for (int i=0; i<3; i++) if (v[i].h && Box::VerticalIntersect(v[i], w)) return 1; return 0; }
-  void Draw(const point &p=point(), const Color *c=0) const;
+  void Draw(GraphicsDevice*, const point &p=point(), const Color *c=0) const;
   Box BoundingBox() const;
 };
 
@@ -261,11 +261,18 @@ struct Drawable {
   virtual int  Ascender   (const LFL::Box *B, const Attr *A=0) const { return B ? B->h : 0; }
   virtual int  Advance    (const LFL::Box *B, const Attr *A=0) const { return B ? B->w : 0; }
   virtual int  Layout     (      LFL::Box *B, const Attr *A=0) const { return B ? B->w : 0; }
-  virtual void Draw       (const LFL::Box &B, const Attr *A=0) const = 0;
+  virtual void Draw       (GraphicsContext*,  const LFL::Box&) const = 0;
+  void DrawGD(GraphicsDevice *gd, const LFL::Box &b) const;
+};
+
+struct GraphicsContext {
+  GraphicsDevice *gd;
+  const Drawable::Attr *attr;
+  GraphicsContext(GraphicsDevice *d=0, const Drawable::Attr *a=0) : gd(d), attr(a) {}
 };
 
 struct DrawableNop : public Drawable {
-  void Draw(const LFL::Box &B, const Drawable::Attr *A=0) const {}
+  void Draw(GraphicsContext*, const LFL::Box &B) const {}
 };
 
 struct Texture : public Drawable {
@@ -326,8 +333,8 @@ struct Texture : public Drawable {
 
   virtual int Id() const { return 0; }
   virtual int LayoutAtPoint(const point &p, LFL::Box *out) const { *out = LFL::Box(p, width, height); return width; } 
-  virtual void Draw(const LFL::Box &B, const Drawable::Attr *A=0) const { Bind(); B.Draw(coord); }
-  virtual void DrawCrimped(const LFL::Box &B, int ort, float sx, float sy) const { Bind(); B.DrawCrimped(coord, ort, sx, sy); }
+  virtual void Draw(GraphicsContext *gc, const LFL::Box &B) const { Bind(); B.Draw(gc->gd, coord); }
+  virtual void DrawCrimped(GraphicsDevice *d, const LFL::Box &B, int ort, float sx, float sy) const { Bind(); B.DrawCrimped(d, coord, ort, sx, sy); }
 
 #ifdef LFL_APPLE
   CGContextRef CGBitMap();

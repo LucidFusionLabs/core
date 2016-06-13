@@ -308,20 +308,20 @@ void glShadertoyShaderWindows(Shader *shader, const Color &backup_color, const v
   else screen->gd->SetColor(backup_color);
   if (tex) { screen->gd->EnableLayering(); tex->Bind(); }
   else screen->gd->DisableTexture();
-  for (auto w : wins) w->Draw(tex ? tex->coord : 0);
+  for (auto w : wins) w->Draw(screen->gd, tex ? tex->coord : 0);
   if (shader) screen->gd->UseShader(0);
 }
 
-void BoxFilled::Draw(const LFL::Box &b, const Drawable::Attr*) const { b.Draw(); }
-void BoxOutline::Draw(const LFL::Box &b, const Drawable::Attr *attr) const {
-  screen->gd->DisableTexture();
-  int line_width = attr ? attr->line_width : 1;
+void BoxFilled::Draw(GraphicsContext *gc, const LFL::Box &b) const { b.Draw(gc->gd); }
+void BoxOutline::Draw(GraphicsContext *gc, const LFL::Box &b) const {
+  gc->gd->DisableTexture();
+  int line_width = gc->attr ? gc->attr->line_width : 1;
   if (line_width <= 1) {
     static int verts_ind = -1;
     float verts[] = { /*1*/ float(b.x),     float(b.y),     /*2*/ float(b.x),     float(b.y+b.h),
                       /*3*/ float(b.x+b.w), float(b.y+b.h), /*4*/ float(b.x+b.w), float(b.y) };
-    screen->gd->VertexPointer(2, GraphicsDevice::Float, 0, 0, verts, sizeof(verts), &verts_ind, true);
-    screen->gd->DrawArrays(GraphicsDevice::LineLoop, 0, 4);
+    gc->gd->VertexPointer(2, GraphicsDevice::Float, 0, 0, verts, sizeof(verts), &verts_ind, true);
+    gc->gd->DrawArrays(GraphicsDevice::LineLoop, 0, 4);
   } else {
     int lw = line_width-1;
     static int verts_ind = -1;
@@ -335,20 +335,20 @@ void BoxOutline::Draw(const LFL::Box &b, const Drawable::Attr *attr) const {
       /*4.3*/ float(b.x+b.w),    float(b.y),        /*4.4*/ float(b.x+b.w+lw), float(b.y-lw),
       /*4.2*/ float(b.x),        float(b.y),        /*4.1*/ float(b.x-lw),     float(b.y-lw)
     };
-    screen->gd->VertexPointer(2, GraphicsDevice::Float, 0, 0, verts, sizeof(verts), &verts_ind, true);
-    screen->gd->DrawArrays(GraphicsDevice::TriangleStrip, 0, 16);
+    gc->gd->VertexPointer(2, GraphicsDevice::Float, 0, 0, verts, sizeof(verts), &verts_ind, true);
+    gc->gd->DrawArrays(GraphicsDevice::TriangleStrip, 0, 16);
   }
 }
 
-void BoxTopLeftOutline::Draw(const LFL::Box &b, const Drawable::Attr *attr) const {
-  screen->gd->DisableTexture();
-  int line_width = attr ? attr->line_width : 1;
+void BoxTopLeftOutline::Draw(GraphicsContext *gc, const LFL::Box &b) const {
+  gc->gd->DisableTexture();
+  int line_width = gc->attr ? gc->attr->line_width : 1;
   if (line_width <= 1) {
     static int verts_ind = -1;
     float verts[] = { /*1*/ float(b.x), float(b.y),     /*2*/ float(b.x),     float(b.y+b.h),
                       /*2*/ float(b.x), float(b.y+b.h), /*3*/ float(b.x+b.w), float(b.y+b.h) };
-    screen->gd->VertexPointer(2, GraphicsDevice::Float, 0, 0, verts, sizeof(verts), &verts_ind, true);
-    screen->gd->DrawArrays(GraphicsDevice::Lines, 0, 4);
+    gc->gd->VertexPointer(2, GraphicsDevice::Float, 0, 0, verts, sizeof(verts), &verts_ind, true);
+    gc->gd->DrawArrays(GraphicsDevice::Lines, 0, 4);
   } else {
     int lw = line_width-1;
     static int verts_ind = -1;
@@ -358,20 +358,20 @@ void BoxTopLeftOutline::Draw(const LFL::Box &b, const Drawable::Attr *attr) cons
       /*2.1*/ float(b.x),        float(b.y+b.h),    /*2.2*/ float(b.x-lw),     float(b.y+b.h+lw),
       /*2.4*/ float(b.x+b.w),    float(b.y+b.h),    /*2.3*/ float(b.x+b.w+lw), float(b.y+b.h+lw),
     };
-    screen->gd->VertexPointer(2, GraphicsDevice::Float, 0, 0, verts, sizeof(verts), &verts_ind, true);
-    screen->gd->DrawArrays(GraphicsDevice::TriangleStrip, 0, 8);
+    gc->gd->VertexPointer(2, GraphicsDevice::Float, 0, 0, verts, sizeof(verts), &verts_ind, true);
+    gc->gd->DrawArrays(GraphicsDevice::TriangleStrip, 0, 8);
   }
 }
 
-void BoxBottomRightOutline::Draw(const LFL::Box &b, const Drawable::Attr *attr) const {
-  screen->gd->DisableTexture();
-  int line_width = attr ? attr->line_width : 1;
+void BoxBottomRightOutline::Draw(GraphicsContext *gc, const LFL::Box &b) const {
+  gc->gd->DisableTexture();
+  int line_width = gc->attr ? gc->attr->line_width : 1;
   if (line_width <= 1) {
     static int verts_ind = -1;
     float verts[] = { /*1*/ float(b.x),     float(b.y), /*4*/ float(b.x+b.w), float(b.y),
                       /*4*/ float(b.x+b.w), float(b.y), /*3*/ float(b.x+b.w), float(b.y+b.h) };
-    screen->gd->VertexPointer(2, GraphicsDevice::Float, 0, 0, verts, sizeof(verts), &verts_ind, true);
-    screen->gd->DrawArrays(GraphicsDevice::Lines, 0, 4);
+    gc->gd->VertexPointer(2, GraphicsDevice::Float, 0, 0, verts, sizeof(verts), &verts_ind, true);
+    gc->gd->DrawArrays(GraphicsDevice::Lines, 0, 4);
   } else {
     int lw = line_width-1;
     static int verts_ind = -1;
@@ -381,8 +381,8 @@ void BoxBottomRightOutline::Draw(const LFL::Box &b, const Drawable::Attr *attr) 
       /*4.3*/ float(b.x+b.w),    float(b.y),        /*4.4*/ float(b.x+b.w+lw), float(b.y-lw),
       /*4.2*/ float(b.x),        float(b.y),        /*4.1*/ float(b.x-lw),     float(b.y-lw)
     };
-    screen->gd->VertexPointer(2, GraphicsDevice::Float, 0, 0, verts, sizeof(verts), &verts_ind, true);
-    screen->gd->DrawArrays(GraphicsDevice::TriangleStrip, 0, 8);
+    gc->gd->VertexPointer(2, GraphicsDevice::Float, 0, 0, verts, sizeof(verts), &verts_ind, true);
+    gc->gd->DrawArrays(GraphicsDevice::TriangleStrip, 0, 8);
   }
 }
 
@@ -405,10 +405,10 @@ Waveform::Waveform(point dim, const Color *c, const Vec<float> *sbh) : width(dim
   }
 }
 
-void Waveform::Draw(const LFL::Box &w, const Drawable::Attr *a) const {
+void Waveform::Draw(GraphicsContext *gc, const LFL::Box &w) const {
   if (!geom) return;
   geom->SetPosition(w.Position());
-  screen->gd->DisableTexture();
+  gc->gd->DisableTexture();
   Scene::Select(geom.get());
   Scene::Draw(geom.get(), 0);
 }

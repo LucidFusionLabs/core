@@ -176,17 +176,17 @@ void glSpectogram(Matrix *m, unsigned char *data, int pf, int width, int height,
 void glSpectogram(Matrix *m, Texture *t, float *max=0, float clip=-INFINITY, int pd=PowerDomain::dB);
 void glSpectogram(const RingSampler::Handle *in, Texture *t, Matrix *transform=0, float *max=0, float clip=-INFINITY);
 
-struct BoxFilled             : public Drawable { void Draw(const LFL::Box &b, const Drawable::Attr *a=0) const; };
-struct BoxOutline            : public Drawable { void Draw(const LFL::Box &b, const Drawable::Attr *a=0) const; };
-struct BoxTopLeftOutline     : public Drawable { void Draw(const LFL::Box &b, const Drawable::Attr *a=0) const; };
-struct BoxBottomRightOutline : public Drawable { void Draw(const LFL::Box &b, const Drawable::Attr *a=0) const; };
+struct BoxFilled             : public Drawable { void Draw(GraphicsContext*, const LFL::Box &b) const; };
+struct BoxOutline            : public Drawable { void Draw(GraphicsContext*, const LFL::Box &b) const; };
+struct BoxTopLeftOutline     : public Drawable { void Draw(GraphicsContext*, const LFL::Box &b) const; };
+struct BoxBottomRightOutline : public Drawable { void Draw(GraphicsContext*, const LFL::Box &b) const; };
 
 struct Waveform : public Drawable {
   int width=0, height=0;
   unique_ptr<Geometry> geom;
   Waveform() {}
   Waveform(point dim, const Color *c, const Vec<float> *);
-  void Draw(const LFL::Box &w, const Drawable::Attr *a=0) const;
+  void Draw(GraphicsContext*, const LFL::Box &w) const;
   static Waveform Decimated(point dim, const Color *c, const RingSampler::Handle *, int decimateBy);
 };
 

@@ -67,38 +67,39 @@ TEST(GLTest, Texture) {
   tex.UpdateGL(tex.buf, Box(dim, dim));
   EXPECT_EQ(0, CompareTextureToBuffer(tex.ID, pdata, dim, lsize, "gl_tests_02.png"));
 
-  FrameBuffer fb(screen->gd);
+  GraphicsContext gc(screen->gd);
+  FrameBuffer fb(gc.gd);
   fb.Create(dim, dim, FrameBuffer::Flag::CreateTexture);
-  screen->gd->EnableLayering();
-  screen->gd->DisableBlend();
-  screen->gd->Clear();
+  gc.gd->EnableLayering();
+  gc.gd->DisableBlend();
+  gc.gd->Clear();
   tex.Bind();
-  Box(dim, dim).Draw(tex.coord);
+  Box(dim, dim).Draw(gc.gd, tex.coord);
   EXPECT_EQ(0, CompareTextureToBuffer(fb.tex.ID, pdata, dim, lsize, "gl_tests_03.png"));
 
-  screen->gd->Clear();
+  gc.gd->Clear();
   EXPECT_EQ(0, CompareTextureToBuffer(fb.tex.ID, zero_pdata, dim, lsize));
 
-  screen->gd->Clear();
+  gc.gd->Clear();
   tex.Bind();
-  Box(dim, dim).DrawCrimped(tex.coord, 0);
+  Box(dim, dim).DrawCrimped(gc.gd, tex.coord, 0);
   EXPECT_EQ(0, CompareTextureToBuffer(fb.tex.ID, pdata, dim, lsize, "gl_tests_04.png"));
 
-  screen->gd->Clear();
+  gc.gd->Clear();
   fb.Release(false);
   EXPECT_EQ(0, CompareTextureToBuffer(fb.tex.ID, zero_pdata, dim, lsize));
 
   fb.Attach(0, 0, false);
-  screen->gd->Clear();
+  gc.gd->Clear();
   tex.Bind();
-  Box(dim, dim).Draw(tex.coord);
+  Box(dim, dim).Draw(gc.gd, tex.coord);
   EXPECT_EQ(0, CompareTextureToBuffer(fb.tex.ID, pdata, dim, lsize, "gl_tests_05.png"));
   fb.Release(false);
 
-  screen->gd->Clear();
+  gc.gd->Clear();
   tex.Bind();
-  Box(dim, dim).Draw(tex.coord);
-  screen->gd->ScreenshotBox(&tex2, Box(dim, dim), 0);
+  Box(dim, dim).Draw(gc.gd, tex.coord);
+  gc.gd->ScreenshotBox(&tex2, Box(dim, dim), 0);
   EXPECT_EQ(0, CompareTextureToBuffer(tex2, pdata, dim, lsize, "gl_tests_06.png"));
 }
 
@@ -142,7 +143,8 @@ TEST(GLTest, CoreText) {
       else                    EXPECT_NE(0, cmp);
     }
   }
-  FrameBuffer fb(screen->gd);
+  GraphicsContext gc(screen->gd);
+  FrameBuffer fb(gc.gd);
   fb.Create(g->tex.width, g->tex.height, FrameBuffer::Flag::CreateTexture);
   font->Draw(string(1, 'a'), Box(-g->bearing_x, g->tex.height - g->bearing_y, g->tex.width, font->ascender));
   EXPECT_EQ(0, CompareTextureToBuffer(fb.tex.ID, ref.buf, g->tex.height, g->tex.LineSize(), "gl_tests_11.png"));

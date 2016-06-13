@@ -43,35 +43,35 @@ void TilesInterface::AddDrawableBoxArray(const DrawableBoxArray &box, point p) {
       if (!attr_set && (attr_set=1)) SetAttr(attr);
       InitDrawBackground(p);
       DrawableBoxRun(iter.Data(), iter.Length(), attr, VectorGet(box.line, iter.cur_attr2))
-        .DrawBackground(p, bind(&TilesInterface::DrawBackground, this, _1));
+        .DrawBackground(screen->gd, p, bind(&TilesInterface::DrawBackground, this, _1, _2));
       ContextClose();
     }
     if (1) {
       ContextOpen();
       if (!attr_set && (attr_set=1)) SetAttr(attr);
       InitDrawBox(p);
-      DrawableBoxRun(iter.Data(), iter.Length(), attr).Draw(p, bind(&TilesInterface::DrawBox, this, _1, _2, _3));
+      DrawableBoxRun(iter.Data(), iter.Length(), attr).Draw(screen->gd, p, bind(&TilesInterface::DrawBox, this, _1, _2, _3));
       ContextClose();
     }
   }
 }
 
 void Tiles::InitDrawBox(const point &p) {
-  PreAdd(bind(&DrawableBoxRun::draw, DrawableBoxRun(0,0,attr), p));
+  PreAdd(bind(&DrawableBoxRun::draw, DrawableBoxRun(0,0,attr), screen->gd, p));
   if (attr->scissor) AddScissor(*attr->scissor + p);
 }
 
 void Tiles::InitDrawBackground(const point &p) {
   PreAdd(bind(&DrawableBoxRun::DrawBackground,
-              DrawableBoxRun(0,0,attr), p, &DrawableBoxRun::DefaultDrawBackgroundCB));
+              DrawableBoxRun(0,0,attr), screen->gd, p, &DrawableBoxRun::DefaultDrawBackgroundCB));
 }
 
-void Tiles::DrawBox(const Drawable *d, const Box &b, const Drawable::Attr*) {
-  AddCallback(&b, bind(&Drawable::Draw, d, b, attr));
+void Tiles::DrawBox(GraphicsContext *gc, const Drawable *d, const Box &b) {
+  AddCallback(&b, bind(&Drawable::Draw, d, gc, b));
 }
 
-void Tiles::DrawBackground(const Box &b) {
-  AddCallback(&b, bind(&Box::Draw, b, NullPointer<float>()));
+void Tiles::DrawBackground(GraphicsDevice *gd, const Box &b) {
+  AddCallback(&b, bind(&Box::Draw, b, gd, NullPointer<float>()));
 }
 
 void Tiles::AddScissor(const Box &b) {
@@ -102,12 +102,12 @@ void TilesIPC::InitDrawBackground(const point &p) {
   TilesIPCDebug("TilesIPC InitDrawBackground %s", p.DebugString().c_str());
 }
 
-void TilesIPC::DrawBox(const Drawable *d, const Box &b, const Drawable::Attr*) {
+void TilesIPC::DrawBox(GraphicsContext *gc, const Drawable *d, const Box &b) {
   if (d) AddCallback(&b, MultiProcessPaintResource::DrawBox(b, d->TexId()));
   TilesIPCDebug("TilesIPC DrawBox %s", b.DebugString().c_str());
 }
 
-void TilesIPC::DrawBackground(const Box &b) {
+void TilesIPC::DrawBackground(GraphicsDevice *gd, const Box &b) {
   AddCallback(&b, MultiProcessPaintResource::DrawBackground(b));
   TilesIPCDebug("TilesIPC DrawBackground %s", b.DebugString().c_str());
 }
@@ -127,6 +127,7 @@ void TilesIPCClient::Run(int flag) {
 }
 
 int MultiProcessPaintResource::Run(const Box &t) const {
+  GraphicsContext gc(screen->gd, &attr);
   ProcessAPIClient *s = CheckPointer(app->render_process.get());
   Iterator i(data.buf);
   int si=0, sd=0, count=0; 
@@ -135,15 +136,15 @@ int MultiProcessPaintResource::Run(const Box &t) const {
     int type = *i.Get<int>();
     switch (type) {
       default:                       FATAL("unknown type ", type);
-      case SetAttr           ::Type: { auto c=i.Get<SetAttr>           (); c->Update(&attr, app->render_process.get());      i.offset += SetAttr           ::Size; TilesIPCDebug("MPPR SetAttr %s",     attr.DebugString().c_str()); } break;
-      case InitDrawBox       ::Type: { auto c=i.Get<InitDrawBox>       (); DrawableBoxRun(0,0,&attr).draw(c->p);             i.offset += InitDrawBox       ::Size; TilesIPCDebug("MPPR InitDrawBox %s", c->p.DebugString().c_str()); } break;
-      case InitDrawBackground::Type: { auto c=i.Get<InitDrawBackground>(); DrawableBoxRun(0,0,&attr).DrawBackground(c->p);   i.offset += InitDrawBackground::Size; TilesIPCDebug("MPPR InitDrawBG %s",  c->p.DebugString().c_str()); } break;
-      case DrawBackground    ::Type: { auto c=i.Get<DrawBackground>    (); c->b.Draw();                                      i.offset += DrawBackground    ::Size; TilesIPCDebug("MPPR DrawBG %s",      c->b.DebugString().c_str()); } break;
-      case PushScissor       ::Type: { auto c=i.Get<PushScissor>       (); screen->gd->PushScissorOffset(t, c->b);     si++; i.offset += PushScissor       ::Size; TilesIPCDebug("MPPR PushScissor %s", c->b.DebugString().c_str()); } break;
-      case PopScissor        ::Type: { auto c=i.Get<PopScissor>        (); screen->gd->PopScissor(); CHECK_LT(sd, si); sd++; i.offset += PopScissor        ::Size; TilesIPCDebug("MPPR PopScissor");                                 } break;
+      case SetAttr           ::Type: { auto c=i.Get<SetAttr>           (); c->Update(&attr, app->render_process.get());           i.offset += SetAttr           ::Size; TilesIPCDebug("MPPR SetAttr %s",     attr.DebugString().c_str()); } break;
+      case InitDrawBox       ::Type: { auto c=i.Get<InitDrawBox>       (); DrawableBoxRun(0,0,&attr).draw(gc.gd, c->p);           i.offset += InitDrawBox       ::Size; TilesIPCDebug("MPPR InitDrawBox %s", c->p.DebugString().c_str()); } break;
+      case InitDrawBackground::Type: { auto c=i.Get<InitDrawBackground>(); DrawableBoxRun(0,0,&attr).DrawBackground(gc.gd, c->p); i.offset += InitDrawBackground::Size; TilesIPCDebug("MPPR InitDrawBG %s",  c->p.DebugString().c_str()); } break;
+      case DrawBackground    ::Type: { auto c=i.Get<DrawBackground>    (); c->b.Draw(gc.gd);                                      i.offset += DrawBackground    ::Size; TilesIPCDebug("MPPR DrawBG %s",      c->b.DebugString().c_str()); } break;
+      case PushScissor       ::Type: { auto c=i.Get<PushScissor>       (); gc.gd->PushScissorOffset(t, c->b);     si++;           i.offset += PushScissor       ::Size; TilesIPCDebug("MPPR PushScissor %s", c->b.DebugString().c_str()); } break;
+      case PopScissor        ::Type: { auto c=i.Get<PopScissor>        (); gc.gd->PopScissor(); CHECK_LT(sd, si); sd++;           i.offset += PopScissor        ::Size; TilesIPCDebug("MPPR PopScissor");                                 } break;
       case DrawBox           ::Type: { auto c=i.Get<DrawBox>           ();
                                        auto d=(c->id > 0 && c->id <= s->drawable.size()) ? s->drawable[c->id-1] : Singleton<BoxFilled>::Get();
-                                       d->Draw(c->b, &attr); i.offset += DrawBox::Size; TilesIPCDebug("DrawBox MPPR %s", c->b.DebugString().c_str());
+                                       d->Draw(&gc, c->b); i.offset += DrawBox::Size; TilesIPCDebug("DrawBox MPPR %s", c->b.DebugString().c_str());
                                      } break;
     }
   }

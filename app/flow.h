@@ -51,9 +51,13 @@ typedef ArrayMemberPairSegmentIter<DrawableBox, int, &DrawableBox::attr_id, &Dra
 typedef ArrayMemberSegmentIter    <DrawableBox, int, &DrawableBox::attr_id>                        DrawableBoxRawIterator;
 
 struct DrawableBoxRun {
+  typedef function<void(GraphicsDevice*, const Box&)> DrawBackgroundCB;
+  typedef function<void(GraphicsContext*, const Drawable *, const Box&)> DrawCB;
+
   const Drawable::Attr *attr;
   ArrayPiece<DrawableBox> data;
   const Box *line;
+
   DrawableBoxRun(const DrawableBox *buf=0, int len=0)                                        : attr(0), data(buf, len), line(0) {}
   DrawableBoxRun(const DrawableBox *buf,   int len, const Drawable::Attr *A, const Box *L=0) : attr(A), data(buf, len), line(L) {}
 
@@ -67,20 +71,19 @@ struct DrawableBoxRun {
     for (auto ti = t.begin(), te = t.end(); ti != te; ++ti, ++bi) *ti = bi->Id();
     return t;
   }
+
   string   Text  ()             const { return Text<char>    (0, data.size()); }
   String16 Text16()             const { return Text<char16_t>(0, data.size()); }
   string   Text  (int i, int l) const { return Text<char>    (i, l); }
   String16 Text16(int i, int l) const { return Text<char16_t>(i, l); }
   string   DebugString()        const { return StrCat("BoxRun='", Text(), "'"); }
 
-  typedef function<void    (const Drawable *,  const Box &,  const Drawable::Attr *)> DrawCB;
-  static void DefaultDrawCB(const Drawable *d, const Box &w, const Drawable::Attr *a) { d->Draw(w, a); }
-  point Draw(point p, DrawCB = &DefaultDrawCB) const;
-  void draw(point p) const { Draw(p); }
+  static void DefaultDrawCB(GraphicsContext *c, const Drawable *d, const Box &w) { d->Draw(c, w); }
+  point Draw(GraphicsDevice *d, point p, DrawCB = &DefaultDrawCB) const;
+  void draw(GraphicsDevice *d, point p) const { Draw(d, p); }
 
-  typedef function<void              (const Box &)> DrawBackgroundCB;
-  static void DefaultDrawBackgroundCB(const Box &w) { w.Draw(); }
-  void DrawBackground(point p, DrawBackgroundCB = &DefaultDrawBackgroundCB) const;
+  static void DefaultDrawBackgroundCB(GraphicsDevice *d, const Box &w) { w.Draw(d); }
+  void DrawBackground(GraphicsDevice *d, point p, DrawBackgroundCB = &DefaultDrawBackgroundCB) const;
 };
 
 struct DrawableBoxArray {
@@ -119,7 +122,7 @@ struct DrawableBoxArray {
   void InsertAt(int o, const vector<DrawableBox> &x);
   void OverwriteAt(int o, const vector<DrawableBox> &x);
   void Erase(int o, size_t l=UINT_MAX, bool shift=false);
-  point Draw(point p, int glyph_start=0, int glyph_len=-1) const;
+  point Draw(GraphicsDevice*, point p, int glyph_start=0, int glyph_len=-1) const;
   string DebugString() const;
 
   int GetLineFromCoords(const point &p) { return 0; }

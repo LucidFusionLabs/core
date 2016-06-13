@@ -19,29 +19,47 @@
 #include "core/app/gui.h"
 
 namespace LFL {
-point DrawableBoxRun::Draw(point p, DrawCB cb) const {
+void DrawableAnnotation::ExtendBack(const pair<int, int> &a) {
+  if (this->size()) {
+    auto &b = this->back();
+    CHECK_LE(b.first, a.first);
+    if (b.second == a.second) return;
+    if (b.first == a.first) { b.second = a.second; return; }
+  }
+  this->push_back(a);
+}
+
+bool DrawableAnnotation::Shifted(const DrawableAnnotation &x, int dir, int offset) const {
+  if (size() != x.size()) return false;
+  for (auto i = begin(), e = end(), xi = x.begin(); i != e; ++i, ++xi)
+    if (xi->first != (i->first + (i->first >= offset ? dir : 0)) || xi->second != i->second) return false;
+  return true;
+}
+
+point DrawableBoxRun::Draw(GraphicsDevice *gd, point p, DrawCB cb) const {
   Box w;
-  DrawBackground(p);
+  DrawBackground(gd, p);
+  GraphicsContext gc(gd, attr);
   if (attr->tex) attr->tex->Bind();
-  if (attr->tex || attr->font) screen->gd-> SetColor(attr->fg ? *attr->fg : Color::white);
-  else                         screen->gd->FillColor(attr->fg ? *attr->fg : Color::white);
-  if (attr->font) attr->font->Select();
-  else if (attr->tex) screen->gd->EnableLayering();
-  if (attr->blend) screen->gd->EnableBlend();
-  // else if (!attr->font) screen->gd->DisableBlend();
-  if (attr->scissor) screen->gd->PushScissor(*attr->scissor + p);
-  for (auto i = data.buf, e = data.end(); i != e; ++i) if (i->drawable) cb(i->drawable, (w = i->box + p), attr);
-  if (attr->scissor) screen->gd->PopScissor();
+  if (attr->tex || attr->font) gd-> SetColor(attr->fg ? *attr->fg : Color::white);
+  else                         gd->FillColor(attr->fg ? *attr->fg : Color::white);
+  if (attr->font) attr->font->Select(gd);
+  else if (attr->tex) gd->EnableLayering();
+  if (attr->blend) gd->EnableBlend();
+  // else if (!attr->font) gd->DisableBlend();
+  if (attr->scissor) gd->PushScissor(*attr->scissor + p);
+  for (auto i = data.buf, e = data.end(); i != e; ++i) if (i->drawable) cb(&gc, i->drawable, (w = i->box + p));
+  if (attr->scissor) gd->PopScissor();
   return point(w.x + w.w, w.y);
 }
 
-void DrawableBoxRun::DrawBackground(point p, DrawBackgroundCB cb) const {
-  if (attr->bg) screen->gd->FillColor(*attr->bg);
+void DrawableBoxRun::DrawBackground(GraphicsDevice *gd, point p, DrawBackgroundCB cb) const {
+  if (attr->bg) gd->FillColor(*attr->bg);
   if (!attr->bg || !data.size()) return;
   int line_height = line ? line->h : (attr->font ? attr->font->Height() : 0);
   if (!line_height) return;
   int left = data[0].LeftBound(attr), right = data.back().RightBound(attr);
-  cb(Box(p.x + left, p.y - line_height, right - left, line_height));
+  cb(gd, Box(p.x + left, p.y - line_height, right - left, line_height));
 }
 
 point DrawableBoxArray::Position(int o) const {
@@ -93,11 +111,11 @@ void DrawableBoxArray::Erase(int o, size_t l, bool shift) {
   if (shift) for (; i != data.end(); ++i) i->box -= p;
 }
 
-point DrawableBoxArray::Draw(point p, int glyph_start, int glyph_len) const {
+point DrawableBoxArray::Draw(GraphicsDevice *gd, point p, int glyph_start, int glyph_len) const {
   point e;
   if (!data.size()) return e;
   for (DrawableBoxIterator iter(&data[glyph_start], Xge0_or_Y(glyph_len, data.size())); !iter.Done(); iter.Increment())
-    e = DrawableBoxRun(iter.Data(), iter.Length(), attr.GetAttr(iter.cur_attr1), VectorGet(line, iter.cur_attr2)).Draw(p);
+    e = DrawableBoxRun(iter.Data(), iter.Length(), attr.GetAttr(iter.cur_attr1), VectorGet(line, iter.cur_attr2)).Draw(gd, p);
   return e;
 }
 

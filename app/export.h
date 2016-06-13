@@ -151,6 +151,7 @@ struct GameServer;
 struct Geometry;
 struct Glyph;
 struct GlyphMetrics;
+struct GraphicsContext;
 struct GraphicsDevice;
 struct GUI;
 struct IDEProject;

@@ -173,7 +173,7 @@ Box::Box(const float *v4, bool round) {
 
 string Box::DebugString() const { return StringPrintf("Box = { %d, %d, %d, %d }", x, y, w, h); }
 
-void Box::Draw(const float *texcoord) const {
+void Box::Draw(GraphicsDevice *gd, const float *texcoord) const {
   static const float default_texcoord[4] = {0, 0, 1, 1};
   const float *tc = X_or_Y(texcoord, default_texcoord);
 #if 1
@@ -183,21 +183,21 @@ void Box::Draw(const float *texcoord) const {
                     float(x),   float(y+h), tc[Texture::minx_coord_ind], tc[Texture::maxy_coord_ind],
                     float(x+w), float(y),   tc[Texture::maxx_coord_ind], tc[Texture::miny_coord_ind],
                     float(x+w), float(y+h), tc[Texture::maxx_coord_ind], tc[Texture::maxy_coord_ind] };
-  bool changed = screen->gd->VertexPointer(2, GraphicsDevice::Float, sizeof(float)*4, 0,               verts, sizeof(verts), NULL, true, GraphicsDevice::Triangles);
-  if (changed)   screen->gd->TexPointer   (2, GraphicsDevice::Float, sizeof(float)*4, sizeof(float)*2, verts, sizeof(verts), NULL, false);
-  if (1)         screen->gd->DeferDrawArrays(GraphicsDevice::Triangles, 0, 6);
+  bool changed = gd->VertexPointer(2, GraphicsDevice::Float, sizeof(float)*4, 0,               verts, sizeof(verts), NULL, true, GraphicsDevice::Triangles);
+  if (changed)   gd->TexPointer   (2, GraphicsDevice::Float, sizeof(float)*4, sizeof(float)*2, verts, sizeof(verts), NULL, false);
+  if (1)         gd->DeferDrawArrays(GraphicsDevice::Triangles, 0, 6);
 #else
   float verts[] = { float(x),   float(y),   tc[Texture::minx_coord_ind], tc[Texture::miny_coord_ind],
                     float(x),   float(y+h), tc[Texture::minx_coord_ind], tc[Texture::maxy_coord_ind],
                     float(x+w), float(y),   tc[Texture::maxx_coord_ind], tc[Texture::miny_coord_ind],
                     float(x+w), float(y+h), tc[Texture::maxx_coord_ind], tc[Texture::maxy_coord_ind] };
-  bool changed = screen->gd->VertexPointer(2, GraphicsDevice::Float, sizeof(float)*4, 0,               verts, sizeof(verts), NULL, true, GraphicsDevice::TriangleStrip);
-  if  (changed)  screen->gd->TexPointer   (2, GraphicsDevice::Float, sizeof(float)*4, sizeof(float)*2, verts, sizeof(verts), NULL, false);
-  if (1)         screen->gd->DeferDrawArrays(GraphicsDevice::TriangleStrip, 0, 4);
+  bool changed = gd->VertexPointer(2, GraphicsDevice::Float, sizeof(float)*4, 0,               verts, sizeof(verts), NULL, true, GraphicsDevice::TriangleStrip);
+  if  (changed)  gd->TexPointer   (2, GraphicsDevice::Float, sizeof(float)*4, sizeof(float)*2, verts, sizeof(verts), NULL, false);
+  if (1)         gd->DeferDrawArrays(GraphicsDevice::TriangleStrip, 0, 4);
 #endif
 }
 
-void Box::DrawGradient(const Color *c) const {
+void Box::DrawGradient(GraphicsDevice *gd, const Color *c) const {
 #if 0
   float verts[] = { float(x),   float(y),   c[0].r(), c[0].g(), c[0].b(), c[0].a(),
                     float(x),   float(y+h), c[3].r(), c[3].g(), c[3].b(), c[3].a(),
@@ -205,21 +205,21 @@ void Box::DrawGradient(const Color *c) const {
                     float(x),   float(y+h), c[3].r(), c[3].g(), c[3].b(), c[3].a(),
                     float(x+w), float(y),   c[1].r(), c[1].g(), c[1].b(), c[1].a(),
                     float(x+w), float(y+h), c[2].r(), c[2].g(), c[2].b(), c[2].a() };
-  bool changed = screen->gd->VertexPointer(2, GraphicsDevice::Float, sizeof(float)*6, 0,               verts, sizeof(verts), NULL, true, GraphicsDevice::Triangles);
-  if (changed)   screen->gd->ColorPointer (4, GraphicsDevice::Float, sizeof(float)*6, sizeof(float)*2, verts, sizeof(verts), NULL, false);
-  if (1)         screen->gd->DeferDrawArrays(GraphicsDevice::Triangles, 0, 6);
+  bool changed = gd->VertexPointer(2, GraphicsDevice::Float, sizeof(float)*6, 0,               verts, sizeof(verts), NULL, true, GraphicsDevice::Triangles);
+  if (changed)   gd->ColorPointer (4, GraphicsDevice::Float, sizeof(float)*6, sizeof(float)*2, verts, sizeof(verts), NULL, false);
+  if (1)         gd->DeferDrawArrays(GraphicsDevice::Triangles, 0, 6);
 #else
   float verts[] = { float(x),   float(y),   c[0].r(), c[0].g(), c[0].b(), c[0].a(),
                     float(x),   float(y+h), c[3].r(), c[3].g(), c[3].b(), c[3].a(),
                     float(x+w), float(y),   c[1].r(), c[1].g(), c[1].b(), c[1].a(),
                     float(x+w), float(y+h), c[2].r(), c[2].g(), c[2].b(), c[2].a() };
-  bool changed = screen->gd->VertexPointer(2, GraphicsDevice::Float, sizeof(float)*6, 0,               verts, sizeof(verts), NULL, true, GraphicsDevice::TriangleStrip);
-  if  (changed)  screen->gd->ColorPointer (4, GraphicsDevice::Float, sizeof(float)*6, sizeof(float)*2, verts, sizeof(verts), NULL, false);
-  if (1)         screen->gd->DeferDrawArrays(GraphicsDevice::TriangleStrip, 0, 4);
+  bool changed = gd->VertexPointer(2, GraphicsDevice::Float, sizeof(float)*6, 0,               verts, sizeof(verts), NULL, true, GraphicsDevice::TriangleStrip);
+  if  (changed)  gd->ColorPointer (4, GraphicsDevice::Float, sizeof(float)*6, sizeof(float)*2, verts, sizeof(verts), NULL, false);
+  if (1)         gd->DeferDrawArrays(GraphicsDevice::TriangleStrip, 0, 4);
 #endif
 }
 
-void Box::DrawCrimped(const float *texcoord, int orientation, float scrollX, float scrollY) const {
+void Box::DrawCrimped(GraphicsDevice *gd, const float *texcoord, int orientation, float scrollX, float scrollY) const {
   float left=x, right=x+w, top=y, bottom=y+h;
   float texMinX, texMinY, texMaxX, texMaxY, texMidX1, texMidX2, texMidY1, texMidY2;
 
@@ -229,12 +229,12 @@ void Box::DrawCrimped(const float *texcoord, int orientation, float scrollX, flo
   scrollY = ScrollCrimped(texcoord[1], texcoord[3], scrollY, &texMinY, &texMidY1, &texMidY2, &texMaxY);
 
 #define DrawCrimpedBoxTriangleStrip() \
-  screen->gd->VertexPointer(2, GraphicsDevice::Float, 4*sizeof(float), 0,               verts, sizeof(verts), NULL, true, GraphicsDevice::TriangleStrip); \
-  screen->gd->TexPointer   (2, GraphicsDevice::Float, 4*sizeof(float), 2*sizeof(float), verts, sizeof(verts), NULL, false); \
-  screen->gd->DeferDrawArrays(GraphicsDevice::TriangleStrip, 0, 4); \
-  screen->gd->DeferDrawArrays(GraphicsDevice::TriangleStrip, 4, 4); \
-  screen->gd->DeferDrawArrays(GraphicsDevice::TriangleStrip, 8, 4); \
-  screen->gd->DeferDrawArrays(GraphicsDevice::TriangleStrip, 12, 4);
+  gd->VertexPointer(2, GraphicsDevice::Float, 4*sizeof(float), 0,               verts, sizeof(verts), NULL, true, GraphicsDevice::TriangleStrip); \
+  gd->TexPointer   (2, GraphicsDevice::Float, 4*sizeof(float), 2*sizeof(float), verts, sizeof(verts), NULL, false); \
+  gd->DeferDrawArrays(GraphicsDevice::TriangleStrip, 0, 4); \
+  gd->DeferDrawArrays(GraphicsDevice::TriangleStrip, 4, 4); \
+  gd->DeferDrawArrays(GraphicsDevice::TriangleStrip, 8, 4); \
+  gd->DeferDrawArrays(GraphicsDevice::TriangleStrip, 12, 4);
 
   switch (orientation) {
     case 0: {
@@ -336,9 +336,9 @@ Box3::Box3(const Box &cont, const point &pb, const point &pe, int first_line_hei
   }
 }
 
-void Box3::Draw(const point &p, const Color *c) const {
-  if (c) screen->gd->SetColor(*c);
-  for (int i=0; i<3; i++) if (v[i].h) (v[i] + p).Draw();
+void Box3::Draw(GraphicsDevice *gd, const point &p, const Color *c) const {
+  if (c) gd->SetColor(*c);
+  for (int i=0; i<3; i++) if (v[i].h) (v[i] + p).Draw(gd);
 }
 
 Box Box3::BoundingBox() const {
@@ -363,22 +363,7 @@ void Drawable::AttrVec::Insert(const Drawable::Attr &v) {
   push_back(v);
 }
 
-void DrawableAnnotation::ExtendBack(const pair<int, int> &a) {
-  if (this->size()) {
-    auto &b = this->back();
-    CHECK_LE(b.first, a.first);
-    if (b.second == a.second) return;
-    if (b.first == a.first) { b.second = a.second; return; }
-  }
-  this->push_back(a);
-}
-
-bool DrawableAnnotation::Shifted(const DrawableAnnotation &x, int dir, int offset) const {
-  if (size() != x.size()) return false;
-  for (auto i = begin(), e = end(), xi = x.begin(); i != e; ++i, ++xi)
-    if (xi->first != (i->first + (i->first >= offset ? dir : 0)) || xi->second != i->second) return false;
-  return true;
-}
+void Drawable::DrawGD(GraphicsDevice *gd, const LFL::Box &b) const { GraphicsContext gc(gd); Draw(&gc, b); }
 
 /* Texture */
 
@@ -741,7 +726,7 @@ void GraphicsDevice::DrawMode(int dm, const Box &b, bool flush) {
   else {
     float aspect = float(b.w) / b.h;
     double top = tan(FLAGS_field_of_view * M_PI/360.0) * FLAGS_near_plane;
-    screen->gd->Frustum(aspect*-top, aspect*top, -top, top, FLAGS_near_plane, FLAGS_far_plane);
+    Frustum(aspect*-top, aspect*top, -top, top, FLAGS_near_plane, FLAGS_far_plane);
   }
 
   if (_2D) DisableDepthTest();
@@ -813,7 +798,7 @@ void GraphicsDevice::DrawPixels(const Box &b, const Texture &tex) {
   Texture temp;
   temp.Resize(tex.width, tex.height, tex.pf, Texture::Flag::CreateGL);
   temp.UpdateGL(tex.buf, LFL::Box(tex.width, tex.height), Texture::Flag::FlipY); 
-  b.Draw(temp.coord);
+  b.Draw(this, temp.coord);
   temp.ClearGL();
 }
 

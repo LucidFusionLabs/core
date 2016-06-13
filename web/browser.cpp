@@ -554,8 +554,8 @@ void Browser::PaintNode(Flow *flow, DOM::Node *n, const point &displacement_in) 
       render->tiles->AddDrawableBoxArray(render->child_bg,  displacement);
       render->tiles->AddDrawableBoxArray(render->child_box, displacement);
     } else {
-      render->child_bg .Draw(displacement);
-      render->child_box.Draw(displacement);
+      render->child_bg .Draw(screen->gd, displacement);
+      render->child_box.Draw(screen->gd, displacement);
     }
   }
   if (auto input = n->AsHTMLInputElement()) {

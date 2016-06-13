@@ -140,7 +140,7 @@ struct Glyph : public Drawable {
   virtual int  Advance    (const LFL::Box *b, const Drawable::Attr *a=0) const;
   virtual int  LeftBearing(                   const Drawable::Attr *a=0) const;
   virtual int  Layout     (      LFL::Box *b, const Drawable::Attr *a=0) const;
-  virtual void Draw       (const LFL::Box &b, const Drawable::Attr *a=0) const;
+  virtual void Draw       (GraphicsContext*,  const LFL::Box&)           const;
 };
 
 struct GlyphMetrics {
@@ -227,13 +227,13 @@ struct Font {
   Glyph *FindGlyph        (char16_t gind);
   Glyph *FindOrInsertGlyph(char16_t gind);
 
-  void Select();
+  void Select(GraphicsDevice*);
   void UpdateMetrics(Glyph *g);
   void SetMetrics(short a, short d, short mw, short fw, short mg, bool mf, bool hb, bool fm, float f)
   { ascender=a; descender=d; max_width=mw; fixed_width=fw; missing_glyph=mg; mix_fg=mf; has_bg=hb; fix_metrics=fm; scale=f; }
   int GetGlyphWidth(int g) { return RoundXY_or_Y(scale, FindGlyph(g)->advance); }
-  void DrawGlyph(int g, const Box &w) { return DrawGlyphWithAttr(g, w, Drawable::Attr(this)); }
-  void DrawGlyphWithAttr(int g, const Box &w, const Drawable::Attr&);
+  void DrawGlyph(GraphicsDevice*, int g, const Box &w);
+  void DrawGlyphWithAttr(GraphicsContext*, int g, const Box &w);
 
   template <class X> void Size(const StringPieceT<X> &text, Box *out, int width=0, int flag=0, int *lines_out=0);
   /**/               void Size(const string          &text, Box *out, int width=0, int flag=0, int *lines_out=0) { return Size(StringPiece           (text), out, width, flag, lines_out); }

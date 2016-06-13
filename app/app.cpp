@@ -776,8 +776,8 @@ void Window::GiveDialogFocusAway(Dialog *d) {
 }
 
 void Window::DrawDialogs() {
-  for (auto i = dialogs.begin(), e = dialogs.end(); i != e; ++i) (*i)->Draw();
-  if (console) console->Draw();
+  for (auto i = dialogs.begin(), e = dialogs.end(); i != e; ++i) (*i)->Draw(gd);
+  if (console) console->Draw(gd);
   if (FLAGS_draw_grid) {
     Color c(.7, .7, .7);
     glIntersect(mouse.x, mouse.y, &c);

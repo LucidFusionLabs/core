@@ -57,8 +57,8 @@ struct GUI {
   virtual void SetLayoutDirty() { child_box.Clear(); }
   virtual void Layout(const Box &b) { box=b; Layout(); }
   virtual void Layout() {}
-  virtual void Draw();
   virtual void ResetGL() {}
+  virtual void Draw(GraphicsDevice*);
   virtual void HandleTextMessage(const string &s) {}
 };
 
@@ -351,8 +351,8 @@ struct TextBox : public GUI, public KeyboardController {
   virtual void UpdateCursor() { cursor.p = cmd_line.data->glyphs.Position(cursor.i.x) + point(0, style.font->Height()); }
   virtual void UpdateCommandFB() { UpdateLineFB(&cmd_line, &cmd_fb); }
   virtual void UpdateLineFB(Line *L, LinesFrameBuffer *fb, int flag=0);
-  virtual void Draw(const Box &b);
-  virtual void DrawCursor(point p);
+  virtual void Draw(GraphicsDevice*, const Box &b);
+  virtual void DrawCursor(GraphicsDevice*, point p);
   virtual void UpdateToken(Line*, int word_offset, int word_len, int update_type, const TokenProcessor<DrawableBox>*);
   virtual void UpdateLongToken(Line *BL, int beg_offset, Line *EL, int end_offset, const string &text, int update_type);
 
@@ -409,7 +409,7 @@ struct TextArea : public TextBox {
   void ChangeColors(Colors *C);
 
   struct DrawFlag { enum { DrawCursor=1, CheckResized=2, Default=DrawCursor|CheckResized }; };
-  virtual void Draw(const Box &w, int flag=DrawFlag::Default, Shader *shader=0);
+  virtual void Draw(GraphicsDevice*, const Box &w, int flag=DrawFlag::Default, Shader *shader=0);
   virtual void DrawHoverLink(const Box &w);
   virtual bool GetGlyphFromCoords(const point &p, Selection::Point *out) { return GetGlyphFromCoordsOffset(p, out, start_line, start_line_adjust); }
   bool GetGlyphFromCoordsOffset(const point &p, Selection::Point *out, int sl, int sla);
@@ -424,7 +424,7 @@ struct TextArea : public TextBox {
   int AddWrappedLines(int wl, int n) { last_v_scrolled = (v_scrolled *= float(wl)/(wl+n)); return wl+n; }
 
   void InitSelection();
-  void DrawSelection();
+  void DrawSelection(GraphicsDevice*);
   void DragCB(int button, int x, int y, int down);
   void CopyText(const Selection::Point &beg, const Selection::Point &end);
   string CopyText(int beg_line_ind, int beg_char_ind, int end_line_end, int end_char_ind, bool add_nl);
@@ -483,7 +483,7 @@ struct PropertyView : public TextView {
   virtual void Clear() { property_line.Clear(); root=0; selected_line_no=-1; }
   virtual void Deactivate() { TextBox::Deactivate(); selected_line_no=-1; }
   virtual void SetRoot(Id id) { GetNode((root = id))->expanded = true; }
-  virtual void Draw(const Box &w, int flag=DrawFlag::Default, Shader *shader=0);
+  virtual void Draw(GraphicsDevice*, const Box &w, int flag=DrawFlag::Default, Shader *shader=0);
   virtual void VisitExpandedChildren(Id id, const Node::Visitor &cb, int depth=0);
   virtual void HandleCollapsed(Id id) {}
   virtual void Input(char k) {}
@@ -653,7 +653,7 @@ struct Terminal : public TextArea {
   virtual void ResizedLeftoverRegion(int w, int h, bool update_fb=true);
   virtual void SetScrollRegion(int b, int e, bool release_fb=false);
   virtual void SetTerminalDimension(int w, int h);
-  virtual void Draw(const Box &b, int flag=DrawFlag::Default, Shader *shader=0);
+  virtual void Draw(GraphicsDevice*, const Box &b, int flag=DrawFlag::Default, Shader *shader=0);
   virtual void Write(const StringPiece &s, bool update_fb=true, bool release_fb=true);
   virtual void Input(char k) {                       sink->Write(StringPiece(&k, 1)); }
   virtual void Erase      () { char k = 0x7f;        sink->Write(StringPiece(&k, 1)); }
@@ -720,8 +720,8 @@ struct Console : public TextArea {
   virtual void PageDown() { TextArea::PageUp(); }
   virtual void Activate() { TextBox::Activate(); StartAnimating(); }
   virtual void Deactivate() { TextBox::Deactivate(); StartAnimating(); }
-  virtual void Draw(const Box &b, int flag=DrawFlag::Default, Shader *shader=0);
-  virtual void Draw();
+  virtual void Draw(GraphicsDevice*, const Box &b, int flag=DrawFlag::Default, Shader *shader=0);
+  virtual void Draw(GraphicsDevice*);
   void StartAnimating();
 };
 
@@ -740,7 +740,7 @@ struct Dialog : public GUI {
   Dialog(GraphicsDevice*, float w, float h, int flag=0);
   virtual ~Dialog() {}
   virtual void Layout();
-  virtual void Draw();
+  virtual void Draw(GraphicsDevice*);
   virtual void TakeFocus() {}
   virtual void LoseFocus() {}
 
@@ -748,7 +748,7 @@ struct Dialog : public GUI {
   void LayoutTitle(const Box &b, MouseController*, DrawableBoxArray*);
   void LayoutReshapeControls(const point &d, MouseController*);
   bool HandleReshape(Box *outline);
-  void DrawGradient(const point &p) const { (title + p).DrawGradient(title_gradient); }
+  void DrawGradient(GraphicsDevice *d, const point &p) const { (title + p).DrawGradient(d, title_gradient); }
   void Reshape(bool *down) { mouse_start = screen->mouse; win_start = point(box.x, box.y); *down = 1; }
 
   static bool LessThan(const unique_ptr<Dialog> &l, const unique_ptr<Dialog> &r) { return l->zsort < r->zsort; }
@@ -762,7 +762,7 @@ struct DialogTab {
   DialogTab(Dialog *D=0) : dialog(D) {}
   bool operator<(const DialogTab &x) const { return dialog < x.dialog; }
   bool operator==(const DialogTab &x) const { return dialog == x.dialog; }
-  static void Draw(const Box &b, const point &tab_dim, const vector<DialogTab>&);
+  static void Draw(GraphicsDevice*, const Box &b, const point &tab_dim, const vector<DialogTab>&);
 };
 
 struct TabbedDialogInterface {
@@ -773,7 +773,7 @@ struct TabbedDialogInterface {
   TabbedDialogInterface(GUI *g, const point &d=point(200,16));
   virtual void SelectTabIndex(size_t i) {}
   virtual void Layout();
-  virtual void Draw() { DialogTab::Draw(box, tab_dim, tab_list); }
+  virtual void Draw(GraphicsDevice *gd) { DialogTab::Draw(gd, box, tab_dim, tab_list); }
 };
 
 template <class D=Dialog> struct TabbedDialog : public TabbedDialogInterface {
@@ -786,7 +786,7 @@ template <class D=Dialog> struct TabbedDialog : public TabbedDialogInterface {
   void SelectTab(D *t) { if ((gui->child_gui = top = t)) t->TakeFocus(); }
   void ReleaseTab(D *t) { if (top == t) { top=0; t->LoseFocus(); SelectTab(FirstTab()); } }
   void SelectTabIndex(size_t i) { CHECK_LT(i, tab_list.size()) SelectTab(dynamic_cast<D*>(tab_list[i].dialog)); }
-  void Draw() { TabbedDialogInterface::Draw(); if (top) top->Draw(); }
+  void Draw(GraphicsDevice *gd) { TabbedDialogInterface::Draw(gd); if (top) top->Draw(gd); }
 };
 
 struct MessageBoxDialog : public Dialog {
@@ -795,14 +795,14 @@ struct MessageBoxDialog : public Dialog {
   MessageBoxDialog(GraphicsDevice *d, const string &m) :
     Dialog(d, .25, .2), message(m) { font->Size(message, &messagesize); }
   void Layout();
-  void Draw();
+  void Draw(GraphicsDevice*);
 };
 
 struct TextureBoxDialog : public Dialog {
   Texture tex;
   TextureBoxDialog(GraphicsDevice *d, const string &m) :
     Dialog(d, .33, .33) { tex.ID = ::atoi(m.c_str()); tex.owner = false; }
-  void Draw() { Dialog::Draw(); tex.Draw(content + box.TopLeft()); }
+  void Draw(GraphicsDevice *d) { Dialog::Draw(d); tex.DrawGD(d, content + box.TopLeft()); }
 };
 
 struct SliderDialog : public Dialog {
@@ -813,7 +813,7 @@ struct SliderDialog : public Dialog {
   SliderDialog(GraphicsDevice *d, const string &title="", const UpdatedCB &cb=UpdatedCB(),
                float scrolled=0, float total=100, float inc=1);
   void Layout() { Dialog::Layout(); slider.LayoutFixed(content); }
-  void Draw() { Dialog::Draw(); if (slider.dirty) { slider.Update(); if (updated) updated(&slider); } }
+  void Draw(GraphicsDevice *d) { Dialog::Draw(d); if (slider.dirty) { slider.Update(); if (updated) updated(&slider); } }
 };
 
 struct FlagSliderDialog : public SliderDialog {
@@ -833,13 +833,13 @@ template <class X> struct TextViewDialogT  : public Dialog {
     Dialog::Layout();
     Widget::Slider::AttachContentBox(&content, &v_scrollbar, view.Wrap() ? nullptr : &h_scrollbar);
   }
-  void Draw() { 
+  void Draw(GraphicsDevice *gd) { 
     bool wrap = view.Wrap();
     if (1)     view.v_scrolled = v_scrollbar.AddScrollDelta(view.v_scrolled);
     if (!wrap) view.h_scrolled = h_scrollbar.AddScrollDelta(view.h_scrolled);
     if (1)     view.UpdateScrolled();
-    if (1)     Dialog::Draw();
-    if (1)     view.Draw(content + box.TopLeft(), TextArea::DrawFlag::CheckResized |
+    if (1)     Dialog::Draw(gd);
+    if (1)     view.Draw(gd, content + box.TopLeft(), TextArea::DrawFlag::CheckResized |
                          (view.cursor_enabled ? Editor::DrawFlag::DrawCursor : 0));
     if (1)     v_scrollbar.Update();
     if (!wrap) h_scrollbar.Update();
@@ -866,7 +866,7 @@ struct EditorDialog : public TextViewDialogT<Editor> {
 
 struct HelperGUI : public GUI {
   FontRef font;
-  HelperGUI() : font(FontDesc(FLAGS_font, "", 9, Color::white)) {}
+  HelperGUI(GraphicsDevice *D) : font(FontDesc(FLAGS_font, "", 9, Color::white)) {}
   struct Hint { enum { UP, UPLEFT, UPRIGHT, DOWN, DOWNLEFT, DOWNRIGHT }; };
   struct Label {
     Box target, label;
@@ -879,7 +879,7 @@ struct HelperGUI : public GUI {
   void AddLabel(const Box &w, const string &d, int h, float ly=.05, float lx=.02) { label.push_back(Label(w, d, h, font, ly, lx)); }
   void Activate() { active=1; /* ForceDirectedLayout(); */ }
   void ForceDirectedLayout();
-  void Draw();
+  void Draw(GraphicsDevice*);
 };
 
 }; // namespace LFL

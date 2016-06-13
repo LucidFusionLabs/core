@@ -47,7 +47,7 @@ template <class Line> struct RingFrameBuffer {
     Box box(pos.x, pos.y, w, h);
     if (scissor) fb.gd->PushScissor(box);
     fb.tex.Bind();
-    (box + adjust).DrawCrimped(fb.tex.coord, 0, 0, scroll.y);
+    (box + adjust).DrawCrimped(fb.gd, fb.tex.coord, 0, 0, scroll.y);
     if (scissor) fb.gd->PopScissor();
   }
 
@@ -92,16 +92,16 @@ struct TilesInterface {
   struct RunFlag { enum { DontClear=1, ClearEmpty=2 }; };
   virtual ~TilesInterface() {}
   virtual void AddDrawableBoxArray(const DrawableBoxArray &box, point p);
-  virtual void SetAttr            (const Drawable::Attr *a)                                = 0;
-  virtual void InitDrawBox        (const point&)                                           = 0;
-  virtual void InitDrawBackground (const point&)                                           = 0;
-  virtual void DrawBox            (const Drawable*, const Box&, const Drawable::Attr *a=0) = 0;
-  virtual void DrawBackground     (const Box&)                                             = 0;
-  virtual void AddScissor         (const Box&)                                             = 0;
-  virtual void Draw(const Box &viewport, const point &doc_position)                        = 0;
-  virtual void ContextOpen()                                                               = 0;
-  virtual void ContextClose()                                                              = 0;
-  virtual void Run(int flag)                                                               = 0;
+  virtual void SetAttr            (const Drawable::Attr *a)                       = 0;
+  virtual void InitDrawBox        (const point&)                                  = 0;
+  virtual void InitDrawBackground (const point&)                                  = 0;
+  virtual void DrawBox            (GraphicsContext*, const Drawable*, const Box&) = 0;
+  virtual void DrawBackground     (GraphicsDevice*,  const Box&)                  = 0;
+  virtual void AddScissor         (const Box&)                                    = 0;
+  virtual void Draw(const Box &viewport, const point &doc_position)               = 0;
+  virtual void ContextOpen()                                                      = 0;
+  virtual void ContextClose()                                                     = 0;
+  virtual void Run(int flag)                                                      = 0;
 };
 
 struct LayersInterface {
@@ -248,7 +248,7 @@ template<class CB, class CBL, class CBLI> struct TilesT : public TilesInterface 
         if (!tile || !tile->id) continue;
         GetSpaceCoords(y, x, &sx, &sy);
         fb.gd->BindTexture(GraphicsDevice::Texture2D, tile->id);
-        Box(sx - doc_to_view.x, sy - doc_to_view.y, W, H).Draw(Texture::unit_texcoord);
+        Box(sx - doc_to_view.x, sy - doc_to_view.y, W, H).Draw(fb.gd, Texture::unit_texcoord);
       }
     }
   }
@@ -260,8 +260,8 @@ struct Tiles : public TilesT<Callback, CallbackList, CallbackList> {
   void SetAttr           (const Drawable::Attr *a) { attr=a; }
   void InitDrawBox       (const point&);
   void InitDrawBackground(const point&);
-  void DrawBox           (const Drawable*, const Box&, const Drawable::Attr *a=0);
-  void DrawBackground    (const Box&);
+  void DrawBox           (GraphicsContext*, const Drawable*, const Box&);
+  void DrawBackground    (GraphicsDevice*,  const Box&);
   void AddScissor        (const Box&);
 };
 

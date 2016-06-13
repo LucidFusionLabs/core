@@ -198,8 +198,8 @@ struct TilesIPC : public TilesT<MultiProcessPaintResource::Cmd, MultiProcessPain
   void SetAttr           (const Drawable::Attr*);
   void InitDrawBox       (const point&);
   void InitDrawBackground(const point&);
-  void DrawBox           (const Drawable*, const Box&, const Drawable::Attr *a=0);
-  void DrawBackground    (const Box&);
+  void DrawBox           (GraphicsContext*, const Drawable*, const Box&);
+  void DrawBackground    (GraphicsDevice*,  const Box&);
   void AddScissor        (const Box&);
 };
 

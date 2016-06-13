@@ -104,12 +104,12 @@ int Glyph::Layout(LFL::Box *out, const Drawable::Attr *attr) const {
   return X_or_Y(center_width, ax);
 }
 
-void Glyph::Draw(const LFL::Box &b, const Drawable::Attr *a) const {
+void Glyph::Draw(GraphicsContext *gc, const LFL::Box &b) const {
   if (space) return;
-  if (!a || !a->font) return tex.Draw(b, a);
-  if (!ready) a->font->engine->LoadGlyphs(a->font, this, 1);
-  if (tex.buf) screen->gd->DrawPixels(b, tex);
-  else b.Draw(tex.coord);
+  if (!gc->attr || !gc->attr->font) return tex.Draw(gc, b);
+  if (!ready) gc->attr->font->engine->LoadGlyphs(gc->attr->font, this, 1);
+  if (tex.buf) gc->gd->DrawPixels(b, tex);
+  else b.Draw(gc->gd, tex.coord);
 }
 
 GlyphCache::GlyphCache(unsigned T, int W, int H) : dim(W, H ? H : W), tex(dim.w, dim.h, Texture::preferred_pf, T), flow(make_unique<Flow>(&dim)) {}
@@ -218,17 +218,23 @@ void Font::UpdateMetrics(Glyph *g) {
   if (descent      > descender) descender = descent;
 }
 
-void Font::Select() {
-  screen->gd->EnableTexture();
+void Font::Select(GraphicsDevice *gd) {
+  gd->EnableTexture();
   glyph->cache->tex.Bind();
-  if      (mix_fg)                { screen->gd->EnableBlend(); screen->gd->SetColor(fg); }
-  else if (has_bg && bg.a() == 1) { screen->gd->DisableBlend(); }
+  if      (mix_fg)                { gd->EnableBlend(); gd->SetColor(fg); }
+  else if (has_bg && bg.a() == 1) { gd->DisableBlend(); }
 }
 
-void Font::DrawGlyphWithAttr(int gid, const Box &w, const Drawable::Attr &a) {
-  Select();
+void Font::DrawGlyph(GraphicsDevice *d, int g, const Box &w) {
+  Drawable::Attr a(this);
+  GraphicsContext gc(d, &a);
+  return DrawGlyphWithAttr(&gc, g, w);
+}
+
+void Font::DrawGlyphWithAttr(GraphicsContext *gc, int gid, const Box &w) {
+  Select(gc->gd);
   Glyph *g = FindGlyph(gid);
-  g->Draw(w, &a);
+  g->Draw(gc, w);
 }
 
 template <class X> void Font::Size(const StringPieceT<X> &text, Box *out, int maxwidth, int flag, int *lines_out) {
@@ -264,7 +270,7 @@ template <class X> int Font::Draw(const StringPieceT<X> &text, const Box &box, v
   DrawableBoxArray out;
   Shape(text, box, &out, draw_flag | DrawFlag::DontAssignFlowP);
   if (lb) *lb = out.line;
-  if (!(draw_flag & DrawFlag::Clipped)) out.Draw(box.TopLeft());
+  if (!(draw_flag & DrawFlag::Clipped)) out.Draw(screen->gd, box.TopLeft());
   return max(size_t(1), out.line.size());
 }
 

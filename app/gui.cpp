@@ -51,9 +51,9 @@ void GUI::IncrementBoxY(int y, int draw_box_ind, int input_box_ind) {
   if (input_box_ind >= 0) mouse.hit     [input_box_ind].box.y += y;
 }
 
-void GUI::Draw() {
+void GUI::Draw(GraphicsDevice *gd) {
   if (child_box.data.empty()) Layout();
-  child_box.Draw(box.TopLeft());
+  child_box.Draw(gd, box.TopLeft());
 }
 
 void Widget::Button::Layout(Flow *flow, Font *f) {
@@ -381,7 +381,7 @@ void TextBox::Line::Layout(Box win, bool flush) {
 
 point TextBox::Line::Draw(point pos, int relayout_width, int g_offset, int g_len) {
   if (relayout_width >= 0) Layout(relayout_width);
-  data->glyphs.Draw((p = pos), g_offset, g_len);
+  data->glyphs.Draw(screen->gd, (p = pos), g_offset, g_len);
   return p - point(0, parent->style.font->Height() + data->glyphs.height);
 }
 
@@ -481,7 +481,7 @@ TextBox::LineUpdate::~LineUpdate() {
   else fb->Update(v);
 }
 
-TextBox::TextBox(GraphicsDevice *d, const FontRef &F, int LC) : style(F), cmd_last(LC), cmd_fb(d) {
+TextBox::TextBox(GraphicsDevice *D, const FontRef &F, int LC) : style(F), cmd_last(LC), cmd_fb(D) {
   if (style.font.Load()) cmd_line.GetAttrId(Drawable::Attr(style.font));
   layout.pad_wide_chars = 1;
   cmd_line.Init(this, 0);
@@ -516,27 +516,27 @@ void TextBox::UpdateLineFB(Line *L, LinesFrameBuffer *fb, int flag) {
   fb->fb.Release();
 }
 
-void TextBox::Draw(const Box &b) {
+void TextBox::Draw(GraphicsDevice *gd, const Box &b) {
   if (cmd_fb.SizeChanged(b.w, b.h, style.font, bg_color)) {
     cmd_fb.p = point(0, style.font->Height());
     cmd_line.Draw(point(0, cmd_line.Lines() * style.font->Height()), cmd_fb.w);
     cmd_fb.SizeChangedDone();
   }
-  // screen->gd->PushColor();
-  // screen->gd->SetColor(cmd_color);
+  // gd->PushColor();
+  // gd->SetColor(cmd_color);
   cmd_fb.Draw(b.Position(), point());
-  if (Active()) DrawCursor(b.Position() + cursor.p);
-  // screen->gd->PopColor();
+  if (Active()) DrawCursor(gd, b.Position() + cursor.p);
+  // gd->PopColor();
 }
 
-void TextBox::DrawCursor(point p) {
+void TextBox::DrawCursor(GraphicsDevice *gd, point p) {
   if (cursor.type == Cursor::Block) {
-    screen->gd->EnableBlend();
-    screen->gd->BlendMode(GraphicsDevice::OneMinusDstColor, GraphicsDevice::OneMinusSrcAlpha);
-    screen->gd->FillColor(cmd_color);
-    Box(p.x, p.y - style.font->Height(), style.font->max_width, style.font->Height()).Draw();
-    screen->gd->BlendMode(GraphicsDevice::SrcAlpha, GraphicsDevice::One);
-    screen->gd->DisableBlend();
+    gd->EnableBlend();
+    gd->BlendMode(GraphicsDevice::OneMinusDstColor, GraphicsDevice::OneMinusSrcAlpha);
+    gd->FillColor(cmd_color);
+    Box(p.x, p.y - style.font->Height(), style.font->max_width, style.font->Height()).Draw(gd);
+    gd->BlendMode(GraphicsDevice::SrcAlpha, GraphicsDevice::One);
+    gd->DisableBlend();
   } else {
     bool blinking = false;
     Time now = Now(), elapsed; 
@@ -579,13 +579,14 @@ void TextBox::UpdateLongToken(Line *BL, int beg_offset, Line *EL, int end_offset
 }
 
 point TiledTextBox::PaintCB(Line *l, point lp, const Box &b) {
+  GraphicsContext gc(screen->gd);
   Box box = b + offset;
   tiles->ContextOpen();
   tiles->AddScissor(box);
 
   // tiles->SetAttr(&a);
   tiles->InitDrawBox(box.Position());
-  tiles->DrawBox(Singleton<BoxFilled>::Get(), box, NULL);
+  tiles->DrawBox(&gc, Singleton<BoxFilled>::Get(), box);
 
   tiles->AddDrawableBoxArray(l->data->glyphs, lp + b.TopLeft() + offset);
   tiles->ContextClose();
@@ -680,7 +681,7 @@ void TextArea::Redraw(bool attach, bool relayout) {
                     : &LinesFrameBuffer::PushFrontAndUpdate;
   fb->p = reverse_line_fb ? point(0, fb->h - start_line_adjust * font_height) 
                           : point(0, start_line_adjust * font_height);
-  if (attach) { fb->fb.Attach(); screen->gd->Clear(); }
+  if (attach) { fb->fb.Attach(); fb->fb.gd->Clear(); }
   for (int i=start_line; i<line.ring.count && lines < fb->lines; i++)
     lines += (fb->*update_cb)(&line[-i-1], -line_left, 0, fb->lines - lines, fb_flag);
   fb->p = point(0, fb->h);
@@ -751,12 +752,12 @@ void TextArea::ChangeColors(Colors *C) {
   Redraw(true, true);
 }
 
-void TextArea::Draw(const Box &b, int flag, Shader *shader) {
+void TextArea::Draw(GraphicsDevice *gd, const Box &b, int flag, Shader *shader) {
   if (shader) {
     float scale = shader->scale;
     glShadertoyShader(shader);
-    shader->SetUniform3f("iChannelResolution", XY_or_Y(scale, screen->gd->TextureDim(line_fb.w)), 
-                                               XY_or_Y(scale, screen->gd->TextureDim(line_fb.h)), 1);
+    shader->SetUniform3f("iChannelResolution", XY_or_Y(scale, gd->TextureDim(line_fb.w)), 
+                                               XY_or_Y(scale, gd->TextureDim(line_fb.h)), 1);
     shader->SetUniform2f("iChannelScroll", XY_or_Y(scale, -line_fb.scroll.x * line_fb.w),
                                            XY_or_Y(scale, -line_fb.scroll.y * line_fb.h - line_fb.align_top_or_bot * extra_height) - b.y);
     shader->SetUniform2f("iChannelModulus", line_fb.fb.tex.coord[Texture::maxx_coord_ind],
@@ -765,13 +766,13 @@ void TextArea::Draw(const Box &b, int flag, Shader *shader) {
   int font_height = style.font->Height();
   LinesFrameBuffer *fb = GetFrameBuffer();
   if (flag & DrawFlag::CheckResized) CheckResized(b);
-  if (clip) screen->gd->PushScissor(Box::DelBorder(b, *clip));
-  else if (extra_height) screen->gd->PushScissor(b);
+  if (clip) gd->PushScissor(Box::DelBorder(b, *clip));
+  else if (extra_height) gd->PushScissor(b);
   fb->DrawAligned(b, point(0, max(0, CommandLines()-1) * font_height));
-  if (clip || extra_height) screen->gd->PopScissor();
-  if (flag & DrawFlag::DrawCursor) DrawCursor(b.Position() + cursor.p);
+  if (clip || extra_height) gd->PopScissor();
+  if (flag & DrawFlag::DrawCursor) DrawCursor(gd, b.Position() + cursor.p);
   if (selection.enabled) box.SetPosition(b.Position());
-  if (selection.changing) DrawSelection();
+  if (selection.changing) DrawSelection(gd);
   if (!clip && hover_control) DrawHoverLink(b);
 }
 
@@ -805,11 +806,11 @@ void TextArea::InitSelection() {
     (Box(), MouseController::CoordCB(bind(&TextArea::DragCB, this, _1, _2, _3, _4)));
 }
 
-void TextArea::DrawSelection() {
-  screen->gd->EnableBlend();
-  screen->gd->FillColor(selection_color);
-  selection.box.Draw(box.BottomLeft());
-  screen->gd->SetColor(Color::white);
+void TextArea::DrawSelection(GraphicsDevice *gd) {
+  gd->EnableBlend();
+  gd->FillColor(selection_color);
+  selection.box.Draw(gd, box.BottomLeft());
+  gd->SetColor(Color::white);
 }
 
 void TextArea::DragCB(int, int, int, int down) {
@@ -975,13 +976,13 @@ PropertyView::PropertyView(GraphicsDevice *D, const FontRef &F) : TextView(D, F)
   Activate();
 }
 
-void PropertyView::Draw(const Box &b, int flag, Shader *shader) {
-  TextArea::Draw(b, flag, shader);
+void PropertyView::Draw(GraphicsDevice *gd, const Box &b, int flag, Shader *shader) {
+  TextArea::Draw(gd, b, flag, shader);
   int selected_line_no_offset = selected_line_no - last_first_line, fh = style.font->Height();
   if (Within(selected_line_no_offset, 0, GetFrameBuffer()->lines)) {
-    screen->gd->EnableBlend();
-    screen->gd->FillColor(selected_color);
-    Box(b.x, b.top()-(selected_line_no_offset+1)*fh, b.w, fh).Draw();
+    gd->EnableBlend();
+    gd->FillColor(selected_color);
+    Box(b.x, b.top()-(selected_line_no_offset+1)*fh, b.w, fh).Draw(gd);
   }
 }
 
@@ -1731,26 +1732,26 @@ void Terminal::UpdateToken(Line *L, int word_offset, int word_len, int update_ty
   if (update_type > 0) UpdateLongToken(BL, beg_offset, EL, end_offset, text, update_type);
 }
 
-void Terminal::Draw(const Box &b, int flag, Shader *shader) {
-  TextArea::Draw(b, flag & ~DrawFlag::DrawCursor, shader);
+void Terminal::Draw(GraphicsDevice *gd, const Box &b, int flag, Shader *shader) {
+  TextArea::Draw(gd, b, flag & ~DrawFlag::DrawCursor, shader);
   if (shader) shader->SetUniform2f("iScroll", 0, XY_or_Y(shader->scale, -b.y));
   if (clip) {
     { Scissor s(line_fb.fb.gd, Box::TopBorder(b, *clip)); cmd_fb.DrawAligned(b, point()); }
     { Scissor s(line_fb.fb.gd, Box::BotBorder(b, *clip)); cmd_fb.DrawAligned(b, point()); }
     if (hover_control) DrawHoverLink(b);
   }
-  if (flag & DrawFlag::DrawCursor) TextBox::DrawCursor(b.Position() + cursor.p);
+  if (flag & DrawFlag::DrawCursor) TextBox::DrawCursor(gd, b.Position() + cursor.p);
   if (extra_height && !shader) {
-    ScopedFillColor c(screen->gd, *bg_color);
-    Box(b.x, b.y + (line_fb.align_top_or_bot ? 0 : line_fb.h), b.w, extra_height).Draw();
+    ScopedFillColor c(gd, *bg_color);
+    Box(b.x, b.y + (line_fb.align_top_or_bot ? 0 : line_fb.h), b.w, extra_height).Draw(gd);
   }
-  if (selection.changing) DrawSelection();
+  if (selection.changing) DrawSelection(gd);
 }
 
 void Terminal::Write(const StringPiece &s, bool update_fb, bool release_fb) {
   if (!app->MainThread()) return app->RunInMainThread(bind(&Terminal::WriteCB, this, s.str(), update_fb, release_fb));
   TerminalTrace("Terminal: Write('%s', %zd)", CHexEscapeNonAscii(s.str()).c_str(), s.size());
-  screen->gd->DrawMode(DrawMode::_2D, 0);
+  line_fb.fb.gd->DrawMode(DrawMode::_2D, 0);
   ScopedClearColor scc(line_fb.fb.gd, bg_color);
   last_fb = 0;
   for (int i = 0; i < s.len; i++) {
@@ -2044,7 +2045,7 @@ void Console::StartAnimating() {
   if (animating && !last_animating && animating_cb) animating_cb();
 }
 
-void Console::Draw() {
+void Console::Draw(GraphicsDevice *gd) {
   drawing = 1;
   Time now = Now(), elapsed;
   bool active = Active(), last_animating = animating;
@@ -2058,24 +2059,24 @@ void Console::Draw() {
     if (!active) { drawing = 0; return; }
   }
   scissor = (animating && bottom_or_top) ? &(scissor_buf = Box(0, screen->y, screen->width, h)) : 0;
-  Draw(Box(0, screen->y + (bottom_or_top ? 0 : screen->height - h), screen->width, full_height));
+  Draw(gd, Box(0, screen->y + (bottom_or_top ? 0 : screen->height - h), screen->width, full_height));
 }
 
-void Console::Draw(const Box &b, int flag, Shader *shader) {
-  if (scissor) screen->gd->PushScissor(*scissor);
+void Console::Draw(GraphicsDevice *gd, const Box &b, int flag, Shader *shader) {
+  if (scissor) gd->PushScissor(*scissor);
   int fh = style.font->Height();
   Box tb(b.x, b.y + fh, b.w, b.h - fh);
-  if (blend) screen->gd->EnableBlend(); 
-  else       screen->gd->DisableBlend();
-  if (blend) { screen->gd->FillColor(color); b.Draw(); screen->gd->SetColor(Color::white); }
-  TextBox::Draw(b);
-  TextArea::Draw(tb, flag & ~DrawFlag::DrawCursor, shader);
-  if (scissor) screen->gd->PopScissor();
+  if (blend) gd->EnableBlend(); 
+  else       gd->DisableBlend();
+  if (blend) { gd->FillColor(color); b.Draw(gd); gd->SetColor(Color::white); }
+  TextBox::Draw(gd, b);
+  TextArea::Draw(gd, tb, flag & ~DrawFlag::DrawCursor, shader);
+  if (scissor) gd->PopScissor();
 }
 
 /* Dialog */
 
-Dialog::Dialog(GraphicsDevice*, float w, float h, int flag) :
+Dialog::Dialog(GraphicsDevice *d, float w, float h, int flag) :
   color(85,85,85,220), title_gradient{Color(127,0,0), Color(0,0,127), Color(0,0,178), Color(208,0,127)},
   font(FontDesc(FLAGS_font, "", 14, Color(Color::white,.8), Color::clear, FLAGS_font_flag)),
   menuicon(FontDesc("MenuAtlas", "", 0, Color::white, Color::clear, 0)), deleted_cb([=]{ deleted=true; })
@@ -2140,32 +2141,32 @@ bool Dialog::HandleReshape(Box *outline) {
   return moving || resizing_left || resizing_right || resizing_bottom;
 }
 
-void Dialog::Draw() {
-  if (fullscreen) { child_box.Draw(box.TopLeft()); return; }
+void Dialog::Draw(GraphicsDevice *gd) {
+  if (fullscreen) { child_box.Draw(gd, box.TopLeft()); return; }
   Box outline;
   bool reshaping = HandleReshape(&outline);
   if (child_box.data.empty() && !reshaping) Layout();
 
-  screen->gd->FillColor(color);
-  box.Draw();
-  screen->gd->SetColor(Color::white);
-  if (reshaping) BoxOutline().Draw(outline);
+  gd->FillColor(color);
+  box.Draw(gd);
+  gd->SetColor(Color::white);
+  if (reshaping) { GraphicsContext gc(gd); BoxOutline().Draw(&gc, outline); }
 
-  screen->gd->EnableVertexColor();
-  DrawGradient(box.TopLeft());
-  screen->gd->DisableVertexColor();
+  gd->EnableVertexColor();
+  DrawGradient(gd, box.TopLeft());
+  gd->DisableVertexColor();
 
-  child_box.Draw(box.TopLeft());
+  child_box.Draw(gd, box.TopLeft());
 }
 
-void DialogTab::Draw(const Box &b, const point &tab_dim, const vector<DialogTab> &t) {
-  screen->gd->FillColor(Color::grey70);
-  Box(b.x, b.y+b.h-tab_dim.y, b.w, tab_dim.y).Draw();
-  screen->gd->EnableVertexColor();
-  for (int i=0, l=t.size(); i<l; ++i) t[i].dialog->DrawGradient(b.TopLeft() + point(i*tab_dim.x, 0));
-  screen->gd->DisableVertexColor();
-  screen->gd->EnableTexture();
-  for (int i=0, l=t.size(); i<l; ++i) t[i].child_box.Draw(b.TopLeft() + point(i*tab_dim.x, 0));
+void DialogTab::Draw(GraphicsDevice *gd, const Box &b, const point &tab_dim, const vector<DialogTab> &t) {
+  gd->FillColor(Color::grey70);
+  Box(b.x, b.y+b.h-tab_dim.y, b.w, tab_dim.y).Draw(gd);
+  gd->EnableVertexColor();
+  for (int i=0, l=t.size(); i<l; ++i) t[i].dialog->DrawGradient(gd, b.TopLeft() + point(i*tab_dim.x, 0));
+  gd->DisableVertexColor();
+  gd->EnableTexture();
+  for (int i=0, l=t.size(); i<l; ++i) t[i].child_box.Draw(gd, b.TopLeft() + point(i*tab_dim.x, 0));
 }
 
 TabbedDialogInterface::TabbedDialogInterface(GUI *g, const point &d): gui(g), tab_dim(d) {}
@@ -2194,9 +2195,9 @@ void MessageBoxDialog::Layout() {
   flow.AppendText(message);
 }
 
-void MessageBoxDialog::Draw() {
-  Scissor scissor(screen->gd, box);
-  Dialog::Draw();
+void MessageBoxDialog::Draw(GraphicsDevice *gd) {
+  Scissor scissor(gd, box);
+  Dialog::Draw(gd);
 }
 
 SliderDialog::SliderDialog(GraphicsDevice *d, const string &t, const SliderDialog::UpdatedCB &cb, float scrolled, float total, float inc) :
@@ -2307,12 +2308,12 @@ HelperGUI::Label::Label(const Box &w, const string &d, int h, Font *f, float ly,
   AssignLabelBox();
 }
 
-void HelperGUI::Draw() {
+void HelperGUI::Draw(GraphicsDevice *gd) {
   for (auto i = label.begin(); i != label.end(); ++i) {
     glLine(point(i->label_center.x, i->label_center.y),
            point(i->target_center.x, i->target_center.y), &font->fg);
-    screen->gd->FillColor(Color::black);
-    Box::AddBorder(i->label, 4, 0).Draw();
+    gd->FillColor(Color::black);
+    Box::AddBorder(i->label, 4, 0).Draw(gd);
     font->Draw(i->description, point(i->label.x, i->label.y));
   }
 }
