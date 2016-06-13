@@ -285,30 +285,32 @@ int SystemNetwork::Bind(int fd, IPV4::Addr addr, int port) {
   return 0;
 }
 
-Socket SystemNetwork::Accept(Socket listener, IPV4::Addr *addr, int *port) {
+Socket SystemNetwork::Accept(Socket listener, IPV4::Addr *addr, int *port, bool blocking) {
   struct sockaddr_in sin;
   socklen_t sinSize = sizeof(sin);
   Socket socket = ::accept(listener, reinterpret_cast<struct sockaddr*>(&sin), &sinSize);
-  if (socket == -1 && !SystemNetwork::EWouldBlock()) return ERRORv(-1, "accept: ", SystemNetwork::LastError());
+  if (socket == -1 && !SystemNetwork::EWouldBlock()) return ERRORv(InvalidSocket, "accept: ", SystemNetwork::LastError());
   if (addr) *addr = sin.sin_addr.s_addr;
   if (port) *port = ntohs(sin.sin_port);
+  if (!blocking && SetSocketBlocking(socket, 0))
+  { ERROR("Network::socket_blocking: ", SystemNetwork::LastError()); CloseSocket(socket); return InvalidSocket; }
   return socket;
 }
 
 Socket SystemNetwork::Listen(int protocol, IPV4::Addr addr, int port, int backlog, bool blocking) {
   Socket fd;
   if ((fd = OpenSocket(protocol)) < 0) 
-    return ERRORv(-1, "network_socket_open: ", SystemNetwork::LastError());
+    return ERRORv(InvalidSocket, "network_socket_open: ", SystemNetwork::LastError());
 
-  if (Bind(fd, addr, port) == -1) { CloseSocket(fd); return -1; }
+  if (Bind(fd, addr, port) == -1) { CloseSocket(fd); return InvalidSocket; }
 
   if (protocol == Protocol::TCP) {
     if (::listen(fd, backlog) == -1)
-    { ERROR("listen: ", SystemNetwork::LastError()); CloseSocket(fd); return -1; }
+    { ERROR("listen: ", SystemNetwork::LastError()); CloseSocket(fd); return InvalidSocket; }
   }
 
   if (!blocking && SetSocketBlocking(fd, 0))
-  { ERROR("Network::socket_blocking: ", SystemNetwork::LastError()); CloseSocket(fd); return -1; }
+  { ERROR("Network::socket_blocking: ", SystemNetwork::LastError()); CloseSocket(fd); return InvalidSocket; }
 
   INFO("listen(port=", port, ", protocol=", (protocol == Protocol::TCP) ? "TCP" : "UDP", ")");
   return fd;
@@ -448,8 +450,8 @@ int Connection::Read() {
 
   if (bio.ssl) {
     if ((len = bio.Read(rb.end(), readlen)) < 0) {
-      const char *err_string = bio.ErrorString();
-      return ERRORv(-1, Name(), ": BIO_read: ", err_string ? err_string : "read() zero");
+      string err_string = bio.ErrorString();
+      return ERRORv(-1, Name(), ": BIO_read: ", err_string.size() ? err_string : "read() zero");
     } else if (!len) return 0;
 
 #ifndef LFL_WINDOWS
@@ -748,7 +750,7 @@ Connection *Service::Connect(const string &hostport, int default_port, Callback 
   return Connect(addr, port, NULL, detach);
 }
 
-Connection *Service::SSLConnect(SSL_CTX *sslctx, const string &hostport, int default_port, Callback *detach) {
+Connection *Service::SSLConnect(SSLSocket::CTXPtr sslctx, const string &hostport, int default_port, Callback *detach) {
   if (!sslctx) sslctx = app->net->ssl;
   if (!sslctx) return ERRORv(nullptr, "no ssl: ", -1);
 
@@ -756,7 +758,7 @@ Connection *Service::SSLConnect(SSL_CTX *sslctx, const string &hostport, int def
   if (!HTTP::ResolveHost(hostport.c_str(), 0, &c->addr, &c->port, true, default_port)) return ERRORv(nullptr, "resolve: ", hostport);
 
   if ((c->socket = c->bio.Connect(sslctx, hostport)) == InvalidSocket) {
-    ERROR(hostport, ": BIO_do_connect: ", SpellNull(c->bio.ErrorString()));
+    ERROR(hostport, ": BIO_do_connect: ", c->bio.ErrorString());
     delete c;
     return 0;
   }
@@ -767,13 +769,13 @@ Connection *Service::SSLConnect(SSL_CTX *sslctx, const string &hostport, int def
   return c;
 }
 
-Connection *Service::SSLConnect(SSL_CTX *sslctx, IPV4::Addr addr, int port, Callback *detach) {
+Connection *Service::SSLConnect(SSLSocket::CTXPtr sslctx, IPV4::Addr addr, int port, Callback *detach) {
   if (!sslctx) sslctx = app->net->ssl;
   if (!sslctx) return ERRORv(nullptr, "no ssl: ", -1);
 
   Connection *c = new Connection(this, Connection::Connecting, addr, port, detach);
   if ((c->socket = c->bio.Connect(sslctx, addr, port)) == InvalidSocket) {
-    ERROR(c->Name(), ": BIO_do_connect: ", BlankNull(c->bio.ErrorString()));
+    ERROR(c->Name(), ": BIO_do_connect: ", c->bio.ErrorString());
     delete c;
     return 0;
   }

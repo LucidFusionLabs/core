@@ -7,6 +7,11 @@ if(LFL_OPENSSL)
                  INCLUDE_DIRECTORIES ${OPENSSL_INCLUDE} LINK_LIBRARIES ${OPENSSL_LIB})
 endif()
 
+if(LFL_APPLE OR LFL_IOS)
+  lfl_add_target(app_securetransport_ssl STATIC_LIBRARY SOURCES securetransport_ssl.cpp
+                 LINK_LIBRARIES "-framework Security")
+endif()
+
 if(LFL_FFMPEG)
   lfl_add_target(app_ffmpeg_stream STATIC_LIBRARY SOURCES ffmpeg_stream.cpp
                  INCLUDE_DIRECTORIES ${FFMPEG_INCLUDE} LINK_LIBRARIES ${FFMPEG_LIB})

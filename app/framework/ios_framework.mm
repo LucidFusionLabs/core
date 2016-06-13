@@ -26,9 +26,7 @@
 #import <OpenGLES/ES1/gl.h>
 #import <OpenGLES/ES1/glext.h>
 #import <QuartzCore/QuartzCore.h>
-#ifndef LFL_IOS_SIM 
 #import <AVFoundation/AVFoundation.h>
-#endif
 
 #include "core/app/app.h"
 #include "core/app/framework/ios_common.h"
@@ -132,7 +130,7 @@ const int Key::End        = -34;
     [self.window addSubview:self.textField];
 
     [[NSFileManager defaultManager] changeCurrentDirectoryPath: [[NSBundle mainBundle] resourcePath]];
-    NSLog(@"iPhoneMain argc=%d", LFL::app->argc);
+    NSLog(@"iOSMain argc=%d", LFL::app->argc);
     MyAppMain();
     INFOf("didFinishLaunchingWithOptions, views: %p, %p, %p, csf=%f", self.view, self.lview, self.rview, scale);
 
@@ -513,9 +511,9 @@ const int Key::End        = -34;
 @end
 
 namespace LFL {
-struct iPhoneFrameworkModule : public Module {
+struct iOSFrameworkModule : public Module {
   int Init() {
-    INFO("iPhoneFrameworkModule::Init()");
+    INFO("iOSFrameworkModule::Init()");
     CHECK(!screen->id.v);
     screen->id = LFL::MakeTyped([[LFUIApplication sharedAppDelegate] view]);
     CHECK(screen->id.v);
@@ -532,20 +530,16 @@ struct iPhoneFrameworkModule : public Module {
   }
 };
 
-struct iPhoneAssetLoader : public SimpleAssetLoader {
+struct iOSAssetLoader : public SimpleAssetLoader {
   virtual void UnloadAudioFile(void *h) {}
   virtual void *LoadAudioFile(File*) { return 0; }
-  virtual void *LoadAudioFileNamed(const string &filename) {
-#ifdef LFL_IOS_SIM
-    return 0;
-#else // LFL_IOS_SIM
+  virtual void *LoadAudioFileNamed(const string &asset_fn) {
     NSError *error;
-    NSString *fn = [NSString stringWithCString:filename.c_str() encoding:NSASCIIStringEncoding];
-    NSURL *url = [NSURL fileURLWithPath:[NSString stringWithFormat:@"%@/%@", [[NSBundle mainBundle] resourcePath], fn]];
+    NSString *fn = [NSString stringWithCString:Asset::FileName(asset_fn).c_str() encoding:NSASCIIStringEncoding];
+    NSURL *url = [NSURL fileURLWithPath: fn];
     AVAudioPlayer *audio_player = [[AVAudioPlayer alloc] initWithContentsOfURL:url error:&error];
-    if (audio_player == nil) NSLog(@"%@", [error description]);
+    if (audio_player == nil) ERRORf("iOS Asset Load %s: %s", [fn UTF8String], [[error description] UTF8String]);
     return audio_player;
-#endif // LFL_IOS_SIM
   }
 
   virtual void LoadAudio(void *handle, SoundAsset *a, int seconds, int flag) { a->handle = handle; }
@@ -652,8 +646,8 @@ void FrameScheduler::DelWaitForeverSocket(Window *w, Socket fd) {
   [[LFUIApplication sharedAppDelegate] delWaitForeverSocket: fd];
 }
 
-unique_ptr<Module> CreateFrameworkModule() { return make_unique<iPhoneFrameworkModule>(); }
-unique_ptr<AssetLoaderInterface> CreateAssetLoader() { return make_unique<iPhoneAssetLoader>(); }
+unique_ptr<Module> CreateFrameworkModule() { return make_unique<iOSFrameworkModule>(); }
+unique_ptr<AssetLoaderInterface> CreateAssetLoader() { return make_unique<iOSAssetLoader>(); }
 
 extern "C" int main(int ac, const char* const* av) {
   MyAppCreate(ac, av);

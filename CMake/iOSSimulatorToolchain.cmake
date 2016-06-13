@@ -1,6 +1,6 @@
 set(LFL_APPLE_DEVELOPER "/Applications/Xcode.app/Contents/Developer")
 set(LFL_IOS_ROOT "${LFL_APPLE_DEVELOPER}/Platforms/iPhoneSimulator.platform/Developer")
-set(LFL_IOS_SDK "${LFL_IOS_ROOT}/SDKs/iPhoneSimulator8.3.sdk")
+set(LFL_IOS_SDK "${LFL_IOS_ROOT}/SDKs/iPhoneSimulator.sdk")
 set(LFL_IOS TRUE)
 set(LFL_IOS_SIM TRUE)
 set(LFL_USE_LIBCPP ON)
@@ -43,8 +43,8 @@ set(ENV{LDFLAGS}  "-arch i686 -isysroot ${LFL_IOS_SDK} ${IOS_VERSION_MIN}")
 set(CONFIGURE_ENV CC=$ENV{CC} CXX=$ENV{CXX} CPP=$ENV{CPP} CXXCPP=$ENV{CXXCPP} AR=$ENV{AR} RANLIB=$ENV{RANLIB}
     CFLAGS=$ENV{CFLAGS} CXXFLAGS=$ENV{CXXFLAGS} LDFLAGS=$ENV{LDFLAGS})
 
-set(M_LIBRARY ${LFL_IOS_SDK}/usr/lib/libm.dylib)
+set(M_LIBRARY ${LFL_IOS_SDK}/usr/lib/libm.tbd)
 set(ZLIB_INCLUDE_DIR ${LFL_IOS_SDK}/usr/include)
-set(ZLIB_LIBRARY ${LFL_IOS_SDK}/usr/lib/libz.dylib)
+set(ZLIB_LIBRARY ${LFL_IOS_SDK}/usr/lib/libz.tbd)
 
 add_custom_target(sim_start COMMAND nohup /Applications/Xcode.app/Contents/Developer/Applications/iOS\ Simulator.app/Contents/MacOS/iOS\ Simulator &)

@@ -28,56 +28,65 @@ namespace LFL {
 DEFINE_string(ssl_certfile, "", "SSL server certificate file");
 DEFINE_string(ssl_keyfile,  "", "SSL server key file");
 
-SSLSocket::~SSLSocket() { if (bio) BIO_free_all(bio); }
-const char *SSLSocket::ErrorString() const { return ERR_reason_error_string(ERR_get_error()); }
-Socket SSLSocket::GetSocket() const { Socket v=InvalidSocket; if (bio) BIO_get_fd(bio, &v); return v; }
-ptrdiff_t SSLSocket::Write(const StringPiece &b) { return BIO_write(bio, b.buf, b.len); }
+SSLSocket::~SSLSocket() { if (bio) BIO_free_all(FromVoid<BIO*>(bio)); }
+string SSLSocket::ErrorString() const { return BlankNull(ERR_reason_error_string(ERR_get_error())); }
+ptrdiff_t SSLSocket::Write(const StringPiece &b) { return BIO_write(FromVoid<BIO*>(bio), b.buf, b.len); }
 ptrdiff_t SSLSocket::Read(char *buf, int readlen) {
-  ptrdiff_t len = BIO_read(bio, buf, readlen);
-  if (len <= 0) return SSL_get_error(ssl, len) == SSL_ERROR_WANT_READ ? 0 : -1;
+  ptrdiff_t len = BIO_read(FromVoid<BIO*>(bio), buf, readlen);
+  if (len <= 0) return SSL_get_error(FromVoid<SSL*>(ssl), len) == SSL_ERROR_WANT_READ ? 0 : -1;
   return len;
+}
+
+Socket SSLSocket::Connect(CTXPtr sslctx, const string &hostport) {
+  bio = BIO_new_ssl_connect(FromVoid<SSL_CTX*>(sslctx));
+  BIO *b = FromVoid<BIO*>(bio);
+  BIO_set_conn_hostname(b, hostport.c_str());
+  BIO_get_ssl(b, &ssl);
+  BIO_set_nbio(b, 1);
+  if (BIO_do_connect(b) < 0 && !BIO_should_retry(b)) return InvalidSocket;
+  BIO_get_fd(b, &socket);
+  return socket;
+};
+
+Socket SSLSocket::Connect(CTXPtr sslctx, IPV4::Addr addr, int port) {
+  char addrbuf[sizeof(addr)], portbuf[sizeof(port)];
+  memcpy(addrbuf, &addr, sizeof(addr));
+  memcpy(portbuf, &port, sizeof(port));
+  bio = BIO_new_ssl_connect(FromVoid<SSL_CTX*>(sslctx));
+  BIO *b = FromVoid<BIO*>(bio);
+  BIO_set_conn_ip(b, addrbuf);
+  BIO_set_conn_int_port(b, portbuf);
+  BIO_get_ssl(b, &ssl);
+  BIO_set_nbio(b, 1);
+  if (BIO_do_connect(b) < 0 && !BIO_should_retry(b)) return InvalidSocket;
+  BIO_get_fd(b, &socket);
+  return socket;
 }
 
 Socket SSLSocket::Listen(int port, bool reuse) {
   bio = BIO_new_accept(const_cast<char*>(StrCat(port).c_str()));
-  BIO_ctrl(bio, BIO_C_SET_ACCEPT, 1, Void("a"));
-  if (reuse) BIO_set_bind_mode(bio, BIO_BIND_REUSEADDR);
-  if (BIO_do_accept(bio) <= 0) return InvalidSocket;
-  BIO_set_accept_bios(bio, BIO_new_ssl(app->net->ssl, 0));
-  return GetSocket();
-}
-
-Socket SSLSocket::Connect(SSL_CTX *sslctx, const string &hostport) {
-  bio = BIO_new_ssl_connect(sslctx);
-  BIO_set_conn_hostname(bio, hostport.c_str());
-  BIO_get_ssl(bio, &ssl);
-  BIO_set_nbio(bio, 1);
-  if (BIO_do_connect(bio) < 0 && !BIO_should_retry(bio)) return InvalidSocket;
-  return GetSocket();
-};
-
-Socket SSLSocket::Connect(SSL_CTX *sslctx, IPV4::Addr addr, int port) {
-  char addrbuf[sizeof(addr)], portbuf[sizeof(port)];
-  memcpy(addrbuf, &addr, sizeof(addr));
-  memcpy(portbuf, &port, sizeof(port));
-  bio = BIO_new_ssl_connect(sslctx);
-  BIO_set_conn_ip(bio, addrbuf);
-  BIO_set_conn_int_port(bio, portbuf);
-  BIO_get_ssl(bio, &ssl);
-  BIO_set_nbio(bio, 1);
-  if (BIO_do_connect(bio) < 0 && !BIO_should_retry(bio)) return InvalidSocket;
-  return GetSocket();
+  BIO *b = FromVoid<BIO*>(bio);
+  BIO_ctrl(b, BIO_C_SET_ACCEPT, 1, Void("a"));
+  if (reuse) BIO_set_bind_mode(b, BIO_BIND_REUSEADDR);
+  if (BIO_do_accept(b) <= 0) return InvalidSocket;
+  BIO_set_accept_bios(b, BIO_new_ssl(FromVoid<SSL_CTX*>(app->net->ssl), 0));
+  BIO_get_fd(b, &socket);
+  return socket;
 }
 
 Socket SSLSocket::Accept(SSLSocket *out) {
-  if (BIO_do_accept(bio) <= 0) return InvalidSocket;
-  out->bio = BIO_pop(bio);
-  BIO_set_nbio(out->bio, 1);
-  BIO_get_ssl(out->bio, &out->ssl);
-  return out->GetSocket();
+  BIO *b = FromVoid<BIO*>(bio);
+  if (BIO_do_accept(b) <= 0) return InvalidSocket;
+  out->bio = BIO_pop(b);
+
+  b = FromVoid<BIO*>(out->bio);
+  BIO_set_nbio(b, 1);
+  BIO_get_ssl(b, &out->ssl);
+  BIO_get_fd(b, &out->socket);
+  return out->socket;
 }
 
-SSL_CTX *SSLSocket::Init() {
+SSLSocket::CTXPtr SSLSocket::Init() {
   SSL_CTX *ssl = nullptr;
   SSL_load_error_strings();
   SSL_library_init(); 

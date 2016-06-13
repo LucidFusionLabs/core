@@ -313,7 +313,7 @@ void Box::DrawCrimped(const float *texcoord, int orientation, float scrollX, flo
 }
 
 float Box::ScrollCrimped(float tex0, float tex1, float scroll, float *min, float *mid1, float *mid2, float *max) {
-  if (tex1 < 1.0 && tex0 == 0.0) {
+  if (tex1 <= 1.0 && tex0 == 0.0) {
     *mid1=tex1; *mid2=0;
     if (scroll > 0) *min = *max = tex1 - scroll;
     else            *min = *max = tex0 - scroll;
@@ -321,12 +321,7 @@ float Box::ScrollCrimped(float tex0, float tex1, float scroll, float *min, float
     *mid1=1; *mid2=tex0;
     if (scroll > 0) *min = *max = tex0 + scroll;
     else            *min = *max = tex1 + scroll;
-  } else if (tex0 == 0 && tex1 == 1) {
-    *min = *max = 1;
-    *mid1 = tex1; *mid2 = tex0;
-  } else {
-    return 0;
-  }
+  } else { FATAL("invalid tex coords"); }
   return (*mid1 - *min) / (tex1 - tex0); 
 }
 

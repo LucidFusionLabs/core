@@ -1,6 +1,6 @@
 set(LFL_APPLE_DEVELOPER "/Applications/Xcode.app/Contents/Developer")
 set(LFL_IOS_ROOT "${LFL_APPLE_DEVELOPER}/Platforms/iPhoneOS.platform/Developer")
-set(LFL_IOS_SDK "${LFL_IOS_ROOT}/SDKs/iPhoneOS8.3.sdk")
+set(LFL_IOS_SDK "${LFL_IOS_ROOT}/SDKs/iPhoneOS.sdk")
 set(LFL_IOS TRUE)
 set(LFL_USE_LIBCPP ON)
 
@@ -44,6 +44,6 @@ set(CONFIGURE_OPTIONS "--host=arm-apple-darwin")
 set(CONFIGURE_ENV CC=$ENV{CC} CXX=$ENV{CXX} CPP=$ENV{CPP} CXXCPP=$ENV{CXXCPP} AR=$ENV{AR} RANLIB=$ENV{RANLIB}
     CFLAGS=$ENV{CFLAGS} CXXFLAGS=$ENV{CXXFLAGS} LDFLAGS=$ENV{LDFLAGS})
 
-set(M_LIBRARY ${LFL_IOS_SDK}/usr/lib/libm.dylib)
+set(M_LIBRARY ${LFL_IOS_SDK}/usr/lib/libm.tbd)
 set(ZLIB_INCLUDE_DIR ${LFL_IOS_SDK}/usr/include)
-set(ZLIB_LIBRARY ${LFL_IOS_SDK}/usr/lib/libz.dylib)
+set(ZLIB_LIBRARY ${LFL_IOS_SDK}/usr/lib/libz.tbd)

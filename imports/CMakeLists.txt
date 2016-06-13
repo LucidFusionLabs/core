@@ -177,7 +177,8 @@ if(LFL_GLOG)
   ExternalProject_Add(googlelog LOG_CONFIGURE ON LOG_BUILD ON
                       SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/glog
                       PREFIX ${CMAKE_CURRENT_BINARY_DIR}/glog
-                      CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_CURRENT_BINARY_DIR}/glog)
+                      CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_CURRENT_BINARY_DIR}/glog
+                      -DCMAKE_TOOLCHAIN_FILE:string=${CMAKE_TOOLCHAIN_FILE})
   add_library(libglog IMPORTED STATIC GLOBAL)
   add_dependencies(libglog googlelog)
   get_static_library_name(_lib glog)
@@ -191,7 +192,8 @@ if(LFL_GTEST)
   ExternalProject_Add(googletest LOG_CONFIGURE ON LOG_BUILD ON
                       SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/googletest/googletest
                       PREFIX ${CMAKE_CURRENT_BINARY_DIR}/googletest
-                      CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_CURRENT_BINARY_DIR}/googletest)
+                      CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_CURRENT_BINARY_DIR}/googletest
+                      -DCMAKE_TOOLCHAIN_FILE:string=${CMAKE_TOOLCHAIN_FILE})
   add_library(libgtest IMPORTED STATIC GLOBAL)
   add_dependencies(libgtest googletest)
   get_static_library_name(_lib gtest)

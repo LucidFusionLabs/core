@@ -143,7 +143,7 @@ struct SystemNetwork {
   static int GetSocketBufferSize(Socket fd, bool send_or_recv);
 
   static int Bind(int fd, IPV4::Addr addr, int port);
-  static Socket Accept(Socket listener, IPV4::Addr *addr, int *port);
+  static Socket Accept(Socket listener, IPV4::Addr *addr, int *port, bool blocking=false);
   static Socket Listen(int protocol, IPV4::Addr addr, int port, int backlog=32, bool blocking=false);
   static int Connect(Socket fd, IPV4::Addr addr, int port, int *connected);
   static int SendTo(Socket fd, IPV4::Addr addr, int port, const char *buf, int len);
@@ -274,18 +274,24 @@ struct SocketWakeupThread : public SocketSet {
 };
 
 struct SSLSocket {
-  SSL *ssl=0;
-  BIO *bio=0;
+  struct SSLPtr : public VoidPtr { using VoidPtr::VoidPtr; };
+  struct BIOPtr : public VoidPtr { using VoidPtr::VoidPtr; };
+  struct CTXPtr : public VoidPtr { using VoidPtr::VoidPtr; };
+  Socket socket = InvalidSocket;
+  int last_error = 0;
+  bool ready = 0;
+  SSLPtr ssl = 0;
+  BIOPtr bio = 0;
+  string buf;
   ~SSLSocket();
-  const char *ErrorString() const;
-  Socket GetSocket() const;
+  string ErrorString() const;
   ptrdiff_t Read(char *buf, int readlen);
   ptrdiff_t Write(const StringPiece &b);
+  Socket Connect(CTXPtr sslctx, const string &hostport);
+  Socket Connect(CTXPtr sslctx, IPV4::Addr addr, int port);
   Socket Listen(int port, bool reuse);
-  Socket Connect(SSL_CTX *sslctx, const string &hostport);
-  Socket Connect(SSL_CTX *sslctx, IPV4::Addr addr, int port);
   Socket Accept(SSLSocket *out);
-  static SSL_CTX *Init();
+  static CTXPtr Init();
   static void Free();
 };
 
@@ -299,7 +305,7 @@ struct Listener {
 };
 
 struct Connection {
-  enum { Connected=1, Connecting=2, Reconnect=3, Error=5 };
+  enum { Connected=1, Connecting=2, Reconnect=3, Handshake=4, Error=5 };
   typedef function<void(Connection*)> CB;
   struct Handler {  
     virtual ~Handler() {}
@@ -388,8 +394,8 @@ struct Service {
   Connection *Connect(IPV4::Addr addr, int port, IPV4EndpointSource *src_addr=0, Callback *detach=0);
   Connection *Connect(IPV4::Addr addr, int port, IPV4::Addr src_addr, int src_port, Callback *detach=0);
   Connection *Connect(const string &hostport, int default_port=0, Callback *detach=0);
-  Connection *SSLConnect(SSL_CTX *sslctx, IPV4::Addr addr, int port, Callback *detach=0);
-  Connection *SSLConnect(SSL_CTX *sslctx, const string &hostport, int default_port=0, Callback *detach=0);
+  Connection *SSLConnect(SSLSocket::CTXPtr sslctx, IPV4::Addr addr, int port, Callback *detach=0);
+  Connection *SSLConnect(SSLSocket::CTXPtr sslctx, const string &hostport, int default_port=0, Callback *detach=0);
   Connection *AddConnectedSocket(Socket socket, Connection::Handler*);
   Connection *EndpointConnect(const string &endpoint_name);
   void EndpointReadCB(string *endpoint_name, string *packet);
@@ -495,7 +501,7 @@ struct Network : public Module {
   LazyInitializedPtr<RecursiveResolver> recursive_resolver;
   LazyInitializedPtr<InProcessClient> inprocess_client;
   LazyInitializedPtr<GPlusClient> gplus_client;
-  SSL_CTX *ssl=0;
+  SSLSocket::CTXPtr ssl;
   Network();
   virtual ~Network();
 

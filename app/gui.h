@@ -185,8 +185,9 @@ struct TextBox : public GUI, public KeyboardController {
     Box box;
     Flow flow;
     DrawableBoxArray glyphs;
-    bool outside_scroll_region=0;
+    bool wrapped=0, outside_scroll_region=0;
     unordered_map<int, shared_ptr<Control>> controls;
+    void Clear() { controls.clear(); glyphs.Clear(); wrapped=0; }
   };
 
   struct Line {
@@ -206,7 +207,7 @@ struct TextBox : public GUI, public KeyboardController {
     int Size () const { return data->glyphs.Size(); }
     int Lines() const { return 1+data->glyphs.line.size(); }
     String16 Text16() const { return data->glyphs.Text16(); }
-    void Clear() { data->controls.clear(); data->glyphs.Clear(); data->flow=InitFlow(&data->glyphs); }
+    void Clear() { data->Clear(); data->flow = InitFlow(&data->glyphs); }
     int Erase(int o, int l=INT_MAX);
     int AssignText(const StringPiece   &s, int                     a=0) { Clear(); return AppendText(s, a); }
     int AssignText(const String16Piece &s, int                     a=0) { Clear(); return AppendText(s, a); }
@@ -324,7 +325,7 @@ struct TextBox : public GUI, public KeyboardController {
   virtual point RelativePosition(const point&) const;
   virtual int CommandLines() const { return 0; }
   virtual void Run(const string &cmd) { if (runcb) runcb(cmd); }
-  virtual bool NotActive(const point &p) const { return !box.within(p); }
+  virtual bool NotActive(const point &p) const { return !box.within(p) && mouse.drag.empty(); }
   virtual bool Active() const { return screen->active_textbox == this; }
   virtual void Activate()   { if (!Active()) { if (auto g=screen->active_textbox) g->Deactivate(); screen->active_textbox=this; } }
   virtual void Deactivate() { if (Active()) screen->active_textbox = screen->default_textbox(); }
@@ -380,7 +381,7 @@ struct TextArea : public TextBox {
   bool wrap_lines=1, write_timestamp=0, write_newline=1, reverse_line_fb=0, cursor_enabled=1;
   int line_left=0, end_line_adjust=0, start_line_cutoff=0, end_line_cutoff=0;
   int extra_height=0, scroll_inc=10, scrolled_lines=0;
-  float v_scrolled=0, h_scrolled=0, last_v_scrolled=0, last_h_scrolled=0;
+  float v_scrolled=0, h_scrolled=0, last_v_scrolled=0, last_h_scrolled=0, start_selection_v_scrolled=0;
 
   TextArea(GraphicsDevice *D, const FontRef &F, int S, int LC);
   virtual ~TextArea() {}

@@ -18,15 +18,14 @@
 
 namespace LFL {
 SSLSocket::~SSLSocket() {}
-const char *SSLSocket::ErrorString() const { return ""; }
-Socket SSLSocket::GetSocket() const { return InvalidSocket; }
+string SSLSocket::ErrorString() const { return ""; }
 ptrdiff_t SSLSocket::Write(const StringPiece &b) { return -1; }
 ptrdiff_t SSLSocket::Read(char *buf, int readlen) { return -1; }
+Socket SSLSocket::Connect(CTXPtr sslctx, const string &hostport) { return InvalidSocket; }
+Socket SSLSocket::Connect(CTXPtr sslctx, IPV4::Addr addr, int port) { return InvalidSocket; }
 Socket SSLSocket::Listen(int port, bool reuse) { return InvalidSocket; }
-Socket SSLSocket::Connect(SSL_CTX *sslctx, const string &hostport) { return InvalidSocket; }
-Socket SSLSocket::Connect(SSL_CTX *sslctx, IPV4::Addr addr, int port) { return InvalidSocket; }
 Socket SSLSocket::Accept(SSLSocket *out) { return InvalidSocket; }
-SSL_CTX *SSLSocket::Init() { return nullptr; }
+SSLSocket::CTXPtr SSLSocket::Init() { return nullptr; }
 void SSLSocket::Free() {}
 
 }; // namespace LFL

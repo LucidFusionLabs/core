@@ -821,14 +821,28 @@ void TextArea::DragCB(int, int, int, int down) {
     return;
 #endif
   }
+
   Selection *s = &selection;
+  point last_end_click = s->end_click;
   bool start = s->Update(screen->mouse - box.BottomLeft() + point(line_left, 0), down);
-  if (start) { GetGlyphFromCoords(s->beg_click, &s->beg); s->end=s->beg; if (selection_cb) selection_cb(s->beg); }
-  else       { GetGlyphFromCoords(s->end_click, &s->end); }
+  if (start) { 
+    GetGlyphFromCoords(s->beg_click, &s->beg);
+    s->end = s->beg;
+    if (selection_cb) selection_cb(s->beg);
+    start_selection_v_scrolled = v_scrolled;
+  } else {
+    if (0) {
+      if      (s->end_click.y>box.top()) AddVScroll(max(0, s->end_click.y-max(box.top(), last_end_click.y)));
+      else if (s->end_click.y<box.y)     AddVScroll(min(0, s->end_click.y-min(box.y,     last_end_click.y)));
+    }
+    GetGlyphFromCoords(s->end_click, &s->end);
+  }
 
   bool swap = (!reverse_line_fb && s->end < s->beg) || (reverse_line_fb && s->beg < s->end);
-  if (!s->changing) CopyText(swap ? s->end : s->beg, swap ? s->beg : s->end);
-  else {
+  if (!s->changing) {
+    if (v_scrolled != start_selection_v_scrolled) SetVScroll(start_selection_v_scrolled);
+    CopyText(swap ? s->end : s->beg, swap ? s->beg : s->end);
+  } else {
     LinesFrameBuffer *fb = GetFrameBuffer();
     int fh = style.font->Height(), h = box.h;
     Box gb = swap ? s->end.glyph : s->beg.glyph;
@@ -868,7 +882,7 @@ string TextArea::CopyText(int beg_line_ind, int beg_char_ind, int end_line_ind, 
       copy_text += Substr(l->Text16(), 0, len);
     } else copy_text += l->Text16();
 
-    if (add_nl && len == l->Size()) copy_text += String16(1, '\n');
+    if (add_nl && len == l->Size() && !l->data->wrapped) copy_text += String16(1, '\n');
     if (i == end_line_ind) break;
   }
   return String::ToUTF8(copy_text);
@@ -1950,11 +1964,13 @@ void Terminal::FlushParseText() {
   TerminalTrace("Terminal: (cur=%d,%d) FlushParseText('%s').size = [%zd, %d]", term_cursor.x, term_cursor.y,
                 StringPiece(parse_text.data(), consumed).str().c_str(), input_text.size(), consumed);
   for (int wrote = 0; wrote < input_text.size(); wrote += write_size) {
-    if (wrote || term_cursor.x > term_width) Newline(true);
+    if (wrote) Newline(true);
+    else if (term_cursor.x > term_width) { GetCursorLine()->data->wrapped = true; Newline(true); }
     Line *l = GetCursorLine();
     LinesFrameBuffer *fb = GetFrameBuffer(l);
-    int remaining = input_text.size() - wrote, o = term_cursor.x-1;
-    write_size = min(remaining, term_width - o);
+    int remaining = input_text.size() - wrote, o = term_cursor.x-1, tl = term_width - o;
+    write_size = min(remaining, tl);
+    if (write_size == tl && remaining > write_size) l->data->wrapped = true;
     String16Piece input_piece(input_text.data() + wrote, write_size);
     update_size = l->UpdateText(o, input_piece, cursor.attr, term_width, &append);
     TerminalTrace("Terminal: FlushParseText: UpdateText(%d, %d, '%s').size = [%d, %d] attr=%d",
@@ -2010,6 +2026,7 @@ void Terminal::ClearTerminal() {
 }
 
 /* Console */
+
 Console::Console(GraphicsDevice *D, const FontRef &F, const Callback &C) : TextArea(D, F, 200, 50),
   animating_cb(C) {
   line_fb.wrap = write_timestamp = 1;

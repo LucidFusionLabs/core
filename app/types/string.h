@@ -140,7 +140,6 @@ template <class X> struct ArrayPiece {
   const X& operator[](int i) const { return buf[i]; }
   const X& front() const { return buf[0]; }
   const X& back() const { return buf[len-1]; }
-  void clear() { buf=0; len=0; }
   bool null() const { return !buf; }
   bool empty() const { return !buf || len <= 0; }
   bool has_size() const { return len >= 0; }
@@ -149,10 +148,13 @@ template <class X> struct ArrayPiece {
   const X *data() const { return buf; }
   const void *ByteData() const { return buf; }
   int Bytes() const { return size() * sizeof(X); }
-  int Remaining(int offset) { return has_size() ? len - offset : -1; }
+  int Remaining(int offset) const { return has_size() ? len - offset : -1; }
   const_iterator begin() const { return buf; }
   const_iterator rbegin() const { return buf+len-1; }
   const_iterator end() const { return buf+len; }
+  void clear() { buf=0; len=0; }
+  void pop_back (int n=1) { if (n > len) FATALf("%d > %d", n, len); len -= n; }
+  void pop_front(int n=1) { if (n > len) FATALf("%d > %d", n, len); len -= n; buf += n; }
 };
 
 template <class X> struct StringPieceT : public ArrayPiece<X> {
