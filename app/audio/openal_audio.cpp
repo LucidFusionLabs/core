@@ -114,6 +114,7 @@ struct OpenALAudioModule : public Module {
     ALuint b = 0;
     ALint val = 0;
     bool bg_added = 0;
+#if 0
     if (screen && screen->cam) {
       alListenerfv(AL_POSITION, screen->cam->pos);
       alListenerfv(AL_VELOCITY, screen->cam->vel);
@@ -121,6 +122,7 @@ struct OpenALAudioModule : public Module {
       ALfloat ortup[6] = { ort.x, ort.y, ort.z, up.x, up.y, up.z };
       alListenerfv(AL_ORIENTATION, ortup);
     }
+#endif
 
     alGetSourcei(bg_source, AL_BUFFERS_PROCESSED, &val);
     for (ALint i = 0; i < val; ++i) {

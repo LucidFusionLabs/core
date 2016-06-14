@@ -35,6 +35,7 @@ struct Shell {
   Shell(AssetMap *AM, SoundAssetMap *SAM, MovieAssetMap *MAM);
 
   template <class... Args> void Add(Args&&... args) { command.emplace_back(forward<Args>(args)...); }
+  void AddSceneCommands(Scene *scene);
   void AddBrowserCommands(Browser*);
 
   Asset      *asset     (const string &n);
@@ -60,7 +61,6 @@ struct Shell {
   void grabmode(const vector<string>&);
   void texmode (const vector<string>&);
   void swapaxis(const vector<string>&);
-  void campos(const vector<string>&);
   void play     (const vector<string>&);
   void playmovie(const vector<string>&);
   void loadsound(const vector<string>&);

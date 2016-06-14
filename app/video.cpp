@@ -488,7 +488,7 @@ void TextureArray::DrawSequence(Asset *out, Entity *e, int *ind) {
   *ind = (*ind + 1) % a.size();
   const Texture *in = &a[*ind];
   out->tex.ID = in->ID;
-  if (out->geometry) Scene::Draw(out->geometry, e);
+  if (out->geometry) Scene::Draw(screen->gd, out->geometry, e);
 }
 
 /* DepthTexture */
@@ -734,7 +734,7 @@ void GraphicsDevice::DrawMode(int dm, const Box &b, bool flush) {
 
   MatrixModelview();
   LoadIdentity();
-  Scene::Select();
+  Scene::Select(this);
   if (_2D) EnableLayering();
 }
 

@@ -509,7 +509,7 @@ struct GameClient {
   string playername;
   Connection *conn=0;
   Game *world;
-  unsigned short seq=0, entity_id=0, team=0, cam=1;
+  unsigned short seq=0, entity_id=0, team=0, cam_id=1;
   bool reorienting=1;
   Game::Network *net=0;
   InProcessServer *inprocess_server=0;
@@ -555,7 +555,7 @@ struct GameClient {
   void MoveRev   (unsigned t) { control.SetBack();    }
   void MoveLeft  (unsigned t) { control.SetLeft();    }
   void MoveRight (unsigned t) { control.SetRight();   }
-  void SetCamera(const vector<string> &a) { cam = atoi(a.size() ? a[0] : ""); }
+  void SetCamera(const vector<string> &a) { cam_id = atoi(a.size() ? a[0] : ""); }
   void RconCmd  (const vector<string> &a) { if (a.size()) Rcon(a[0]); }
   void SetTeam  (const vector<string> &a) { if (a.size()) Rcon(StrCat("team ", a[0])); }
   void SetName  (const vector<string> &a) {
@@ -573,7 +573,7 @@ struct GameClient {
 
   void Reset() {
     if (conn) conn->SetError();
-    conn=0; seq=0; entity_id=0; team=0; cam=1; reorienting=1; net=0;
+    conn=0; seq=0; entity_id=0; team=0; cam_id=1; reorienting=1; net=0;
     retry.Clear();
     last.id_WorldUpdate=last.seq_WorldUpdate=0;
     replay.disable();
@@ -668,11 +668,12 @@ struct GameClient {
     UpdateWorld();
     if (reorienting || (CS.buttons == last.buttons && last.time_send_PlayerUpdate + Time(100) > Now())) return;
 
+    Entity *cam = &world->scene->cam;
     GameProtocol::PlayerUpdate pup;
     pup.id_WorldUpdate = last.id_WorldUpdate;
     pup.time_since_WorldUpdate = (Now() - last.time_recv_WorldUpdate[0]).count();
     pup.buttons = CS.buttons;
-    pup.ort.From(screen->cam->ort, screen->cam->up);
+    pup.ort.From(cam->ort, cam->up);
     net->Write(conn, UDPClient::Write, seq++, &pup);
 
     last.buttons = CS.buttons;
@@ -686,6 +687,7 @@ struct GameClient {
     last.time_frame = Now();
     unsigned updateInterval = (last.time_recv_WorldUpdate[0] - last.time_recv_WorldUpdate[1]).count();
     unsigned updateLast = (last.time_frame - last.time_recv_WorldUpdate[0]).count();
+    Entity *cam = &world->scene->cam;
 
     if (1) { /* interpolate */
       GameProtocol::WorldUpdate *wu1=0, *wu2=0;
@@ -738,8 +740,8 @@ struct GameClient {
         }
 
         e->updated = last.time_frame;
-        if (me && reorienting) { reorienting=0; e1->ort.To(&screen->cam->ort, &screen->cam->up); }
-        if (me && !replay.enabled()) Me(e, cam, !reorienting);
+        if (me && reorienting) { reorienting=0; e1->ort.To(&cam->ort, &cam->up); }
+        if (me && !replay.enabled()) Me(e, cam_id, !reorienting);
         i++; j++;
       }
     }
@@ -826,26 +828,27 @@ struct GameClient {
     }
   }
 
-  static void Me(Entity *e, int cam, bool assign_entity) {
-    screen->cam->pos = e->pos;
-    if (cam == 1) {
-      v3 v = screen->cam->ort * 2;
-      screen->cam->pos.Sub(v);
-    } else if (cam == 2) {
-      v3 v = screen->cam->ort * 2;
-      screen->cam->pos.Sub(v);
-      v = screen->cam->up * .1;
-      screen->cam->pos.Add(v);
-    } else if (cam == 3) {
+  void Me(Entity *e, int cam_id, bool assign_entity) {
+    Entity *cam = &world->scene->cam;
+    cam->pos = e->pos;
+    if (cam_id == 1) {
+      v3 v = cam->ort * 2;
+      cam->pos.Sub(v);
+    } else if (cam_id == 2) {
+      v3 v = cam->ort * 2;
+      cam->pos.Sub(v);
+      v = cam->up * .1;
+      cam->pos.Add(v);
+    } else if (cam_id == 3) {
       assign_entity = false;
-    } else if (cam == 4) {
-      screen->cam->pos = v3(0,3.8,0);
-      screen->cam->ort = v3(0,-1,0);
-      screen->cam->up  = v3(0,0,-1);
+    } else if (cam_id == 4) {
+      cam->pos = v3(0,3.8,0);
+      cam->ort = v3(0,-1,0);
+      cam->up  = v3(0,0,-1);
       assign_entity    = false;
     } if (assign_entity) {
-      e->ort = screen->cam->ort;
-      e->up  = screen->cam->up;
+      e->ort = cam->ort;
+      e->up  = cam->up;
     }
   }
 };
@@ -877,7 +880,7 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
   string master_get_url;
   vector<Server> master_server_list;
 
-  Asset *title;
+  Texture *title;
   FontRef font, glow_font, bright_font, mobile_font;
   Box titlewin, menuhdr, menuftr1, menuftr2;
   int default_port, selected=1, last_selected=0, sub_selected=0, last_sub_selected=0, master_server_selected=-1;
@@ -890,9 +893,10 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
 #endif
   Browser browser;
   MenuParticles particles;
+  Entity *cam=0;
 
-  GameMenuGUI(const string &master_url, int port, Asset *t=0, Asset *parts=0) :
-    pinger(-1), master_get_url(master_url), title(t),
+  GameMenuGUI(Window *W, const string &master_url, int port, Texture *Title=0) :
+    GUI(W), topbar(W), pinger(-1), master_get_url(master_url), title(Title),
     font       (FontDesc(FLAGS_font,                 "", 12, Color::grey80)),
     bright_font(FontDesc(FLAGS_font,                 "", 12, Color::white)),
     glow_font  (FontDesc(StrCat(FLAGS_font, "Glow"), "", 12)),
@@ -906,8 +910,8 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
     sub_tab1(this, 0, "g+",             MouseController::CB([&]() { sub_selected=1; })),
     sub_tab2(this, 0, "join",           MouseController::CB([&]() { sub_selected=2; })),
     sub_tab3(this, 0, "start",          MouseController::CB([&]() { sub_selected=3; })),
-    tab2_server_address(screen->gd, bright_font.desc),
-    tab3_player_name   (screen->gd, bright_font.desc),
+    tab2_server_address(W, bright_font.desc),
+    tab3_player_name   (W, bright_font.desc),
     tab1_options    (this),
     tab2_servers    (this),
     tab3_sensitivity(this, Widget::Slider::Flag::Horizontal),
@@ -942,15 +946,17 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
     tab3_volume.doc_height = app->GetMaxVolume();
     tab3_volume.scrolled = float(app->GetVolume()) / tab3_volume.doc_height;
     sub_selected = 2;
-    if (parts) {
-      particles.emitter_type = MenuParticles::Emitter::Mouse | MenuParticles::Emitter::GlowFade;
-      particles.texture = parts->tex.ID;
-    }
     pinger.handler = this;
     app->net->Enable(&pinger);
     SystemNetwork::SetSocketBroadcastEnabled(pinger.GetListener()->socket, true);
     Sniffer::GetIPAddress(&ip);
     Sniffer::GetBroadcastAddress(&broadcast_ip);
+  }
+
+  void EnableParticles(Entity *c, Texture *parts) {
+    cam = c;
+    particles.emitter_type = MenuParticles::Emitter::Mouse | MenuParticles::Emitter::GlowFade;
+    particles.texture = parts->ID;
   }
 
   void Activate  () { active=1; topbar.active=1; selected=last_selected=0; screen->shell->mouseout(vector<string>()); app->HideAds(); }
@@ -1206,24 +1212,25 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
   }
 
   void Draw(unsigned clicks, Shader *MyShader) {
-    screen->gd->EnableBlend();
+    GraphicsContext gc(root->gd);
+    gc.gd->EnableBlend();
     vector<const Box*> bgwins;
     bgwins.push_back(&topbar.box);
     if (selected) bgwins.push_back(&box);
     glShadertoyShaderWindows(MyShader, Color(25, 60, 130, 120), bgwins);
 
     if (title && selected) {
-      screen->gd->DisableBlend();
-      title->tex.Draw(titlewin);
-      screen->gd->EnableBlend();
-      screen->gd->SetColor(font->fg);
-      screen->gd->SetColor(Color::grey80); BoxTopLeftOutline    ().Draw(titlewin);
-      screen->gd->SetColor(Color::grey40); BoxBottomRightOutline().Draw(titlewin);
+      gc.gd->DisableBlend();
+      title->Draw(&gc, titlewin);
+      gc.gd->EnableBlend();
+      gc.gd->SetColor(font->fg);
+      gc.gd->SetColor(Color::grey80); BoxTopLeftOutline    ().Draw(&gc, titlewin);
+      gc.gd->SetColor(Color::grey40); BoxBottomRightOutline().Draw(&gc, titlewin);
     }
 
     LayoutMenu();
     {
-      Scissor s(screen->gd, box);
+      Scissor s(gc.gd, box);
       GUI::Draw();
     }
     topbar.Draw();
@@ -1233,16 +1240,16 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
     if (current_scrollbar) current_scrollbar->Update();
 
     if (particles.texture) {
-      particles.Update(screen->cam.get(), clicks, screen->mouse.x, screen->mouse.y, app->input->MouseButton1Down());
-      particles.Draw(screen->gd);
+      particles.Update(cam, clicks, screen->mouse.x, screen->mouse.y, app->input->MouseButton1Down());
+      particles.Draw(gc.gd);
     }
 
     if (selected) {
-      screen->gd->SetColor(Color::grey80); BoxTopLeftOutline    ().Draw(box);
-      screen->gd->SetColor(Color::grey40); BoxBottomRightOutline().Draw(box);
+      gc.gd->SetColor(Color::grey80); BoxTopLeftOutline    ().Draw(&gc, box);
+      gc.gd->SetColor(Color::grey40); BoxBottomRightOutline().Draw(&gc, box);
     }
     if (decay_box_line >= 0 && decay_box_line < child_box.line.size() && decay_box_left > 0) {
-      BoxOutline().Draw(child_box.line[decay_box_line] + box.TopLeft());
+      BoxOutline().Draw(&gc, child_box.line[decay_box_line] + box.TopLeft());
       decay_box_left--;
     }
 
@@ -1261,7 +1268,7 @@ struct GamePlayerListGUI : public GUI {
   string titlename, titletext, team1, team2;
   PlayerList playerlist;
   int winning_team=0;
-  GamePlayerListGUI(const char *TitleName, const char *Team1, const char *Team2) :
+  GamePlayerListGUI(Window *W, const char *TitleName, const char *Team1, const char *Team2) : GUI(W),
     font(FontDesc(FLAGS_font, "", 12, Color::black)), titlename(TitleName), team1(Team1), team2(Team2) {}
 
   void HandleTextMessage(const string &in) {
@@ -1292,7 +1299,8 @@ struct GamePlayerListGUI : public GUI {
   void Draw(Shader *MyShader) {
     GUI::Draw();
     if (!toggled) Deactivate();
-    screen->gd->EnableBlend();
+    GraphicsContext gc(root->gd);
+    gc.gd->EnableBlend();
     Box win = screen->Box(.1, .1, .8, .8, false);
     glShadertoyShaderWindows(MyShader, Color(255, 255, 255, 120), win);
 
@@ -1306,11 +1314,11 @@ struct GamePlayerListGUI : public GUI {
       bool winner = team == winning_team;
       LayoutLine(winner ? &menuflow1 : &menuflow2, PlayerName(p), PlayerScore(p), PlayerPing(p));
     }
-    outgeom1.Draw(out1.TopLeft());
-    outgeom2.Draw(out2.TopLeft());
+    outgeom1.Draw(gc.gd, out1.TopLeft());
+    outgeom2.Draw(gc.gd, out2.TopLeft());
     font->Draw(titletext, Box(win.x, win.top()-font->Height(), win.w, font->Height()), 0, Font::DrawFlag::AlignCenter);
-    screen->gd->SetColor(Color::grey60); BoxTopLeftOutline    ().Draw(win);
-    screen->gd->SetColor(Color::grey20); BoxBottomRightOutline().Draw(win);
+    gc.gd->SetColor(Color::grey60); BoxTopLeftOutline    ().Draw(&gc, win);
+    gc.gd->SetColor(Color::grey20); BoxBottomRightOutline().Draw(&gc, win);
   }
 
   void LayoutLine(Flow *flow, const string &name, const string &score, const string &ping) {
@@ -1328,8 +1336,8 @@ struct GamePlayerListGUI : public GUI {
 
 struct GameChatGUI : public TextArea {
   GameClient **server;
-  GameChatGUI(int key, GameClient **s) :
-    TextArea(screen->gd, FontDesc(FLAGS_font, "", 10, Color::grey80), 100, 10), server(s) { 
+  GameChatGUI(Window *W, int key, GameClient **s) :
+    TextArea(W, FontDesc(FLAGS_font, "", 10, Color::grey80), 100, 10), server(s) { 
     write_timestamp = deactivate_on_enter = true;
     line_fb.align_top_or_bot = false;
     SetToggleKey(key, true);
@@ -1365,13 +1373,14 @@ struct GameMultiTouchControls {
   lpad_tbx(RoundF(lpad_win.w * .6)), lpad_tby(RoundF(lpad_win.h *.6)),
   rpad_tbx(RoundF(rpad_win.w * .6)), rpad_tby(RoundF(rpad_win.h *.6)) {}
 
-  void Draw() {
-    dpad_font->Select();
-    dpad_font->DrawGlyph(lpad_down, lpad_win);
-    dpad_font->DrawGlyph(rpad_down, rpad_win);
+  void Draw(GraphicsDevice *gd) {
+    dpad_font->Select(gd);
+    dpad_font->DrawGlyph(gd, lpad_down, lpad_win);
+    dpad_font->DrawGlyph(gd, rpad_down, rpad_win);
   }
 
   void Update(unsigned clicks) {
+    Entity *cam = &client->world->scene->cam;
     if (swipe_controls) {
       if (screen->gesture_dpad_stop[0]) dp0_x = dp0_y = 0;
       else if (screen->gesture_dpad_dx[0] || screen->gesture_dpad_dy[0]) {
@@ -1393,19 +1402,19 @@ struct GameMultiTouchControls {
         if (dp0_y < 0) { lpad_down = RIGHT;   client->MoveRight    (clicks); }
         if (dp0_x < 0) { lpad_down = UP;      client->MoveFwd      (clicks); }
         if (dp0_x > 0) { lpad_down = DOWN;    client->MoveRev      (clicks); }
-        if (dp1_y > 0) { rpad_down = LEFT;    screen->cam->YawLeft (clicks); }
-        if (dp1_y < 0) { rpad_down = RIGHT;   screen->cam->YawRight(clicks); }
-        if (dp1_x < 0) { rpad_down = UP;   /* screen->cam->MoveUp  (clicks); */ }
-        if (dp1_x > 0) { rpad_down = DOWN; /* screen->cam->MoveDown(clicks); */ }
+        if (dp1_y > 0) { rpad_down = LEFT;    cam->YawLeft (clicks); }
+        if (dp1_y < 0) { rpad_down = RIGHT;   cam->YawRight(clicks); }
+        if (dp1_x < 0) { rpad_down = UP;   /* cam->MoveUp  (clicks); */ }
+        if (dp1_x > 0) { rpad_down = DOWN; /* cam->MoveDown(clicks); */ }
       } else {
         if (dp1_x < 0) { lpad_down = LEFT;    client->MoveLeft     (clicks); }
         if (dp1_x > 0) { lpad_down = RIGHT;   client->MoveRight    (clicks); }
         if (dp1_y < 0) { lpad_down = UP;      client->MoveFwd      (clicks); }
         if (dp1_y > 0) { lpad_down = DOWN;    client->MoveRev      (clicks); }
-        if (dp0_x < 0) { rpad_down = LEFT;    screen->cam->YawLeft (clicks); } 
-        if (dp0_x > 0) { rpad_down = RIGHT;   screen->cam->YawRight(clicks); }
-        if (dp0_y < 0) { rpad_down = UP;   /* screen->cam->MoveUp  (clicks); */ }
-        if (dp0_y > 0) { rpad_down = DOWN; /* screen->cam->MoveDown(clicks); */ }
+        if (dp0_x < 0) { rpad_down = LEFT;    cam->YawLeft (clicks); } 
+        if (dp0_x > 0) { rpad_down = RIGHT;   cam->YawRight(clicks); }
+        if (dp0_y < 0) { rpad_down = UP;   /* cam->MoveUp  (clicks); */ }
+        if (dp0_y > 0) { rpad_down = DOWN; /* cam->MoveDown(clicks); */ }
       }
     } else {
       point l, r;
@@ -1449,8 +1458,8 @@ struct GameMultiTouchControls {
         bool g1 = (rpad_win.w * (r.y - (rpad_win.y))              - rpad_win.h * (r.x - rpad_win.x)) > 0; 
         bool g2 = (rpad_win.w * (r.y - (rpad_win.y + rpad_win.h)) + rpad_win.h * (r.x - rpad_win.x)) > 0; 
 
-        if      ( g1 && !g2) { rpad_down = LEFT;  screen->cam->YawLeft (clicks); }
-        else if (!g1 &&  g2) { rpad_down = RIGHT; screen->cam->YawRight(clicks); }
+        if      ( g1 && !g2) { rpad_down = LEFT;  cam->YawLeft (clicks); }
+        else if (!g1 &&  g2) { rpad_down = RIGHT; cam->YawRight(clicks); }
         else if ( g1 &&  g2) { rpad_down = UP;    }
         else if (!g1 && !g2) { rpad_down = DOWN;  }
       }

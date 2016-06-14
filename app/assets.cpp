@@ -209,56 +209,56 @@ int MovieAsset::Play(int seek) {
 
 /* asset impls */
 
-void glLine(const point &p1, const point &p2, const Color *color) {
+void glLine(GraphicsDevice *gd, const point &p1, const point &p2, const Color *color) {
   static int verts_ind=-1;
-  screen->gd->DisableTexture();
+  gd->DisableTexture();
 
   float verts[] = { /*1*/ float(p1.x), float(p1.y), /*2*/ float(p2.x), float(p2.y) };
-  screen->gd->VertexPointer(2, GraphicsDevice::Float, 0, 0, verts, sizeof(verts), &verts_ind, true);
+  gd->VertexPointer(2, GraphicsDevice::Float, 0, 0, verts, sizeof(verts), &verts_ind, true);
 
-  if (color) screen->gd->Color4f(color->r(), color->g(), color->b(), color->a());
-  screen->gd->DrawArrays(GraphicsDevice::LineLoop, 0, 2);
+  if (color) gd->Color4f(color->r(), color->g(), color->b(), color->a());
+  gd->DrawArrays(GraphicsDevice::LineLoop, 0, 2);
 }
 
-void glAxis(Asset*, Entity*) {
+void glAxis(GraphicsDevice *gd, Asset*, Entity*) {
   static int vert_id=-1;
   const float scaleFactor = 1;
   const float range = powf(10, scaleFactor);
   const float step = range/10;
 
-  screen->gd->DisableNormals();
-  screen->gd->DisableTexture();
+  gd->DisableNormals();
+  gd->DisableTexture();
 
   float vert[] = { /*1*/ 0, 0, 0, /*2*/ step, 0, 0, /*3*/ 0, 0, 0, /*4*/ 0, step, 0, /*5*/ 0, 0, 0, /*6*/ 0, 0, step };
-  screen->gd->VertexPointer(3, GraphicsDevice::Float, 0, 0, vert, sizeof(vert), &vert_id, false);
+  gd->VertexPointer(3, GraphicsDevice::Float, 0, 0, vert, sizeof(vert), &vert_id, false);
 
   /* origin */
-  screen->gd->PointSize(7);
-  screen->gd->Color4f(1, 1, 0, 1);
-  screen->gd->DrawArrays(GraphicsDevice::Points, 0, 1);
+  gd->PointSize(7);
+  gd->Color4f(1, 1, 0, 1);
+  gd->DrawArrays(GraphicsDevice::Points, 0, 1);
 
   /* R=X */
-  screen->gd->PointSize(5);
-  screen->gd->Color4f(1, 0, 0, 1);
-  screen->gd->DrawArrays(GraphicsDevice::Points, 1, 1);
+  gd->PointSize(5);
+  gd->Color4f(1, 0, 0, 1);
+  gd->DrawArrays(GraphicsDevice::Points, 1, 1);
 
   /* G=Y */
-  screen->gd->Color4f(0, 1, 0, 1);
-  screen->gd->DrawArrays(GraphicsDevice::Points, 3, 1);
+  gd->Color4f(0, 1, 0, 1);
+  gd->DrawArrays(GraphicsDevice::Points, 3, 1);
 
   /* B=Z */
-  screen->gd->Color4f(0, 0, 1, 1);
-  screen->gd->DrawArrays(GraphicsDevice::Points, 5, 1);
+  gd->Color4f(0, 0, 1, 1);
+  gd->DrawArrays(GraphicsDevice::Points, 5, 1);
 
   /* axis */
-  screen->gd->PointSize(1);
-  screen->gd->Color4f(.5, .5, .5, 1);
-  screen->gd->DrawArrays(GraphicsDevice::Lines, 0, 5);
+  gd->PointSize(1);
+  gd->Color4f(.5, .5, .5, 1);
+  gd->DrawArrays(GraphicsDevice::Lines, 0, 5);
 }
 
-void glRoom(Asset*, Entity*) {
-  screen->gd->DisableNormals();
-  screen->gd->DisableTexture();
+void glRoom(GraphicsDevice *gd, Asset*, Entity*) {
+  gd->DisableNormals();
+  gd->DisableTexture();
 
   static int verts_id=-1;
   float verts[] = {
@@ -266,19 +266,19 @@ void glRoom(Asset*, Entity*) {
     /*4*/ 0,0,2, /*5*/ 0,2,0, /*6*/ 0,0,0,
     /*7*/ 0,0,0, /*8*/ 2,0,0, /*9*/ 0,0,2 
   };
-  screen->gd->VertexPointer(3, GraphicsDevice::Float, 0, 0, verts, sizeof(verts), &verts_id, false);
+  gd->VertexPointer(3, GraphicsDevice::Float, 0, 0, verts, sizeof(verts), &verts_id, false);
 
-  screen->gd->Color4f(.8,.8,.8,1);
-  screen->gd->DrawArrays(GraphicsDevice::Triangles, 0, 3);
+  gd->Color4f(.8,.8,.8,1);
+  gd->DrawArrays(GraphicsDevice::Triangles, 0, 3);
 
-  screen->gd->Color4f(.7,.7,.7,1);
-  screen->gd->DrawArrays(GraphicsDevice::Triangles, 3, 3);
+  gd->Color4f(.7,.7,.7,1);
+  gd->DrawArrays(GraphicsDevice::Triangles, 3, 3);
 
-  screen->gd->Color4f(.6,.6,.6,1);
-  screen->gd->DrawArrays(GraphicsDevice::Triangles, 6, 3);;
+  gd->Color4f(.6,.6,.6,1);
+  gd->DrawArrays(GraphicsDevice::Triangles, 6, 3);;
 }
 
-void glIntersect(int x, int y, Color *c) {
+void glIntersect(GraphicsDevice *gd, int x, int y, Color *c) {
   unique_ptr<Geometry> geom = make_unique<Geometry>(GraphicsDevice::Lines, 4, NullPointer<v2>(), NullPointer<v3>(), NullPointer<v2>(), *c);
   v2 *vert = reinterpret_cast<v2*>(&geom->vert[0]);
 
@@ -287,14 +287,14 @@ void glIntersect(int x, int y, Color *c) {
   vert[2] = v2(x, 0);
   vert[3] = v2(x, screen->height);
 
-  screen->gd->DisableTexture();
-  Scene::Select(geom.get());
-  Scene::Draw(geom.get(), 0);
+  gd->DisableTexture();
+  Scene::Select(gd, geom.get());
+  Scene::Draw(gd, geom.get(), 0);
 }
 
-void glShadertoyShader(Shader *shader, const Texture *tex) {
+void glShadertoyShader(GraphicsDevice *gd, Shader *shader, const Texture *tex) {
   float scale = shader->scale;
-  screen->gd->UseShader(shader);
+  gd->UseShader(shader);
   shader->SetUniform1f("iGlobalTime", ToFSeconds(Now() - app->time_started).count());
   shader->SetUniform1f("iBlend", FLAGS_shadertoy_blend);
   shader->SetUniform4f("iMouse", screen->mouse.x, screen->mouse.y, app->input->MouseButton1Down(), 0);
@@ -302,14 +302,14 @@ void glShadertoyShader(Shader *shader, const Texture *tex) {
   if (tex) shader->SetUniform3f("iChannelResolution", XY_or_Y(scale, tex->width), XY_or_Y(scale, tex->height), 1);
 }
 
-void glShadertoyShaderWindows(Shader *shader, const Color &backup_color, const Box &w,                   const Texture *tex) { glShadertoyShaderWindows(shader, backup_color, vector<const Box*>(1, &w), tex); }
-void glShadertoyShaderWindows(Shader *shader, const Color &backup_color, const vector<const Box*> &wins, const Texture *tex) {
-  if (shader) glShadertoyShader(shader, tex);
-  else screen->gd->SetColor(backup_color);
-  if (tex) { screen->gd->EnableLayering(); tex->Bind(); }
-  else screen->gd->DisableTexture();
-  for (auto w : wins) w->Draw(screen->gd, tex ? tex->coord : 0);
-  if (shader) screen->gd->UseShader(0);
+void glShadertoyShaderWindows(GraphicsDevice *gd, Shader *shader, const Color &backup_color, const Box &w,                   const Texture *tex) { glShadertoyShaderWindows(gd, shader, backup_color, vector<const Box*>(1, &w), tex); }
+void glShadertoyShaderWindows(GraphicsDevice *gd, Shader *shader, const Color &backup_color, const vector<const Box*> &wins, const Texture *tex) {
+  if (shader) glShadertoyShader(gd, shader, tex);
+  else gd->SetColor(backup_color);
+  if (tex) { gd->EnableLayering(); tex->Bind(); }
+  else gd->DisableTexture();
+  for (auto w : wins) w->Draw(gd, tex ? tex->coord : 0);
+  if (shader) gd->UseShader(0);
 }
 
 void BoxFilled::Draw(GraphicsContext *gc, const LFL::Box &b) const { b.Draw(gc->gd); }
@@ -409,8 +409,8 @@ void Waveform::Draw(GraphicsContext *gc, const LFL::Box &w) const {
   if (!geom) return;
   geom->SetPosition(w.Position());
   gc->gd->DisableTexture();
-  Scene::Select(geom.get());
-  Scene::Draw(geom.get(), 0);
+  Scene::Select(gc->gd, geom.get());
+  Scene::Draw(gc->gd, geom.get(), 0);
 }
 
 Waveform Waveform::Decimated(point dim, const Color *c, const RingSampler::Handle *sbh, int decimateBy) {
@@ -425,7 +425,7 @@ Waveform Waveform::Decimated(point dim, const Color *c, const RingSampler::Handl
   return WF;
 }
 
-void glSpectogram(Matrix *m, unsigned char *data, int pf, int width, int height, int hjump, float vmax, float clip, bool interpolate, int pd) {
+void glSpectogram(GraphicsDevice *gd, Matrix *m, unsigned char *data, int pf, int width, int height, int hjump, float vmax, float clip, bool interpolate, int pd) {
   int ps = Pixel::Size(pf);
   unsigned char pb[4];
   double v;
@@ -452,7 +452,7 @@ void glSpectogram(Matrix *m, unsigned char *data, int pf, int width, int height,
   }
 }
 
-void glSpectogram(Matrix *m, Texture *t, float *max, float clip, int pd) {
+void glSpectogram(GraphicsDevice *gd, Matrix *m, Texture *t, float *max, float clip, int pd) {
   if (!t->ID) t->CreateBacked(m->N, m->M);
   else {
     if (t->width < m->N || t->height < m->M) t->Resize(m->N, m->M);
@@ -465,17 +465,17 @@ void glSpectogram(Matrix *m, Texture *t, float *max, float clip, int pd) {
   float Max = Matrix::Max(m);
   if (max) *max = Max;
 
-  glSpectogram(m, t->buf, t->pf, m->M, m->N, t->width, Max, clip, 0, pd);
+  glSpectogram(gd, m, t->buf, t->pf, m->M, m->N, t->width, Max, clip, 0, pd);
 
   screen->gd->BindTexture(GraphicsDevice::Texture2D, t->ID);
   t->UpdateGL();
 }
 
-void glSpectogram(const RingSampler::Handle *in, Texture *t, Matrix *transform, float *max, float clip) {
+void glSpectogram(GraphicsDevice *gd, const RingSampler::Handle *in, Texture *t, Matrix *transform, float *max, float clip) {
   /* 20*log10(abs(specgram(y,2048,sr,hamming(512),256))) */
   Matrix *m = Spectogram(in, 0, 512, 256, 512, vector<double>(), PowerDomain::abs);
   if (transform) m = Matrix::Mult(m, transform, mDelA);
-  glSpectogram(m, t, max, clip, PowerDomain::abs);
+  glSpectogram(gd, m, t, max, clip, PowerDomain::abs);
   delete m;
 }
 
@@ -653,12 +653,12 @@ void Skybox::Draw() {
   screen->gd->DisableNormals();
   screen->gd->DisableVertexColor();
   screen->gd->DisableDepthTest();
-  Scene::Draw(&a_left,   0, v_left);
-  Scene::Draw(&a_right,  0, v_right);
-  Scene::Draw(&a_top,    0, v_top);
-  Scene::Draw(&a_bottom, 0, v_bottom);
-  Scene::Draw(&a_front,  0, v_front);
-  Scene::Draw(&a_back,   0, v_back);
+  Scene::Draw(screen->gd, &a_left,   0, v_left);
+  Scene::Draw(screen->gd, &a_right,  0, v_right);
+  Scene::Draw(screen->gd, &a_top,    0, v_top);
+  Scene::Draw(screen->gd, &a_bottom, 0, v_bottom);
+  Scene::Draw(screen->gd, &a_front,  0, v_front);
+  Scene::Draw(screen->gd, &a_back,   0, v_back);
   screen->gd->EnableDepthTest();
 }
 

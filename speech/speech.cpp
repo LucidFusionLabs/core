@@ -1340,9 +1340,10 @@ void Decoder::VisualizeFeatures(AcousticModel::Compiled *model, Matrix *MFCC, Ma
   static bool interactive_done;
 
   delete segments;
-  segments = new PhoneticSegmentationGUI(model, viterbi, "visbuf");
+  segments = new PhoneticSegmentationGUI(screen, model, viterbi, "visbuf");
   interactive_done = 0;
 
+  GraphicsContext gc(screen->gd);
   SoundAsset sa;
   sa.name = "visbuf";
   sa.Load();
@@ -1353,7 +1354,7 @@ void Decoder::VisualizeFeatures(AcousticModel::Compiled *model, Matrix *MFCC, Ma
 
   Matrix *spect = Spectogram(&B, 0, FLAGS_feat_window, FLAGS_feat_hop, FLAGS_feat_window, vector<double>(), PowerDomain::dB);
   Asset *snap = screen->shell->asset("snap");
-  glSpectogram(spect, &snap->tex, 0);
+  glSpectogram(screen->gd, spect, &snap->tex, 0);
   delete spect;
 
   if (FLAGS_enable_audio) app->audio->QueueMixBuf(&B);
@@ -1365,7 +1366,7 @@ void Decoder::VisualizeFeatures(AcousticModel::Compiled *model, Matrix *MFCC, Ma
     app->HandleEvents(app->frame_time.GetTime(true).count());
 
     screen->gd->DrawMode(DrawMode::_2D);
-    screen->shell->asset("snap")->tex.Draw(wcc); // 4);
+    screen->shell->asset("snap")->tex.Draw(&gc, wcc); // 4);
 
     int levels=10;
     float percent = 1-float(app->audio->Out.size())/app->audio->outlast;

@@ -83,16 +83,20 @@ struct InputController {
   virtual ~InputController() {}
   virtual void Activate  () { active = 1; }
   virtual void Deactivate() { active = 0; }
-  virtual void Input(InputEvent::Id event, bool down) {}
+  virtual void Button(InputEvent::Id event, bool down) {}
+  virtual void Move(InputEvent::Id event, point p, point d) {}
 };
 
 struct BindMap : public InputController {
   unordered_set<Bind> data, down;
+  function<void(point, point)> move_cb;
   BindMap() { active = 1; }
+
   template <class... Args> void Add(Args&&... args) { AddBind(Bind(forward<Args>(args)...)); }
   void AddBind(const Bind &b) { data.insert(b); }
   void Repeat(unsigned clicks) { for (auto b : down) b.Run(clicks); }
-  void Input(InputEvent::Id event, bool d);
+  void Button(InputEvent::Id event, bool d);
+  void Move(InputEvent::Id event, point p, point d) { if (move_cb) move_cb(p, d); }
   string DebugString() const { string v="{ "; for (auto b : data) StrAppend(&v, b.key, " "); return v + "}"; }
 };
 

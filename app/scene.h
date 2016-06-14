@@ -77,6 +77,11 @@ struct Entity {
   void RollRight(unsigned t) { RotOrt  (t/-1000.0*FLAGS_msens); }
   void PitchDown(unsigned t) { RotRight(t/ 1000.0*FLAGS_msens*FLAGS_invert); }
   void PitchUp  (unsigned t) { RotRight(t/-1000.0*FLAGS_msens*FLAGS_invert); }
+
+  void MoveCB     (point p, point d) { YawChange(d.x); PitchChange(d.y); }
+  void MoveYawCB  (point p, point d) { YawChange(d.x); }
+  void MovePitchCB(point p, point d) { PitchChange(d.y); }
+
   void YawChange(int x) {
     if      (x<0) YawLeft(-x);
     else if (x>0) YawRight(x);
@@ -121,9 +126,11 @@ struct Scene {
     }
   };
 
+  Entity cam;
   EntityMap entity;
   EntityAssetMap asset;
   EntityVector zsort;
+  Scene() : cam(v3(5.54, 1.70, 4.39), v3(-.51, -.03, -.49), v3(-.03, 1, -.03)) {}
 
   Entity *Get(const string &n) { return FindOrNull(entity, n); }
   Entity *Add(Entity *e) { return Add(e->name, e); }
@@ -133,19 +140,19 @@ struct Scene {
   void Del(const string &name);
   void Del(const EntityVector &vec);
 
-  static void Select(const Asset *);
-  static void Select(Geometry *);
-  static void Select();
+  static void Select(GraphicsDevice*, const Asset *);
+  static void Select(GraphicsDevice*, Geometry *);
+  static void Select(GraphicsDevice*);
 
-  static void Draw(Asset *a, Entity*);
-  static void Draw(const Geometry *a, Entity*, int start_vert=0, int num_verts=0);
-  static void DrawParticles(Entity *e, unsigned dt);
+  static void Draw(GraphicsDevice*, Asset *a, Entity*);
+  static void Draw(GraphicsDevice*, const Geometry *a, Entity*, int start_vert=0, int num_verts=0);
+  void DrawParticles(GraphicsDevice*, Entity *e, unsigned dt);
 
-  void Draw(vector<Asset> *assets);
-  void Draw(Asset *a, EntityFilter *filter=0);
-  static void Draw(Asset *a, EntityFilter *filter, const EntityVector&);
+  void Draw(GraphicsDevice*, vector<Asset> *assets);
+  void Draw(GraphicsDevice*, Asset *a, EntityFilter *filter=0);
+  static void Draw(GraphicsDevice*, Asset *a, EntityFilter *filter, const EntityVector&);
 
-  void ZSortDraw(EntityFilter *filter, unsigned dt);
+  void ZSortDraw(GraphicsDevice*, EntityFilter *filter, unsigned dt);
   void ZSort(const vector<Asset> &assets);
 };
 

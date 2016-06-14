@@ -37,7 +37,6 @@ Shell::Shell(AssetMap *AM, SoundAssetMap *SAM, MovieAssetMap *MAM) : assets(AM),
   command.emplace_back("fillmode",     bind(&Shell::fillmode,      this, _1));
   command.emplace_back("texmode",      bind(&Shell::texmode,       this, _1));
   command.emplace_back("swapaxis",     bind(&Shell::swapaxis,      this, _1));
-  command.emplace_back("campos",       bind(&Shell::campos,        this, _1));
   command.emplace_back("filter",       bind(&Shell::filter,        this, _1));
   command.emplace_back("fftfilter",    bind(&Shell::filter,        this, _1));
   command.emplace_back("f0",           bind(&Shell::f0,            this, _1));
@@ -141,19 +140,13 @@ void Shell::grabmode(const vector<string> &a) { if (app->grab_mode.Next()) mouse
 void Shell::texmode(const vector<string>&) { if (app->tex_mode.Next()) screen->gd->EnableTexture(); else screen->gd->DisableTexture(); }
 void Shell::swapaxis(const vector<string>&) { screen->SwapAxis(); }
 
-void Shell::campos(const vector<string>&) {
-  INFO("camMain.pos=",  screen->cam->pos.DebugString(),
-       " camMain.ort=", screen->cam->ort.DebugString(),
-       " camMain.up=",  screen->cam->up .DebugString());
-}
-
 void Shell::snap(const vector<string> &arg) {
   Asset      *a  = asset     (arg.size() ? arg[0] : "snap"); 
   SoundAsset *sa = soundasset(arg.size() ? arg[0] : "snap");
   if (a && sa) {
     app->audio->Snapshot(sa);
     RingSampler::Handle H(sa->wav.get());
-    glSpectogram(&H, &a->tex);
+    glSpectogram(screen->gd, &H, &a->tex);
   }
 }
 
@@ -324,13 +317,13 @@ void Shell::Slider(const vector<string> &a) {
   string flag_name = a[0];
   float total = a.size() >= 1 ? atof(a[1]) : 0;
   float inc   = a.size() >= 2 ? atof(a[2]) : 0;
-  screen->AddDialog(make_unique<FlagSliderDialog>(screen->gd, flag_name, total ? total : 100, inc ? inc : 1));
+  screen->AddDialog(make_unique<FlagSliderDialog>(screen, flag_name, total ? total : 100, inc ? inc : 1));
 }
 
 void Shell::Edit(const vector<string> &a) {
   string s = Asset::FileContents("default.vert");
   if (s.empty()) INFO("missing file default.vert");
-  screen->AddDialog(make_unique<EditorDialog>(screen->gd, FontDesc::Default(), new BufferFile(s, "default.vert")));
+  screen->AddDialog(make_unique<EditorDialog>(screen, FontDesc::Default(), new BufferFile(s, "default.vert")));
 }
 
 void Shell::cmds(const vector<string>&) {
@@ -347,6 +340,14 @@ void Shell::binds(const vector<string>&) {
 
 void Shell::constants(const vector<string>&) {
   INFO("DEBUG=", DEBUG, ", MOBILE=", MOBILE, ", IOS=", IOS, ", ANDROID=", ANDROID);
+}
+
+void Shell::AddSceneCommands(Scene *scene) {
+  Add("campos", [=](const vector<string>&){
+    INFO("camMain.pos=",  scene->cam.pos.DebugString(),
+         " camMain.ort=", scene->cam.ort.DebugString(),
+         " camMain.up=",  scene->cam.up .DebugString());
+  });
 }
 
 void Shell::AddBrowserCommands(Browser *b) {

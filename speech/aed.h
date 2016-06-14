@@ -373,8 +373,8 @@ struct AcousticEventGUI {
     }
 
     screen->gd->DisableTexture();
-    Scene::Select(geom);
-    Scene::Draw(geom, 0);
+    Scene::Select(screen->gd, geom);
+    Scene::Draw(screen->gd, geom, 0);
   }
 };
 #endif /* LFL_CORE_APP_GUI_H__ */

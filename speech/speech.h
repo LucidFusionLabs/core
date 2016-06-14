@@ -403,12 +403,15 @@ struct PhoneticSegmentationGUI : public GUI {
   string sound_asset_name;
   int sound_asset_len;
 
-  PhoneticSegmentationGUI(FeatureSink::DecodedWords &decoded, int len, const string &AN) : sound_asset_name(AN), sound_asset_len(len) {
+  PhoneticSegmentationGUI(Window *W, FeatureSink::DecodedWords &decoded, int len, const string &AN) :
+    GUI(W), sound_asset_name(AN), sound_asset_len(len) {
     Activate();
     for (int i=0, l=decoded.size(); i<l; i++)
       segments.push_back(Segment(decoded[i].text, decoded[i].beg, decoded[i].end));
   }
-  PhoneticSegmentationGUI(AcousticModel::Compiled *model, Matrix *decoded, const string &AN) : sound_asset_name(AN), sound_asset_len(decoded ? decoded->M : 0) {
+
+  PhoneticSegmentationGUI(Window *W, AcousticModel::Compiled *model, Matrix *decoded, const string &AN) :
+    GUI(W), sound_asset_name(AN), sound_asset_len(decoded ? decoded->M : 0) {
     Activate();
     for (Decoder::PhoneIter iter(model, decoded); !iter.Done(); iter.Next()) {
       if (!iter.phone) continue;
@@ -445,8 +448,8 @@ struct PhoneticSegmentationGUI : public GUI {
     if (geometry.get()) {
       geometry->SetPosition(win.TopLeft());
       screen->gd->DisableTexture();
-      Scene::Select(geometry.get());
-      Scene::Draw(geometry.get(), 0);
+      Scene::Select(root->gd, geometry.get());
+      Scene::Draw(root->gd, geometry.get(), 0);
     }
 
     for (int i = 0; i < segments.size(); i++) {

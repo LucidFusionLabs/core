@@ -483,7 +483,6 @@ struct Window : public ::NativeWindow {
   FrameCB frame_cb;
   Timer frame_time;
   RollingAvg<unsigned> fps;
-  unique_ptr<Entity> cam;
   unique_ptr<Console> console;
   vector<GUI*> gui;
   vector<unique_ptr<GUI>> my_gui;
@@ -491,8 +490,6 @@ struct Window : public ::NativeWindow {
   vector<unique_ptr<Dialog>> dialogs;
   FontRef default_font = FontRef(FontDesc::Default(), false);
   function<TextBox*()> default_textbox = []{ return nullptr; };
-  function<void(int)> grabbed_yaw_cb = [=](int x){ cam->YawChange(x); };
-  function<void(int)> grabbed_pitch_cb = [=](int x){ cam->PitchChange(x); };
   Callback reshaped_cb;
   TextBox *active_textbox=0;
   Dialog *top_dialog=0;

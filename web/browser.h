@@ -27,17 +27,20 @@ namespace LFL {
 
 struct BrowserController : public InputController {
   BrowserInterface *browser;
+  int last_mx=0, last_my=0;
   BrowserController(BrowserInterface *B) : browser(B) { active=1; }
-  void Input(InputEvent::Id event, bool down) {
+  void Button(InputEvent::Id event, bool down) {
     int key = InputEvent::GetKey(event);
     if (key)                                 browser->KeyEvent(key, down);
-    else if (event == Mouse::Event::Motion)  browser->MouseMoved(screen->mouse.x, screen->mouse.y);
     else if (event == Mouse::Event::Wheel)   browser->MouseWheel(0, down*32);
-    else if (event == Mouse::Event::Button2) browser->MouseButton(2, down, screen->mouse.x, screen->mouse.y);
+    else if (event == Mouse::Event::Button2) browser->MouseButton(2, down, last_mx, last_my);
     else if (event == Mouse::Event::Button1) {
       if (down) screen->active_textbox = 0;
       browser->MouseButton(1, down, screen->mouse.x, screen->mouse.y);
     }
+  }
+  void Moved(InputEvent::Id event, point p, point d) {
+    if (event == Mouse::Event::Motion) browser->MouseMoved((last_mx = p.x), (last_my = p.y));
   }
 };
 

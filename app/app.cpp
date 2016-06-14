@@ -725,7 +725,6 @@ Window::Window() : caption(app->name), fps(128) {
   resize_increment_x = resize_increment_y = 0;
   target_fps = FLAGS_target_fps;
   multitouch_keyboard_x = .93; 
-  cam = make_unique<Entity>(v3(5.54, 1.70, 4.39), v3(-.51, -.03, -.49), v3(-.03, 1, -.03));
   SetBox(LFL::Box(0, 0, 640, 480));
 }
 
@@ -747,7 +746,7 @@ Box Window::Box(float xp, float yp, float xs, float ys, float xbl, float ybt, fl
 }
 
 void Window::InitConsole(const Callback &animating_cb) {
-  gui.push_back((console = make_unique<Console>(gd, animating_cb)).get());
+  gui.push_back((console = make_unique<Console>(this, animating_cb)).get());
   console->ReadHistory(LFAppDownloadDir(), StrCat(app->name, "_console"));
   console->Write(StrCat(caption, " started"));
   console->Write("Try console commands 'cmds' and 'flags'");
@@ -776,11 +775,11 @@ void Window::GiveDialogFocusAway(Dialog *d) {
 }
 
 void Window::DrawDialogs() {
-  for (auto i = dialogs.begin(), e = dialogs.end(); i != e; ++i) (*i)->Draw(gd);
-  if (console) console->Draw(gd);
+  for (auto i = dialogs.begin(), e = dialogs.end(); i != e; ++i) (*i)->Draw();
+  if (console) console->Draw();
   if (FLAGS_draw_grid) {
     Color c(.7, .7, .7);
-    glIntersect(mouse.x, mouse.y, &c);
+    glIntersect(gd, mouse.x, mouse.y, &c);
     default_font->Draw(StrCat("draw_grid ", mouse.x, " , ", mouse.y), point(0,0));
   }
 }
@@ -847,7 +846,7 @@ void Window::RenderToFrameBuffer(FrameBuffer *fb) {
   // gd->ViewPort(Box(fb->tex.width, fb->tex.height));
   gd->DrawMode(gd->default_draw_mode);
   gd->Clear();
-  frame_cb(0, 0, 0);
+  frame_cb(this, 0, 0);
   fb->Release();
   gd->RestoreViewport(dm);
 }

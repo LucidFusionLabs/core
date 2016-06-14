@@ -46,6 +46,7 @@ extern "C" void MyAppCreate(int argc, const char* const* argv) {
 extern "C" int MyAppMain() {
   CHECK_EQ(0, LFL::app->Create(__FILE__));
   CHECK_EQ(0, LFL::app->Init());
+  LFL::screen->gd->have_npot_textures = false;
   app->StartNewWindow(screen);
   return app->Main();
 }

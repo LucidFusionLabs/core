@@ -152,7 +152,7 @@ void Bind::Run(unsigned t) const {
   }
 }
 
-void BindMap::Input(InputEvent::Id event, bool d) {
+void BindMap::Button(InputEvent::Id event, bool d) {
   auto b = data.find(event);
   if (b == data.end()) return;
   if (b->cb_type == Bind::CB_TIME) { Bind r=*b; r.key=InputEvent::GetKey(r.key); InsertOrErase(&down, r, d); }
@@ -258,7 +258,7 @@ int Input::KeyPress(int key, bool down) {
   if (fired) return fired;
 
   for (auto &g : screen->input)
-    if (g->active) g->Input(event, down); 
+    if (g->active) g->Button(event, down); 
 
   return 0;
 }
@@ -310,8 +310,10 @@ int Input::MouseMove(const point &p, const point &d) {
   if (!app->run) return 0;
   int fired = MouseEventDispatch(Mouse::Event::Motion, p, MouseButton1Down());
   if (!app->grab_mode.Enabled()) return fired;
-  if (screen->grabbed_yaw_cb) screen->grabbed_yaw_cb(d.x);
-  if (screen->grabbed_pitch_cb) screen->grabbed_pitch_cb(d.y);
+
+  for (auto &g : screen->input)
+    if (g->active) g->Move(Mouse::Event::Motion, p, d); 
+
   return fired;
 }
 
@@ -331,8 +333,8 @@ int Input::MouseClick(int button, bool down, const point &p) {
   int fired = MouseEventDispatch(event, p, down);
   if (fired) return fired;
 
-  for (auto g = screen->input.begin(); g != screen->input.end(); ++g)
-    if ((*g)->active) (*g)->Input(event, down);
+  for (auto i = screen->input.begin(), e = screen->input.end(); i != e; ++i)
+    if ((*i)->active) (*i)->Button(event, down);
 
   return fired;
 }

@@ -81,7 +81,7 @@ typedef AssetMapT<SoundAsset> SoundAssetMap;
 typedef AssetMapT<MovieAsset> MovieAssetMap;
 
 struct Asset {
-  typedef function<void(Asset*, Entity*)> DrawCB;
+  typedef function<void(GraphicsDevice*, Asset*, Entity*)> DrawCB;
 
   AssetMap *parent=0;
   string name, texture, geom_fn;
@@ -162,19 +162,19 @@ struct MovieAsset {
 };
 
 struct MapAsset {
-  virtual void Draw(const Entity &camera) = 0;
+  virtual void Draw(GraphicsDevice*, const Entity &camera) = 0;
 };
 
-void glLine(const point &p1, const point &p2, const Color *color);
-void glAxis(Asset*, Entity*);
-void glRoom(Asset*, Entity*);
-void glIntersect(int x, int y, Color *c);
-void glShadertoyShader(Shader *shader, const Texture *tex=0);
-void glShadertoyShaderWindows(Shader *shader, const Color &backup_color, const Box                &win, const Texture *tex=0);
-void glShadertoyShaderWindows(Shader *shader, const Color &backup_color, const vector<const Box*> &win, const Texture *tex=0);
-void glSpectogram(Matrix *m, unsigned char *data, int pf, int width, int height, int hjump, float max, float clip, bool interpolate, int pd=PowerDomain::dB);
-void glSpectogram(Matrix *m, Texture *t, float *max=0, float clip=-INFINITY, int pd=PowerDomain::dB);
-void glSpectogram(const RingSampler::Handle *in, Texture *t, Matrix *transform=0, float *max=0, float clip=-INFINITY);
+void glLine(GraphicsDevice*, const point &p1, const point &p2, const Color *color);
+void glAxis(GraphicsDevice*, Asset*, Entity*);
+void glRoom(GraphicsDevice*, Asset*, Entity*);
+void glIntersect(GraphicsDevice*, int x, int y, Color *c);
+void glShadertoyShader(GraphicsDevice*, Shader *shader, const Texture *tex=0);
+void glShadertoyShaderWindows(GraphicsDevice*, Shader *shader, const Color &backup_color, const Box                &win, const Texture *tex=0);
+void glShadertoyShaderWindows(GraphicsDevice*, Shader *shader, const Color &backup_color, const vector<const Box*> &win, const Texture *tex=0);
+void glSpectogram(GraphicsDevice*, Matrix *m, unsigned char *data, int pf, int width, int height, int hjump, float max, float clip, bool interpolate, int pd=PowerDomain::dB);
+void glSpectogram(GraphicsDevice*, Matrix *m, Texture *t, float *max=0, float clip=-INFINITY, int pd=PowerDomain::dB);
+void glSpectogram(GraphicsDevice*, const RingSampler::Handle *in, Texture *t, Matrix *transform=0, float *max=0, float clip=-INFINITY);
 
 struct BoxFilled             : public Drawable { void Draw(GraphicsContext*, const LFL::Box &b) const; };
 struct BoxOutline            : public Drawable { void Draw(GraphicsContext*, const LFL::Box &b) const; };
