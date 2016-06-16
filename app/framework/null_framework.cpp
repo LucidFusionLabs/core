@@ -85,7 +85,7 @@ void Application::SetAutoRotateOrientation(bool v) {}
 void Window::SetCaption(const string &v) {}
 void Window::SetResizeIncrements(float x, float y) {}
 void Window::SetTransparency(float v) {}
-void Window::Reshape(int w, int h) {}
+bool Window::Reshape(int w, int h) { return false; }
 
 bool Video::CreateWindow(Window *W) { 
   app->windows[W->id.v] = W;

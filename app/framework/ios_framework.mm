@@ -591,7 +591,7 @@ void Application::SetDownScale(bool v) { [[LFUIApplication sharedAppDelegate] do
 void Window::SetResizeIncrements(float x, float y) {}
 void Window::SetTransparency(float v) {}
 void Window::SetCaption(const string &v) {}
-void Window::Reshape(int w, int h) {}
+bool Window::Reshape(int w, int h) { return false; }
 
 bool Video::CreateWindow(Window *w) { return false; }
 void Video::StartWindow(Window *w) {
@@ -605,7 +605,7 @@ int Video::Swap() {
 }
 
 bool FrameScheduler::DoWait() { return false; }
-void FrameScheduler::Setup() { rate_limit = synchronize_waits = wait_forever_thread = monolithic_frame = 0; }
+void FrameScheduler::Setup() { rate_limit = synchronize_waits = wait_forever_thread = monolithic_frame = run_main_loop = 0; }
 void FrameScheduler::Wakeup(Window *w) {
   dispatch_async(dispatch_get_main_queue(), ^{ [GetTyped<GLKView*>(w->id) setNeedsDisplay]; });
 }

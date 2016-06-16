@@ -501,14 +501,14 @@ void Application::LoseFocus() { [GetTyped<GameView*>(GetNativeWindow()->id) clea
 void Application::ReleaseMouseFocus() { 
   CGDisplayShowCursor(kCGDirectMainDisplay);
   CGAssociateMouseAndMouseCursorPosition(true);
-  app->grab_mode.Off();
+  screen->grab_mode.Off();
   screen->cursor_grabbed = 0;
 }
 
 void Application::GrabMouseFocus() {
   CGDisplayHideCursor(kCGDirectMainDisplay);
   CGAssociateMouseAndMouseCursorPosition(false);
-  app->grab_mode.On(); 
+  screen->grab_mode.On(); 
   screen->cursor_grabbed = 1;
   CGWarpMouseCursorPosition
     (NSPointToCGPoint([[GetTyped<GameView*>(screen->id) window] convertRectToScreen:
@@ -553,7 +553,7 @@ void Window::SetTransparency(float v) {
   [[GetTyped<GameView*>(id) window] setAlphaValue: 1.0 - v];
 }
 
-void Window::Reshape(int w, int h) {
+bool Window::Reshape(int w, int h) {
   NSWindow *window = [GetTyped<GameView*>(id) window];
   NSRect frame = [window frame], x;
   LFL::Box b(frame.origin.x, frame.origin.y, w, h);
@@ -570,6 +570,7 @@ void Window::Reshape(int w, int h) {
     }
   }
   [window setContentSize:NSMakeSize(b.w, b.h)];
+  return true;
 }
 
 bool Video::CreateWindow(Window *W) { 

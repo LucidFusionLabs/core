@@ -211,7 +211,7 @@ void Application::MakeCurrentWindow(Window *W) {
 void Window::SetCaption(const string &v) { GetTyped<QWindow*>(id)->setTitle(QString::fromUtf8(v.data(), v.size())); }
 void Window::SetResizeIncrements(float x, float y) { GetTyped<QWindow*>(id)->setSizeIncrement(QSize(x, y)); }
 void Window::SetTransparency(float v) { GetTyped<QWindow*>(id)->setOpacity(1-v); }
-void Window::Reshape(int w, int h) { GetTyped<QWindow*>(id)->resize(w, h); app->MakeCurrentWindow(this); }
+bool Window::Reshape(int w, int h) { GetTyped<QWindow*>(id)->resize(w, h); app->MakeCurrentWindow(this); return true; }
 void Video::StartWindow(Window*) {}
 
 int Video::Swap() {

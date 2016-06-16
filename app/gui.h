@@ -291,14 +291,17 @@ struct TextBox : public GUI, public KeyboardController {
   };
 
   struct Selection : public DragTracker {
-    bool enabled=1;
-    int gui_ind=-1;
     struct Point { 
-      int line_ind=0, char_ind=0; Box glyph;
-      bool operator<(const Point &c) const { SortImpl2(c.glyph.y, glyph.y, glyph.x, c.glyph.x); }
+      Box glyph;
+      int line_ind=0, char_ind=0;
       string DebugString() const { return StrCat("Selection::Point(l=", line_ind, ", c=", char_ind, ", b=", glyph.DebugString(), ")"); }
-    } beg, end;
+    };
+    Point beg, end;
     Box3 box;
+    String16 text;
+    float start_v_scrolled=0;
+    int gui_ind=-1, scrolled=0;
+    void Begin(float s) { end=beg; start_v_scrolled=s; scrolled=0; text.clear(); }
   };
 
   StringCB runcb;
@@ -382,7 +385,7 @@ struct TextArea : public TextBox {
   bool wrap_lines=1, write_timestamp=0, write_newline=1, reverse_line_fb=0, cursor_enabled=1;
   int line_left=0, end_line_adjust=0, start_line_cutoff=0, end_line_cutoff=0;
   int extra_height=0, scroll_inc=10, scrolled_lines=0;
-  float v_scrolled=0, h_scrolled=0, last_v_scrolled=0, last_h_scrolled=0, start_selection_v_scrolled=0;
+  float v_scrolled=0, h_scrolled=0, last_v_scrolled=0, last_h_scrolled=0;
 
   TextArea(Window *W, const FontRef &F, int S, int LC);
   virtual ~TextArea() {}

@@ -494,6 +494,7 @@ struct Window : public ::NativeWindow {
   TextBox *active_textbox=0;
   Dialog *top_dialog=0;
   unique_ptr<Shell> shell;
+  CategoricalVariable<int> tex_mode, grab_mode, fill_mode;
 
   Window();
   virtual ~Window();
@@ -507,7 +508,7 @@ struct Window : public ::NativeWindow {
   void SetCaption(const string &c);
   void SetResizeIncrements(float x, float y);
   void SetTransparency(float v);
-  void Reshape(int w, int h);
+  bool Reshape(int w, int h);
   void Reshaped(const LFL::Box&);
   void Minimized()   { minimized=1; }
   void UnMinimized() { minimized=0; }
@@ -565,7 +566,6 @@ struct Application : public ::LFApp {
   Callback exit_cb;
   function<void(Window*)> window_init_cb, window_start_cb, window_closed_cb = [](Window *w){ delete w; };
   unordered_map<string, StringPiece> asset_cache;
-  CategoricalVariable<int> tex_mode, grab_mode, fill_mode;
   const Color *splash_color = &Color::black;
   bool log_pid=0;
 

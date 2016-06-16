@@ -214,7 +214,7 @@ struct Skybox {
 
   Asset *asset() { return &a_left; }
   void Load(const string &filename_prefix);
-  void Draw();
+  void Draw(GraphicsDevice*);
 };
 
 }; // namespace LFL

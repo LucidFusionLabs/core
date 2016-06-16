@@ -43,8 +43,8 @@ set(ENV{LDFLAGS}  "-arch i686 -isysroot ${LFL_IOS_SDK} ${IOS_VERSION_MIN}")
 set(CONFIGURE_ENV CC=$ENV{CC} CXX=$ENV{CXX} CPP=$ENV{CPP} CXXCPP=$ENV{CXXCPP} AR=$ENV{AR} RANLIB=$ENV{RANLIB}
     CFLAGS=$ENV{CFLAGS} CXXFLAGS=$ENV{CXXFLAGS} LDFLAGS=$ENV{LDFLAGS})
 
-set(M_LIBRARY ${LFL_IOS_SDK}/usr/lib/libm.tbd)
+set(M_LIBRARY ${LFL_IOS_SDK}/usr/lib/libm.dylib)
 set(ZLIB_INCLUDE_DIR ${LFL_IOS_SDK}/usr/include)
-set(ZLIB_LIBRARY ${LFL_IOS_SDK}/usr/lib/libz.tbd)
+set(ZLIB_LIBRARY ${LFL_IOS_SDK}/usr/lib/libz.dylib)
 
 add_custom_target(sim_start COMMAND nohup /Applications/Xcode.app/Contents/Developer/Applications/iOS\ Simulator.app/Contents/MacOS/iOS\ Simulator &)

@@ -142,7 +142,7 @@ struct SDLFrameworkModule : public Module {
 void Window::SetCaption(const string &v) {}
 void Window::SetResizeIncrements(float x, float y) {}
 void Window::SetTransparency(float v) {}
-void Window::Reshape(int w, int h) { SDL_SetWindowSize(GetTyped<SDL_Window*>(id), w, h); }
+bool Window::Reshape(int w, int h) { SDL_SetWindowSize(GetTyped<SDL_Window*>(id), w, h); return true; }
 
 void Application::MakeCurrentWindow(Window *W) {
   if (SDL_GL_MakeCurrent(GetTyped<SDL_Window*>(W->id), GetTyped<SDL_GLContext>(W->gl)) < 0)

@@ -1217,7 +1217,7 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
     vector<const Box*> bgwins;
     bgwins.push_back(&topbar.box);
     if (selected) bgwins.push_back(&box);
-    glShadertoyShaderWindows(MyShader, Color(25, 60, 130, 120), bgwins);
+    glShadertoyShaderWindows(gc.gd, MyShader, Color(25, 60, 130, 120), bgwins);
 
     if (title && selected) {
       gc.gd->DisableBlend();
@@ -1302,7 +1302,7 @@ struct GamePlayerListGUI : public GUI {
     GraphicsContext gc(root->gd);
     gc.gd->EnableBlend();
     Box win = screen->Box(.1, .1, .8, .8, false);
-    glShadertoyShaderWindows(MyShader, Color(255, 255, 255, 120), win);
+    glShadertoyShaderWindows(gc.gd, MyShader, Color(255, 255, 255, 120), win);
 
     int fh = win.h/2-font->Height()*2;
     DrawableBoxArray outgeom1, outgeom2;

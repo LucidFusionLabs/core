@@ -290,8 +290,7 @@ void RateLimiter::Limit() {
 
 /* Application */
 
-Application::Application(int ac, const char* const* av) : argc(ac), argv(av), tex_mode(2, 1, 0),
-  grab_mode(2, 0, 1), fill_mode(3, GraphicsDevice::Fill, GraphicsDevice::Line, GraphicsDevice::Point) {
+Application::Application(int ac, const char* const* av) : argc(ac), argv(av) {
   run=1; initialized=0; main_thread_id=0; frames_ran=0; memzero(log_time); 
   fonts = make_unique<Fonts>();
 }
@@ -662,9 +661,6 @@ int Application::TimerDrivenFrame(bool got_wakeup) {
 
 int Application::Main() {
   ONCE({ scheduler.Start(); });
-#ifdef LFL_IOS
-  ONCE({ return 0; });
-#endif
   if (Start()) return -1;
   if (!scheduler.run_main_loop) return 0;
   return MainLoop();
@@ -719,7 +715,8 @@ Application::~Application() {
 
 /* Window */
 
-Window::Window() : caption(app->name), fps(128) {
+Window::Window() : caption(app->name), fps(128), tex_mode(2, 1, 0), grab_mode(2, 0, 1),
+  fill_mode(3, GraphicsDevice::Fill, GraphicsDevice::Line, GraphicsDevice::Point) {
   id = gl = surface = glew_context = impl = user1 = user2 = user3 = typed_ptr{0, nullptr};
   started = minimized = cursor_grabbed = frame_init = animating = 0;
   resize_increment_x = resize_increment_y = 0;
@@ -868,12 +865,6 @@ void FrameScheduler::Free() {
 void FrameScheduler::Start() {
   if (!wait_forever) return;
   if (wait_forever_thread) wakeup_thread.Start();
-#if defined(LFL_ANDROID)
-  Socket fd[2];
-  CHECK(SystemNetwork::OpenSocketPair(fd));
-  AddWaitForeverSocket(screen, (system_event_socket = fd[0]), SocketSet::READABLE);
-  wait_forever_wakeup_socket = fd[1];
-#endif
 }
 
 void FrameScheduler::FrameDone() { if (rate_limit && app->run && FLAGS_target_fps) maxfps.Limit(); }

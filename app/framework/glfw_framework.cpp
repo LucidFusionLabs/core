@@ -149,7 +149,7 @@ void Application::CloseWindow(Window *W) {
 void Window::SetCaption(const string &v) {}
 void Window::SetResizeIncrements(float x, float y) {}
 void Window::SetTransparency(float v) {}
-void Window::Reshape(int w, int h) { glfwSetWindowSize(GetTyped<GLFWwindow*>(id), w, h); }
+bool Window::Reshape(int w, int h) { glfwSetWindowSize(GetTyped<GLFWwindow*>(id), w, h); return true; }
 
 bool Video::CreateWindow(Window *W) {
   GLFWwindow *share = app->windows.empty() ? 0 : GetTyped<GLFWwindow*>(app->windows.begin()->second->id);

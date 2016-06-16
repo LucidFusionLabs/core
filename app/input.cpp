@@ -309,7 +309,7 @@ int Input::HandleSpecialKey(InputEvent::Id event, KeyboardController *g) {
 int Input::MouseMove(const point &p, const point &d) {
   if (!app->run) return 0;
   int fired = MouseEventDispatch(Mouse::Event::Motion, p, MouseButton1Down());
-  if (!app->grab_mode.Enabled()) return fired;
+  if (!screen->grab_mode.Enabled()) return fired;
 
   for (auto &g : screen->input)
     if (g->active) g->Move(Mouse::Event::Motion, p, d); 

@@ -294,13 +294,14 @@ void Application::SetTouchKeyboardTiled(bool v) {}
 bool Application::GetTouchKeyboardOpened() { return false; }
 Box Application::GetTouchKeyboardBox() { return Box(); }
 
-int  Application::SetExtraScale(bool v) {}
 int  Application::SetMultisample(bool v) {}
+int  Application::SetExtraScale(bool v) {}
+void Application::SetDownScale(bool v) {}
 
 void Window::SetCaption(const string &v) {}
 void Window::SetResizeIncrements(float x, float y) {}
 void Window::SetTransparency(float v) {}
-void Window::Reshape(int w, int h) {}
+bool Window::Reshape(int w, int h) { return false; }
 
 bool Video::CreateWindow(Window *W) { return true; }
 void Video::StartWindow(Window *W) {}
@@ -325,8 +326,9 @@ bool FrameScheduler::DoWait() {
         for (const char *p = buf, *e = p + l; p < e; p++) if (*p) return true;
       }
     }
-  if (wakeup) app->scheduler.Wakeup(screen);
-  return false;
+  return wakeup;
+  // if (wakeup) app->scheduler.Wakeup(screen);
+  // return false;
 }
 
 void FrameScheduler::Wakeup(Window *w) {

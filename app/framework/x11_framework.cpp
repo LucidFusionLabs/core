@@ -137,12 +137,13 @@ void Application::SetAutoRotateOrientation(bool v) {}
 void Window::SetCaption(const string &v) {}
 void Window::SetResizeIncrements(float x, float y) {}
 void Window::SetTransparency(float v) {}
-void Window::Reshape(int w, int h) {
+bool Window::Reshape(int w, int h) {
   auto fw = dynamic_cast<X11FrameworkModule*>(app->framework.get());
   XWindowChanges resize;
   resize.width = w;
   resize.height = h;
   XConfigureWindow(fw->display, ::Window(id.v), CWWidth|CWHeight, &resize);
+  return true;
 }
 
 bool Video::CreateWindow(Window *W) {

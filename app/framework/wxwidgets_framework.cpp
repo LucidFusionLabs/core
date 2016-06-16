@@ -185,7 +185,7 @@ void Application::CloseWindow(Window *W) {
   if (app->window_closed_cb) app->window_closed_cb(W);
   screen = 0;
 }
-void Window::Reshape(int w, int h) { GetTyped<wxGLCanvas*>(id)->SetSize(w, h); }
+bool Window::Reshape(int w, int h) { GetTyped<wxGLCanvas*>(id)->SetSize(w, h); return true; }
 void Mouse::GrabFocus()    {}
 void Mouse::ReleaseFocus() {}
 

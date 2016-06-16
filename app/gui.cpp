@@ -620,7 +620,7 @@ int TextBox::WriteHistory(const string &dir, const string &name, const string &h
 
 TextArea::TextArea(Window *W, const FontRef &F, int S, int LC) :
   TextBox(W, F, LC), line(this, S), line_fb(W->gd) {
-  if (selection.enabled) InitSelection();
+  InitSelection();
 }
 
 void TextArea::Write(const StringPiece &s, bool update_fb, bool release_fb) {
@@ -658,8 +658,8 @@ void TextArea::SetDimension(int w, int h) {
 
 void TextArea::Resized(const Box &b, bool font_size_changed) {
   SetDimension(b.w, b.h);
-  if (selection.enabled)    UpdateBox(Box(0,-b.h,b.w,b.h*2), -1, selection.gui_ind);
-  if (context_gui_ind >= 0) UpdateBox(Box(0,-b.h,b.w,b.h*2), -1, context_gui_ind);
+  if (selection.gui_ind >= 0) UpdateBox(Box(0,-b.h,b.w,b.h*2), -1, selection.gui_ind);
+  if (context_gui_ind   >= 0) UpdateBox(Box(0,-b.h,b.w,b.h*2), -1, context_gui_ind);
   UpdateLines(last_v_scrolled, 0, 0, 0);
   UpdateCursor();
   Redraw(false, font_size_changed);
@@ -773,7 +773,7 @@ void TextArea::Draw(const Box &b, int flag, Shader *shader) {
   fb->DrawAligned(b, point(0, max(0, CommandLines()-1) * font_height));
   if (clip || extra_height) gc.gd->PopScissor();
   if (flag & DrawFlag::DrawCursor) DrawCursor(b.Position() + cursor.p);
-  if (selection.enabled) box.SetPosition(b.Position());
+  if (selection.gui_ind >= 0) box.SetPosition(b.Position());
   if (selection.changing) DrawSelection();
   if (!clip && hover_control) DrawHoverLink(b);
 }
@@ -791,8 +791,8 @@ void TextArea::DrawHoverLink(const Box &b) {
 }
 
 bool TextArea::GetGlyphFromCoordsOffset(const point &p, Selection::Point *out, int sl, int sla) {
-  int fh = style.font->Height(), targ = reverse_line_fb ? ((box.h - p.y) / fh) : (p.y / fh);
-  for (int i=sl, lines=sla, ll; i<line.ring.count && lines<line_fb.lines; i++, lines += ll) {
+  int fh = style.font->Height(), targ = Clamp(reverse_line_fb ? ((box.h - p.y) / fh) : (p.y / fh), 0, line_fb.lines-1);
+  for (int i = sl, lines = sla, ll; i < line.ring.count && lines < line_fb.lines; i++, lines += ll) {
     Line *L = &line[-i-1];
     if (lines + (ll = L->Lines()) <= targ) continue;
     L->data->glyphs.GetGlyphFromCoords(p, &out->char_ind, &out->glyph, reverse_line_fb ? targ-lines : lines+ll-targ-1);
@@ -821,8 +821,7 @@ void TextArea::DragCB(int, int, int, int down) {
   if (down) {
     if (!Active()) Activate();
 #ifdef LFL_MOBILE
-    app->ToggleTouchKeyboard();
-    return;
+    return app->ToggleTouchKeyboard();
 #endif
   }
 
@@ -831,20 +830,27 @@ void TextArea::DragCB(int, int, int, int down) {
   bool start = s->Update(root->mouse - box.BottomLeft() + point(line_left, 0), down);
   if (start) { 
     GetGlyphFromCoords(s->beg_click, &s->beg);
-    s->end = s->beg;
+    s->Begin(v_scrolled);
     if (selection_cb) selection_cb(s->beg);
-    start_selection_v_scrolled = v_scrolled;
   } else {
-    if (0) {
-      if      (s->end_click.y>box.top()) AddVScroll(max(0, s->end_click.y-max(box.top(), last_end_click.y)));
-      else if (s->end_click.y<box.y)     AddVScroll(min(0, s->end_click.y-min(box.y,     last_end_click.y)));
+    int add_scroll = 0;
+    if      (s->end_click.y>box.top()) add_scroll = max(0, s->end_click.y-max(box.top(), last_end_click.y));
+    else if (s->end_click.y<box.y)     add_scroll = min(0, s->end_click.y-min(box.y,     last_end_click.y));
+    if (add_scroll) {
+      AddVScroll(reverse_line_fb ? -add_scroll : add_scroll);
+      selection.scrolled += add_scroll;
     }
     GetGlyphFromCoords(s->end_click, &s->end);
   }
 
-  bool swap = (!reverse_line_fb && s->end < s->beg) || (reverse_line_fb && s->beg < s->end);
+  bool swap = (s->beg.line_ind == s->end.line_ind && s->end.char_ind < s->beg.char_ind) ||
+    (reverse_line_fb ? (s->end.line_ind < s->beg.line_ind) : (s->beg.line_ind < s->end.line_ind));
   if (!s->changing) {
-    if (v_scrolled != start_selection_v_scrolled) SetVScroll(start_selection_v_scrolled);
+    if (v_scrolled != selection.start_v_scrolled) {
+      v_scrolled = selection.start_v_scrolled;
+      UpdateScrolled();
+      Redraw();
+    }
     CopyText(swap ? s->end : s->beg, swap ? s->beg : s->end);
   } else {
     LinesFrameBuffer *fb = GetFrameBuffer();
@@ -852,9 +858,9 @@ void TextArea::DragCB(int, int, int, int down) {
     Box gb = swap ? s->end.glyph : s->beg.glyph;
     Box ge = swap ? s->beg.glyph : s->end.glyph;
     if (reverse_line_fb) { gb.y=h-gb.y-fh; ge.y=h-ge.y-fh; }
-    point gbp = !reverse_line_fb ? gb.Position() : gb.Position() + point(gb.w, 0);
-    point gep =  reverse_line_fb ? ge.Position() : ge.Position() + point(ge.w, 0);
-    s->box = Box3(Box(fb->w, h), gbp, gep, fh, fh);
+    if      (selection.scrolled > 0) ge.y -= selection.scrolled * fh;
+    else if (selection.scrolled < 0) gb.y -= selection.scrolled * fh;
+    s->box = Box3(Box(fb->w, h), gb.Position(), ge.BottomRight(), fh, fh);
   }
 }
 
@@ -866,8 +872,6 @@ void TextArea::CopyText(const Selection::Point &beg, const Selection::Point &end
 string TextArea::CopyText(int beg_line_ind, int beg_char_ind, int end_line_ind, int end_char_ind, bool add_nl) {
   String16 copy_text;
   bool one_line = beg_line_ind == end_line_ind;
-  int bc = (one_line && reverse_line_fb) ? end_char_ind : beg_char_ind;
-  int ec = (one_line && reverse_line_fb) ? beg_char_ind : end_char_ind;
   int d = reverse_line_fb ? 1 : -1;
   if (d < 0) { CHECK_LE(end_line_ind, beg_line_ind); }
   else       { CHECK_LE(beg_line_ind, end_line_ind); }
@@ -876,10 +880,10 @@ string TextArea::CopyText(int beg_line_ind, int beg_char_ind, int end_line_ind, 
     Line *l = &line[-i-1];
     int len = l->Size();
     if (i == beg_line_ind) {
-      if (!l->Size() || bc < 0) len = -1;
+      if (!l->Size() || beg_char_ind < 0) len = -1;
       else {
-        len = (one_line && ec >= 0) ? ec+1 : l->Size();
-        copy_text += Substr(l->Text16(), bc, max(0, len - bc));
+        len = (one_line && end_char_ind >= 0) ? (end_char_ind + 1) : l->Size();
+        copy_text += Substr(l->Text16(), beg_char_ind, max(0, len - beg_char_ind));
       }
     } else if (i == end_line_ind) {
       len = (end_char_ind >= 0) ? end_char_ind+1 : l->Size();
@@ -1084,6 +1088,7 @@ void PropertyView::SelectionCB(const Selection::Point &p) {
 /* DirectoryTree */
 
 void DirectoryTree::VisitExpandedChildren(Id id, const Node::Visitor &cb, int depth) {
+  if (!id) return;
   auto n = GetNode(id);
   if (depth) cb(id, n, depth);
   else depth = n->depth;

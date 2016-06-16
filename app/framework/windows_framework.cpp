@@ -307,12 +307,13 @@ void Window::SetTransparency(float v) {
   }
 }
 
-void Window::Reshape(int w, int h) {
+bool Window::Reshape(int w, int h) {
   WinWindow *win = GetTyped<WinWindow*>(impl);
   long lStyle = GetWindowLong(GetTyped<HWND>(id), GWL_STYLE);
   RECT r = { 0, 0, w, h };
   AdjustWindowRect(&r, lStyle, win->menubar);
   SetWindowPos(GetTyped<HWND>(id), 0, 0, 0, r.right - r.left, r.bottom - r.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+  return true;
 }
 
 void Video::StartWindow(Window *W) {}

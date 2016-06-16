@@ -456,7 +456,7 @@ void glSpectogram(GraphicsDevice *gd, Matrix *m, Texture *t, float *max, float c
   if (!t->ID) t->CreateBacked(m->N, m->M);
   else {
     if (t->width < m->N || t->height < m->M) t->Resize(m->N, m->M);
-    else Texture::Coordinates(t->coord, m->N, m->M, screen->gd->TextureDim(t->width), screen->gd->TextureDim(t->height));
+    else Texture::Coordinates(t->coord, m->N, m->M, gd->TextureDim(t->width), gd->TextureDim(t->height));
   }
 
   if (clip == -INFINITY) clip = -65;
@@ -467,7 +467,7 @@ void glSpectogram(GraphicsDevice *gd, Matrix *m, Texture *t, float *max, float c
 
   glSpectogram(gd, m, t->buf, t->pf, m->M, m->N, t->width, Max, clip, 0, pd);
 
-  screen->gd->BindTexture(GraphicsDevice::Texture2D, t->ID);
+  gd->BindTexture(GraphicsDevice::Texture2D, t->ID);
   t->UpdateGL();
 }
 
@@ -649,17 +649,17 @@ void Skybox::Load(const string &filename_prefix) {
   a_back  .texture = StrCat(filename_prefix,   "_back.png"); a_back  .Load();
 }
 
-void Skybox::Draw() {
-  screen->gd->DisableNormals();
-  screen->gd->DisableVertexColor();
-  screen->gd->DisableDepthTest();
-  Scene::Draw(screen->gd, &a_left,   0, v_left);
-  Scene::Draw(screen->gd, &a_right,  0, v_right);
-  Scene::Draw(screen->gd, &a_top,    0, v_top);
-  Scene::Draw(screen->gd, &a_bottom, 0, v_bottom);
-  Scene::Draw(screen->gd, &a_front,  0, v_front);
-  Scene::Draw(screen->gd, &a_back,   0, v_back);
-  screen->gd->EnableDepthTest();
+void Skybox::Draw(GraphicsDevice *gd) {
+  gd->DisableNormals();
+  gd->DisableVertexColor();
+  gd->DisableDepthTest();
+  Scene::Draw(gd, &a_left,   0, v_left);
+  Scene::Draw(gd, &a_right,  0, v_right);
+  Scene::Draw(gd, &a_top,    0, v_top);
+  Scene::Draw(gd, &a_bottom, 0, v_bottom);
+  Scene::Draw(gd, &a_front,  0, v_front);
+  Scene::Draw(gd, &a_back,   0, v_back);
+  gd->EnableDepthTest();
 }
 
 }; // namespace LFL
