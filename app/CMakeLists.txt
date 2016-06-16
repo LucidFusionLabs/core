@@ -3,7 +3,7 @@
 set(LFL_APP_CFLAGS)
 set(LFL_APP_DEF -D__STDC_CONSTANT_MACROS -D__STDC_LIMIT_MACROS)
 set(LFL_APP_INCLUDE ${LFL_SOURCE_DIR} ${LFL_CORE_BINARY_DIR})
-set(LFL_APP_LIB lfl_app app_font app_browser app_stdregex_regex)
+set(LFL_APP_LIB lfl_app app_browser app_layers app_font ${LFL_APP_REGEX})
 
 macro(add_app_def _def)
   if(${_def})
@@ -56,7 +56,7 @@ add_subdirectory(camera)
 add_subdirectory(cuda)
 
 add_library(lfl_app ${LFL_APP_TYPE} gui.cpp font.cpp flow.cpp app.cpp types/types.cpp
-            types/string.cpp types/time.cpp bindings/syntax.cpp "file.cpp" assets.cpp layers.cpp loader.cpp
+            types/string.cpp types/time.cpp bindings/syntax.cpp "file.cpp" assets.cpp loader.cpp
             audio.cpp video.cpp input.cpp math.cpp ipc.cpp network.cpp
             net/http.cpp net/ssh.cpp net/smtp.cpp net/resolver.cpp
             camera.cpp scene.cpp shell.cpp crypto.cpp bindings.cpp
@@ -80,6 +80,8 @@ target_include_directories(lfl_app PUBLIC ${_include})
 add_precompiled_header(lfl_app core/app/app.h c++-header COMPILE_OPTIONS ${LFL_APP_CFLAGS}
                        COMPILE_DEFINITIONS ${LFL_APP_DEF} INCLUDE_DIRECTORIES ${_include})
 target_use_precompiled_header(lfl_app core/app/app.h FORCEINCLUDE)
+
+lfl_add_target(app_layers STATIC_LIBRARY SOURCES layers.cpp)
 
 set(LFL_APP_CFLAGS ${LFL_APP_CFLAGS} PARENT_SCOPE)
 set(LFL_APP_DEF ${LFL_APP_DEF} PARENT_SCOPE)

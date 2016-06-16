@@ -38,11 +38,16 @@ Regex::Result Regex::MatchOne(const StringPiece &text) {
 }
 
 Regex::Result Regex::MatchOne(const String16Piece &text) {
+#ifdef LFL_LINUX
+  ERROR("Regex Match16 not supported");
+  return Regex::Result();
+#else
   if (!impl || !text.len) return Regex::Result();
   auto compiled = static_cast<std::regex*>(impl);
   std::match_results<const char16_t*> matches;
   if (!std::regex_search(text.begin(), text.end(), matches, *compiled) || matches.size() < 2) return Regex::Result();
   return Regex::Result(matches[1].first - text.begin(), matches[1].second - text.begin());
+#endif
 }
 
 }; // namespace LFL

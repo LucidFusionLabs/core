@@ -91,13 +91,14 @@ struct X11FrameworkModule : public Module {
     XEvent xev;
     while (XPending(display)) {
       XNextEvent(display, &xev);
+      if (app->windows.size() > 1) SetNativeWindowByID(Void(xev.xany.window));
       switch (xev.type) {
         case XKeyPress:       if (KeyPress(GetKeyCodeFromXEvent(display, xev), 1)) app->EventDrivenFrame(0); break;
         case KeyRelease:      if (KeyPress(GetKeyCodeFromXEvent(display, xev), 0)) app->EventDrivenFrame(0); break;
         case ButtonPress:     if (screen && MouseClick(xev.xbutton.button, 1, xev.xbutton.x, screen->height-xev.xbutton.y)) app->EventDrivenFrame(0); break;
         case ButtonRelease:   if (screen && MouseClick(xev.xbutton.button, 0, xev.xbutton.x, screen->height-xev.xbutton.y)) app->EventDrivenFrame(0); break;
         case MotionNotify:    if (screen) { point p(xev.xmotion.x, screen->height-xev.xmotion.y); if (app->input->MouseMove(p, p - screen->mouse)) app->EventDrivenFrame(0); } break;
-        case ConfigureNotify: if (screen && (xev.xconfigure.width != screen->width || xev.xconfigure.height != screen->height)) { screen->Reshaped(xev.xconfigure.width, xev.xconfigure.height); app->EventDrivenFrame(0); } break;
+        case ConfigureNotify: if (screen && (xev.xconfigure.width != screen->width || xev.xconfigure.height != screen->height)) { screen->Reshaped(Box(xev.xconfigure.width, xev.xconfigure.height)); app->EventDrivenFrame(0); } break;
         case ClientMessage:   if (xev.xclient.data.l[0] == delete_win) WindowClosed(); break;
         case Expose:          app->EventDrivenFrame(0);
         default:              continue;
@@ -113,9 +114,10 @@ void Application::CloseWindow(Window *W) {
   glXDestroyContext(display, GetTyped<GLXContext>(W->gl));
   XDestroyWindow(display, ::Window(W->id.v));
   windows.erase(W->id.v);
-  if (windows.empty()) app->run = false;
-  if (app->window_closed_cb) app->window_closed_cb(W);
-  screen = 0;
+  if (windows.empty()) run = false;
+  if (window_closed_cb) window_closed_cb(W);
+  screen = nullptr;
+  if (windows.size() == 1) SetNativeWindow(windows.begin()->second);
 }
 
 void Application::MakeCurrentWindow(Window *W) {
@@ -133,6 +135,7 @@ void Application::OpenTouchKeyboard() {}
 void Application::SetTouchKeyboardTiled(bool v) {}
 bool Application::GetTouchKeyboardOpened() { return false; }
 void Application::SetAutoRotateOrientation(bool v) {}
+void Application::SetDownScale(bool) {}
 
 void Window::SetCaption(const string &v) {}
 void Window::SetResizeIncrements(float x, float y) {}
@@ -160,7 +163,9 @@ bool Video::CreateWindow(Window *W) {
   if (!(W->id.v = Void(win))) return ERRORv(false, "XCreateWindow");
   XMapWindow(fw->display, win);
   XStoreName(fw->display, win, W->caption.c_str());
-  if (!(W->gl = MakeTyped(glXCreateContext(fw->display, fw->vi, NULL, GL_TRUE))).v) return ERRORv(false, "glXCreateContext");
+  GLXContext share = app->windows.size() ? GetTyped<GLXContext>(app->windows.begin()->second->gl) : nullptr;
+  if (!(W->gl = MakeTyped(glXCreateContext(fw->display, fw->vi, share, GL_TRUE))).v)
+    return ERRORv(false, "glXCreateContext");
   W->surface = MakeTyped(fw->display);
   app->windows[W->id.v] = W;
   app->MakeCurrentWindow(W);

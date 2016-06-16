@@ -111,6 +111,7 @@ struct LayersInterface {
   vector<Child> child;
   vector<unique_ptr<TilesInterface>> layer;
   LayersInterface() { ClearLayerNodes(); }
+  virtual ~LayersInterface() {}
 
   void ClearLayerNodes() { child.clear(); node.clear(); node.push_back({ Box(), point(), 0, 0 }); }
   int AddLayerNode(int parent_node_id, const Box &b, int layer_id) {
