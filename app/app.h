@@ -99,7 +99,6 @@ extern int optind;
 
 #ifdef LFL_ANDROID
 #include <sys/endian.h>
-#include "core/app/bindings/jni.h"
 #endif
 
 #define  INFO(...) ((::LFApp::Log::Info  <= ::LFL::FLAGS_loglevel) ? ::LFL::Log(::LFApp::Log::Info,  __FILE__, __LINE__, ::LFL::StrCat(__VA_ARGS__)) : void())
@@ -233,6 +232,9 @@ void Log(int level, const char *file, int line, const string &m);
 #include "core/app/export.h"
 #include "core/app/types/string.h"
 #include "core/app/types/time.h"
+#ifdef LFL_ANDROID
+#include "core/app/bindings/jni.h"
+#endif
 
 namespace LFL {
 extern Window *screen;
@@ -632,14 +634,15 @@ struct Application : public ::LFApp {
   void CloseTouchKeyboard();
   void CloseTouchKeyboardAfterReturn(bool);
   void SetTouchKeyboardTiled(bool);
-  bool GetTouchKeyboardOpened();
   Box GetTouchKeyboardBox();
-  void ToggleTouchKeyboard() { if (GetTouchKeyboardOpened()) CloseTouchKeyboard(); else OpenTouchKeyboard(); }
+  void ToggleTouchKeyboard();
   void SetAutoRotateOrientation(bool);
 
   int SetMultisample(bool on);
   int SetExtraScale(bool on); /// e.g. Retina display
   void SetDownScale(bool on);
+  void SetTitleBar(bool on);
+  void SetKeepScreenOn(bool on);
 
   bool LoadPassword(const string &host, const string &user,       string *pw_out);
   void SavePassword(const string &host, const string &user, const string &pw);

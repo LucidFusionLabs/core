@@ -21,8 +21,7 @@
 #include <libgen.h>
 
 namespace LFL {
-static void *gplus_service;
-static int jni_activity_width=0, jni_activity_height=0;
+static Box activity_box;
 static LFL::JNI *jni = LFL::Singleton<LFL::JNI>::Get();
 
 const int Key::Escape     = 0xE100;
@@ -65,17 +64,25 @@ struct AndroidFrameworkModule : public Module {
 
   int Init() {
     INFO("AndroidFrameworkModule::Init()");
-    screen->width = jni_activity_width;
-    screen->height = jni_activity_height;
+    screen->x      = activity_box.x;
+    screen->y      = activity_box.y;
+    screen->width  = activity_box.w;
+    screen->height = activity_box.h;
 
     jfieldID fid = CheckNotNull(jni->env->GetFieldID(jni->activity_class, "egl_version", "I"));
     jint v = CheckNotNull(jni->env->GetIntField(jni->activity, fid));
     app->opengles_version = v;
-    INFOf("AndroidVideoInit: %d", v);
+    INFOf("AndroidFrameworkModule opengles_version: %d", v);
 
     CHECK(!screen->id.v);
     screen->id = MakeTyped(screen);
     app->windows[screen->id.v] = screen;
+
+    Socket fd[2];
+    CHECK(SystemNetwork::OpenSocketPair(fd));
+    app->scheduler.AddWaitForeverSocket(screen, (app->scheduler.system_event_socket = fd[0]), SocketSet::READABLE);
+    app->scheduler.wait_forever_wakeup_socket = fd[1];
+    app->scheduler.Wakeup(screen);
     return 0;
   }
 
@@ -88,12 +95,9 @@ struct AndroidAssetLoader : public SimpleAssetLoader {
   virtual void UnloadAudioFile(void *h) {}
   virtual void *LoadAudioFile(File*) { return 0; }
   virtual void *LoadAudioFileNamed(const string &filename) {
-    char fn[1024];
-    snprintf(fn, sizeof(fn), "%s", basename(filename.c_str()));
-    char *suffix = strchr(fn, '.');
-    if (suffix) *suffix = 0;
-    jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "loadMusicResource", "(Ljava/lang/String;)Landroid/media/MediaPlayer;"));
-    jstring jfn = jni->env->NewStringUTF(fn);
+    static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "loadMusicResource", "(Ljava/lang/String;)Landroid/media/MediaPlayer;"));
+    string fn = basename(filename.c_str());
+    jstring jfn = jni->env->NewStringUTF(fn.substr(0, fn.find('.')).c_str());
     jobject handle = jni->env->CallObjectMethod(jni->activity, mid, jfn);
     jni->env->DeleteLocalRef(jfn);
     return handle;
@@ -103,10 +107,10 @@ struct AndroidAssetLoader : public SimpleAssetLoader {
   virtual int RefillAudio(SoundAsset *a, int reset) { return 0; }
 };
 
-void JNI::Init(jobject a, bool init) {
+void JNI::Init(jobject a, bool first) {
   if      (1)           CHECK(activity = env->NewGlobalRef(a));
   if      (1)           CHECK(view     = env->NewGlobalRef(env->GetObjectField(activity, view_id)));
-  if      (init)              gplus    = env->NewGlobalRef(env->GetObjectField(activity, gplus_id));
+  if      (first)             gplus    = env->NewGlobalRef(env->GetObjectField(activity, gplus_id));
   else if (gplus_class) CHECK(gplus    = env->NewGlobalRef(env->GetObjectField(activity, gplus_id)));
 }
 
@@ -114,7 +118,7 @@ void JNI::Free() {
   if (gplus_class) env->DeleteGlobalRef(gplus);    gplus    = 0;
   if (1)           env->DeleteGlobalRef(view);     view     = 0;
   if (1)           env->DeleteGlobalRef(activity); activity = 0;
-  jni_activity_width = jni_activity_height = -1;
+  activity_box = Box(-1, -1);
 }
 
 string JNI::GetJNIString(jstring x) {
@@ -146,7 +150,6 @@ void JNI::LogException(jthrowable &exception) {
   jsize frames_length = jni->env->GetArrayLength(frames);
   std::string out;
 
-#if 1
   if (frames > 0) {
     jstring msg = (jstring)jni->env->CallObjectMethod(exception, jni_throwable_method_tostring);
     out += jni->GetJNIString(msg);
@@ -163,85 +166,71 @@ void JNI::LogException(jthrowable &exception) {
     jthrowable cause = (jthrowable)jni->env->CallObjectMethod(exception, jni_throwable_method_get_cause);
     if (cause) LogException(cause);
   }  
-#endif
 
   INFOf("JNI::LogException: %s", out.c_str());
 }
 
-extern "C" int AndroidAssetRead(const char *fn, char **out, int *size) {
-  jmethodID mid;
-  jstring jfn = jni->env->NewStringUTF(fn);
-  CHECK(mid = jni->env->GetMethodID(jni->activity_class, "getAssets", "()Landroid/content/res/AssetManager;"));
-  jobject assets = jni->env->CallObjectMethod(jni->activity, mid);
-  jclass assets_class = jni->env->GetObjectClass(assets);
+BufferFile *JNI::OpenAsset(const string &fn) {
+  static jmethodID get_assets_mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "getAssets", "()Landroid/content/res/AssetManager;"));
+  static jmethodID assetmgr_open_mid = CheckNotNull(jni->env->GetMethodID(jni->assetmgr_class, "open", "(Ljava/lang/String;)Ljava/io/InputStream;"));
+  static jmethodID inputstream_avail_mid = CheckNotNull(jni->env->GetMethodID(jni->inputstream_class, "available", "()I"));
+  static jmethodID channels_newchan_mid = CheckNotNull(jni->env->GetStaticMethodID(jni->channels_class, "newChannel", "(Ljava/io/InputStream;)Ljava/nio/channels/ReadableByteChannel;"));
+  static jmethodID readbytechan_read_mid = CheckNotNull(jni->env->GetMethodID(jni->readbytechan_class, "read", "(Ljava/nio/ByteBuffer;)I"));
 
-  CHECK(mid = jni->env->GetMethodID(assets_class, "open", "(Ljava/lang/String;)Ljava/io/InputStream;"));
-  jobject input = jni->env->CallObjectMethod(assets, mid, jfn);
+  jstring jfn = jni->env->NewStringUTF(fn.c_str());
+  jobject assets = jni->env->CallObjectMethod(jni->activity, get_assets_mid);
+  jobject input = jni->env->CallObjectMethod(assets, assetmgr_open_mid, jfn);
   jni->env->DeleteLocalRef(jfn);
   jni->env->DeleteLocalRef(assets);
-  jni->env->DeleteLocalRef(assets_class);
-  if (!input || jni->CheckForException()) return -1;
-  jclass input_class = jni->env->GetObjectClass(input);
+  if (!input || jni->CheckForException()) return nullptr;
 
-  CHECK(mid = jni->env->GetMethodID(input_class, "available", "()I"));
-  *size = jni->env->CallIntMethod(input, mid);
-  jni->env->DeleteLocalRef(input_class);
-  if (jni->CheckForException()) { jni->env->DeleteLocalRef(input); return -1; }
-  if (!*size) { jni->env->DeleteLocalRef(input); *out=(char*)""; return 0; }
+  int len = jni->env->CallIntMethod(input, inputstream_avail_mid);
+  if (jni->CheckForException()) { jni->env->DeleteLocalRef(input); return nullptr; }
 
-  jclass channels = jni->env->FindClass("java/nio/channels/Channels");
-  CHECK(mid = jni->env->GetStaticMethodID(channels, "newChannel", "(Ljava/io/InputStream;)Ljava/nio/channels/ReadableByteChannel;"));
-  jobject readable = jni->env->CallStaticObjectMethod(channels, mid, input);
-  jclass readable_class = jni->env->GetObjectClass(readable);
+  unique_ptr<BufferFile> ret = make_unique<BufferFile>(string(), fn.c_str());
+  if (!len) { jni->env->DeleteLocalRef(input); return ret.release(); }
+  ret->buf.resize(len);
+
+  jobject readable = jni->env->CallStaticObjectMethod(jni->channels_class, channels_newchan_mid, input);
   jni->env->DeleteLocalRef(input);
-  jni->env->DeleteLocalRef(channels);
 
-  *out = (char*)malloc(*size);
-  jobject bytes = jni->env->NewDirectByteBuffer(*out, *size);
-  CHECK(mid = jni->env->GetMethodID(readable_class, "read", "(Ljava/nio/ByteBuffer;)I"));
-  int ret = jni->env->CallIntMethod(readable, mid, bytes);
+  jobject bytes = jni->env->NewDirectByteBuffer(&ret->buf[0], ret->buf.size());
+  len = jni->env->CallIntMethod(readable, readbytechan_read_mid, bytes);
   jni->env->DeleteLocalRef(readable);
-  jni->env->DeleteLocalRef(readable_class);
   jni->env->DeleteLocalRef(bytes);
 
-  if (ret != *size || jni->CheckForException()) return -1;
-  return 0;
+  if (len != ret->buf.size() || jni->CheckForException()) return nullptr;
+  return ret.release();
 }
 
-extern "C" int AndroidDeviceName(char *out, int size) {
-  out[0] = 0;
-  jmethodID mid;
-  CHECK(mid = jni->env->GetMethodID(jni->activity_class, "getModelName", "()Ljava/lang/String;"));
+string JNI::GetDeviceName() {
+  static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "getModelName", "()Ljava/lang/String;"));
   jstring ret = (jstring)jni->env->CallObjectMethod(jni->activity, mid);
-  const char *id = jni->env->GetStringUTFChars(ret, 0);
-  strncpy(out, id, size-1);
-  out[size-1] = 0;
-  return strlen(out);
+  return GetJNIString(ret);
 }
 
-extern "C" void AndroidGPlusService(void *s) { gplus_service = s; }
-extern "C" void AndroidGPlusSignin() {
+void GPlus::SignIn() {
   if (jni->gplus) {
     static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->gplus_class, "signIn", "()V"));
     jni->env->CallVoidMethod(jni->gplus, mid);
   } else ERRORf("no gplus %p", jni->gplus);
 }
 
-extern "C" void AndroidGPlusSignout() {
+void GPlus::SignOut() {
   if (jni->gplus) {
     static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->gplus_class, "signOut", "()V"));
     jni->env->CallVoidMethod(jni->gplus, mid);
   } else ERRORf("no gplus %p", jni->gplus);
 }
 
-extern "C" int AndroidGPlusSignedin() {
+int GPlus::GetSignedIn() {
   if (jni->gplus) {
     static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->gplus_class, "signedIn", "()Z"));
     return jni->env->CallBooleanMethod(jni->gplus, mid);
   } else { ERRORf("no gplus %p", jni->gplus); return 0; }
 }
 
-extern "C" int AndroidGPlusQuickGame() {
+int GPlus::QuickGame() {
   if (jni->gplus) {
     static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->gplus_class, "quickGame", "()V"));
     jni->env->CallVoidMethod(jni->gplus, mid);
@@ -249,7 +238,7 @@ extern "C" int AndroidGPlusQuickGame() {
   return 0;
 }
 
-extern "C" int AndroidGPlusInvite() {
+int GPlus::Invite() {
   if (jni->gplus) {
     static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->gplus_class, "inviteGUI", "()V"));
     jni->env->CallVoidMethod(jni->gplus, mid);
@@ -257,7 +246,7 @@ extern "C" int AndroidGPlusInvite() {
   return 0;
 }
 
-extern "C" int AndroidGPlusAccept() {
+int GPlus::Accept() {
   if (jni->gplus) {
     static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->gplus_class, "acceptGUI", "()V"));
     jni->env->CallVoidMethod(jni->gplus, mid);
@@ -279,26 +268,58 @@ void Application::ToggleToolbarButton(const string &n) {}
 
 void Application::OpenTouchKeyboard() {
   static jmethodID jni_activity_method_show_keyboard =
-    jni->env->GetMethodID(jni->activity_class, "showKeyboard", "()V");
+    CheckNotNull(jni->env->GetMethodID(jni->activity_class, "showKeyboard", "()V"));
   jni->env->CallVoidMethod(jni->activity, jni_activity_method_show_keyboard);
 }
 
 void Application::CloseTouchKeyboard() {
   static jmethodID jni_activity_method_hide_keyboard =
-    jni->env->GetMethodID(jni->activity_class, "hideKeyboard", "()V");
+    CheckNotNull(jni->env->GetMethodID(jni->activity_class, "hideKeyboard", "()V"));
   jni->env->CallVoidMethod(jni->activity, jni_activity_method_hide_keyboard);
 }
 
-void Application::CloseTouchKeyboardAfterReturn(bool v) {} 
+void Application::ToggleTouchKeyboard() {
+  static jmethodID jni_activity_method_toggle_keyboard =
+    CheckNotNull(jni->env->GetMethodID(jni->activity_class, "toggleKeyboard", "()V"));
+  jni->env->CallVoidMethod(jni->activity, jni_activity_method_toggle_keyboard);
+}
+
+void Application::CloseTouchKeyboardAfterReturn(bool v) {
+#if 0
+  static jmethodID jni_activity_method_hide_keyboard_after_enter =
+    jni->env->GetMethodID(jni->activity_class, "hideKeyboardAfterEnter", "()V");
+  jni->env->CallVoidMethod(jni->activity, jni_activity_method_hide_keyboard_after_enter);
+#endif
+} 
+
 void Application::SetTouchKeyboardTiled(bool v) {}
-bool Application::GetTouchKeyboardOpened() { return false; }
 Box Application::GetTouchKeyboardBox() { return Box(); }
 
 int  Application::SetMultisample(bool v) {}
 int  Application::SetExtraScale(bool v) {}
 void Application::SetDownScale(bool v) {}
 
-void Window::SetCaption(const string &v) {}
+void Application::SetTitleBar(bool v) {
+  if (!v) {
+    static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "disableTitle", "()V"));
+    jni->env->CallVoidMethod(jni->activity, mid);
+  }
+}
+
+void Application::SetKeepScreenOn(bool v) {
+  if (v) {
+    static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "enableKeepScreenOn", "()V"));
+    jni->env->CallVoidMethod(jni->activity, mid);
+  }
+}
+
+void Window::SetCaption(const string &text) {
+  static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "setCaption", "(Ljava/lang/String;)V"));
+  jstring jtext = jni->env->NewStringUTF(text.c_str());
+  jni->env->CallVoidMethod(jni->activity, mid, jtext);
+  jni->env->DeleteLocalRef(jtext);
+}
+
 void Window::SetResizeIncrements(float x, float y) {}
 void Window::SetTransparency(float v) {}
 bool Window::Reshape(int w, int h) { return false; }
@@ -313,22 +334,18 @@ int Video::Swap() {
   return 0;
 }
 
-void FrameScheduler::Setup() { synchronize_waits = wait_forever_thread = monolithic_frame = 0; }
+void FrameScheduler::Setup() {
+  synchronize_waits = wait_forever_thread = 0;
+}
+
 bool FrameScheduler::DoWait() {
-  bool wakeup = false;
   wait_forever_sockets.Select(-1);
-  for (auto &s : wait_forever_sockets.socket)
-    if (wait_forever_sockets.GetReadable(s.first)) {
-      if (s.first != system_event_socket) wakeup = true;
-      else {
-        char buf[512];
-        int l = read(system_event_socket, buf, sizeof(buf));
-        for (const char *p = buf, *e = p + l; p < e; p++) if (*p) return true;
-      }
-    }
-  return wakeup;
-  // if (wakeup) app->scheduler.Wakeup(screen);
-  // return false;
+  if (wait_forever_sockets.GetReadable(system_event_socket)) {
+    char buf[512];
+    read(system_event_socket, buf, sizeof(buf));
+    return true;
+  }
+  return true;
 }
 
 void FrameScheduler::Wakeup(Window *w) {
@@ -359,29 +376,35 @@ unique_ptr<AssetLoaderInterface> CreateAssetLoader() { return make_unique<Androi
 
 extern "C" jint JNI_OnLoad(JavaVM* vm, void* reserved) { return JNI_VERSION_1_4; }
 
-extern "C" void Java_com_lucidfusionlabs_app_Activity_main(JNIEnv *e, jclass c, jobject a) {
-  const char *argv[2] = { "lfjni", 0 };
-  MyAppCreate(1, argv);
+extern "C" void Java_com_lucidfusionlabs_app_Activity_Create(JNIEnv *e, jclass c, jobject a) {
   CHECK(jni->env = e);
-  auto env = jni->env;
-  INFOf("main: env=%p", env);
-
-  CHECK(jni->activity_class = (jclass)env->NewGlobalRef(env->GetObjectClass(a)));
-  CHECK(jni->view_id  = env->GetFieldID(jni->activity_class, "view",  "Lcom/lucidfusionlabs/app/GameView;"));
-  CHECK(jni->gplus_id = env->GetFieldID(jni->activity_class, "gplus", "Lcom/lucidfusionlabs/app/GPlusClient;"));
+  CHECK(jni->activity_class = (jclass)e->NewGlobalRef(e->GetObjectClass(a)));
+  CHECK(jni->view_id  = e->GetFieldID(jni->activity_class, "view",  "Lcom/lucidfusionlabs/app/GameView;"));
+  CHECK(jni->gplus_id = e->GetFieldID(jni->activity_class, "gplus", "Lcom/lucidfusionlabs/app/GPlusClient;"));
   jni->Init(a, true);
 
-  CHECK(jni->view_class = (jclass)env->NewGlobalRef(env->GetObjectClass(jni->view)));
-  if (jni->gplus) CHECK(jni->gplus_class = (jclass)env->NewGlobalRef(env->GetObjectClass(jni->gplus)));
-  CHECK(jni->throwable_class = env->FindClass("java/lang/Throwable"));
-  CHECK(jni->frame_class = env->FindClass("java/lang/StackTraceElement"));
+  CHECK(jni->view_class         = (jclass)e->NewGlobalRef(e->GetObjectClass(jni->view)));
+  CHECK(jni->throwable_class    = (jclass)e->NewGlobalRef(e->FindClass("java/lang/Throwable")));
+  CHECK(jni->frame_class        = (jclass)e->NewGlobalRef(e->FindClass("java/lang/StackTraceElement")));
+  CHECK(jni->assetmgr_class     = (jclass)e->NewGlobalRef(e->FindClass("android/content/res/AssetManager")));
+  CHECK(jni->inputstream_class  = (jclass)e->NewGlobalRef(e->FindClass("java/io/InputStream")));
+  CHECK(jni->channels_class     = (jclass)e->NewGlobalRef(e->FindClass("java/nio/channels/Channels")));
+  CHECK(jni->readbytechan_class = (jclass)e->NewGlobalRef(e->FindClass("java/nio/channels/ReadableByteChannel")));
+  if (jni->gplus) CHECK(jni->gplus_class = (jclass)e->NewGlobalRef(e->GetObjectClass(jni->gplus)));
 
+  const char *argv[2] = { "lfjni", 0 };
+  MyAppCreate(1, argv);
+}
+
+extern "C" void Java_com_lucidfusionlabs_app_Activity_Main(JNIEnv *e, jclass c, jobject a) {
+  CHECK(jni->env = e);
+  INFOf("main: env=%p", jni->env);
   int ret = MyAppMain();
-  INFOf("main: env=%p ret=%d", env, ret);
+  INFOf("main: env=%p ret=%d", jni->env, ret);
   jni->Free();
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_Activity_mainloop(JNIEnv *e, jclass c, jobject a) {
+extern "C" void Java_com_lucidfusionlabs_app_Activity_MainLoop(JNIEnv *e, jclass c, jobject a) {
   CHECK(jni->env = e);
   INFOf("mainloop: env=%p", jni->env);
   jni->Init(a, false);
@@ -392,25 +415,25 @@ extern "C" void Java_com_lucidfusionlabs_app_Activity_mainloop(JNIEnv *e, jclass
   jni->Free();
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_Activity_minimize(JNIEnv* env, jclass c) {
+extern "C" void Java_com_lucidfusionlabs_app_Activity_Minimize(JNIEnv* env, jclass c) {
   INFOf("%s", "minimize");
   QueueWindowMinimized();
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_Activity_resize(JNIEnv *e, jclass c, jint w, jint h) { 
-  bool init = !jni_activity_width && !jni_activity_height;
-  jni_activity_width = w;
-  jni_activity_height = h;
-  if (init) return;
-  QueueWindowReshaped(w, h);
+extern "C" void Java_com_lucidfusionlabs_app_Activity_Reshaped(JNIEnv *e, jclass c, jint x, jint y, jint w, jint h) { 
+  bool init = !activity_box.w && !activity_box.h;
+  if (init) { activity_box = Box(x, y, w, h); return; }
+  if (activity_box.x == x && activity_box.y == y && activity_box.w == w && activity_box.h == h) return;
+  activity_box = Box(x, y, w, h);
+  QueueWindowReshaped(x, y, w, h);
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_Activity_key(JNIEnv *e, jclass c, jint down, jint keycode) {
+extern "C" void Java_com_lucidfusionlabs_app_Activity_KeyPress(JNIEnv *e, jclass c, jint down, jint keycode) {
   QueueKeyPress(keycode, down);
   LFAppWakeup();
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_Activity_touch(JNIEnv *e, jclass c, jint action, jfloat x, jfloat y, jfloat p) {
+extern "C" void Java_com_lucidfusionlabs_app_Activity_Touch(JNIEnv *e, jclass c, jint action, jfloat x, jfloat y, jfloat p) {
   static float lx[2]={0,0}, ly[2]={0,0};
   int dpind = (/*FLAGS_swap_axis*/ 0) ? y < LFL::screen->width/2 : x < LFL::screen->width/2;
   if (action == AndroidEvent::ACTION_DOWN || action == AndroidEvent::ACTION_POINTER_DOWN) {
@@ -442,18 +465,18 @@ extern "C" void Java_com_lucidfusionlabs_app_Activity_touch(JNIEnv *e, jclass c,
   } else INFOf("unhandled action %d", action);
 } 
 
-extern "C" void Java_com_lucidfusionlabs_app_Activity_fling(JNIEnv *e, jclass c, jfloat x, jfloat y, jfloat vx, jfloat vy) {
+extern "C" void Java_com_lucidfusionlabs_app_Activity_Fling(JNIEnv *e, jclass c, jfloat x, jfloat y, jfloat vx, jfloat vy) {
   int dpind = y < LFL::screen->width/2;
   LFL::screen->gesture_dpad_dx[dpind] = vx;
   LFL::screen->gesture_dpad_dy[dpind] = vy;
   INFOf("fling(%f, %f) = %d of (%d, %d) and vel = (%f, %f)", x, y, dpind, LFL::screen->width, LFL::screen->height, vx, vy);
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_Activity_scroll(JNIEnv *e, jclass c, jfloat x, jfloat y, jfloat vx, jfloat vy) {
+extern "C" void Java_com_lucidfusionlabs_app_Activity_Scroll(JNIEnv *e, jclass c, jfloat x, jfloat y, jfloat vx, jfloat vy) {
   LFL::screen->gesture_swipe_up = LFL::screen->gesture_swipe_down = 0;
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_Activity_accel(JNIEnv *e, jclass c, jfloat x, jfloat y, jfloat z) {}
+extern "C" void Java_com_lucidfusionlabs_app_Activity_Accel(JNIEnv *e, jclass c, jfloat x, jfloat y, jfloat z) {}
 
 extern "C" void Java_com_lucidfusionlabs_app_GPlusClient_startGame(JNIEnv *e, jclass c, jboolean server, jstring pid) {
   char buf[128];
@@ -464,8 +487,9 @@ extern "C" void Java_com_lucidfusionlabs_app_GPlusClient_startGame(JNIEnv *e, jc
 }
 
 extern "C" void Java_com_lucidfusionlabs_app_GPlusClient_read(JNIEnv *e, jclass c, jstring pid, jobject bb, jint len) {
+  static GPlus *gplus = Singleton<GPlus>::Get();
   const char *participant_id = e->GetStringUTFChars(pid, 0);
-  if (gplus_service) EndpointRead(gplus_service, participant_id, (const char*)e->GetDirectBufferAddress(bb), len);
+  if (gplus->server) EndpointRead(gplus->server, participant_id, (const char*)e->GetDirectBufferAddress(bb), len);
   e->ReleaseStringUTFChars(pid, participant_id);
 }
 

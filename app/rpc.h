@@ -169,7 +169,7 @@ namespace LFL {
     virtual ~name ## IPC() {} \
   }; \
   unordered_map<IPC::Seq, void*> name ## _map; \
-  void name(__VA_ARGS__); \
+  void name(__VA_ARGS__) {} \
   struct name ## Query : public name ## IPC
 
 #define IPC_SERVER_CALL(name, mpt) \

@@ -61,13 +61,9 @@ string Asset::FileContents(const string &asset_fn) {
   if (i != app->asset_cache.end()) return string(i->second.data(), i->second.size());
   if (asset_fn[0] == '/') return LocalFile::FileContents(asset_fn);
 #ifdef LFL_ANDROID
-  int l=0;
-  char *b=0;
-  if (!AndroidAssetRead(asset_fn.c_str(), &b, &l)) {
-    string ret = string(b, l);
-    free(b);
-    return ret;
-  }
+  static JNI *jni = Singleton<LFL::JNI>::Get();
+  unique_ptr<BufferFile> f(jni->OpenAsset(asset_fn));
+  return f ? string(move(f->buf)) : string();
 #endif
   return LocalFile::FileContents(Asset::FileName(asset_fn));
 }
@@ -77,13 +73,8 @@ File *Asset::OpenFile(const string &asset_fn) {
   if (i != app->asset_cache.end()) return new BufferFile(StringPiece(i->second), asset_fn.c_str());
   if (asset_fn[0] == '/') return new LocalFile(asset_fn, "r");
 #ifdef LFL_ANDROID
-  int l=0;
-  char *b=0;
-  if (!AndroidAssetRead(asset_fn.c_str(), &b, &l)) {
-    BufferFile *ret = new BufferFile(string(b, l));
-    free(b);
-    return ret;
-  }
+  static JNI *jni = Singleton<LFL::JNI>::Get();
+  return jni->OpenAsset(asset_fn);
 #endif
   return new LocalFile(Asset::FileName(asset_fn), "r");
 }

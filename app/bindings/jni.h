@@ -30,7 +30,8 @@ struct AndroidEvent {
 struct JNI {
   JNIEnv *env=0;
   jobject activity=0, view=0, gplus=0;
-  jclass activity_class=0, view_class=0, gplus_class=0, throwable_class=0, frame_class=0;
+  jclass activity_class=0, view_class=0, gplus_class=0, throwable_class=0, frame_class=0, assetmgr_class=0;
+  jclass inputstream_class=0, channels_class=0, readbytechan_class=0;
   jfieldID view_id=0, gplus_id=0;
 
   void Init(jobject a, bool first);
@@ -38,24 +39,20 @@ struct JNI {
 
   int CheckForException();
   void LogException(jthrowable &exception);
-  std::string GetJNIString(jstring);
+  string GetJNIString(jstring);
+  BufferFile *OpenAsset(const string &fn);
+  string GetDeviceName();
 };
+
+struct GPlus {
+  GPlusServer *server=0;
+  void SignIn();
+  void SignOut();
+  int  GetSignedIn();
+  int  Invite();
+  int  Accept();
+  int  QuickGame();
+};
+
 }; // namespace LFL
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-int   AndroidAssetRead(const char *filename, char **malloc_out, int *size_out);
-int   AndroidDeviceName(char *out, int len);
-void  AndroidGPlusSignin();
-void  AndroidGPlusSignout();
-int   AndroidGPlusSignedin();
-int   AndroidGPlusInvite();
-int   AndroidGPlusAccept();
-int   AndroidGPlusQuickGame();
-void  AndroidGPlusService(void *s);
-#ifdef __cplusplus
-};
-#endif
-
 #endif // LFL_CORE_APP_BINDINGS_JNI_H__

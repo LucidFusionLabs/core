@@ -16,9 +16,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifdef LFL_ANDROID
-#include "core/app/bindings/jni.h"
-#endif
 #include "core/app/gui.h"
 #include "core/web/browser.h"
 #include "core/game/game.h"

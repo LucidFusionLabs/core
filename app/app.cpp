@@ -53,19 +53,19 @@ extern "C" void LFAppResetGL()             { return LFL::app->ResetGL(); }
 extern "C" const char *LFAppDownloadDir()  { return LFL::app->dldir.c_str(); }
 extern "C" void LFAppAtExit()              { delete LFL::app; }
 extern "C" void LFAppShutdown()                   { LFL::app->run=0; LFAppWakeup(); }
-extern "C" void WindowReshaped(int x, int y, int w, int h)  { LFL::screen->Reshaped(LFL::Box(x, y, w, h)); }
-extern "C" void WindowMinimized()                           { LFL::screen->Minimized(); }
-extern "C" void WindowUnMinimized()                         { LFL::screen->UnMinimized(); }
-extern "C" bool WindowClosed()                              { LFL::app->CloseWindow(LFL::screen); return LFL::app->windows.empty(); }
-extern "C" void QueueWindowReshaped(int w, int h)           { LFL::app->RunInMainThread(LFL::bind(&LFL::Window::Reshaped,    LFL::screen, LFL::Box(0, 0, w, h))); }
-extern "C" void QueueWindowMinimized()                      { LFL::app->RunInMainThread(LFL::bind(&LFL::Window::Minimized,   LFL::screen)); }
-extern "C" void QueueWindowUnMinimized()                    { LFL::app->RunInMainThread(LFL::bind(&LFL::Window::UnMinimized, LFL::screen)); }
-extern "C" void QueueWindowClosed()                         { LFL::app->RunInMainThread(LFL::bind([=](){ LFL::app->CloseWindow(LFL::screen); })); }
-extern "C" int  KeyPress  (int b, int d)                    { return LFL::app->input->KeyPress  (b, d); }
-extern "C" int  MouseClick(int b, int d, int x,  int y)     { return LFL::app->input->MouseClick(b, d, LFL::point(x, y)); }
-extern "C" int  MouseMove (int x, int y, int dx, int dy)    { return LFL::app->input->MouseMove (LFL::point(x, y), LFL::point(dx, dy)); }
-extern "C" void QueueKeyPress  (int b, int d)               { return LFL::app->input->QueueKeyPress  (b, d); }
-extern "C" void QueueMouseClick(int b, int d, int x, int y) { return LFL::app->input->QueueMouseClick(b, d, LFL::point(x, y)); }
+extern "C" void WindowReshaped(int x, int y, int w, int h)      { LFL::screen->Reshaped(LFL::Box(x, y, w, h)); }
+extern "C" void WindowMinimized()                               { LFL::screen->Minimized(); }
+extern "C" void WindowUnMinimized()                             { LFL::screen->UnMinimized(); }
+extern "C" bool WindowClosed()                                  { LFL::app->CloseWindow(LFL::screen); return LFL::app->windows.empty(); }
+extern "C" void QueueWindowReshaped(int x, int y, int w, int h) { LFL::app->RunInMainThread(LFL::bind(&LFL::Window::Reshaped,    LFL::screen, LFL::Box(x, y, w, h))); }
+extern "C" void QueueWindowMinimized()                          { LFL::app->RunInMainThread(LFL::bind(&LFL::Window::Minimized,   LFL::screen)); }
+extern "C" void QueueWindowUnMinimized()                        { LFL::app->RunInMainThread(LFL::bind(&LFL::Window::UnMinimized, LFL::screen)); }
+extern "C" void QueueWindowClosed()                             { LFL::app->RunInMainThread(LFL::bind([=](){ LFL::app->CloseWindow(LFL::screen); })); }
+extern "C" int  KeyPress  (int b, int d)                        { return LFL::app->input->KeyPress  (b, d); }
+extern "C" int  MouseClick(int b, int d, int x,  int y)         { return LFL::app->input->MouseClick(b, d, LFL::point(x, y)); }
+extern "C" int  MouseMove (int x, int y, int dx, int dy)        { return LFL::app->input->MouseMove (LFL::point(x, y), LFL::point(dx, dy)); }
+extern "C" void QueueKeyPress  (int b, int d)                   { return LFL::app->input->QueueKeyPress  (b, d); }
+extern "C" void QueueMouseClick(int b, int d, int x, int y)     { return LFL::app->input->QueueMouseClick(b, d, LFL::point(x, y)); }
 extern "C" void EndpointRead(void *svc, const char *name, const char *buf, int len) { LFL::app->net->EndpointRead(static_cast<LFL::Service*>(svc), name, buf, len); }
 
 extern "C" NativeWindow *SetNativeWindowByID(void *id) { return SetNativeWindow(LFL::FindOrNull(LFL::app->windows, id)); }
@@ -136,6 +136,9 @@ const bool ANDROID = true;
 const bool ANDROID = false;
 #endif
 
+Application *app = nullptr;
+Window *screen = nullptr;
+
 DEFINE_int(loglevel, DEBUG ? 7 : 0, "Log level: [Fatal=-1, Error=0, Info=3, Debug=7]");
 DEFINE_string(logfile, "", "Log file name");
 DEFINE_bool(enable_audio, false, "Enable audio in/out");
@@ -156,9 +159,10 @@ DEFINE_bool(cursor_grabbed, false, "Center cursor every frame");
 DEFINE_bool(frame_debug, false, "Print each frame");
 DEFINE_bool(rcon_debug, false, "Print game protocol commands");
 
-Application *app = nullptr;
-Window *screen = nullptr;
-void Log(int level, const char *file, int line, const string &m) { app->Log(level, file, line, m.c_str()); }
+void Log(int level, const char *file, int line, const string &m) {
+  if (app) app->Log(level, file, line, m.c_str());
+  else Application::WriteLogLine("", m.c_str(), file, line);
+}
 
 #ifdef LFL_APPLE
 void NSLogString(const string&);

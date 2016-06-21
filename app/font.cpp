@@ -202,11 +202,11 @@ Glyph *Font::FindGlyph(char16_t ind) {
 void Font::UpdateMetrics(Glyph *g) {
   if (fix_metrics) {
     if (int fixed_width = FixedWidth()) {
-      if (g->advance > (fixed_width)) {
+      if (g->advance > fixed_width) {
         if ((g->wide = g->advance > (fixed_width * 1.4) && g->id != Unicode::replacement_char))
           g->advance = fixed_width * 2;
         else g->advance = fixed_width;
-      }
+      } else if (g->advance < fixed_width) g->advance = fixed_width;
     }
     return;
   }

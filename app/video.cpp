@@ -321,7 +321,7 @@ float Box::ScrollCrimped(float tex0, float tex1, float scroll, float *min, float
     *mid1=1; *mid2=tex0;
     if (scroll > 0) *min = *max = tex0 + scroll;
     else            *min = *max = tex1 + scroll;
-  } else { FATAL("invalid tex coords"); }
+  } else { FATAL("invalid tex coords ", tex0, ", ", tex1); }
   return (*mid1 - *min) / (tex1 - tex0); 
 }
 

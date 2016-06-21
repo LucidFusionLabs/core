@@ -889,6 +889,7 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
   TextBox tab2_server_address, tab3_player_name;
   Widget::Slider tab1_options, tab2_servers, tab3_sensitivity, tab3_volume, *current_scrollbar;
 #ifdef LFL_ANDROID
+  GPlus *gplus;
   Widget::Button gplus_signin_button, gplus_signout_button, gplus_quick, gplus_invite, gplus_accept;
 #endif
   Browser browser;
@@ -917,11 +918,12 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
     tab3_sensitivity(this, Widget::Slider::Flag::Horizontal),
     tab3_volume     (this, Widget::Slider::Flag::Horizontal), current_scrollbar(0),
 #ifdef LFL_ANDROID
-    gplus_signin_button (this, 0, "",           MouseController::CB([&](){ AndroidGPlusSignin(); gplus_signin_button.decay = 10; })),
-    gplus_signout_button(this, 0, "g+ Signout", MouseController::CB([&](){ AndroidGPlusSignout(); })),
-    gplus_quick         (this, 0, "match" ,     MouseController::CB([&](){ AndroidGPlusQuickGame(); })),
-    gplus_invite        (this, 0, "invite",     MouseController::CB([&](){ AndroidGPlusInvite(); })),
-    gplus_accept        (this, 0, "accept",     MouseController::CB([&](){ AndroidGPlusAccept(); })),
+    gplus(Singleton<GPlus>::Get()),
+    gplus_signin_button (this, 0, "",           MouseController::CB([&](){ gplus->SignIn(); gplus_signin_button.decay = 10; })),
+    gplus_signout_button(this, 0, "g+ Signout", MouseController::CB([&](){ gplus->SignOut(); })),
+    gplus_quick         (this, 0, "match" ,     MouseController::CB([&](){ gplus->QuickGame(); })),
+    gplus_invite        (this, 0, "invite",     MouseController::CB([&](){ gplus->Invite(); })),
+    gplus_accept        (this, 0, "accept",     MouseController::CB([&](){ gplus->Accept(); })),
 #endif
     browser(this, box), particles("GameMenuParticles") {
     tab1.outline_topleft = tab2.outline_topleft = tab3.outline_topleft = tab4.outline_topleft = tab1_server_start.outline_topleft = tab2_server_join.outline_topleft = sub_tab1.outline_topleft = sub_tab2.outline_topleft = sub_tab3.outline_topleft = &Color::grey80;
@@ -1084,7 +1086,7 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
       if (sub_selected == 1) {
 #ifdef LFL_ANDROID
         Scissor s(screen->gd, *menuflow.container);
-        bool gplus_signedin = AndroidGPlusSignedin();
+        bool gplus_signedin = gplus->GetSignedIn();
         if (!gplus_signedin) LayoutGPlusSigninButton(&menuflow, gplus_signedin);
         else {
           int fw = menuflow.container->w, bh = font->Height();
@@ -1141,7 +1143,7 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
     if (my_selected == 3) {
       Scissor s(screen->gd, *menuflow.container);
 #ifdef LFL_ANDROID
-      LayoutGPlusSigninButton(&menuflow, AndroidGPlusSignedin());
+      LayoutGPlusSigninButton(&menuflow, gplus->GetSignedIn());
 #endif
       menuflow.AppendText("\nPlayer Name:");
       if (DecayBoxIfMatch(line_clicked, menuflow.out->line.size())) {
@@ -1201,7 +1203,7 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
     int bh = menuflow->cur_attr.font->Height()*2, bw = bh * 41/9.0;
     menuflow->AppendBox((.95 - (float)bw/menuflow->container->w)/2, bw, bh, &gplus_signin_button.box);
     if (!signedin) { 
-      mobile_font->Select();
+      mobile_font->Select(root->gd);
       // gplus_signin_button.Draw(mobile_font, gplus_signin_button.decay ? 2 : (gplus_signin_button.hover ? 1 : 0));
     } else {
       gplus_signout_button.box = gplus_signin_button.box;

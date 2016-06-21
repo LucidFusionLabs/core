@@ -66,6 +66,9 @@ const int Key::F11        = -31;
 const int Key::F12        = -32;
 const int Key::Home       = -33;
 const int Key::End        = -34;
+
+static int                ios_argc = 0;
+static const char* const* ios_argv = 0;
 };
 
 @implementation LFUIApplication
@@ -80,6 +83,7 @@ const int Key::End        = -34;
 
   + (LFUIApplication *)sharedAppDelegate { return (LFUIApplication *)[[UIApplication sharedApplication] delegate]; }
   - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
+    MyAppCreate(LFL::ios_argc, LFL::ios_argv);
     CGRect wbounds = [[UIScreen mainScreen] bounds];
     scale = [[UIScreen mainScreen] scale];
     self.window = [[[UIWindow alloc] initWithFrame:wbounds] autorelease];
@@ -571,7 +575,11 @@ void Application::OpenTouchKeyboard() { [[LFUIApplication sharedAppDelegate] sho
 void Application::CloseTouchKeyboard() { [[LFUIApplication sharedAppDelegate] hideKeyboard]; }
 void Application::CloseTouchKeyboardAfterReturn(bool v) { [LFUIApplication sharedAppDelegate].resign_textfield_on_return = v; }
 void Application::SetTouchKeyboardTiled(bool v) { [[LFUIApplication sharedAppDelegate].controller setOverlapKeyboard: !v]; }
-bool Application::GetTouchKeyboardOpened() { return [[LFUIApplication sharedAppDelegate] isKeyboardFirstResponder]; }
+void Application::ToggleTouchKeyboard() {
+  if ([[LFUIApplication sharedAppDelegate] isKeyboardFirstResponder]) CloseTouchKeyboard();
+  else OpenTouchKeyboard();
+}
+
 Box Application::GetTouchKeyboardBox() {
   Box ret; 
   LFUIApplication *uiapp = [LFUIApplication sharedAppDelegate];
@@ -587,6 +595,8 @@ void Application::SetAutoRotateOrientation(bool v) { [LFUIApplication sharedAppD
 int Application::SetMultisample(bool v) { return [[LFUIApplication sharedAppDelegate] updateGLKMultisample:v]; }
 int Application::SetExtraScale(bool v) { return [[LFUIApplication sharedAppDelegate] updateScale:v]; }
 void Application::SetDownScale(bool v) { [[LFUIApplication sharedAppDelegate] downScale:v]; }
+void Application::SetTitleBar(bool v) {}
+void Application::SetKeepScreenOn(bool v) {}
 
 void Window::SetResizeIncrements(float x, float y) {}
 void Window::SetTransparency(float v) {}
@@ -650,8 +660,9 @@ unique_ptr<Module> CreateFrameworkModule() { return make_unique<iOSFrameworkModu
 unique_ptr<AssetLoaderInterface> CreateAssetLoader() { return make_unique<iOSAssetLoader>(); }
 
 extern "C" int main(int ac, const char* const* av) {
-  MyAppCreate(ac, av);
-  NSLog(@"%@", @"lfl_app_iphone_framework_main");
+  ios_argc = ac;
+  ios_argv = av;
+  NSLog(@"%@", @"lfl_app_ios_framework_main");
   NSAutoreleasePool * pool = [[NSAutoreleasePool alloc] init];
   int ret = UIApplicationMain(ac, const_cast<char**>(av), nil, @"LFUIApplication");
   [pool release];

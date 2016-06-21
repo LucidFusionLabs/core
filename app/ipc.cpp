@@ -325,25 +325,9 @@ bool MultiProcessResource::Read(const MultiProcessBuffer &mpb, int type, Seriali
   return out->Read(&in) == 0;
 }
 
-#if defined(LFL_MOBILE) || !defined(LFL_FLATBUFFERS)
+#if !defined(LFL_IPC)
 bool InterProcessComm::StartServerProcess(const string &server_program, const vector<string> &arg) { return false; }
 bool InterProcessComm::OpenSocket(const string &socket_name) { return false; }
-void ProcessAPIClient::LoadAsset(const string &content, const string &fn, const TextureCB &cb) {}
-void ProcessAPIClient::Navigate(const string &url) {}
-void ProcessAPIClient::SetViewport(int w, int h) {}
-void ProcessAPIServer::OpenSystemFont(const LFL::FontDesc &d, const OpenSystemFontIPC::CB &cb) {}
-void ProcessAPIServer::SetClearColor(const Color &c) {}
-void ProcessAPIServer::SetDocsize(int w, int h) {}
-void ProcessAPIServer::WGet(const string&, const HTTPClient::ResponseCB&, const StringCB&) {}
-void ProcessAPIServer::SetTitle(const string&) {}
-void ProcessAPIServer::SetURL(const string&) {}
-void ProcessAPIServer::LoadTexture(Texture*, const LoadTextureIPC::CB &cb) {}
-void ProcessAPIServer::Paint(int, const point&, int, MultiProcessPaintResourceBuilder&) {}
-void ProcessAPIServer::SwapTree(int, const LayersInterface*) {}
-void ProcessAPIClient::KeyPress(int b, bool d) {}
-void ProcessAPIClient::MouseClick(int b, bool d, int x, int y) {}
-void ProcessAPIClient::MouseMove(int x, int y, int dx, int dy) {}
-void ProcessAPIClient::ExecuteScript(const string &text, const StringCB &cb) {}
 #else
 
 MultiProcessBuffer *InterProcessComm::NewBuffer() const { return new MultiProcessBuffer(server_process); }

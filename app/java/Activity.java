@@ -17,6 +17,8 @@ import android.content.pm.ActivityInfo;
 import android.hardware.*;
 import android.util.Log;
 import android.net.Uri;
+import android.graphics.Rect;
+import android.app.ActionBar;
 
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.egl.*;
@@ -24,45 +26,69 @@ import javax.microedition.khronos.egl.*;
 public class Activity extends android.app.Activity {
     static { System.loadLibrary("app"); }
     
-    public static native void main(Object activity);
-    public static native void mainloop(Object activity);
-    public static native void minimize();
-    public static native void resize(int x, int y);
-    public static native void key(int upordonw, int keycode);
-    public static native void touch(int action, float x, float y, float p);
-    public static native void fling(float x, float y, float vx, float vy);
-    public static native void scroll(float x, float y, float sx, float sy);
-    public static native void accel(float x, float y, float z);
+    public static native void Create(Object activity);
+    public static native void Main(Object activity);
+    public static native void MainLoop(Object activity);
+    public static native void Minimize();
+    public static native void Reshaped(int x, int y, int w, int h);
+    public static native void KeyPress(int upordonw, int keycode);
+    public static native void Touch(int action, float x, float y, float p);
+    public static native void Fling(float x, float y, float vx, float vy);
+    public static native void Scroll(float x, float y, float sx, float sy);
+    public static native void Accel(float x, float y, float z);
 
     public static Activity instance;
     public static boolean init;
-    public FrameLayout frameLayout;
+    public FrameLayout frame_layout;
+    public ActionBar action_bar;
+    public Window root_window;
+    public View root_view;
     public GameView view;
     public Thread thread;
     public AudioManager audio;
     public GPlusClient gplus;
     public Advertising advertising;
-    public boolean waiting_activity_result;
-    public int egl_version;
+    public boolean waiting_activity_result, discard_next_global_layout;
+    public int surface_width, surface_height, egl_version;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         Log.i("lfl", "Activity.onCreate()");
-
         instance = this;
-        requestWindowFeature(Window.FEATURE_NO_TITLE);
         super.onCreate(savedInstanceState);
-        this.getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        
-        frameLayout = new FrameLayout(this);
+
+        root_window = getWindow();
+        frame_layout = new FrameLayout(this);
         view = new GameView(this, getApplication());
-        frameLayout.addView(view, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
 
-        if (ActivityConfig.advertising) advertising = new Advertising(this, frameLayout);
-        setContentView(frameLayout, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
-
+        if (ActivityConfig.advertising) advertising = new Advertising(this, frame_layout);
         if (ActivityConfig.play_services) gplus = new GPlusClient(this);
         audio = (AudioManager)getSystemService(Context.AUDIO_SERVICE);
+
+        Create(instance);
+        frame_layout.addView(view, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
+        setContentView(frame_layout, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
+
+        action_bar = getActionBar();
+        root_view = root_window.getDecorView().findViewById(android.R.id.content);
+        root_view.getViewTreeObserver().addOnGlobalLayoutListener(
+            new ViewTreeObserver.OnGlobalLayoutListener() {
+            public void onGlobalLayout(){
+                if (!init) return;
+                if (discard_next_global_layout) {
+                    discard_next_global_layout = false;
+                    return;
+                } 
+                Rect r = new Rect();
+                View view = root_window.getDecorView();
+                view.getWindowVisibleDisplayFrame(r);
+
+                int actionbar_h = action_bar == null ? 0 : action_bar.getHeight();
+                int h = r.bottom - r.top - actionbar_h;
+                Log.i("lfl", "onGlobalLayout(" + r.left + ", " + r.top + ", " + r.right + ", " + r.bottom
+                      + ", " + actionbar_h + ") = " + h);
+                Reshaped(r.left, surface_height - h, r.right - r.left, h); 
+            }});
     }
     
     @Override
@@ -87,7 +113,7 @@ public class Activity extends android.app.Activity {
 
         Thread t = thread;
         thread = null;        
-        minimize();
+        Minimize();
         try { t.join(); }
         catch(Exception e) { Log.e("lfl", e.toString()); }
         Log.i("lfl", "Activity.onPause() exit");
@@ -121,13 +147,16 @@ public class Activity extends android.app.Activity {
     }
 
     void surfaceChanged(int format, int width, int height) {
+        surface_width = width;
+        surface_height = height;
         boolean thread_exists = thread != null;
         Log.i("lfl", "surfaceChanged init= " + init + ", thread_exists=" + thread_exists);
-        resize(width, height);
+        Reshaped(0, 0, width, height);
         if (thread_exists) return;
-        if (!init) thread = new Thread(new Runnable() { public void run() { view.initEGL(); main    (Activity.instance); } }, "JNIMainThread");
-        else       thread = new Thread(new Runnable() { public void run() { view.initEGL(); mainloop(Activity.instance); } }, "JNIMainThread");
+        if (!init) thread = new Thread(new Runnable() { public void run() { view.initEGL(); Main    (Activity.instance); } }, "JNIMainThread");
+        else       thread = new Thread(new Runnable() { public void run() { view.initEGL(); MainLoop(Activity.instance); } }, "JNIMainThread");
         thread.start();
+        if (!init) discard_next_global_layout = true;
         init = true;
     }
 
@@ -152,7 +181,23 @@ public class Activity extends android.app.Activity {
     }
     public void hideKeyboard() {
         android.view.inputmethod.InputMethodManager imm = (android.view.inputmethod.InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
-        // imm.hideSoftInput(view, 0);
+        imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
+    }
+    public void hideKeyboardAfteEnter() {
+        android.view.inputmethod.InputMethodManager imm = (android.view.inputmethod.InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
+        imm.hideSoftInputFromWindow(view.getWindowToken(), android.view.inputmethod.InputMethodManager.HIDE_NOT_ALWAYS); 
+    }
+
+    public void disableTitle() {
+        requestWindowFeature(Window.FEATURE_NO_TITLE);
+    }
+
+    public void enableKeepScreenOn() {
+        root_window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+    }
+
+    public void setCaption(final String text) {
+        runOnUiThread(new Runnable() { public void run() { setTitle(text); } });
     }
 
     public MediaPlayer loadMusicResource(String filename) {
@@ -224,7 +269,7 @@ public class Activity extends android.app.Activity {
 class MyGestureListener extends android.view.GestureDetector.SimpleOnGestureListener {
     @Override
     public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
-        Activity.fling(e1.getX(), e1.getY(), velocityX, velocityY);
+        Activity.Fling(e1.getX(), e1.getY(), velocityX, velocityY);
         return false;
     }
 }
@@ -270,7 +315,7 @@ class GameView extends android.view.SurfaceView implements SurfaceHolder.Callbac
     }
 
     public void onSensorChanged(SensorEvent event) {
-        if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) Activity.accel(event.values[0], event.values[1], event.values[2]);
+        if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) Activity.Accel(event.values[0], event.values[1], event.values[2]);
     }
 
     public boolean onKey(View v, int keyCode, KeyEvent event) {
@@ -301,8 +346,8 @@ class GameView extends android.view.SurfaceView implements SurfaceHolder.Callbac
                 case KeyEvent.KEYCODE_F9:         keyChar = 0xE114; break;
             }
         }
-        if      (event.getAction() == KeyEvent.ACTION_UP)   { Activity.key(0, keyChar); return true; }
-        else if (event.getAction() == KeyEvent.ACTION_DOWN) { Activity.key(1, keyChar); return true; }
+        if      (event.getAction() == KeyEvent.ACTION_UP)   { Activity.KeyPress(0, keyChar); return true; }
+        else if (event.getAction() == KeyEvent.ACTION_DOWN) { Activity.KeyPress(1, keyChar); return true; }
         else return false;
     }
 
@@ -311,11 +356,11 @@ class GameView extends android.view.SurfaceView implements SurfaceHolder.Callbac
         final int action = event.getAction() & MotionEvent.ACTION_MASK;
         if (action == MotionEvent.ACTION_MOVE) {
             for (int i = 0; i < event.getPointerCount(); i++) {
-                Activity.touch(action, event.getX(i), event.getY(i), event.getPressure(i));
+                Activity.Touch(action, event.getX(i), event.getY(i), event.getPressure(i));
             }
         } else {
             int action_index = (action == MotionEvent.ACTION_POINTER_DOWN || action == MotionEvent.ACTION_POINTER_UP) ? event.getActionIndex() : 0;
-            Activity.touch(action, event.getX(action_index), event.getY(action_index), event.getPressure(action_index));
+            Activity.Touch(action, event.getX(action_index), event.getY(action_index), event.getPressure(action_index));
         }
         return true; 
     }

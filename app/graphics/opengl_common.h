@@ -150,12 +150,14 @@ int CreateProgram() { int p=glCreateProgram(); GDDebug("CreateProgram ", p); ret
 void DelProgram(int p) { glDeleteProgram(p); GDDebug("DelProgram ", p); }
 int CreateShader(int t) { return glCreateShader(t); }
 void CompileShader(int shader, vector<const char*> source) {
-  int l = 0;
-  char buf[1024] = {0};
+  GLint success = 0;
   glShaderSource(shader, source.size(), &source[0], nullptr);
   glCompileShader(shader);
-  glGetShaderInfoLog(shader, sizeof(buf), &l, buf);
-  if (l) {
+  glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
+  if (success == GL_FALSE) {
+    int l = 0;
+    char buf[1024] = {0};
+    glGetShaderInfoLog(shader, sizeof(buf), &l, buf);
     INFO(buf);
     INFO("Source:");
     for (auto &s : source) INFO(s);
