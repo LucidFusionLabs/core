@@ -1696,6 +1696,7 @@ Border *Terminal::UpdateClipBorder() {
 }
 
 void Terminal::MoveLines(int sy, int ey, int dy, bool move_fb_p) {
+  if (sy == ey) return;
   CHECK_LT(sy, ey);
   int line_ind = GetTermLineIndex(sy), scroll_lines = ey - sy + 1, ady = abs(dy), sdy = (dy > 0 ? 1 : -1);
   Move(line, line_ind + (dy>0 ? dy : 0), line_ind + (dy<0 ? -dy : 0), scroll_lines - ady, move_fb_p ? line.movep_cb : line.move_cb);
@@ -1973,7 +1974,7 @@ void Terminal::FlushParseText() {
   style.font.ptr = style.GetAttr(cursor.attr)->font;
   String16 input_text = String::ToUTF16(parse_text, &consumed);
   TerminalTrace("Terminal: (cur=%d,%d) FlushParseText('%s').size = [%zd, %d]", term_cursor.x, term_cursor.y,
-                StringPiece(parse_text.data(), consumed).str().c_str(), input_text.size(), consumed);
+                CHexEscapeNonAscii(StringPiece(parse_text.data(), consumed)).c_str(), input_text.size(), consumed);
   for (int wrote = 0; wrote < input_text.size(); wrote += write_size) {
     if (wrote) Newline(true);
     else if (term_cursor.x > term_width) { GetCursorLine()->data->wrapped = true; Newline(true); }

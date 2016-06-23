@@ -70,6 +70,7 @@ int FCFontEngine::InitGlyphs(Font *f, Glyph *g, int n) {
     Font *sub = ri->second->font.get();
     ttf_engine->InitGlyphs(sub, g, 1);
     g->internal.freetype.substitute = sub;
+    f->UpdateMetrics(g);
   }
   return ret;
 }

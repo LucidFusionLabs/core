@@ -92,9 +92,10 @@ int UTF8::ReadGlyph(const StringPiece &s, const char *p, int *len, bool eof) {
   *len = 1;
   unsigned char c0 = *MakeUnsigned(p);
   if ((c0 & (1<<7)) == 0) return c0; // ascii
-  if ((c0 & (1<<6)) == 0) { UnicodeDebug("unexpected continuation byte"); return c0; }
+  if ((c0 & (1<<6)) == 0) { UnicodeDebug("unexpected continuation byte"); return Unicode::replacement_char; }
+  if (c0 == 0xc0 || c0 == 0xc1 || (c0 >= 0xf5 && c0 <= 0xff)) { UnicodeDebug("overlong byte"); return Unicode::replacement_char; } 
   for ((*len)++; *len < 4; (*len)++) {
-    if (s.Done(p + *len - 1)) { UnicodeDebug("unexpected end of string"); *len=eof; return c0; }
+    if (s.Done(p + *len - 1)) { UnicodeDebug("unexpected end of string"); *len=eof; return Unicode::replacement_char; }
     if ((c0 & (1<<(7 - *len))) == 0) break;
   }
 
@@ -102,11 +103,11 @@ int UTF8::ReadGlyph(const StringPiece &s, const char *p, int *len, bool eof) {
   if      (*len == 2) ret = c0 & 0x1f;
   else if (*len == 3) ret = c0 & 0x0f;
   else if (*len == 4) ret = c0 & 0x07;
-  else { UnicodeDebug("invalid len ", *len); *len=1; return c0; }
+  else { UnicodeDebug("invalid len ", *len); *len=1; return Unicode::replacement_char; }
 
   for (int i = *len; i > 1; i--) {
     unsigned char c = *MakeUnsigned(++p);
-    if ((c & 0xc0) != 0x80) { UnicodeDebug("unexpected non-continuation byte"); *len=1; return c0; }
+    if ((c & 0xc0) != 0x80) { UnicodeDebug("unexpected non-continuation byte"); *len=1; return Unicode::replacement_char; }
     ret = (ret << 6) | (c & 0x3f);
   }
   return ret;
