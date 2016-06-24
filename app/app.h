@@ -582,6 +582,10 @@ struct Application : public ::LFApp {
   unique_ptr<Camera> camera;
   unique_ptr<CUDA> cuda;
 
+  AssetMap      asset;
+  SoundAssetMap soundasset;
+  MovieAssetMap movieasset;
+
   virtual ~Application();
   Application(int ac, const char* const* av);
 

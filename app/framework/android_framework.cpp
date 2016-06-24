@@ -22,7 +22,7 @@
 
 namespace LFL {
 static Box activity_box;
-static LFL::JNI *jni = LFL::Singleton<LFL::JNI>::Get();
+static JNI *jni = Singleton<JNI>::Get();
 
 const int Key::Escape     = 0xE100;
 const int Key::Return     = 10;
@@ -100,7 +100,7 @@ struct AndroidAssetLoader : public SimpleAssetLoader {
     jstring jfn = jni->env->NewStringUTF(fn.substr(0, fn.find('.')).c_str());
     jobject handle = jni->env->CallObjectMethod(jni->activity, mid, jfn);
     jni->env->DeleteLocalRef(jfn);
-    return handle;
+    return jni->env->NewGlobalRef(handle);
   }
 
   virtual void LoadAudio(void *handle, SoundAsset *a, int seconds, int flag) { a->handle = handle; }
@@ -138,17 +138,17 @@ int JNI::CheckForException() {
 
 void JNI::LogException(jthrowable &exception) {
   static jmethodID jni_throwable_method_get_cause =
-    LFL::CheckNotNull(jni->env->GetMethodID(jni->throwable_class, "getCause", "()Ljava/lang/Throwable;"));
+    CheckNotNull(jni->env->GetMethodID(jni->throwable_class, "getCause", "()Ljava/lang/Throwable;"));
   static jmethodID jni_throwable_method_get_stack_trace =
-    LFL::CheckNotNull(jni->env->GetMethodID(jni->throwable_class, "getStackTrace", "()[Ljava/lang/StackTraceElement;"));
+    CheckNotNull(jni->env->GetMethodID(jni->throwable_class, "getStackTrace", "()[Ljava/lang/StackTraceElement;"));
   static jmethodID jni_throwable_method_tostring =
-    LFL::CheckNotNull(jni->env->GetMethodID(jni->throwable_class, "toString", "()Ljava/lang/String;"));
+    CheckNotNull(jni->env->GetMethodID(jni->throwable_class, "toString", "()Ljava/lang/String;"));
   static jmethodID jni_frame_method_tostring =
-    LFL::CheckNotNull(jni->env->GetMethodID(jni->frame_class, "toString", "()Ljava/lang/String;"));
+    CheckNotNull(jni->env->GetMethodID(jni->frame_class, "toString", "()Ljava/lang/String;"));
 
   jobjectArray frames = (jobjectArray)jni->env->CallObjectMethod(exception, jni_throwable_method_get_stack_trace);
   jsize frames_length = jni->env->GetArrayLength(frames);
-  std::string out;
+  string out;
 
   if (frames > 0) {
     jstring msg = (jstring)jni->env->CallObjectMethod(exception, jni_throwable_method_tostring);
@@ -392,26 +392,27 @@ extern "C" void Java_com_lucidfusionlabs_app_Activity_Create(JNIEnv *e, jclass c
   CHECK(jni->readbytechan_class = (jclass)e->NewGlobalRef(e->FindClass("java/nio/channels/ReadableByteChannel")));
   if (jni->gplus) CHECK(jni->gplus_class = (jclass)e->NewGlobalRef(e->GetObjectClass(jni->gplus)));
 
-  const char *argv[2] = { "lfjni", 0 };
+  static const char *argv[2] = { "lfl_jni", 0 };
   MyAppCreate(1, argv);
 }
 
 extern "C" void Java_com_lucidfusionlabs_app_Activity_Main(JNIEnv *e, jclass c, jobject a) {
   CHECK(jni->env = e);
-  INFOf("main: env=%p", jni->env);
+  INFOf("Main: env=%p", jni->env);
   int ret = MyAppMain();
-  INFOf("main: env=%p ret=%d", jni->env, ret);
+  INFOf("Main: env=%p ret=%d", jni->env, ret);
   jni->Free();
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_Activity_MainLoop(JNIEnv *e, jclass c, jobject a) {
+extern "C" void Java_com_lucidfusionlabs_app_Activity_NewMainLoop(JNIEnv *e, jclass c, jobject a, bool reset) {
   CHECK(jni->env = e);
-  INFOf("mainloop: env=%p", jni->env);
+  INFOf("NewMainLoop: env=%p reset=%d", jni->env, reset);
   jni->Init(a, false);
   SetLFAppMainThread();
-  LFAppResetGL();
+  if (reset) LFAppResetGL();
   WindowUnMinimized();
-  LFAppMainLoop();
+  int ret = LFAppMainLoop();
+  INFOf("NewMainLoop: env=%p ret=%d", jni->env, ret);
   jni->Free();
 }
 
@@ -435,45 +436,45 @@ extern "C" void Java_com_lucidfusionlabs_app_Activity_KeyPress(JNIEnv *e, jclass
 
 extern "C" void Java_com_lucidfusionlabs_app_Activity_Touch(JNIEnv *e, jclass c, jint action, jfloat x, jfloat y, jfloat p) {
   static float lx[2]={0,0}, ly[2]={0,0};
-  int dpind = (/*FLAGS_swap_axis*/ 0) ? y < LFL::screen->width/2 : x < LFL::screen->width/2;
+  int dpind = (/*FLAGS_swap_axis*/ 0) ? y < screen->width/2 : x < screen->width/2;
   if (action == AndroidEvent::ACTION_DOWN || action == AndroidEvent::ACTION_POINTER_DOWN) {
     // INFOf("%d down %f, %f", dpind, x, y);
-    QueueMouseClick(1, 1, (int)x, LFL::screen->height - (int)y);
+    QueueMouseClick(1, 1, (int)x, screen->height - (int)y);
     LFAppWakeup();
-    LFL::screen->gesture_tap[dpind] = 1;
-    LFL::screen->gesture_dpad_x[dpind] = x;
-    LFL::screen->gesture_dpad_y[dpind] = y;
+    screen->gesture_tap[dpind] = 1;
+    screen->gesture_dpad_x[dpind] = x;
+    screen->gesture_dpad_y[dpind] = y;
     lx[dpind] = x;
     ly[dpind] = y;
   } else if (action == AndroidEvent::ACTION_UP || action == AndroidEvent::ACTION_POINTER_UP) {
     // INFOf("%d up %f, %f", dpind, x, y);
-    QueueMouseClick(1, 0, (int)x, LFL::screen->height - (int)y);
+    QueueMouseClick(1, 0, (int)x, screen->height - (int)y);
     LFAppWakeup();
-    LFL::screen->gesture_dpad_stop[dpind] = 1;
-    LFL::screen->gesture_dpad_x[dpind] = 0;
-    LFL::screen->gesture_dpad_y[dpind] = 0;
+    screen->gesture_dpad_stop[dpind] = 1;
+    screen->gesture_dpad_x[dpind] = 0;
+    screen->gesture_dpad_y[dpind] = 0;
   } else if (action == AndroidEvent::ACTION_MOVE) {
     float vx = x - lx[dpind]; lx[dpind] = x;
     float vy = y - ly[dpind]; ly[dpind] = y;
     // INFOf("%d move %f, %f vel = %f, %f", dpind, x, y, vx, vy);
     if (vx > 1.5 || vx < -1.5 || vy > 1.5 || vy < -1.5) {
-      LFL::screen->gesture_dpad_dx[dpind] = vx;
-      LFL::screen->gesture_dpad_dy[dpind] = vy;
+      screen->gesture_dpad_dx[dpind] = vx;
+      screen->gesture_dpad_dy[dpind] = vy;
     }
-    LFL::screen->gesture_dpad_x[dpind] = x;
-    LFL::screen->gesture_dpad_y[dpind] = y;
+    screen->gesture_dpad_x[dpind] = x;
+    screen->gesture_dpad_y[dpind] = y;
   } else INFOf("unhandled action %d", action);
 } 
 
 extern "C" void Java_com_lucidfusionlabs_app_Activity_Fling(JNIEnv *e, jclass c, jfloat x, jfloat y, jfloat vx, jfloat vy) {
-  int dpind = y < LFL::screen->width/2;
-  LFL::screen->gesture_dpad_dx[dpind] = vx;
-  LFL::screen->gesture_dpad_dy[dpind] = vy;
-  INFOf("fling(%f, %f) = %d of (%d, %d) and vel = (%f, %f)", x, y, dpind, LFL::screen->width, LFL::screen->height, vx, vy);
+  int dpind = y < screen->width/2;
+  screen->gesture_dpad_dx[dpind] = vx;
+  screen->gesture_dpad_dy[dpind] = vy;
+  INFOf("fling(%f, %f) = %d of (%d, %d) and vel = (%f, %f)", x, y, dpind, screen->width, screen->height, vx, vy);
 }
 
 extern "C" void Java_com_lucidfusionlabs_app_Activity_Scroll(JNIEnv *e, jclass c, jfloat x, jfloat y, jfloat vx, jfloat vy) {
-  LFL::screen->gesture_swipe_up = LFL::screen->gesture_swipe_down = 0;
+  screen->gesture_swipe_up = screen->gesture_swipe_down = 0;
 }
 
 extern "C" void Java_com_lucidfusionlabs_app_Activity_Accel(JNIEnv *e, jclass c, jfloat x, jfloat y, jfloat z) {}

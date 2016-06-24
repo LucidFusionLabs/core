@@ -105,7 +105,7 @@ class QtWindow : public QWindow {
     QWindow::resizeEvent(ev);
     if (!init) return; 
     LFL::app->MakeCurrentWindow(lfl_window);
-    LFL::screen->Reshaped(ev->size().width(), ev->size().height());
+    LFL::screen->Reshaped(Box(ev->size().width(), ev->size().height()));
     RequestRender();
   }
 
@@ -221,8 +221,8 @@ int Video::Swap() {
 }
 
 void Application::LoseFocus() {}
-void Application::GrabMouseFocus()    { GetTyped<QtWindow*>(screen->impl)->grabbed=1; GetTyped<QWindow*>(screen->id)->setCursor(Qt::BlankCursor); app->grab_mode.On();  screen->cursor_grabbed=true;  }
-void Application::ReleaseMouseFocus() { GetTyped<QtWindow*>(screen->impl)->grabbed=0; GetTyped<QWindow*>(screen->id)->unsetCursor();              app->grab_mode.Off(); screen->cursor_grabbed=false; }
+void Application::GrabMouseFocus()    { GetTyped<QtWindow*>(screen->impl)->grabbed=1; GetTyped<QWindow*>(screen->id)->setCursor(Qt::BlankCursor); screen->grab_mode.On();  screen->cursor_grabbed=true;  }
+void Application::ReleaseMouseFocus() { GetTyped<QtWindow*>(screen->impl)->grabbed=0; GetTyped<QWindow*>(screen->id)->unsetCursor();              screen->grab_mode.Off(); screen->cursor_grabbed=false; }
 void Application::OpenTouchKeyboard() {}
 void Application::SetTouchKeyboardTiled(bool v) {}
 
@@ -262,7 +262,7 @@ void Dialog::MessageBox(const string &n) {
 #endif
 
 extern "C" int main(int argc, const char *argv[]) {
-  MyAppCreate(arc, argv);
+  MyAppCreate(argc, argv);
   lfl_qapp = new QApplication(argc, const_cast<char**>(argv));
   LFL::screen->gd = LFL::CreateGraphicsDevice(2).release();
   Video::CreateWindow(LFL::screen);

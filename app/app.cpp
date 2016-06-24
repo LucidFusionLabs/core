@@ -687,8 +687,9 @@ int Application::MainLoop() {
 
 void Application::ResetGL() {
   INFO("Application::ResetGL");
-  for (auto &w : windows) w.second->ResetGL();
   fonts->ResetGL();
+  for (auto &a : asset.vec) a.ResetGL();
+  for (auto &w : windows) w.second->ResetGL();
 }
 
 Application::~Application() {
@@ -802,6 +803,7 @@ void Window::Reshaped(const LFL::Box &b) {
 
 void Window::ResetGL() {
   INFO("Window::ResetGL");
+  for (auto b : gd->buffers) *b = -1;
   gd->Init(Box());
   for (auto &g : gui    ) g->ResetGL();
   for (auto &g : dialogs) g->ResetGL();

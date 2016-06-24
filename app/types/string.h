@@ -613,6 +613,7 @@ struct Regex {
   Regex(const Regex&);
   Regex(const string &pattern);
   Regex(Regex &&x) : impl(x.impl) { x.impl=0; }
+  Regex& operator=(Regex &&x) { impl=x.impl; x.impl=0; return *this; }
   Result MatchOne(const StringPiece &text);
   Result MatchOne(const String16Piece &text);
 };

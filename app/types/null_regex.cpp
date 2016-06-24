@@ -19,6 +19,7 @@
 namespace LFL {
 Regex::~Regex() {}
 Regex::Regex(const string &patternstr) {}
-int Regex::Match(const string &text, vector<Regex::Result> *out) { return ERRORv(0, "regex not implemented"); }
+Regex::Result Regex::MatchOne(const StringPiece&)   { return ERRORv(Regex::Result(), "regex not implemented"); }
+Regex::Result Regex::MatchOne(const String16Piece&) { return ERRORv(Regex::Result(), "regex not implemented"); }
 
 }; // namespace LFL

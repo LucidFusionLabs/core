@@ -88,10 +88,7 @@ DEFINE_int   (UseTransition,         1,           "Use transition probabilities 
 DEFINE_string(UttPathsInFile,        "",          "Viterbi paths input file");
 DEFINE_string(UttPathsOutFile,       "",          "Viterbi paths output file");
 
-AssetMap asset;
-SoundAssetMap soundasset;
-
-void MyResynth(const vector<string> &args) { SoundAsset *sa=soundasset(args.size()?args[0]:"snap"); if (sa) { Resynthesize(app->audio.get(), sa); } }
+void MyResynth(const vector<string> &args) { SoundAsset *sa=app->soundasset(args.size()?args[0]:"snap"); if (sa) { Resynthesize(app->audio.get(), sa); } }
 
 struct Wav2Features {
   enum Target { File, Archive };
@@ -901,28 +898,28 @@ struct Wav2Segments {
 }; // namespace LFL
 using namespace LFL;
 
-extern "C" void MyAppCreate() {
+extern "C" void MyAppCreate(int argc, const char* const* argv) {
   FLAGS_enable_audio = FLAGS_enable_video = FLAGS_enable_input = FLAGS_visualize;
 #ifdef _WIN32
   open_console = 1;
 #endif
-  app = new Application();
+  app = new Application(argc, argv);
   screen = new Window();
   app->name = "trainer";
 }
 
-extern "C" int MyAppMain(int argc, const char* const* argv) {
-  if (app->Create(argc, argv, __FILE__)) return -1;
+extern "C" int MyAppMain() {
+  if (app->Create(__FILE__)) return -1;
   INFO("LFL_PHONES=", LFL_PHONES);
   if (app->Init()) return -1;
 
-  asset.Add(Asset("snap", 0, 0, 0, 0, 0, 0, 0, 0));
-  asset.Load();
+  app->asset.Add(Asset("snap", 0, 0, 0, 0, 0, 0, 0, 0));
+  app->asset.Load();
 
-  soundasset.Add(SoundAsset("snap", 0, new RingSampler(FLAGS_sample_rate*FLAGS_sample_secs), 1, FLAGS_sample_rate, FLAGS_sample_secs));
-  soundasset.Load();
+  app->soundasset.Add(SoundAsset("snap", 0, new RingSampler(FLAGS_sample_rate*FLAGS_sample_secs), 1, FLAGS_sample_rate, FLAGS_sample_secs));
+  app->soundasset.Load();
   
-  screen->shell = make_unique<Shell>(&asset, &soundasset, nullptr);
+  screen->shell = make_unique<Shell>();
   BindMap *binds = screen->AddInputController(make_unique<BindMap>());
   binds->Add(Bind(Key::Backquote, Bind::CB(bind([&](){ screen->shell->console(vector<string>()); }))));
   binds->Add(Bind(Key::Escape,    Bind::CB(bind(&Shell::quit,   screen->shell.get(), vector<string>()))));

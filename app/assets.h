@@ -69,6 +69,8 @@ template <class X> struct AssetMapT {
   bool loaded=0;
   vector<X> vec;
   unordered_map<string, X*> amap;
+  virtual ~AssetMapT() {}
+
   template<typename ...Args>
   void Add(Args&& ...args) { CHECK(!loaded); vec.emplace_back(forward<Args>(args)...); }
   void Unloaded(X *a) { if (!a->name.empty()) amap.erase(a->name); }
@@ -76,6 +78,7 @@ template <class X> struct AssetMapT {
   void Load() { CHECK(!loaded); for (int i=0; i<vec.size(); i++) Load(&vec[i]); loaded=1; }
   X *operator()(const string &an) { return FindOrNull(amap, an); }
 };
+
 typedef AssetMapT<     Asset>      AssetMap;
 typedef AssetMapT<SoundAsset> SoundAssetMap;
 typedef AssetMapT<MovieAsset> MovieAssetMap;
@@ -102,6 +105,7 @@ struct Asset {
 
   void Load(void *handle=0, VideoAssetLoader *l=0);
   void Unload();
+  void ResetGL();
 
   static void Load(vector<Asset> *assets) { for (int i=0; i<assets->size(); ++i) (*assets)[i].Load(); }
   static void LoadTexture(         const string &asset_fn, Texture *out, VideoAssetLoader *l=0, int flag=VideoAssetLoader::Flag::Default) { LoadTexture(0, asset_fn, out, l, flag); }

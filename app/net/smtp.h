@@ -41,6 +41,7 @@ struct SMTPClient : public Service {
 
   long long total_connected=0, total_disconnected=0, delivered=0, failed=0;
   map<IPV4::Addr, string> domains; string domain;
+  SMTPClient() : Service("SMTPClient") {}
 
   virtual int Connected(Connection *c) { total_connected++; return 0; }
   string HeloDomain(IPV4::Addr addr) const { return domain.empty() ? FindOrDie(domains, addr) : domain; }

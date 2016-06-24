@@ -28,19 +28,11 @@ struct Shell {
     Command(const string &N, const CB &Cb) : name(N), cb(Cb) {}
   };
   vector<Command> command;
-  AssetMap       *assets;
-  SoundAssetMap  *soundassets;
-  MovieAssetMap  *movieassets;
-  Shell() {}
-  Shell(AssetMap *AM, SoundAssetMap *SAM, MovieAssetMap *MAM);
+  Shell();
 
   template <class... Args> void Add(Args&&... args) { command.emplace_back(forward<Args>(args)...); }
   void AddSceneCommands(Scene *scene);
   void AddBrowserCommands(Browser*);
-
-  Asset      *asset     (const string &n);
-  SoundAsset *soundasset(const string &n);
-  MovieAsset *movieasset(const string &n);
 
   bool FGets();
   void Run(const string &text);

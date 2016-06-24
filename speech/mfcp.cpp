@@ -26,27 +26,26 @@ DEFINE_bool(verify,       false,       "Verify copied matrix file");
 }; // namespace LFL
 using namespace LFL;
 
-extern "C" void MyAppCreate() {
+extern "C" void MyAppCreate(int argc, const char* const* argv) {
 #ifdef _WIN32
   FLAGS_open_console = 1;
 #endif
-  app = new Application();
+  app = new Application(argc, argv);
   screen = new Window();
 }
 
-extern "C" int MyAppMain(int argc, const char* const* argv) {
+extern "C" int MyAppMain() {
   /* lfapp init */
-  int ac=1; const char *av[] = { "" };
-  if (app->Create(ac, av, __FILE__)) return -1;
+  if (app->Create(__FILE__)) return -1;
   if (app->Init()) return -1;
 
   /* app init */
-  if (argc<2) { INFO(argv[0], " <file.matrix> [file.matbin]"); return -1; }
-  const char *in=argv[1], *out=argc>2 ? argv[2] : 0;
+  if (app->argc<2) { INFO(app->argv[0], " <file.matrix> [file.matbin]"); return -1; }
+  const char *in=app->argv[1], *out=app->argc>2 ? app->argv[2] : 0;
 
   if (!out) {
-    static string prefix=".matrix", filename=argv[1];
-    if (!SuffixMatch(filename, prefix, false)) { ERROR("unrecognized input filename: ", filename); return -1; }
+    static string prefix=".matrix", filename=app->argv[1];
+    if (!SuffixMatch(filename, prefix, false)) return ERRORv(-1, "unrecognized input filename: ", filename);
     filename = filename.substr(0, filename.size() - prefix.size()) + ".matbin";
     out = filename.c_str();
   }
@@ -55,28 +54,28 @@ extern "C" int MyAppMain(int argc, const char* const* argv) {
     /* read input */
     INFO("input = ", in);
     MatrixFile mf;
-    if (mf.Read(in)) { ERROR("read: ", in); return -1; }
+    if (mf.Read(in)) return ERRORv(-1, "read: ", in);
 
     /* write output */
     INFO("output = ", out);
-    if (mf.WriteBinary(out, BaseName(out))) { ERROR("write ", out); return -1; }
+    if (mf.WriteBinary(out, BaseName(out))) return ERRORv(-1, "write ", out);
   }
   else {
     /* open input */
     INFO("input = ", in);
     LocalFileLineIter lfi(in);
-    if (!lfi.f.Opened()) { ERROR("FileWordIter: ", in); return -1; }
+    if (!lfi.f.Opened()) return ERRORv(-1, "FileWordIter: ", in);
     IterWordIter word(&lfi);
 
     string hdr;
-    if (MatrixFile::ReadHeader(&word, &hdr) < 0) { ERROR("readHeader: ", -1); return -1; }
+    if (MatrixFile::ReadHeader(&word, &hdr) < 0) return ERRORv(-1, "readHeader: ", -1);
     int M=atof(word.NextString()), N=atof(word.NextString()), ret;
 
     /* open output */
     INFO("output = ", out);
     LocalFile file(out, "w");
-    if (!file.Opened()) { ERROR("LocalFile: ", strerror(errno)); return -1;  }
-    if (MatrixFile::WriteBinaryHeader(&file, BaseName(out), hdr.c_str(), M, N) < 0) { ERROR("writeBinaryHeader: ", -1); return -1; }
+    if (!file.Opened()) return ERRORv(-1, "LocalFile: ", strerror(errno));
+    if (MatrixFile::WriteBinaryHeader(&file, BaseName(out), hdr.c_str(), M, N) < 0) return ERRORv(-1, "writeBinaryHeader: ", -1);
 
     /* read & write */
     double *row = (double *)alloca(N*sizeof(double));
@@ -88,15 +87,15 @@ extern "C" int MyAppMain(int argc, const char* const* argv) {
 
   if (FLAGS_verify) {
     MatrixFile mf;
-    if (mf.Read(in)) { ERROR("read: ", in); return -1; }
+    if (mf.Read(in)) return ERRORv(-1, "read: ", in);
 
     MatrixFile nf;
-    if (nf.ReadBinary(out)) { ERROR("read_binary: ", out); return -1; }
+    if (nf.ReadBinary(out)) return ERRORv(-1, "read_binary: ", out);
 
     if (mf.H != nf.H) ERROR("mismatching text '", mf.H, "' != '", nf.H, "'");
 
     Matrix *A=mf.F, *B=nf.F;
-    if (A->M != B->M || A->N != B->N) { ERROR("dim mismatch ", A->M, " != ", B->M, " || ", A->N, " != ", B->N); return -1; }
+    if (A->M != B->M || A->N != B->N) return ERRORv(-1, "dim mismatch ", A->M, " != ", B->M, " || ", A->N, " != ", B->N);
 
     MatrixIter(A) {
       if (A->row(i)[j] - B->row(i)[j] > 1e-6) ERROR("val mismatch (", i, ", ", j, ") ", A->row(i)[j], " != ", B->row(i)[j]);

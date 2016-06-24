@@ -86,6 +86,13 @@ void Asset::Unload() {
   if (hull)     { delete hull;     hull     = 0; }
 }
 
+void Asset::ResetGL() {
+  if (!texture.empty()) {
+    tex.ID = 0;
+    LoadTexture(nullptr, texture, &tex, nullptr);
+  } 
+}
+
 void Asset::Load(void *h, VideoAssetLoader *l) {
   static int next_asset_type_id = 1, next_list_id = 1;
   if (!name.empty()) typeID = next_asset_type_id++;
@@ -201,7 +208,7 @@ int MovieAsset::Play(int seek) {
 /* asset impls */
 
 void glLine(GraphicsDevice *gd, const point &p1, const point &p2, const Color *color) {
-  static int verts_ind=-1;
+  static int verts_ind = gd->RegisterBuffer(&verts_ind);
   gd->DisableTexture();
 
   float verts[] = { /*1*/ float(p1.x), float(p1.y), /*2*/ float(p2.x), float(p2.y) };
@@ -212,7 +219,7 @@ void glLine(GraphicsDevice *gd, const point &p1, const point &p2, const Color *c
 }
 
 void glAxis(GraphicsDevice *gd, Asset*, Entity*) {
-  static int vert_id=-1;
+  static int vert_id = gd->RegisterBuffer(&vert_id);
   const float scaleFactor = 1;
   const float range = powf(10, scaleFactor);
   const float step = range/10;
@@ -251,7 +258,7 @@ void glRoom(GraphicsDevice *gd, Asset*, Entity*) {
   gd->DisableNormals();
   gd->DisableTexture();
 
-  static int verts_id=-1;
+  static int verts_id = gd->RegisterBuffer(&verts_id);
   float verts[] = {
     /*1*/ 0,0,0, /*2*/ 0,2,0, /*3*/ 2,0,0,
     /*4*/ 0,0,2, /*5*/ 0,2,0, /*6*/ 0,0,0,
@@ -308,14 +315,14 @@ void BoxOutline::Draw(GraphicsContext *gc, const LFL::Box &b) const {
   gc->gd->DisableTexture();
   int line_width = gc->attr ? gc->attr->line_width : 1;
   if (line_width <= 1) {
-    static int verts_ind = -1;
+    static int verts_ind = gc->gd->RegisterBuffer(&verts_ind);
     float verts[] = { /*1*/ float(b.x),     float(b.y),     /*2*/ float(b.x),     float(b.y+b.h),
                       /*3*/ float(b.x+b.w), float(b.y+b.h), /*4*/ float(b.x+b.w), float(b.y) };
     gc->gd->VertexPointer(2, GraphicsDevice::Float, 0, 0, verts, sizeof(verts), &verts_ind, true);
     gc->gd->DrawArrays(GraphicsDevice::LineLoop, 0, 4);
   } else {
+    static int verts_ind = gc->gd->RegisterBuffer(&verts_ind);
     int lw = line_width-1;
-    static int verts_ind = -1;
     float verts[] = {
       /*1.1*/ float(b.x-lw),     float(b.y-lw),     /*1.2*/ float(b.x-lw),     float(b.y+b.h+lw),
       /*1.4*/ float(b.x),        float(b.y),        /*1.3*/ float(b.x),        float(b.y+b.h),
@@ -335,14 +342,14 @@ void BoxTopLeftOutline::Draw(GraphicsContext *gc, const LFL::Box &b) const {
   gc->gd->DisableTexture();
   int line_width = gc->attr ? gc->attr->line_width : 1;
   if (line_width <= 1) {
-    static int verts_ind = -1;
+    static int verts_ind = gc->gd->RegisterBuffer(&verts_ind);
     float verts[] = { /*1*/ float(b.x), float(b.y),     /*2*/ float(b.x),     float(b.y+b.h),
                       /*2*/ float(b.x), float(b.y+b.h), /*3*/ float(b.x+b.w), float(b.y+b.h) };
     gc->gd->VertexPointer(2, GraphicsDevice::Float, 0, 0, verts, sizeof(verts), &verts_ind, true);
     gc->gd->DrawArrays(GraphicsDevice::Lines, 0, 4);
   } else {
+    static int verts_ind = gc->gd->RegisterBuffer(&verts_ind);
     int lw = line_width-1;
-    static int verts_ind = -1;
     float verts[] = {
       /*1.1*/ float(b.x-lw),     float(b.y-lw),     /*1.2*/ float(b.x-lw),     float(b.y+b.h+lw),
       /*1.4*/ float(b.x),        float(b.y),        /*1.3*/ float(b.x),        float(b.y+b.h),
@@ -358,14 +365,14 @@ void BoxBottomRightOutline::Draw(GraphicsContext *gc, const LFL::Box &b) const {
   gc->gd->DisableTexture();
   int line_width = gc->attr ? gc->attr->line_width : 1;
   if (line_width <= 1) {
-    static int verts_ind = -1;
+    static int verts_ind = gc->gd->RegisterBuffer(&verts_ind);
     float verts[] = { /*1*/ float(b.x),     float(b.y), /*4*/ float(b.x+b.w), float(b.y),
                       /*4*/ float(b.x+b.w), float(b.y), /*3*/ float(b.x+b.w), float(b.y+b.h) };
     gc->gd->VertexPointer(2, GraphicsDevice::Float, 0, 0, verts, sizeof(verts), &verts_ind, true);
     gc->gd->DrawArrays(GraphicsDevice::Lines, 0, 4);
   } else {
+    static int verts_ind = gc->gd->RegisterBuffer(&verts_ind);
     int lw = line_width-1;
-    static int verts_ind = -1;
     float verts[] = {
       /*3.3*/ float(b.x+b.w+lw), float(b.y+b.h+lw), /*3.4*/ float(b.x+b.w+lw), float(b.y-lw),
       /*3.2*/ float(b.x+b.w),    float(b.y+b.h),    /*3.1*/ float(b.x+b.w),    float(b.y),

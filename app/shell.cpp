@@ -22,7 +22,7 @@
 #include "core/web/document.h"
 
 namespace LFL {
-Shell::Shell(AssetMap *AM, SoundAssetMap *SAM, MovieAssetMap *MAM) : assets(AM), soundassets(SAM), movieassets(MAM) {
+Shell::Shell() {
   command.emplace_back("quit",         bind(&Shell::quit,          this, _1));
   command.emplace_back("console",      bind(&Shell::console,       this, _1));
   command.emplace_back("cmds",         bind(&Shell::cmds,          this, _1));
@@ -56,10 +56,6 @@ Shell::Shell(AssetMap *AM, SoundAssetMap *SAM, MovieAssetMap *MAM) : assets(AM),
   command.emplace_back("edit",         bind(&Shell::Edit,          this, _1));
   command.emplace_back("slider",       bind(&Shell::Slider,        this, _1));
 }
-
-Asset      *Shell::asset     (const string &n) { return assets      ? (*     assets)(n) : 0; }
-SoundAsset *Shell::soundasset(const string &n) { return soundassets ? (*soundassets)(n) : 0; }
-MovieAsset *Shell::movieasset(const string &n) { return movieassets ? (*movieassets)(n) : 0; }
 
 bool Shell::FGets() {
   char buf[1024];
@@ -141,8 +137,8 @@ void Shell::texmode(const vector<string>&) { if (screen->tex_mode.Next()) screen
 void Shell::swapaxis(const vector<string>&) { screen->SwapAxis(); }
 
 void Shell::snap(const vector<string> &arg) {
-  Asset      *a  = asset     (arg.size() ? arg[0] : "snap"); 
-  SoundAsset *sa = soundasset(arg.size() ? arg[0] : "snap");
+  Asset      *a  = app->asset     (arg.size() ? arg[0] : "snap"); 
+  SoundAsset *sa = app->soundasset(arg.size() ? arg[0] : "snap");
   if (a && sa) {
     app->audio->Snapshot(sa);
     RingSampler::Handle H(sa->wav.get());
@@ -151,14 +147,14 @@ void Shell::snap(const vector<string> &arg) {
 }
 
 void Shell::play(const vector<string> &arg) {
-  SoundAsset *sa     = arg.size() > 0 ? soundasset(arg[0]) : soundasset("snap");
-  int         offset = arg.size() > 1 ?       atoi(arg[1]) : -1;
-  int         len    = arg.size() > 2 ?       atoi(arg[2]) : -1;
+  SoundAsset *sa     = arg.size() > 0 ? app->soundasset(arg[0]) : app->soundasset("snap");
+  int         offset = arg.size() > 1 ?            atoi(arg[1]) : -1;
+  int         len    = arg.size() > 2 ?            atoi(arg[2]) : -1;
   if (sa) app->audio->QueueMix(sa, MixFlag::Reset, offset, len);
 }
 
 void Shell::playmovie(const vector<string> &arg) {
-  MovieAsset *ma = arg.size() ? movieasset(arg[0]) : 0;
+  MovieAsset *ma = arg.size() ? app->movieasset(arg[0]) : 0;
   if (ma) ma->Play(0);
 }
 
@@ -185,8 +181,8 @@ void Shell::loadmovie(const vector<string> &arg) {
 
 void Shell::copy(const vector<string> &arg) {
   SoundAsset *src = 0, *dst = 0;
-  if (!(src = soundasset(arg.size() > 0 ? arg[0] : "")) ||
-      !(dst = soundasset(arg.size() > 1 ? arg[1] : ""))) { INFO("copy <src> <dst>"); return; }
+  if (!(src = app->soundasset(arg.size() > 0 ? arg[0] : "")) ||
+      !(dst = app->soundasset(arg.size() > 1 ? arg[1] : ""))) { INFO("copy <src> <dst>"); return; }
 
   INFOf("copy %s %d %d %d %s %d %d %d",
         src->name.c_str(), src->sample_rate, src->channels, src->seconds,
@@ -201,7 +197,7 @@ void shell_filter(const vector<string> &arg, bool FFTfilter, int taps, int hop=0
   SoundAsset *sa=0;
   double cutoff=0;
 
-  if (arg.size() > 0) sa     = screen->shell->soundasset(arg[0]);
+  if (arg.size() > 0) sa     = app->soundasset(arg[0]);
   if (arg.size() > 2) cutoff = atof(arg[2]);
   if (arg.size() > 1) {
     filter.resize(taps);
@@ -251,7 +247,7 @@ void Shell::fftfilter(const vector<string> &arg) { shell_filter(arg, true, 512, 
 void Shell::f0(const vector<string> &arg) {
   SoundAsset *sa=0; int offset=0; int method=F0EstmMethod::Default;
 
-  if (arg.size() > 0) sa = soundasset(arg[0]);
+  if (arg.size() > 0) sa = app->soundasset(arg[0]);
   if (arg.size() > 1) offset = atoi(arg[1]);
   if (arg.size() > 2) method = atoi(arg[2]);
 
@@ -283,7 +279,7 @@ void Shell::sinth(const vector<string> &a) {
 }
 
 void Shell::writesnap(const vector<string> &a) {
-  SoundAsset *sa = soundasset(a.size() ? a[0] : "snap");
+  SoundAsset *sa = app->soundasset(a.size() ? a[0] : "snap");
   if (sa) {
     string filename = StrCat(LFAppDownloadDir(), "snap.wav"); 
     RingSampler::Handle B(sa->wav.get());

@@ -1353,7 +1353,7 @@ void Decoder::VisualizeFeatures(AcousticModel::Compiled *model, Matrix *MFCC, Ma
   RingSampler::Handle B = RingSampler::Handle(sa.wav.get());
 
   Matrix *spect = Spectogram(&B, 0, FLAGS_feat_window, FLAGS_feat_hop, FLAGS_feat_window, vector<double>(), PowerDomain::dB);
-  Asset *snap = screen->shell->asset("snap");
+  Asset *snap = app->asset("snap");
   glSpectogram(screen->gd, spect, &snap->tex, 0);
   delete spect;
 
@@ -1366,7 +1366,7 @@ void Decoder::VisualizeFeatures(AcousticModel::Compiled *model, Matrix *MFCC, Ma
     app->HandleEvents(app->frame_time.GetTime(true).count());
 
     screen->gd->DrawMode(DrawMode::_2D);
-    screen->shell->asset("snap")->tex.Draw(&gc, wcc); // 4);
+    app->asset("snap")->tex.Draw(&gc, wcc); // 4);
 
     int levels=10;
     float percent = 1-float(app->audio->Out.size())/app->audio->outlast;

@@ -454,7 +454,8 @@ struct GraphicsDevice {
   m44 invview_matrix, model_matrix;
   Color clear_color = Color::black;
   vector<Color> default_color;
-  vector<vector<Box> > scissor_stack;
+  vector<vector<Box>> scissor_stack;
+  vector<int*> buffers;
 
   GraphicsDevice() : scissor_stack(1) {}
   virtual ~GraphicsDevice() {}
@@ -562,6 +563,7 @@ struct GraphicsDevice {
 
   void DelTexture(unsigned id) { DelTextures(1, &id); }
   int TextureDim(int x) { return have_npot_textures ? x : NextPowerOfTwo(x); }
+  int RegisterBuffer(int *b) { buffers.push_back(b); return -1; }
   void FillColor(const Color &c) { DisableTexture(); SetColor(c); };
   void SetColor(const Color &c) { Color4f(c.r(), c.g(), c.b(), c.a()); }
   void PushColor(const Color &c) { PushColor(); SetColor(c); }

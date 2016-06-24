@@ -36,16 +36,16 @@ void Path(AcousticModel::Compiled *, Matrix *viterbi, double vprob, Time vtime, 
 }; // namespace LFL
 using namespace LFL;
 
-extern "C" void MyAppCreate() {
+extern "C" void MyAppCreate(int argc, const char* const* argv) {
 #ifdef _WIN32
   open_console = 1;
 #endif
-  app = new Application();
+  app = new Application(argc, argv);
   screen = new Window();
 }
 
-extern "C" int MyAppMain(int argc, const char* const* argv) {
-  if (app->Create(argc, argv, __FILE__)) return -1;
+extern "C" int MyAppMain() {
+  if (app->Create(__FILE__)) return -1;
   if (app->Init()) return -1;
 
   string modeldir = StrCat(FLAGS_homedir, "/", FLAGS_ModelDir, "/");
@@ -58,7 +58,7 @@ extern "C" int MyAppMain(int argc, const char* const* argv) {
   if (FLAGS_vp) {
     FLAGS_loglevel = LFApp::Log::Debug;
     MatrixArchiveInputFile ViterbiPathsIn;
-    ViterbiPathsIn.Open(argv[1]);
+    ViterbiPathsIn.Open(app->argv[1]);
 
     int count = PathCorpus::PathIter(featdir.c_str(), &ViterbiPathsIn, bind(&Path, _1, _2, _3, _4, _5, _6, _7));
     INFO(count, " paths");

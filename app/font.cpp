@@ -437,12 +437,11 @@ void Fonts::ResetGL() {
       if (!f->glyph->cache->tex.ID) ERROR("Reset font failed");
     } else maps.insert(f->glyph.get());
   }
-  for (auto m : maps) {
-    for (auto &g : m->table) g.       ready = 0;
-    for (auto &g : m->index) g.second.ready = 0;
-    if (auto c = m->cache.get()) caches.insert(c);
+  for (auto m : maps) if (auto c = m->cache.get()) caches.insert(c);
+  for (auto c : caches) {
+    c->tex.owner = false;
+    c->Clear();
   }
-  for (auto c : caches) {}
 }
 
 void Fonts::LoadDefaultFonts() {

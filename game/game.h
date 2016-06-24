@@ -534,7 +534,7 @@ struct GameClient {
   Entity *WorldAddEntity(int id) { return world->Add(id, new Entity()); }
   void WorldAddEntityFinish(Entity *e, int type) {
     CHECK(!e->asset);
-    world->scene->ChangeAsset(e, screen->shell->asset(assets[type]));
+    world->scene->ChangeAsset(e, app->asset(assets[type]));
     NewEntityCB(e);
   }
 

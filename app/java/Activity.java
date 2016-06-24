@@ -28,7 +28,7 @@ public class Activity extends android.app.Activity {
     
     public static native void Create(Object activity);
     public static native void Main(Object activity);
-    public static native void MainLoop(Object activity);
+    public static native void NewMainLoop(Object activity, boolean reset);
     public static native void Minimize();
     public static native void Reshaped(int x, int y, int w, int h);
     public static native void KeyPress(int upordonw, int keycode);
@@ -85,8 +85,7 @@ public class Activity extends android.app.Activity {
 
                 int actionbar_h = action_bar == null ? 0 : action_bar.getHeight();
                 int h = r.bottom - r.top - actionbar_h;
-                Log.i("lfl", "onGlobalLayout(" + r.left + ", " + r.top + ", " + r.right + ", " + r.bottom
-                      + ", " + actionbar_h + ") = " + h);
+                // Log.i("lfl", "onGlobalLayout(" + r.left + ", " + r.top + ", " + r.right + ", " + r.bottom + ", " + actionbar_h + ") = " + h);
                 Reshaped(r.left, surface_height - h, r.right - r.left, h); 
             }});
     }
@@ -128,8 +127,10 @@ public class Activity extends android.app.Activity {
 
     @Override
     public void onResume() {
-        Log.i("lfl", "Activity.onResume()");
+        boolean have_surface = view.have_surface, thread_exists = thread != null;
+        Log.i("lfl", "Activity.onResume() have_surface=" + have_surface + " thread_exists=" + thread_exists);
         super.onResume();
+        if (have_surface && !thread_exists) startRenderThread(false);
     }
 
     @Override
@@ -150,13 +151,19 @@ public class Activity extends android.app.Activity {
         surface_width = width;
         surface_height = height;
         boolean thread_exists = thread != null;
-        Log.i("lfl", "surfaceChanged init= " + init + ", thread_exists=" + thread_exists);
+        Log.i("lfl", "surfaceChanged thread_exists=" + thread_exists);
         Reshaped(0, 0, width, height);
         if (thread_exists) return;
-        if (!init) thread = new Thread(new Runnable() { public void run() { view.initEGL(); Main    (Activity.instance); } }, "JNIMainThread");
-        else       thread = new Thread(new Runnable() { public void run() { view.initEGL(); MainLoop(Activity.instance); } }, "JNIMainThread");
+        // if (!init) discard_next_global_layout = true;
+        startRenderThread(true);
+    }
+
+    void startRenderThread(boolean reset) {
+        Log.i("lfl", "startRenderThread init= " + init);
+        if      (!init) thread = new Thread(new Runnable() { public void run() { view.initEGL();        Main       (Activity.instance);        } }, "JNIMainThread");
+        else if (reset) thread = new Thread(new Runnable() { public void run() { view.initEGL();        NewMainLoop(Activity.instance, true);  } }, "JNIMainThread");
+        else            thread = new Thread(new Runnable() { public void run() { view.makeCurrentEGL(); NewMainLoop(Activity.instance, false); } }, "JNIMainThread");
         thread.start();
-        if (!init) discard_next_global_layout = true;
         init = true;
     }
 
@@ -275,12 +282,12 @@ class MyGestureListener extends android.view.GestureDetector.SimpleOnGestureList
 }
 
 class GameView extends android.view.SurfaceView implements SurfaceHolder.Callback, View.OnKeyListener, View.OnTouchListener, SensorEventListener {
-
     public EGLContext egl_context;
     public EGLSurface egl_surface;
     public EGLDisplay egl_display;
     public GestureDetector gesture;
     public SensorManager sensor;
+    public boolean have_surface;
 
     public GameView(Activity activity, Context context) {
         super(context);
@@ -302,6 +309,7 @@ class GameView extends android.view.SurfaceView implements SurfaceHolder.Callbac
     public void surfaceCreated(SurfaceHolder holder) {
         Log.i("lfl", "GameView.surfaceCreated()");
         sensor.registerListener(this, sensor.getDefaultSensor(Sensor.TYPE_ACCELEROMETER), SensorManager.SENSOR_DELAY_GAME, null);
+        have_surface = true;
     }
 
     public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
@@ -312,6 +320,7 @@ class GameView extends android.view.SurfaceView implements SurfaceHolder.Callbac
     public void surfaceDestroyed(SurfaceHolder holder) {
         Log.i("lfl", "surfaceDestroyed()");
         sensor.unregisterListener(this, sensor.getDefaultSensor(Sensor.TYPE_ACCELEROMETER));
+        have_surface = false;
     }
 
     public void onSensorChanged(SensorEvent event) {
@@ -392,13 +401,21 @@ class GameView extends android.view.SurfaceView implements SurfaceHolder.Callbac
             if ((egl_context = egl.eglCreateContext(egl_display, configs[0], EGL10.EGL_NO_CONTEXT, context_attrib)) == EGL10.EGL_NO_CONTEXT) throw new Exception("eglCreateContext");
             if ((egl_surface = egl.eglCreateWindowSurface(egl_display, configs[0], this, null)) == EGL10.EGL_NO_SURFACE) throw new Exception("eglCreateWindowSurface");
             if (!egl.eglMakeCurrent(egl_display, egl_surface, egl_surface, egl_context)) throw new Exception("eglMakeCurrent");
+            makeCurrentEGL();
         } catch(Exception e) {
             Log.e("lfl", e.toString());
             for (StackTraceElement ste : e.getStackTrace()) Log.e("lfl", ste.toString());
-            egl_context = null; egl_surface = null; egl_display = null;
+            egl_context = null;
+            egl_surface = null;
+            egl_display = null;
             return false;
         }
         return true;
+    }
+
+    public void makeCurrentEGL() {
+        EGL10 egl = (EGL10)EGLContext.getEGL();
+        egl.eglMakeCurrent(egl_display, egl_surface, egl_surface, egl_context);
     }
 
     public void swapEGL() {

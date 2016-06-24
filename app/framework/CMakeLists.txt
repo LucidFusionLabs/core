@@ -58,7 +58,7 @@ if(LFL_QT)
   lfl_enable_qt()
   set(CMAKE_AUTOMOC ON)
   lfl_add_target(app_qt_framework STATIC_LIBRARY SOURCES qt_framework.cpp
-                 INCLUDE_DIRECTORIES ${QT_INCLUDE} LINK_LIBRARIES ${QT_LIB})
+                 INCLUDE_DIRECTORIES ${QT_INCLUDE} ${CMAKE_CURRENT_BINARY_DIR} LINK_LIBRARIES ${QT_LIB})
   set(CMAKE_AUTOMOC OFF)
 endif()
 

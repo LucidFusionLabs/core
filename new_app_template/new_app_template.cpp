@@ -23,25 +23,20 @@
 #include "core/app/gui.h"
 
 namespace LFL {
-struct MyAppState {
-  AssetMap asset;
-  SoundAssetMap soundasset;
-} *my_app;
-
 struct MyGUI : public GUI {
   Scene scene;
-  MyGUI() {
-    scene.Add(new Entity("axis",  my_app->asset("axis")));
-    scene.Add(new Entity("grid",  my_app->asset("grid")));
-    scene.Add(new Entity("room",  my_app->asset("room")));
-    scene.Add(new Entity("arrow", my_app->asset("arrow"), v3(1, .24, 1)));
+  MyGUI(Window *W) : GUI(W) {
+    scene.Add(new Entity("axis",  app->asset("axis")));
+    scene.Add(new Entity("grid",  app->asset("grid")));
+    scene.Add(new Entity("room",  app->asset("room")));
+    scene.Add(new Entity("arrow", app->asset("arrow"), v3(1, .24, 1)));
   }
 
-  int Frame(LFL::Window *W, unsigned clicks, int flag) {
-    W->cam->Look(W->gd);
+  int Frame(Window *W, unsigned clicks, int flag) {
     W->GetInputController<BindMap>(0)->Repeat(clicks);
+    scene.cam.Look(W->gd);
     scene.Get("arrow")->YawRight(double(clicks));
-    scene.Draw(&my_app->asset.vec);
+    scene.Draw(W->gd, &app->asset.vec);
 
     W->gd->DrawMode(DrawMode::_2D);
     W->DrawDialogs();
@@ -58,54 +53,53 @@ void MyWindowInit(Window *W) {
 }
 
 void MyWindowStart(Window *W) {
-  MyGUI *gui = W->AddGUI(make_unique<MyGUI>());
+  MyGUI *gui = W->AddGUI(make_unique<MyGUI>(W));
   W->frame_cb = bind(&MyGUI::Frame, gui, _1, _2, _3);
-  W->shell = make_unique<Shell>(&my_app->asset, &my_app->soundasset, nullptr);
+  W->shell = make_unique<Shell>();
   if (FLAGS_console) W->InitConsole(Callback());
   BindMap *binds = W->AddInputController(make_unique<BindMap>());
+  binds->move_cb = bind(&Entity::MoveCB, &gui->scene.cam, _1, _2);
   binds->Add(Key::Escape,    Bind::CB(bind(&Shell::quit,     W->shell.get(), vector<string>())));
   binds->Add(Key::Return,    Bind::CB(bind(&Shell::grabmode, W->shell.get(), vector<string>())));
   binds->Add(Key::Backquote, Bind::CB(bind(&Shell::console,  W->shell.get(), vector<string>())));
   binds->Add(Key::Quote,     Bind::CB(bind(&Shell::console,  W->shell.get(), vector<string>())));
-  binds->Add(Key::LeftShift, Bind::TimeCB(bind(&Entity::RollLeft,   W->cam.get(), _1)));
-  binds->Add(Key::Space,     Bind::TimeCB(bind(&Entity::RollRight,  W->cam.get(), _1)));
-  binds->Add('w',            Bind::TimeCB(bind(&Entity::MoveFwd,    W->cam.get(), _1)));
-  binds->Add('s',            Bind::TimeCB(bind(&Entity::MoveRev,    W->cam.get(), _1)));
-  binds->Add('a',            Bind::TimeCB(bind(&Entity::MoveLeft,   W->cam.get(), _1)));
-  binds->Add('d',            Bind::TimeCB(bind(&Entity::MoveRight,  W->cam.get(), _1)));
-  binds->Add('q',            Bind::TimeCB(bind(&Entity::MoveDown,   W->cam.get(), _1)));
-  binds->Add('e',            Bind::TimeCB(bind(&Entity::MoveUp,     W->cam.get(), _1)));
+  binds->Add(Key::LeftShift, Bind::TimeCB(bind(&Entity::RollLeft,  &gui->scene.cam, _1)));
+  binds->Add(Key::Space,     Bind::TimeCB(bind(&Entity::RollRight, &gui->scene.cam, _1)));
+  binds->Add('w',            Bind::TimeCB(bind(&Entity::MoveFwd,   &gui->scene.cam, _1)));
+  binds->Add('s',            Bind::TimeCB(bind(&Entity::MoveRev,   &gui->scene.cam, _1)));
+  binds->Add('a',            Bind::TimeCB(bind(&Entity::MoveLeft,  &gui->scene.cam, _1)));
+  binds->Add('d',            Bind::TimeCB(bind(&Entity::MoveRight, &gui->scene.cam, _1)));
+  binds->Add('q',            Bind::TimeCB(bind(&Entity::MoveDown,  &gui->scene.cam, _1)));
+  binds->Add('e',            Bind::TimeCB(bind(&Entity::MoveUp,    &gui->scene.cam, _1)));
 }
 
 }; // namespace LFL
 using namespace LFL;
 
-extern "C" void MyAppCreate() {
+extern "C" void MyAppCreate(int argc, const char* const* argv) {
   FLAGS_target_fps = 30;
   FLAGS_font_engine = "atlas";
   FLAGS_font = FLAGS_console_font = "Nobile.ttf";
   FLAGS_font_flag = FLAGS_console_font_flag = 0;
   FLAGS_enable_audio = FLAGS_enable_video = FLAGS_enable_input = FLAGS_console = 1;
-  app = new Application();
+  app = new Application(argc, argv);
   screen = new Window();
-  my_app = new MyAppState();
-  app->exit_cb = [](){ delete my_app; };
+  app->name = "$PKGNAME";
   app->window_start_cb = MyWindowStart;
   app->window_init_cb = MyWindowInit;
   app->window_init_cb(screen);
 }
 
-extern "C" int MyAppMain(int argc, const char* const* argv) {
-  if (app->Create(argc, argv, __FILE__)) return -1;
+extern "C" int MyAppMain() {
+  if (app->Create(__FILE__)) return -1;
   if (app->Init()) return -1;
   screen->gd->default_draw_mode = DrawMode::_3D;
 
-  // my_app->asset.Add(name, texture,  scale, translate, rotate, geometry                  hull
-  my_app->asset.Add("axis",  "",       0,     0,         0,      nullptr,                  nullptr, 0, 0, glAxis  );
-  my_app->asset.Add("grid",  "",       0,     0,         0,      Grid::Grid3D().release(), nullptr, 0, 0          );
-  my_app->asset.Add("room",  "",       0,     0,         0,      nullptr,                  nullptr, 0, 0, glRoom  );
-  my_app->asset.Add("arrow", "",      .005,   1,        -90,     "arrow.obj",              nullptr, 0             );
-  my_app->asset.Load();
+  // app->asset.Add(name, texture,  scale, translate, rotate, geometry                  hull
+  app->asset.Add("grid",  "",       0,     0,         0,      Grid::Grid3D().release(), nullptr, 0, 0          );
+  app->asset.Add("room",  "",       0,     0,         0,      nullptr,                  nullptr, 0, 0, glRoom  );
+  app->asset.Add("arrow", "",      .005,   1,        -90,     "arrow.obj",              nullptr, 0             );
+  app->asset.Load();
 
   app->StartNewWindow(screen);
   return app->Main();
