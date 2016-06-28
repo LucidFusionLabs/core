@@ -209,51 +209,6 @@ string JNI::GetDeviceName() {
   return GetJNIString(ret);
 }
 
-void GPlus::SignIn() {
-  if (jni->gplus) {
-    static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->gplus_class, "signIn", "()V"));
-    jni->env->CallVoidMethod(jni->gplus, mid);
-  } else ERRORf("no gplus %p", jni->gplus);
-}
-
-void GPlus::SignOut() {
-  if (jni->gplus) {
-    static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->gplus_class, "signOut", "()V"));
-    jni->env->CallVoidMethod(jni->gplus, mid);
-  } else ERRORf("no gplus %p", jni->gplus);
-}
-
-int GPlus::GetSignedIn() {
-  if (jni->gplus) {
-    static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->gplus_class, "signedIn", "()Z"));
-    return jni->env->CallBooleanMethod(jni->gplus, mid);
-  } else { ERRORf("no gplus %p", jni->gplus); return 0; }
-}
-
-int GPlus::QuickGame() {
-  if (jni->gplus) {
-    static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->gplus_class, "quickGame", "()V"));
-    jni->env->CallVoidMethod(jni->gplus, mid);
-  } else ERRORf("no gplus %p", jni->gplus);
-  return 0;
-}
-
-int GPlus::Invite() {
-  if (jni->gplus) {
-    static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->gplus_class, "inviteGUI", "()V"));
-    jni->env->CallVoidMethod(jni->gplus, mid);
-  } else ERRORf("no gplus %p", jni->gplus);
-  return 0;
-}
-
-int GPlus::Accept() {
-  if (jni->gplus) {
-    static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->gplus_class, "acceptGUI", "()V"));
-    jni->env->CallVoidMethod(jni->gplus, mid);
-  } else ERRORf("no gplus %p", jni->gplus);
-  return 0;
-}
-
 void Application::CloseWindow(Window *W) {}
 void Application::MakeCurrentWindow(Window *W) {}
 
@@ -371,6 +326,51 @@ void FrameScheduler::DelWaitForeverSocket(Window*, Socket fd) {
   wait_forever_sockets.Del(fd);
 }
 
+void GPlus::SignIn() {
+  if (jni->gplus) {
+    static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->gplus_class, "signIn", "()V"));
+    jni->env->CallVoidMethod(jni->gplus, mid);
+  } else ERRORf("no gplus %p", jni->gplus);
+}
+
+void GPlus::SignOut() {
+  if (jni->gplus) {
+    static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->gplus_class, "signOut", "()V"));
+    jni->env->CallVoidMethod(jni->gplus, mid);
+  } else ERRORf("no gplus %p", jni->gplus);
+}
+
+int GPlus::GetSignedIn() {
+  if (jni->gplus) {
+    static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->gplus_class, "signedIn", "()Z"));
+    return jni->env->CallBooleanMethod(jni->gplus, mid);
+  } else { ERRORf("no gplus %p", jni->gplus); return 0; }
+}
+
+int GPlus::QuickGame() {
+  if (jni->gplus) {
+    static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->gplus_class, "quickGame", "()V"));
+    jni->env->CallVoidMethod(jni->gplus, mid);
+  } else ERRORf("no gplus %p", jni->gplus);
+  return 0;
+}
+
+int GPlus::Invite() {
+  if (jni->gplus) {
+    static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->gplus_class, "inviteGUI", "()V"));
+    jni->env->CallVoidMethod(jni->gplus, mid);
+  } else ERRORf("no gplus %p", jni->gplus);
+  return 0;
+}
+
+int GPlus::Accept() {
+  if (jni->gplus) {
+    static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->gplus_class, "acceptGUI", "()V"));
+    jni->env->CallVoidMethod(jni->gplus, mid);
+  } else ERRORf("no gplus %p", jni->gplus);
+  return 0;
+}
+
 unique_ptr<Module> CreateFrameworkModule() { return make_unique<AndroidFrameworkModule>(); }
 unique_ptr<AssetLoaderInterface> CreateAssetLoader() { return make_unique<AndroidAssetLoader>(); }
 
@@ -438,8 +438,8 @@ extern "C" void Java_com_lucidfusionlabs_app_Activity_Touch(JNIEnv *e, jclass c,
   static float lx[2]={0,0}, ly[2]={0,0};
   int dpind = (/*FLAGS_swap_axis*/ 0) ? y < screen->width/2 : x < screen->width/2;
   if (action == AndroidEvent::ACTION_DOWN || action == AndroidEvent::ACTION_POINTER_DOWN) {
-    // INFOf("%d down %f, %f", dpind, x, y);
-    QueueMouseClick(1, 1, (int)x, screen->height - (int)y);
+    // INFOf("%d down %f, %f", dpind, x, screen->height - y);
+    QueueMouseClick(1, 1, screen->x + x, screen->y + screen->height - y);
     LFAppWakeup();
     screen->gesture_tap[dpind] = 1;
     screen->gesture_dpad_x[dpind] = x;
@@ -448,14 +448,16 @@ extern "C" void Java_com_lucidfusionlabs_app_Activity_Touch(JNIEnv *e, jclass c,
     ly[dpind] = y;
   } else if (action == AndroidEvent::ACTION_UP || action == AndroidEvent::ACTION_POINTER_UP) {
     // INFOf("%d up %f, %f", dpind, x, y);
-    QueueMouseClick(1, 0, (int)x, screen->height - (int)y);
+    QueueMouseClick(1, 0, screen->x + x, screen->y + screen->height - y);
     LFAppWakeup();
     screen->gesture_dpad_stop[dpind] = 1;
     screen->gesture_dpad_x[dpind] = 0;
     screen->gesture_dpad_y[dpind] = 0;
   } else if (action == AndroidEvent::ACTION_MOVE) {
-    float vx = x - lx[dpind]; lx[dpind] = x;
-    float vy = y - ly[dpind]; ly[dpind] = y;
+    float vx = x - lx[dpind];
+    float vy = y - ly[dpind];
+    lx[dpind] = x;
+    ly[dpind] = y;
     // INFOf("%d move %f, %f vel = %f, %f", dpind, x, y, vx, vy);
     if (vx > 1.5 || vx < -1.5 || vy > 1.5 || vy < -1.5) {
       screen->gesture_dpad_dx[dpind] = vx;

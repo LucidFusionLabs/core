@@ -379,9 +379,9 @@ void TextBox::Line::Layout(Box win, bool flush) {
   data->flow.AppendBoxArrayText(b);
 }
 
-point TextBox::Line::Draw(point pos, int relayout_width, int g_offset, int g_len) {
+point TextBox::Line::Draw(point pos, int relayout_width, int g_offset, int g_len, const Box *scissor) {
   if (relayout_width >= 0) Layout(relayout_width);
-  data->glyphs.Draw(screen->gd, (p = pos), g_offset, g_len);
+  data->glyphs.Draw(screen->gd, (p = pos), g_offset, g_len, scissor);
   return p - point(0, parent->style.font->Height() + data->glyphs.height);
 }
 
@@ -464,9 +464,13 @@ void TextBox::LinesFrameBuffer::PushBackAndUpdateOffset(TextBox::Line *l, int lo
 }
 
 point TextBox::LinesFrameBuffer::Paint(TextBox::Line *l, point lp, const Box &b, int offset, int len) {
-  Scissor scissor(screen->gd, lp.x, lp.y - b.h, b.w, b.h);
-  screen->gd->Clear();
-  l->Draw(lp + b.Position(), -1, offset, len);
+  Box sb(lp.x, lp.y - b.h, b.w, b.h);
+  {
+    ScopedDontClearDeferred dont_clear_deferred(screen->gd);
+    Scissor scissor(screen->gd, sb);
+    screen->gd->Clear();
+  }
+  l->Draw(lp + b.Position(), -1, offset, len, &sb);
   return point(lp.x, lp.y-b.h);
 }
 

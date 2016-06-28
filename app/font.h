@@ -268,7 +268,8 @@ struct Font {
 
 struct FakeFontEngine : public FontEngine {
   static const int size = 10, fixed_width = 8, ascender = 9, descender = 5;
-  static const unsigned char wide_glyph_begin = 0xf0, wide_glyph_end = 0xff;
+  static const char16_t wide_glyph_begin = 0x1FC, wide_glyph_end = 0x1FD;
+  // U+1FC = 'AE'; encoded: c7bc,  U+1FD = 'ae', encoded: c7bd
   FontDesc fake_font_desc;
   Font fake_font;
   FakeFontEngine();

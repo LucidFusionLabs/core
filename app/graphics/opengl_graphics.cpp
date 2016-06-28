@@ -382,6 +382,7 @@ struct OpenGLES2 : public GraphicsDevice, public QOpenGLFunctions {
   void DisableCubeMap()     { if (Changed(&cubemap_on,    false)) { UpdateShader(); }                                                                                 GDDebug("CubeMap=", 0); }
   void BindCubeMap(int n)   { if (Changed(&cubemap_on,    true))  { UpdateShader(); } glUniform1i(shader->uniform_cubetex, 0); glBindTexture(GL_TEXTURE_CUBE_MAP, n); GDDebug("CubeMap=", n); }
   void ActiveTexture(int n) { if (Changed(&bound_texture.l, n))   { ClearDeferred(); glActiveTexture(n ? GL_TEXTURE1 : GL_TEXTURE0); } GDDebug("ActivteTexture=", n); }
+  void SetDontClearDeferred(bool v) { dont_clear_deferred = v; GDDebug("SetDontClearDeferred = ", v); }
   void EnableLight(int n) {}
   void DisableLight(int n) {}
   void TextureGenLinear() {}
@@ -549,11 +550,12 @@ struct OpenGLES2 : public GraphicsDevice, public QOpenGLFunctions {
     else                          UseShader(&app->shaders->shader_default);
   }
 
-  void UpdateColor()  { ClearDeferred(); dirty_color = true; }
-  void UpdateMatrix() { ClearDeferred(); dirty_matrix = true; }
+  void UpdateColor()  { ClearDeferred(); dirty_color = true;  GDDebug("UpdateColor"); }
+  void UpdateMatrix() { ClearDeferred(); dirty_matrix = true; GDDebug("UpdateMatrix"); }
   void UpdateMaterial() {
     ClearDeferred();
     shader->dirty_material = app->shaders->shader_cubenorm.dirty_material = app->shaders->shader_normals.dirty_material = true;
+    GDDebug("UpdateMaterial");
   }
 
   void UpdateVertex() {
@@ -633,6 +635,7 @@ struct OpenGLES2 : public GraphicsDevice, public QOpenGLFunctions {
 
   void ClearDeferred() {
     if (!deferred.vertexbuffer_len) return;
+    if (dont_clear_deferred) { GDDebug("Suppressed ClearDeferred"); return; }
     // INFOf("merged %d %d (type = %d)\n", deferred.draw_calls, deferred.vertexbuffer_len / deferred.vertex_size, deferred.prim_type);
     glDrawArrays(deferred.prim_type, 0, deferred.vertexbuffer_len / deferred.vertex_size);
     deferred.vertexbuffer_len = deferred.draw_calls = 0;

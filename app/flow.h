@@ -79,7 +79,7 @@ struct DrawableBoxRun {
   string   DebugString()        const { return StrCat("BoxRun='", Text(), "'"); }
 
   static void DefaultDrawCB(GraphicsContext *c, const Drawable *d, const Box &w) { d->Draw(c, w); }
-  point Draw(GraphicsDevice *d, point p, DrawCB = &DefaultDrawCB) const;
+  point Draw(GraphicsDevice *d, point p, DrawCB = &DefaultDrawCB, const Box *scissor=0) const;
   void draw(GraphicsDevice *d, point p) const { Draw(d, p); }
 
   static void DefaultDrawBackgroundCB(GraphicsDevice *d, const Box &w) { w.Draw(d); }
@@ -122,7 +122,7 @@ struct DrawableBoxArray {
   void InsertAt(int o, const vector<DrawableBox> &x);
   void OverwriteAt(int o, const vector<DrawableBox> &x);
   void Erase(int o, size_t l=UINT_MAX, bool shift=false);
-  point Draw(GraphicsDevice*, point p, int glyph_start=0, int glyph_len=-1) const;
+  point Draw(GraphicsDevice*, point p, int glyph_start=0, int glyph_len=-1, const Box *scissor=0) const;
   string DebugString() const;
 
   int GetLineFromCoords(const point &p) { return 0; }

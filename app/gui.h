@@ -235,7 +235,7 @@ struct TextBox : public GUI, public KeyboardController {
     void EncodeText(DrawableBoxArray *o, int x, const String16Piece &s, const DrawableAnnotation &a, int da=0) { Flow f=InitFlow(o); f.p.x=x; f.AppendText(s,a,da); }
     int Layout(int width=0, bool flush=0) { Layout(Box(0,0,width,0), flush); return Lines(); }
     void Layout(Box win, bool flush=0);
-    point Draw(point pos, int relayout_width=-1, int g_offset=0, int g_len=-1);
+    point Draw(point pos, int relayout_width=-1, int g_offset=0, int g_len=-1, const Box *scissor=0);
   };
 
   struct Lines : public RingVector<Line> {

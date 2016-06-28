@@ -172,6 +172,8 @@ struct Box {
   int percentY(float py) const { return y+h*py; }
   bool Empty() const { return !w && !h; }
   bool within(const point &p) const { return p.x >= x && p.x < right() && p.y >= y && p.y < top(); }
+  bool outside(const point &p) const { return p.x < x || p.y < y || p.x > right() || p.y > top(); }
+  bool outside(const Box &b) const { return b.right() < x || b.top() < y || b.x > right() || b.y > top(); }
   bool operator==(const Box &c) const { return x == c.x && y == c.y && w == c.w && h == c.h; }
   bool operator!=(const Box &c) const { return !(*this == c); }
   bool operator<(const Box &c) const { SortImpl4(x, c.x, y, c.y, w, c.w, h, c.h); }
@@ -447,7 +449,7 @@ struct GraphicsDevice {
 
   int default_draw_mode = DrawMode::_2D, draw_mode = 0, default_framebuffer = 0;
   bool done_init = 0, have_framebuffer = 1, have_cubemap = 1, have_npot_textures = 1;
-  bool blend_enabled = 0, invert_view_matrix = 0, track_model_matrix = 0;
+  bool blend_enabled = 0, invert_view_matrix = 0, track_model_matrix = 0, dont_clear_deferred = 0;
   string vertex_shader, pixel_shader;
   Shader *shader = 0;
   v3 camera_pos;
@@ -503,6 +505,7 @@ struct GraphicsDevice {
   virtual void DrawElements(int pt, int np, int it, int o, void *index, int l, int *out, bool dirty) = 0;
   virtual void DrawArrays(int t, int o, int n) = 0;
   virtual void DeferDrawArrays(int t, int o, int n) = 0;
+  virtual void SetDontClearDeferred(bool v) {}
   virtual void ClearDeferred() {}
 
   virtual void Flush() = 0;
@@ -627,6 +630,13 @@ struct ScopedClearColor {
   ~ScopedClearColor()                                                                                  { if (enabled) gd->ClearColor(prev_color); }
   ScopedClearColor(GraphicsDevice *d, const Color *c) : gd(d), enabled(c), prev_color(gd->clear_color) { if (enabled) gd->ClearColor(*c); }
   ScopedClearColor(GraphicsDevice *d, const Color &c) : gd(d), enabled(1), prev_color(gd->clear_color) {              gd->ClearColor(c); }
+};
+
+struct ScopedDontClearDeferred {
+  GraphicsDevice *gd;
+  bool previous_dont_clear_deferred;
+  ~ScopedDontClearDeferred()                                                                                { if (!previous_dont_clear_deferred) gd->SetDontClearDeferred(false); }
+  ScopedDontClearDeferred(GraphicsDevice *d) : gd(d), previous_dont_clear_deferred(gd->dont_clear_deferred) { if (!previous_dont_clear_deferred) gd->SetDontClearDeferred(true);  }
 };
 
 struct Shaders {

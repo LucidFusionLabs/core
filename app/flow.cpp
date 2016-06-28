@@ -36,7 +36,7 @@ bool DrawableAnnotation::Shifted(const DrawableAnnotation &x, int dir, int offse
   return true;
 }
 
-point DrawableBoxRun::Draw(GraphicsDevice *gd, point p, DrawCB cb) const {
+point DrawableBoxRun::Draw(GraphicsDevice *gd, point p, DrawCB cb, const Box *scissor) const {
   Box w;
   DrawBackground(gd, p);
   GraphicsContext gc(gd, attr);
@@ -48,7 +48,12 @@ point DrawableBoxRun::Draw(GraphicsDevice *gd, point p, DrawCB cb) const {
   if (attr->blend) gd->EnableBlend();
   // else if (!attr->font) gd->DisableBlend();
   if (attr->scissor) gd->PushScissor(*attr->scissor + p);
-  for (auto i = data.buf, e = data.end(); i != e; ++i) if (i->drawable) cb(&gc, i->drawable, (w = i->box + p));
+  for (auto i = data.buf, e = data.end(); i != e; ++i)
+    if (i->drawable) {
+      w = i->box + p;
+      if (scissor && scissor->outside(w)) continue;
+      cb(&gc, i->drawable, w);
+    }
   if (attr->scissor) gd->PopScissor();
   return point(w.x + w.w, w.y);
 }
@@ -111,11 +116,12 @@ void DrawableBoxArray::Erase(int o, size_t l, bool shift) {
   if (shift) for (; i != data.end(); ++i) i->box -= p;
 }
 
-point DrawableBoxArray::Draw(GraphicsDevice *gd, point p, int glyph_start, int glyph_len) const {
+point DrawableBoxArray::Draw(GraphicsDevice *gd, point p, int glyph_start, int glyph_len, const Box *scissor) const {
   point e;
   if (!data.size()) return e;
   for (DrawableBoxIterator iter(&data[glyph_start], Xge0_or_Y(glyph_len, data.size())); !iter.Done(); iter.Increment())
-    e = DrawableBoxRun(iter.Data(), iter.Length(), attr.GetAttr(iter.cur_attr1), VectorGet(line, iter.cur_attr2)).Draw(gd, p);
+    e = DrawableBoxRun(iter.Data(), iter.Length(), attr.GetAttr(iter.cur_attr1), VectorGet(line, iter.cur_attr2)).Draw
+      (gd, p, &DrawableBoxRun::DefaultDrawCB, scissor);
   return e;
 }
 

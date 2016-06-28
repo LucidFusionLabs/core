@@ -16,7 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-void Flush() { ClearDeferred(); glFlush(); }
+void Flush() { ClearDeferred(); glFlush(); GDDebug("Flush"); }
 void Clear() { glClear(GL_COLOR_BUFFER_BIT | (draw_mode == DrawMode::_3D ? GL_DEPTH_BUFFER_BIT : 0)); }
 void ClearDepth() { glClear(GL_DEPTH_BUFFER_BIT); }
 void ClearColor(const Color &c) { clear_color=c; glClearColor(c.r(), c.g(), c.b(), c.a()); GDDebug("ClearColor=", c.DebugString()); }
@@ -71,6 +71,7 @@ void ViewPort(Box w) {
   if (FLAGS_swap_axis) w.swapaxis(LFL::screen->width, LFL::screen->height);
   ClearDeferred();
   glViewport(w.x, w.y, w.w, w.h);
+  GDDebug("Viewport(", w.x, ", ", w.y, ", ", w.w, ", ", w.h, ")");
 }
 
 void Scissor(Box w) {
@@ -78,6 +79,7 @@ void Scissor(Box w) {
   ClearDeferred();
   EnableScissor();
   glScissor(w.x, w.y, w.w, w.h);
+  GDDebug("Scissor(", w.x, ", ", w.y, ", ", w.w, ", ", w.h, ")");
 }
 
 void TexParameter(int t, int p, int v) {
@@ -107,7 +109,7 @@ void DelFrameBuffers(int n, const unsigned *id) {
   glDeleteFramebuffersEXT(n, id);
 }
 
-void BindFrameBuffer(int id) { ClearDeferred(); glBindFramebufferEXT(GL_FRAMEBUFFER, id); }
+void BindFrameBuffer(int id) { ClearDeferred(); glBindFramebufferEXT(GL_FRAMEBUFFER, id); GDDebug("BindFrameBuffer ", id); }
 void FrameBufferTexture(int id) { glFramebufferTexture2DEXT(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, id, 0); }
 void FrameBufferDepthTexture(int id) { glFramebufferRenderbufferEXT(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, id); }
 int CheckFrameBufferStatus() { return glCheckFramebufferStatusEXT(GL_FRAMEBUFFER); }
@@ -120,6 +122,7 @@ void ScreenshotBox(Texture *out, const Box &b, int flag) {
   glReadPixels(b.x, b.y, b.w, b.h, out->GLPixelType(), out->GLBufferType(), pixels);
   out->UpdateBuffer(pixels, point(b.w, b.h), out->pf, b.w*4, flag);
   delete [] pixels;
+  GDDebug("ScreenshotBox");
 }
 
 void DumpTexture(Texture *out, unsigned tex_id) {

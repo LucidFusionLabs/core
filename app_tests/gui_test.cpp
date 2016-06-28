@@ -1041,27 +1041,27 @@ TEST(GUITest, LineTokenProcessor) {
   // test wide chars
   L->Clear();
   ta.insert_mode = 1;
-  L->UpdateText(0, "\xff", 0);
-  EXPECT_EQ(u"\xff\ufeff", L->Text16()); EXPECT_EQ(1, ta.token.size());
-  if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, 4); EXPECT_EQ(u"\xff\ufeff", ta.token[0].word); }
+  L->UpdateText(0, "\xc7\xbc", 0);
+  EXPECT_EQ(u"\x1fc\ufeff", L->Text16()); EXPECT_EQ(1, ta.token.size());
+  if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, 4); EXPECT_EQ(u"\x1fc\ufeff", ta.token[0].word); }
   ta.token.clear();
 
   L->UpdateText(2, "y", 0);
-  EXPECT_EQ(u"\xff\ufeffy", L->Text16()); EXPECT_EQ(2, ta.token.size());
-  if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -8); EXPECT_EQ(u"\xff\ufeff",  ta.token[0].word); }
-  if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,  2); EXPECT_EQ(u"\xff\ufeffy", ta.token[1].word); }
+  EXPECT_EQ(u"\x1fc\ufeffy", L->Text16()); EXPECT_EQ(2, ta.token.size());
+  if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -8); EXPECT_EQ(u"\x1fc\ufeff",  ta.token[0].word); }
+  if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,  2); EXPECT_EQ(u"\x1fc\ufeffy", ta.token[1].word); }
   ta.token.clear();
 
   L->UpdateText(2, "x", 0);
-  EXPECT_EQ(u"\xff\ufeffxy", L->Text16()); EXPECT_EQ(2, ta.token.size());
-  if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -7); EXPECT_EQ(u"\xff\ufeffy",  ta.token[0].word); }
-  if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,  1); EXPECT_EQ(u"\xff\ufeffxy", ta.token[1].word); }
+  EXPECT_EQ(u"\x1fc\ufeffxy", L->Text16()); EXPECT_EQ(2, ta.token.size());
+  if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -7); EXPECT_EQ(u"\x1fc\ufeffy",  ta.token[0].word); }
+  if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,  1); EXPECT_EQ(u"\x1fc\ufeffxy", ta.token[1].word); }
   ta.token.clear();
 
   L->UpdateText(0, "0", 0);
-  EXPECT_EQ(u"0\xff\ufeffxy", L->Text16()); EXPECT_EQ(2, ta.token.size());
-  if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -9); EXPECT_EQ(u"\xff\ufeffxy",  ta.token[0].word); }
-  if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,  3); EXPECT_EQ(u"0\xff\ufeffxy", ta.token[1].word); }
+  EXPECT_EQ(u"0\x1fc\ufeffxy", L->Text16()); EXPECT_EQ(2, ta.token.size());
+  if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -9); EXPECT_EQ(u"\x1fc\ufeffxy",  ta.token[0].word); }
+  if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,  3); EXPECT_EQ(u"0\x1fc\ufeffxy", ta.token[1].word); }
   ta.token.clear();
 }
 
