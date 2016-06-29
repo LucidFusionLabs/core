@@ -74,10 +74,10 @@ struct Color {
   bool operator==(const Color &y) const { return R()==y.R() && G()==y.G() && B()==y.B() && A()==y.A(); }
   bool operator!=(const Color &y) const { return !(*this == y); }
   bool Transparent() const { return a() == 0; }
-  string IntString() const { return StrCat("Color(", R(), ",", G(), ",", B(), ",", A(), ")"); }
+  string IntString() const { return StrCat("Color(", A(), ",", R(), ",", G(), ",", B(), ")"); }
   string HexString() const { return StringPrintf("%02X%02X%02X", R(), G(), B()); }
-  string DebugString() const { return StringPrintf("%02X%02X%02X%02X", R(), G(), B(), A()); }
-  unsigned AsUnsigned() const { return uint8_t(R())<<24 | uint8_t(G())<<16 | uint8_t(B())<<8 | uint8_t(A()); }
+  string DebugString() const { return StringPrintf("%02X%02X%02X%02X", A(), R(), G(), B()); }
+  unsigned AsUnsigned() const { return uint8_t(A())<<24 | uint8_t(R())<<16 | uint8_t(G())<<8 | uint8_t(B()); }
   const float &r() const { return x[0]; }
   const float &g() const { return x[1]; }
   const float &b() const { return x[2]; }     
@@ -679,6 +679,9 @@ struct SimpleVideoResampler : public VideoResamplerInterface {
 
   static void Filter(unsigned char *dst, int w, int h,
                      int pf, int ls, int x, int y, Matrix *kernel, int channel, int flag=0);
+
+  static void Fill(unsigned char *dst, int w, int h,
+                   int pf, int ls, int x, int y, const Color &c, int flag=0);
 
   static void CopyColorChannelsToMatrix(const unsigned char *buf, int w, int h,
                                         int pw, int ls, int x, int y, Matrix *out, int po);

@@ -102,9 +102,47 @@ TEST(GLTest, Texture) {
   Box(dim, dim).Draw(gc.gd, tex.coord);
   gc.gd->ScreenshotBox(&tex2, Box(dim, dim), 0);
   EXPECT_EQ(0, CompareTextureToBuffer(tex2, pdata, dim, lsize, "gl_tests_06.png"));
+  fb.Release(true);
 }
 
-TEST(GLTest, Font) {
+TEST(GLTest, Fonts) {
+  GraphicsContext gc(screen->gd);
+
+  Color c(0xffcdef12);
+  Texture tex(37, 93), tex2;
+  tex.RenewBuffer();
+  SimpleVideoResampler::Fill(tex.buf, tex.width, tex.height, tex.pf, tex.LineSize(), 0, 0, c);
+  EXPECT_EQ(4, Pixel::Size(tex.pf));
+  for (int y = 0; y < tex.height; y++) {
+    for (int x = 0; x < tex.width; x++) {
+      const unsigned char *b = tex.buf + y * tex.LineSize() + x * Pixel::Size(tex.pf);
+      if (Texture::preferred_pf == Pixel::RGBA) {
+        EXPECT_EQ(c.R(), b[0]);
+        EXPECT_EQ(c.G(), b[1]);
+        EXPECT_EQ(c.B(), b[2]);
+        EXPECT_EQ(c.A(), b[3]);
+      } else if (Texture::preferred_pf == Pixel::BGRA) {
+        EXPECT_EQ(c.B(), b[0]);
+        EXPECT_EQ(c.G(), b[1]);
+        EXPECT_EQ(c.R(), b[2]);
+        EXPECT_EQ(c.A(), b[3]);
+      } else EXPECT_EQ(0, 1);
+    }
+  }
+
+#if 0 
+  gc.gd->Clear();
+  gc.gd->FillColor(c);
+  Box(tex.width, tex.height).Draw(gc.gd);
+  gc.gd->SetColor(Color::white);
+  gc.gd->ScreenshotBox(&tex2, Box(tex.width, tex.height), 0);
+  EXPECT_EQ(0, CompareTextureToBuffer(tex2, tex.buf, tex.height, tex.LineSize(), "gl_tests_10.png"));
+#endif
+
+  gc.gd->Clear();
+  app->fonts->GetFillColor(c)->Draw(&gc, Box(tex.width, tex.height));
+  gc.gd->ScreenshotBox(&tex2, Box(tex.width, tex.height), 0);
+  EXPECT_EQ(0, CompareTextureToBuffer(tex2, tex.buf, tex.height, tex.LineSize(), "gl_tests_11.png"));
 }
 
 #ifdef __APPLE__
@@ -135,7 +173,7 @@ TEST(GLTest, CoreText) {
     CGContextRelease(context);
     g->tex.FlipBufferY();
     if (!ref.buf) {
-      // PngWriter::Write("gl_tests_10.png", g->tex);
+      // PngWriter::Write("gl_tests_12.png", g->tex);
       // printf("reference:\n%s", g->tex.HexDump().c_str());
       ref.buf = g->tex.ReleaseBuffer();
     } else {

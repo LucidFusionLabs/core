@@ -122,6 +122,7 @@ struct Glyph : public Drawable {
     struct IPCClient { int id; }                                                   ipcclient;
     struct FreeType  { int id; Font *substitute; }                                 freetype;
     struct CoreText  { int id; float origin_x, origin_y, width, height, advance; } coretext;
+    struct FillColor { unsigned color;                                           } fillcolor;
   } internal;
   mutable Texture tex;
   mutable bool ready=0;
@@ -141,6 +142,10 @@ struct Glyph : public Drawable {
   virtual int  LeftBearing(                   const Drawable::Attr *a=0) const;
   virtual int  Layout     (      LFL::Box *b, const Drawable::Attr *a=0) const;
   virtual void Draw       (GraphicsContext*,  const LFL::Box&)           const;
+};
+
+struct FillColor : public Glyph {
+  virtual void Draw(GraphicsContext*, const LFL::Box&) const;
 };
 
 struct GlyphMetrics {
@@ -485,7 +490,11 @@ struct Fonts {
   LazyInitializedPtr<IPCServerFontEngine> ipc_server_engine;
   unordered_map<FontDesc, unique_ptr<Font>, FontDesc::ColoredHasher, FontDesc::ColoredEqual> desc_map;
   unordered_map<string, Family> family_map;
+  unordered_map<unsigned, FillColor> color_map;
   Font *default_font=0;
+
+  void SelectFillColor(GraphicsDevice*);
+  FillColor *GetFillColor(const Color&);
 
   Font *Find        (                    const FontDesc &d);
   Font *Insert      (FontEngine *engine, const FontDesc &d);

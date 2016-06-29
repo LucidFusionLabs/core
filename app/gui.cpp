@@ -464,12 +464,11 @@ void TextBox::LinesFrameBuffer::PushBackAndUpdateOffset(TextBox::Line *l, int lo
 }
 
 point TextBox::LinesFrameBuffer::Paint(TextBox::Line *l, point lp, const Box &b, int offset, int len) {
+  GraphicsContext gc(screen->gd);
   Box sb(lp.x, lp.y - b.h, b.w, b.h);
-  {
-    ScopedDontClearDeferred dont_clear_deferred(screen->gd);
-    Scissor scissor(screen->gd, sb);
-    screen->gd->Clear();
-  }
+  auto bg_color = l->parent->bg_color;
+  app->fonts->SelectFillColor(gc.gd);
+  app->fonts->GetFillColor(bg_color ? *bg_color : Color::black)->Draw(&gc, sb);
   l->Draw(lp + b.Position(), -1, offset, len, &sb);
   return point(lp.x, lp.y-b.h);
 }
@@ -1518,15 +1517,13 @@ bool Editor::ScrollTo(int line_index, int x) {
     wrapped_line_no = li.GetBegKey();
   }
 
+  cursor.i.y = 0;
   if (wrapped_line_no >= last_first_line &&
       wrapped_line_no < last_first_line + last_fb_lines) target_offset = wrapped_line_no - last_first_line;
   else SetVScroll(wrapped_line_no - target_offset);
 
   if (!Wrap()) cursor.i.y = target_offset;
-  else {
-    cursor.i.y = 0;
-    for (int i=start_line, o=start_line_adjust; o<target_offset; i++, cursor.i.y++) o += line[-1-i].Lines();
-  }
+  else for (int i=start_line, o=start_line_adjust; o<target_offset; i++, cursor.i.y++) o += line[-1-i].Lines();
 
   UpdateCursorLine();
   UpdateCursorX(x);

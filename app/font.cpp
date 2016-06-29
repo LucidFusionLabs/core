@@ -112,6 +112,27 @@ void Glyph::Draw(GraphicsContext *gc, const LFL::Box &b) const {
   else b.Draw(gc->gd, tex.coord);
 }
 
+void FillColor::Draw(GraphicsContext *gc, const LFL::Box &b) const {
+  if (!ready) {
+    Texture fill(2, 2);
+    fill.RenewBuffer();
+    SimpleVideoResampler::Fill(fill.buf, fill.width, fill.height, fill.pf, fill.LineSize(), 0, 0,
+                               Color(internal.fillcolor.color));
+
+    tex.width = fill.width;
+    tex.height = fill.height;
+    if (auto cache = app->fonts->rgba_glyph_cache.get()) {
+      cache->Load(0, this, fill.buf, fill.LineSize(), fill.pf);
+      tex.coord[Texture::minx_coord_ind] += 1.0/cache->tex.width;
+      tex.coord[Texture::miny_coord_ind] += 1.0/cache->tex.height;
+      tex.coord[Texture::maxx_coord_ind] -= 1.0/cache->tex.width;
+      tex.coord[Texture::maxy_coord_ind] -= 1.0/cache->tex.height;
+      ready = true;
+    }
+  }
+  b.Draw(gc->gd, tex.coord);
+}
+
 GlyphCache::GlyphCache(unsigned T, int W, int H) : dim(W, H ? H : W), tex(dim.w, dim.h, Texture::preferred_pf, T), flow(make_unique<Flow>(&dim)) {}
 GlyphCache::~GlyphCache() {}
 
@@ -147,7 +168,7 @@ void GlyphCache::Load(const Font *f, const Glyph *g, const unsigned char *buf, i
   point p;
   bool cache_glyph = ShouldCacheGlyph(g->tex);
   if (cache_glyph) {
-    CHECK(Add(&p, g->tex.coord, g->tex.width, g->tex.height, f->Height()));
+    CHECK(Add(&p, g->tex.coord, g->tex.width, g->tex.height, f ? f->Height() : g->tex.height));
     glyph.push_back(g);
   }
   if (tex.buf && cache_glyph) {
@@ -301,6 +322,19 @@ int FakeFontEngine::InitGlyphs(Font *f, Glyph *g, int n) {
     g->tex.height = g->bearing_y = fake_font.Height();
     g->tex.width  = g->advance   = fake_font.fixed_width;
   } return n;
+}
+
+void Fonts::SelectFillColor(GraphicsDevice *gd) {
+  gd->EnableTexture();
+  if (auto cache = rgba_glyph_cache.get()) cache->tex.Bind();
+  gd->DisableBlend();
+}
+
+FillColor *Fonts::GetFillColor(const Color &c) {
+  bool inserted = false;
+  auto it = LFL::FindOrInsert(color_map, c.AsUnsigned(), &inserted);
+  if (inserted) it->second.internal.fillcolor.color = c.AsUnsigned();
+  return &it->second;
 }
 
 int Fonts::InitFontWidth() {

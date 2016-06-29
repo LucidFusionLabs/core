@@ -927,6 +927,18 @@ void SimpleVideoResampler::Filter(unsigned char *buf, int w, int h,
   CopyMatrixToColorChannels(&out, w, h, pw, ls, x, y, buf, ColorChannel::PixelOffset(channel));
 }
 
+void SimpleVideoResampler::Fill(unsigned char *dst, int w, int h,
+                                int pf, int ls, int x, int y, const Color &c, int flag) {
+  int pw = Pixel::Size(pf); 
+  unsigned char pixel[4] = { uint8_t(c.R()), uint8_t(c.G()), uint8_t(c.B()), uint8_t(c.A()) };
+  for (int yi = 0; yi < h; ++yi) {
+    for (int xi = 0; xi < w; ++xi) {
+      unsigned char *dp = dst + (ls*(y + yi) + (x + xi)*pw);
+      CopyPixel(Pixel::RGBA, pf, pixel, dp, xi == 0, xi == w-1, flag);
+    }
+  }
+}
+
 void SimpleVideoResampler::CopyColorChannelsToMatrix(const unsigned char *buf, int w, int h,
                                                      int pw, int ls, int x, int y,
                                                      Matrix *out, int po) {

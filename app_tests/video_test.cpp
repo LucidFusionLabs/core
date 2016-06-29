@@ -56,6 +56,9 @@ TEST(VideoTest, Color) {
 
   Color  c2("FF7400");
   EXPECT_EQ("FF7400", c2.HexString());
+  EXPECT_EQ(0xffff7400, c2.AsUnsigned());
+  EXPECT_EQ(c2, Color(0xffff7400));
+
   c2.ToHSV(&h, &s, &v);
   EXPECT_EQ("FF7400", Color::FromHSV(h, s, v).HexString());
   h += 180;
