@@ -23,21 +23,70 @@
 #include "core/app/framework/apple_common.h"
 #include "core/app/framework/ios_common.h"
 
+@interface NativeAlert : NSObject<UIAlertViewDelegate>
+  @property (nonatomic, retain) UIAlertView *alert;
+@end
+
+@implementation NativeAlert
+  {
+    bool add_text;
+    std::string style, cancel_cmd, confirm_cmd;
+  }
+
+  - (id)init:(const std::vector<std::pair<std::string, std::string>>&) kv {
+    CHECK_EQ(4, kv.size());
+    CHECK_EQ("style", kv[0].first);
+    style       = kv[0].second;
+    cancel_cmd  = kv[2].second;
+    confirm_cmd = kv[3].second;
+    _alert      = [[UIAlertView alloc]
+      initWithTitle:     [NSString stringWithUTF8String: kv[1].first .c_str()]
+      message:           [NSString stringWithUTF8String: kv[1].second.c_str()]
+      delegate:          self
+      cancelButtonTitle: [NSString stringWithUTF8String: kv[2].first.c_str()]
+      otherButtonTitles: [NSString stringWithUTF8String: kv[3].first.c_str()], nil];
+    if ((add_text = style == "textinput")) _alert.alertViewStyle = UIAlertViewStylePlainTextInput;
+    return self;
+  }
+
+  - (void)alertView:(UIAlertView *)alertView clickedButtonAtIndex:(NSInteger)buttonIndex {
+    if (add_text) {
+      ShellRun(buttonIndex ?
+               LFL::StrCat(confirm_cmd, " ", [[alertView textFieldAtIndex:0].text UTF8String]).c_str() :
+               cancel_cmd.c_str());
+    } else {
+      ShellRun(buttonIndex ? confirm_cmd.c_str() : cancel_cmd.c_str());
+    }
+  }
+
+  + (void)addAlert:(const std::string&)name items:(const std::vector<std::pair<std::string, std::string>>&) kv {
+    alerts[name] = [[NativeAlert alloc] init: kv];
+  }
+
+  + (void)showAlert:(const std::string&)name arg:(const std::string&)a {
+    auto alert = alerts[name];
+    [alert.alert show];
+    if (alert->add_text) [alert.alert textFieldAtIndex:0].text = [NSString stringWithUTF8String: a.c_str()];
+  }
+
+  static std::unordered_map<std::string, NativeAlert*> alerts;
+@end
+
 @interface NativeMenu : NSObject
 @end
 
 @implementation NativeMenu
-  + (void)addMenu:(const char*)title_text items:(const std::vector<LFL::MenuItem>&)item {
-    NSString *title = [NSString stringWithUTF8String: title_text];
+  + (void)addMenu:(const std::string&)title_text items:(const std::vector<LFL::MenuItem>&)item {
+    NSString *title = [NSString stringWithUTF8String: title_text.c_str()];
     menu_tags[[title hash]] = title_text;
     auto menu = &menus[title_text];
     for (auto &i : item) menu->emplace_back(tuple_get<1>(i), tuple_get<2>(i)); 
   }
 
-  + (void)launchMenu:(const char*)title_text {
+  + (void)launchMenu:(const std::string&)title_text {
     auto it = menus.find(title_text);
-    if (it == menus.end()) { ERRORf("unknown menu: %s", title_text); return; }
-    NSString *title = [NSString stringWithUTF8String: title_text];
+    if (it == menus.end()) { ERRORf("unknown menu: %s", title_text.c_str()); return; }
+    NSString *title = [NSString stringWithUTF8String: title_text.c_str()];
     UIActionSheet *actions = [[UIActionSheet alloc] initWithTitle:title delegate:self
       cancelButtonTitle:@"Cancel" destructiveButtonTitle:nil otherButtonTitles:nil];
     for (auto &i : it->second) [actions addButtonWithTitle:[NSString stringWithUTF8String: i.first.c_str()]];
@@ -57,6 +106,142 @@
 
   static std::unordered_map<int, std::string> menu_tags;
   static std::unordered_map<std::string, std::vector<std::pair<std::string, std::string>>> menus;
+@end
+
+@implementation NativeToolbar
+  {
+    UIToolbar *toolbar;
+    int toolbar_height;
+    std::unordered_map<std::string, void*> toolbar_titles;
+    std::unordered_map<void*, std::string> toolbar_cmds;
+  }
+
+  - (id)init: (const std::vector<std::pair<std::string, std::string>>&) kv {
+    NSMutableArray *items = [[NSMutableArray alloc] init];
+    UIBarButtonItem *spacer = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil];
+    for (int i=0, l=kv.size(); i<l; i++) {
+      if (i) [items addObject: spacer];
+      NSString *K = [NSString stringWithUTF8String: kv[i].first.c_str()];
+      UIBarButtonItem *item =
+        [[UIBarButtonItem alloc] initWithTitle:[NSString stringWithFormat:@"%@\U0000FE0E", K]
+        style:UIBarButtonItemStyleBordered target:self action:@selector(onClick:)];
+      [items addObject:item];
+      toolbar_titles[kv[i].first] = item;
+      toolbar_cmds[item] = kv[i].second;
+      [item release];
+    }
+    toolbar_height = 30;
+    toolbar = [[UIToolbar alloc] initWithFrame: [self getToolbarFrame]];
+    // [toolbar setBarStyle:UIBarStyleBlackTranslucent];
+    [toolbar setItems:items];
+    [items release];
+    [spacer release];
+    return self;
+  }
+
+  - (CGRect)getToolbarFrame {
+    CGRect bounds = [[UIScreen mainScreen] bounds], kbd = [[LFUIApplication sharedAppDelegate] getKeyboardFrame];
+    return CGRectMake(0, bounds.size.height - kbd.size.height - toolbar_height, bounds.size.width, toolbar_height);
+  }
+
+  - (void)toggleButton:(id)sender {
+    if (![sender isKindOfClass:[UIBarButtonItem class]]) FATALf("unknown sender: %p", sender);
+    UIBarButtonItem *item = (UIBarButtonItem*)sender;
+    if (item.style != UIBarButtonItemStyleDone) { item.style = UIBarButtonItemStyleDone;     item.tintColor = [UIColor colorWithRed:0.8 green:0.8 blue:0.8 alpha:.8]; }
+    else                                        { item.style = UIBarButtonItemStyleBordered; item.tintColor = nil; }
+  }
+
+  - (void)onClick:(id)sender {
+    auto it = toolbar_cmds.find(sender);
+    if (it != toolbar_cmds.end()) {
+      ShellRun(it->second.c_str());
+      if (it->second.substr(0,6) == "toggle") [self toggleButton:sender];
+    }
+    [[LFUIApplication sharedAppDelegate].controller resignFirstResponder];
+  }
+
+  + (void)addToolbar:(const std::string&)name items:(const std::vector<std::pair<std::string, std::string>>&)kv {
+    toolbars[name] = [[NativeToolbar alloc] init: kv];
+  }
+
+  + (void)showToolbar:(const std::string&)name {
+    auto toolbar = toolbars[name];
+    show_bottom.push_back(toolbar);
+    [[LFUIApplication sharedAppDelegate].window addSubview: toolbar->toolbar];
+  }
+
+  + (int)getBottomHeight {
+    int ret = 0;
+    for (auto t : show_bottom) ret += t->toolbar_height;
+    return ret;
+  }
+
+  + (void)updateFrame {
+    for (auto t : show_bottom) t->toolbar.frame = [t getToolbarFrame];
+  }
+
+  + (void)toggleToolbarButton:(const std::string&)name withTitle:(const std::string&)k {
+    auto toolbar = toolbars[name];
+    auto it = toolbar->toolbar_titles.find(k);
+    if (it != toolbar->toolbar_titles.end()) [toolbar toggleButton: (id)(UIBarButtonItem*)it->second];
+  }
+
+  static std::unordered_map<std::string, NativeToolbar*> toolbars;
+  static std::vector<NativeToolbar*> show_bottom, show_top;
+@end
+
+@interface NativeTable : NSObject<UITableViewDelegate, UITableViewDataSource>
+  {
+    std::vector<std::string> rows;
+  }
+  @property (nonatomic, retain) UITableView *table;
+@end
+
+@implementation NativeTable
+  - (id)init {
+    self = [super init];
+    _table = [[UITableView alloc] initWithFrame: [LFUIApplication sharedAppDelegate].view.bounds style:UITableViewStyleGrouped];
+    _table.delegate = self;
+    _table.dataSource = self;
+    return self;
+  }
+
+  - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
+    return 2;
+  }
+
+  - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
+    return 2;
+  }
+
+  - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
+    static NSString *cellIdentifier = @"cellIdentifier";
+    UITableViewCell *cell = [self.table dequeueReusableCellWithIdentifier:cellIdentifier];
+    if (cell == nil) {
+      cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:cellIdentifier];
+      cell.textLabel.text = @"foo"; // [_content objectAtIndex:indexPath.row];
+    }
+    return cell;
+  }
+
+  - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
+    INFOf("select row %d", indexPath.row);
+  }
+
+  + (void)addTable:(const std::string&)title_text items:(const std::vector<LFL::MenuItem>&)item {
+    NSString *title = [NSString stringWithUTF8String: title_text.c_str()];
+    NativeTable *table = [[NativeTable alloc] init];
+    tables[title_text] = table;
+  }
+
+  + (void)launchTable:(const std::string&)title_text {
+    auto it = tables.find(title_text);
+    if (it == tables.end()) { ERRORf("unknown menu: %s", title_text.c_str()); return; }
+    INFOf("launching table %p ", it->second->_table);
+    [[LFUIApplication sharedAppDelegate].view addSubview: it->second->_table];
+  }
+
+  static std::unordered_map<std::string, NativeTable*> tables;
 @end
 
 @interface NativePicker : NSObject<UIPickerViewDelegate>
@@ -175,13 +360,41 @@
 @end
 
 namespace LFL {
+void Application::AddNativeAlert(const string &name, const vector<pair<string, string>>&items) {
+  [NativeAlert addAlert:name items:items];
+}
+
+void Application::LaunchNativeAlert(const string &name, const string &arg) {
+  [NativeAlert showAlert:name arg:arg];
+}
+
 void Application::AddNativeEditMenu(const vector<MenuItem>&items) {}
 void Application::AddNativeMenu(const string &title, const vector<MenuItem>&items) {
-  [NativeMenu addMenu:title.c_str() items:items];
+  [NativeMenu addMenu:title items:items];
 }
 
 void Application::LaunchNativeMenu(const string &title) {
-  [NativeMenu launchMenu:title.c_str()];
+  [NativeMenu launchMenu:title];
+}
+
+void Application::AddToolbar(const string &title, const vector<pair<string, string>>&items) {
+  [NativeToolbar addToolbar:title items:items];
+}
+
+void Application::ShowToolbar(const string &title, bool v) {
+  if (v) [NativeToolbar showToolbar: title];
+}
+
+void Application::ToggleToolbarButton(const string &title, const string &n) { 
+  [NativeToolbar toggleToolbarButton:title withTitle:n];
+}
+
+void Application::AddNativeTable(const string &title, const vector<MenuItem>&items) {
+  [NativeTable addTable:title items:items];
+}
+
+void Application::LaunchNativeTable(const string &title) {
+  [NativeTable launchTable:title];
 }
 
 void Application::LaunchNativeFontChooser(const FontDesc &cur_font, const string &choose_cmd) {

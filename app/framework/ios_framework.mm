@@ -82,7 +82,10 @@ static const char* const* ios_argv = 0;
   @synthesize window, controller, view, lview, rview, textField;
 
   + (LFUIApplication *)sharedAppDelegate { return (LFUIApplication *)[[UIApplication sharedApplication] delegate]; }
+
   - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
+    _resign_textfield_on_return = YES;
+
     MyAppCreate(LFL::ios_argc, LFL::ios_argv);
     CGRect wbounds = [[UIScreen mainScreen] bounds];
     scale = [[UIScreen mainScreen] scale];
@@ -125,7 +128,6 @@ static const char* const* ios_argv = 0;
     [self initNotifications];
 
     // text view for keyboard display
-    _resign_textfield_on_return = YES;
     self.textField = [[[MyTextField alloc] initWithFrame: CGRectZero] autorelease];
     self.textField.delegate = self;
     self.textField.text = [NSString stringWithFormat:@"default"];
@@ -242,7 +244,7 @@ static const char* const* ios_argv = 0;
 
   - (void)initGestureRecognizers {
     UIWindow *win = [[[UIApplication sharedApplication] windows] objectAtIndex:0];
-    INFOf("UIWindow frame: %s", [NSStringFromCGRect(win.frame) cString]);
+    INFOf("UIWindow frame: %s", [NSStringFromCGRect(win.frame) UTF8String]);
 
     UISwipeGestureRecognizer *up = [[UISwipeGestureRecognizer alloc] initWithTarget:self action:@selector(doubleSwipeUp:)];
     up.direction = UISwipeGestureRecognizerDirectionUp;
@@ -355,11 +357,7 @@ static const char* const* ios_argv = 0;
 @implementation LFViewController
   {
     LFUIApplication *uiapp;
-    UIToolbar *toolbar;
-    int toolbar_height;
     bool overlap_keyboard;
-    std::unordered_map<std::string, void*> toolbar_titles;
-    std::unordered_map<void*, std::string> toolbar_cmds;
   }
 
   - (void)viewWillAppear:(BOOL)animated { 
@@ -395,64 +393,14 @@ static const char* const* ios_argv = 0;
   - (BOOL)shouldAutorotate { return _autorotate; }
   - (void)setOverlapKeyboard:(bool)v { overlap_keyboard = v; }
 
-  - (void)addToolbar:(int)n key:(const char**)k val:(const char**)v {
-    if (toolbar) FATALf("addToolbar w toolbar=%p", toolbar);
-    NSMutableArray *items = [[NSMutableArray alloc] init];
-    UIBarButtonItem *spacer = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil];
-    for (int i=0; i<n; i++) {
-      if (i) [items addObject: spacer];
-      NSString *K = [NSString stringWithUTF8String: k[i]];
-      UIBarButtonItem *item =
-        [[UIBarButtonItem alloc] initWithTitle:[NSString stringWithFormat:@"%@\U0000FE0E", K]
-        style:UIBarButtonItemStyleBordered target:self action:@selector(onClick:)];
-      [items addObject:item];
-      toolbar_titles[k[i]] = item;
-      toolbar_cmds[item] = v[i];
-      [item release];
-    }
-    toolbar_height = 30;
-    toolbar = [[UIToolbar alloc]initWithFrame: [self getToolbarFrame]];
-    // [toolbar setBarStyle:UIBarStyleBlackTranslucent];
-    [toolbar setItems:items];
-    [items release];
-    [spacer release];
-    [uiapp.window addSubview:toolbar];
+  - (CGRect)getKeyboardToolbarFrame {
+    CGRect kbd = [[LFUIApplication sharedAppDelegate] getKeyboardFrame];
+    return CGRectMake(kbd.origin.x, kbd.origin.y, kbd.size.width, kbd.size.height + [NativeToolbar getBottomHeight]);
   }
 
   - (void)updateToolbarFrame {
-    if (toolbar) toolbar.frame = [self getToolbarFrame];
+    [NativeToolbar updateFrame];
     [self.view setNeedsLayout];
-  }
-
-  - (CGRect)getToolbarFrame {
-    CGRect bounds = [[UIScreen mainScreen] bounds], kbd = [[LFUIApplication sharedAppDelegate] getKeyboardFrame];
-    return CGRectMake(0, bounds.size.height - kbd.size.height - toolbar_height, bounds.size.width, toolbar_height);
-  }
-
-  - (CGRect)getKeyboardToolbarFrame {
-    CGRect kbd = [[LFUIApplication sharedAppDelegate] getKeyboardFrame];
-    return CGRectMake(kbd.origin.x, kbd.origin.y, kbd.size.width, kbd.size.height + toolbar_height);
-  }
-
-  - (void)toggleToolbarButton:(id)sender {
-    if (![sender isKindOfClass:[UIBarButtonItem class]]) FATALf("unknown sender: %p", sender);
-    UIBarButtonItem *item = (UIBarButtonItem*)sender;
-    if (item.style != UIBarButtonItemStyleDone) { item.style = UIBarButtonItemStyleDone;     item.tintColor = [UIColor colorWithRed:0.8 green:0.8 blue:0.8 alpha:.8]; }
-    else                                        { item.style = UIBarButtonItemStyleBordered; item.tintColor = nil; }
-  }
-
-  - (void)toggleToolbarButtonWithTitle:(const char *)k {
-    auto it = toolbar_titles.find(k);
-    if (it != toolbar_titles.end()) [self toggleToolbarButton: (id)(UIBarButtonItem*)it->second];
-  }
-
-  - (void)onClick:(id)sender {
-    auto it = toolbar_cmds.find(sender);
-    if (it != toolbar_cmds.end()) {
-      ShellRun(it->second.c_str());
-      if (it->second.substr(0,6) == "toggle") [self toggleToolbarButton:sender];
-    }
-    [self resignFirstResponder];
   }
 @end
 
@@ -561,16 +509,6 @@ void Application::SetClipboardText(const string &s) {
   [UIPasteboard generalPasteboard].string = [NSString stringWithUTF8String:s.c_str()];
 }
 
-void Application::AddToolbar(const vector<pair<string, string>>&items) {
-  vector<const char *> k, v;
-  for (auto &i : items) { k.push_back(i.first.c_str()); v.push_back(i.second.c_str()); }
-  [[LFUIApplication sharedAppDelegate].controller addToolbar:items.size() key:&k[0] val:&v[0]];
-}
-
-void Application::ToggleToolbarButton(const string &n) { 
-  [[LFUIApplication sharedAppDelegate].controller toggleToolbarButtonWithTitle:n.c_str()];
-}
-
 void Application::OpenTouchKeyboard() { [[LFUIApplication sharedAppDelegate] showKeyboard]; }
 void Application::CloseTouchKeyboard() { [[LFUIApplication sharedAppDelegate] hideKeyboard]; }
 void Application::CloseTouchKeyboardAfterReturn(bool v) { [LFUIApplication sharedAppDelegate].resign_textfield_on_return = v; }
@@ -578,17 +516,6 @@ void Application::SetTouchKeyboardTiled(bool v) { [[LFUIApplication sharedAppDel
 void Application::ToggleTouchKeyboard() {
   if ([[LFUIApplication sharedAppDelegate] isKeyboardFirstResponder]) CloseTouchKeyboard();
   else OpenTouchKeyboard();
-}
-
-Box Application::GetTouchKeyboardBox() {
-  Box ret; 
-  LFUIApplication *uiapp = [LFUIApplication sharedAppDelegate];
-  CGRect rect = [uiapp.controller getKeyboardToolbarFrame];
-  CGFloat scale = [uiapp getScale];
-  return Box(scale * rect.origin.x,
-             scale * (rect.origin.y + rect.size.height) - screen->height,
-             scale * rect.size.width,
-             scale * rect.size.height);
 }
 
 void Application::SetAutoRotateOrientation(bool v) { [LFUIApplication sharedAppDelegate].controller.autorotate = v; }

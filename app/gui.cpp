@@ -1746,7 +1746,7 @@ void Terminal::UpdateToken(Line *L, int word_offset, int word_len, int update_ty
 void Terminal::Draw(const Box &b, int flag, Shader *shader) {
   GraphicsContext gc(root->gd);
   TextArea::Draw(b, flag & ~DrawFlag::DrawCursor, shader);
-  if (shader) shader->SetUniform2f("iScroll", 0, XY_or_Y(shader->scale, -b.y));
+  if (shader) shader->SetUniform2f("iChannelScroll", 0, XY_or_Y(shader->scale, -b.y));
   if (clip) {
     { Scissor s(gc.gd, Box::TopBorder(b, *clip)); cmd_fb.DrawAligned(b, point()); }
     { Scissor s(gc.gd, Box::BotBorder(b, *clip)); cmd_fb.DrawAligned(b, point()); }

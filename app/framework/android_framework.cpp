@@ -248,8 +248,6 @@ void Application::CloseTouchKeyboardAfterReturn(bool v) {
 } 
 
 void Application::SetTouchKeyboardTiled(bool v) {}
-Box Application::GetTouchKeyboardBox() { return Box(); }
-
 int  Application::SetMultisample(bool v) {}
 int  Application::SetExtraScale(bool v) {}
 void Application::SetDownScale(bool v) {}

@@ -620,10 +620,14 @@ struct Application : public ::LFApp {
   void SetClipboardText(const string &s);
   void OpenSystemBrowser(const string &url);
 
+  void AddNativeAlert(const string &name, const vector<pair<string, string>>&items);
   void AddNativeMenu(const string &title, const vector<MenuItem> &items);
+  void AddNativeTable(const string &title, const vector<MenuItem> &items);
   void AddNativeEditMenu(const vector<MenuItem>&items);
   void AddNativePanel(const string &name, const Box&, const string &title, const vector<PanelItem>&);
+  void LaunchNativeAlert(const string &name, const string &arg);
   void LaunchNativeMenu(const string &title);
+  void LaunchNativeTable(const string &title);
   void LaunchNativeContextMenu(const vector<MenuItem> &items);
   void LaunchNativeFontChooser(const FontDesc &cur_font, const string &choose_cmd);
   void LaunchNativeFileChooser(bool files, bool dirs, bool multi, const string &choose_cmd);
@@ -631,14 +635,14 @@ struct Application : public ::LFApp {
   void SetNativePanelTitle(const string &n, const string &title);
 
   /// AddToolbar item values with prefix "toggle" stay depressed
-  void AddToolbar(const vector<pair<string, string>>&items);
-  void ToggleToolbarButton(const string &n);
+  void AddToolbar(const string &title, const vector<pair<string, string>>&items);
+  void ShowToolbar(const string &title, bool show_or_hide);
+  void ToggleToolbarButton(const string &title, const string &n);
 
   void OpenTouchKeyboard();
   void CloseTouchKeyboard();
   void CloseTouchKeyboardAfterReturn(bool);
   void SetTouchKeyboardTiled(bool);
-  Box GetTouchKeyboardBox();
   void ToggleTouchKeyboard();
   void SetAutoRotateOrientation(bool);
 
