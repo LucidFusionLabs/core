@@ -10,6 +10,7 @@ import android.os.*;
 import android.view.*;
 import android.widget.FrameLayout;
 import android.widget.FrameLayout.LayoutParams;
+import android.widget.RelativeLayout;
 import android.media.*;
 import android.content.*;
 import android.content.res.Configuration;
@@ -31,7 +32,7 @@ public class Activity extends android.app.Activity {
     public static native void NewMainLoop(Object activity, boolean reset);
     public static native void Minimize();
     public static native void Reshaped(int x, int y, int w, int h);
-    public static native void KeyPress(int upordonw, int keycode);
+    public static native void KeyPress(int keycode, int mod, int down);
     public static native void Touch(int action, float x, float y, float p);
     public static native void Fling(float x, float y, float vx, float vy);
     public static native void Scroll(float x, float y, float sx, float sy);
@@ -48,7 +49,7 @@ public class Activity extends android.app.Activity {
     public AudioManager audio;
     public GPlusClient gplus;
     public Advertising advertising;
-    public boolean waiting_activity_result, discard_next_global_layout;
+    public boolean waiting_activity_result;
     public int surface_width, surface_height, egl_version;
 
     @Override
@@ -75,16 +76,17 @@ public class Activity extends android.app.Activity {
             new ViewTreeObserver.OnGlobalLayoutListener() {
             public void onGlobalLayout(){
                 if (!init) return;
-                if (discard_next_global_layout) {
-                    discard_next_global_layout = false;
-                    return;
-                } 
                 Rect r = new Rect();
                 View view = root_window.getDecorView();
                 view.getWindowVisibleDisplayFrame(r);
 
                 int actionbar_h = action_bar == null ? 0 : action_bar.getHeight();
                 int h = r.bottom - r.top - actionbar_h;
+                FrameLayout.LayoutParams params = (FrameLayout.LayoutParams)tb.getLayoutParams();
+                params.bottomMargin = surface_height - h;
+                tb.setLayoutParams(params);
+                h -= params.height;
+
                 // Log.i("lfl", "onGlobalLayout(" + r.left + ", " + r.top + ", " + r.right + ", " + r.bottom + ", " + actionbar_h + ") = " + h);
                 Reshaped(r.left, surface_height - h, r.right - r.left, h); 
             }});
@@ -154,7 +156,6 @@ public class Activity extends android.app.Activity {
         Log.i("lfl", "surfaceChanged thread_exists=" + thread_exists);
         Reshaped(0, 0, width, height);
         if (thread_exists) return;
-        // if (!init) discard_next_global_layout = true;
         startRenderThread(true);
     }
 
@@ -271,6 +272,18 @@ public class Activity extends android.app.Activity {
 
     public void hideAds() { /* advertising.hideAds(); */ }
     public void showAds() { /* advertising.showAds(); */ }
+
+    public View addToolbar() {
+        RelativeLayout toolbar = new RelativeLayout(this);
+        android.widget.Button bt = new android.widget.Button(this);
+        bt.setText("A Button");
+        bt.setLayoutParams(new RelativeLayout.LayoutParams(50, 44)); 
+        toolbar.addView(bt);
+
+        frame_layout.addView(toolbar, new LayoutParams(RelativeLayout.LayoutParams.MATCH_PARENT,
+                                                       44, Gravity.BOTTOM));
+        return toolbar;
+    }
 }
 
 class MyGestureListener extends android.view.GestureDetector.SimpleOnGestureListener {
@@ -327,36 +340,68 @@ class GameView extends android.view.SurfaceView implements SurfaceHolder.Callbac
         if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) Activity.Accel(event.values[0], event.values[1], event.values[2]);
     }
 
-    public boolean onKey(View v, int keyCode, KeyEvent event) {
-        int keyChar = event.getUnicodeChar();
-        if (keyChar == 0) {
+    public boolean onKey(View v, int key_code, KeyEvent event) {
+        int key_char = event.getUnicodeChar(), mod = 0;
+        if (key_char == 0) {
+            int meta_state = event.getMetaState();
+            if ((meta_state & KeyEvent.META_SHIFT_ON) != 0) mod |= 1;
+            if ((meta_state & KeyEvent.META_CTRL_ON)  != 0) mod |= 2;
+            if ((meta_state & KeyEvent.META_ALT_ON)   != 0) mod |= 4;
+
             switch(event.getKeyCode()) {
-                case KeyEvent.KEYCODE_DEL:        keyChar = '\b';   break;
-                case KeyEvent.KEYCODE_ESCAPE:     keyChar = 0xE100; break;
-                case KeyEvent.KEYCODE_DPAD_UP:    keyChar = 0xE101; break;
-                case KeyEvent.KEYCODE_DPAD_DOWN:  keyChar = 0xE102; break;
-                case KeyEvent.KEYCODE_DPAD_LEFT:  keyChar = 0xE103; break;
-                case KeyEvent.KEYCODE_DPAD_RIGHT: keyChar = 0xE104; break;
-                case KeyEvent.KEYCODE_CTRL_LEFT:  keyChar = 0xE105; break;
-                case KeyEvent.KEYCODE_CTRL_RIGHT: keyChar = 0xE106; break;
-                case KeyEvent.KEYCODE_META_LEFT:  keyChar = 0xE107; break;
-                case KeyEvent.KEYCODE_META_RIGHT: keyChar = 0xE108; break;
-                case KeyEvent.KEYCODE_TAB:        keyChar = 0xE109; break;
-                case KeyEvent.KEYCODE_PAGE_UP:    keyChar = 0xE10A; break;
-                case KeyEvent.KEYCODE_PAGE_DOWN:  keyChar = 0xE10B; break;
-                case KeyEvent.KEYCODE_F1:         keyChar = 0xE10C; break;
-                case KeyEvent.KEYCODE_F2:         keyChar = 0xE10D; break;
-                case KeyEvent.KEYCODE_F3:         keyChar = 0xE10E; break;
-                case KeyEvent.KEYCODE_F4:         keyChar = 0xE10F; break;
-                case KeyEvent.KEYCODE_F5:         keyChar = 0xE110; break;
-                case KeyEvent.KEYCODE_F6:         keyChar = 0xE111; break;
-                case KeyEvent.KEYCODE_F7:         keyChar = 0xE112; break;
-                case KeyEvent.KEYCODE_F8:         keyChar = 0xE113; break;
-                case KeyEvent.KEYCODE_F9:         keyChar = 0xE114; break;
+                case KeyEvent.KEYCODE_DEL:        key_char = '\b';   break;
+                case KeyEvent.KEYCODE_ESCAPE:     key_char = 0xE100; break;
+                case KeyEvent.KEYCODE_DPAD_UP:    key_char = 0xE101; break;
+                case KeyEvent.KEYCODE_DPAD_DOWN:  key_char = 0xE102; break;
+                case KeyEvent.KEYCODE_DPAD_LEFT:  key_char = 0xE103; break;
+                case KeyEvent.KEYCODE_DPAD_RIGHT: key_char = 0xE104; break;
+                case KeyEvent.KEYCODE_CTRL_LEFT:  key_char = 0xE105; break;
+                case KeyEvent.KEYCODE_CTRL_RIGHT: key_char = 0xE106; break;
+                case KeyEvent.KEYCODE_META_LEFT:  key_char = 0xE107; break;
+                case KeyEvent.KEYCODE_META_RIGHT: key_char = 0xE108; break;
+                case KeyEvent.KEYCODE_TAB:        key_char = 0xE109; break;
+                case KeyEvent.KEYCODE_PAGE_UP:    key_char = 0xE10A; break;
+                case KeyEvent.KEYCODE_PAGE_DOWN:  key_char = 0xE10B; break;
+                case KeyEvent.KEYCODE_F1:         key_char = 0xE10C; break;
+                case KeyEvent.KEYCODE_F2:         key_char = 0xE10D; break;
+                case KeyEvent.KEYCODE_F3:         key_char = 0xE10E; break;
+                case KeyEvent.KEYCODE_F4:         key_char = 0xE10F; break;
+                case KeyEvent.KEYCODE_F5:         key_char = 0xE110; break;
+                case KeyEvent.KEYCODE_F6:         key_char = 0xE111; break;
+                case KeyEvent.KEYCODE_F7:         key_char = 0xE112; break;
+                case KeyEvent.KEYCODE_F8:         key_char = 0xE113; break;
+                case KeyEvent.KEYCODE_F9:         key_char = 0xE114; break;
+                case KeyEvent.KEYCODE_A:          key_char = 'a';    break;
+                case KeyEvent.KEYCODE_B:          key_char = 'b';    break;
+                case KeyEvent.KEYCODE_C:          key_char = 'c';    break;
+                case KeyEvent.KEYCODE_D:          key_char = 'd';    break;
+                case KeyEvent.KEYCODE_E:          key_char = 'e';    break;
+                case KeyEvent.KEYCODE_F:          key_char = 'f';    break;
+                case KeyEvent.KEYCODE_G:          key_char = 'g';    break;
+                case KeyEvent.KEYCODE_H:          key_char = 'h';    break;
+                case KeyEvent.KEYCODE_I:          key_char = 'i';    break;
+                case KeyEvent.KEYCODE_J:          key_char = 'j';    break;
+                case KeyEvent.KEYCODE_K:          key_char = 'k';    break;
+                case KeyEvent.KEYCODE_L:          key_char = 'l';    break;
+                case KeyEvent.KEYCODE_M:          key_char = 'm';    break;
+                case KeyEvent.KEYCODE_N:          key_char = 'n';    break;
+                case KeyEvent.KEYCODE_O:          key_char = 'o';    break;
+                case KeyEvent.KEYCODE_P:          key_char = 'p';    break;
+                case KeyEvent.KEYCODE_Q:          key_char = 'q';    break;
+                case KeyEvent.KEYCODE_R:          key_char = 'r';    break;
+                case KeyEvent.KEYCODE_S:          key_char = 's';    break;
+                case KeyEvent.KEYCODE_T:          key_char = 't';    break;
+                case KeyEvent.KEYCODE_U:          key_char = 'u';    break;
+                case KeyEvent.KEYCODE_V:          key_char = 'v';    break;
+                case KeyEvent.KEYCODE_W:          key_char = 'w';    break;
+                case KeyEvent.KEYCODE_X:          key_char = 'x';    break;
+                case KeyEvent.KEYCODE_Y:          key_char = 'y';    break;
+                case KeyEvent.KEYCODE_Z:          key_char = 'z';    break;
             }
         }
-        if      (event.getAction() == KeyEvent.ACTION_UP)   { Activity.KeyPress(0, keyChar); return true; }
-        else if (event.getAction() == KeyEvent.ACTION_DOWN) { Activity.KeyPress(1, keyChar); return true; }
+        if (key_char == 0) return false;
+        else if (event.getAction() == KeyEvent.ACTION_UP)   { Activity.KeyPress(key_char, mod, 0); return true; }
+        else if (event.getAction() == KeyEvent.ACTION_DOWN) { Activity.KeyPress(key_char, mod, 1); return true; }
         else return false;
     }
 
@@ -429,5 +474,5 @@ class GameView extends android.view.SurfaceView implements SurfaceHolder.Callbac
             Log.e("lfl", e.toString());
             for (StackTraceElement ste : e.getStackTrace()) Log.e("lfl", ste.toString());
         }
-    }    
+    }
 }

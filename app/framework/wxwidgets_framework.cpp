@@ -90,7 +90,7 @@ struct LFLWxWidgetCanvas : public wxGLCanvas {
   void OnKeyUp  (wxKeyEvent& event) { OnKeyEvent(GetKeyCode(event), false); }
   void OnKeyEvent(int key, bool down) {
     SetNativeWindow(screen);
-    int fired = key ? KeyPress(key, down) : 0;
+    int fired = key ? KeyPress(key, 0, down) : 0;
     if (fired && frame_on_keyboard_input) Refresh();
   }
   static int GetKeyCode(wxKeyEvent& event) {

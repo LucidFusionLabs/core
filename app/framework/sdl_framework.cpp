@@ -103,9 +103,9 @@ struct SDLFrameworkModule : public Module {
         else if (ev.window.event == SDL_WINDOWEVENT_CLOSE) app->CloseWindow(screen);
       }
       else if (ev.type == SDL_KEYDOWN) {
-        app->input->KeyPress(GetKey(ev.key.keysym.sym), 1);
+        app->input->KeyPress(GetKey(ev.key.keysym.sym), 0, 1);
       } else if (ev.type == SDL_KEYUP) {
-        app->input->KeyPress(GetKey(ev.key.keysym.sym), 0);
+        app->input->KeyPress(GetKey(ev.key.keysym.sym), 0, 0);
       } else if (ev.type == SDL_MOUSEMOTION) {
         app->input->MouseMove(Input::TransformMouseCoordinate(point(ev.motion.x, ev.motion.y)),
                               point(ev.motion.xrel, -ev.motion.yrel));

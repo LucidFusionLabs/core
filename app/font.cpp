@@ -325,6 +325,7 @@ int FakeFontEngine::InitGlyphs(Font *f, Glyph *g, int n) {
 }
 
 void Fonts::SelectFillColor(GraphicsDevice *gd) {
+  gd->Color4f(1, 1, 1, 1);
   gd->EnableTexture();
   if (auto cache = rgba_glyph_cache.get()) cache->tex.Bind();
   gd->DisableBlend();

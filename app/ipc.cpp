@@ -715,7 +715,7 @@ int ProcessAPIServer::HandleSetViewportRequest(int seq, const IPC::SetViewportRe
 }
 
 int ProcessAPIServer::HandleKeyPressRequest(int seq, const IPC::KeyPressRequest *req, Void) {
-  KeyPress(req->button(), req->down());
+  KeyPress(req->button(), 0, req->down());
   return IPC::Done;
 }
 

@@ -63,11 +63,17 @@ static bool ERRORvTest2() { return ERRORv(false, "ERRORvTest2"); }
 static bool ERRORvTest3() { return ERRORv(true,  "ERRORvTest1", "-2"); }
 static bool ERRORvTest4() { return ERRORv(false, "ERRORvTest2", "-2"); }
 
-TEST(LFAppTest, ERRORv) {
+TEST(AppTest, ERRORv) {
   EXPECT_EQ(true,  ERRORvTest1());
   EXPECT_EQ(false, ERRORvTest2());
   EXPECT_EQ(true,  ERRORvTest3());
   EXPECT_EQ(false, ERRORvTest4());
+}
+
+TEST(AppTest, InputMod) {
+  EXPECT_EQ(Key::Modifier::Shift, Key::Modifier::FromID(Key::Modifier::ID::Shift));
+  EXPECT_EQ(Key::Modifier::Ctrl,  Key::Modifier::FromID(Key::Modifier::ID::Ctrl));
+  EXPECT_EQ(Key::Modifier::Cmd,   Key::Modifier::FromID(Key::Modifier::ID::Cmd));
 }
 
 #if defined(LFL_OPENSSL) || defined(LFL_COMMONCRYPTO)

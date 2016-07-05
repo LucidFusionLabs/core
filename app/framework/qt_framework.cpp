@@ -114,7 +114,7 @@ class QtWindow : public QWindow {
   void keyEvent       (QKeyEvent *ev, bool down) {
     if (!init) return;
     ev->accept();
-    int key = GetKeyCode(ev), fired = key ? KeyPress(key, down) : 0;
+    int key = GetKeyCode(ev), fired = key ? KeyPress(key, 0, down) : 0;
     if (fired && frame_on_keyboard_input) RequestRender();
   }
 

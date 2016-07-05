@@ -17,11 +17,22 @@
  */
 
 namespace LFL {
+void Application::AddNativeAlert(const string &name, const vector<pair<string, string>>&items) {}
+void Application::LaunchNativeAlert(const string &name, const string &arg) {}
+
 void Application::AddNativeMenu(const string &title, const vector<MenuItem>&items) {}
 void Application::AddNativeEditMenu(const vector<MenuItem>&items) {}
 void Application::LaunchNativeMenu(const string &title) {}
 void Application::LaunchNativeFontChooser(const FontDesc &cur_font, const string &choose_cmd) {}
 void Application::LaunchNativeFileChooser(bool files, bool dirs, bool multi, const string &choose_cmd) {}
+
+void Application::AddToolbar(const string&, const vector<pair<string, string>>&items) {}
+void Application::ShowToolbar(const string &title, bool show_or_hide) {}
+void Application::ToggleToolbarButton(const string&, const string &n) {}
+
+void Application::AddNativeTable(const string &title, const vector<MenuItem> &items) {}
+void Application::LaunchNativeTable(const string &title) {}
+
 void Application::SavePassword(const string &h, const string &u, const string &pw) {}
 bool Application::LoadPassword(const string &h, const string &u, string *pw) { return false; }
 

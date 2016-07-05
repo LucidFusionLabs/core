@@ -7,17 +7,22 @@ int CompareTextureToBuffer(const Texture &test, const unsigned char *buf, int h,
     printf("CompareTextureToBuffer: %s\n%s\n", fn, test.HexDump().c_str());
     PngWriter::Write(fn, test);
   }
-  CHECK_LE(h,        test.height);
-  CHECK_LE(linesize, test.LineSize());
+  if (!(h        <= test.height))     { FATAL(BlankNull(fn), ": CHECK(", h,        " <= ", test.height,     ")"); }
+  if (!(linesize <= test.LineSize())) { FATAL(BlankNull(fn), ": CHECK(", linesize, " <= ", test.LineSize(), ")"); }
   for (int i=0, cmp; i<h; i++)
     if ((cmp = memcmp(buf + i*linesize, test.buf + i*test.LineSize(), linesize))) return cmp;
   return 0;
 }
 
 int CompareTextureToBuffer(int tex_id, const unsigned char *buf, int h, int linesize, const char *fn=0, bool debug=0) {
+#ifdef LFL_MOBILE
+  INFO("skipping ", BlankNull(fn));
+  return 0;
+#else
   Texture test;
   screen->gd->DumpTexture(&test, tex_id);
   return CompareTextureToBuffer(test, buf, h, linesize, fn, debug);
+#endif
 }
 
 }; // namespace LFL
@@ -36,7 +41,7 @@ extern "C" int MyAppFrame(Window *W, unsigned clicks, int flag) {
 }
 
 extern "C" void MyAppCreate(int argc, const char* const* argv) {
-  LFL::FLAGS_enable_video = true;
+  LFL::FLAGS_enable_video = LFL::FLAGS_enable_input = true;
   LFL::app = new LFL::Application(argc, argv);
   LFL::screen = new LFL::Window();
   LFL::screen->frame_cb = MyAppFrame;

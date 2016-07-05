@@ -218,9 +218,6 @@ void Application::ReleaseMouseFocus() {}
 string Application::GetClipboardText() { return ""; }
 void Application::SetClipboardText(const string &s) {}
 
-void Application::AddToolbar(const vector<pair<string, string>>&items) {}
-void Application::ToggleToolbarButton(const string &n) {}
-
 void Application::OpenTouchKeyboard() {
   static jmethodID jni_activity_method_show_keyboard =
     CheckNotNull(jni->env->GetMethodID(jni->activity_class, "showKeyboard", "()V"));
@@ -427,8 +424,8 @@ extern "C" void Java_com_lucidfusionlabs_app_Activity_Reshaped(JNIEnv *e, jclass
   QueueWindowReshaped(x, y, w, h);
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_Activity_KeyPress(JNIEnv *e, jclass c, jint down, jint keycode) {
-  QueueKeyPress(keycode, down);
+extern "C" void Java_com_lucidfusionlabs_app_Activity_KeyPress(JNIEnv *e, jclass c, jint keycode, jint mod, jint down) {
+  QueueKeyPress(keycode, mod, down);
   LFAppWakeup();
 }
 

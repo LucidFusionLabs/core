@@ -19,6 +19,65 @@
 #import <Cocoa/Cocoa.h>
 #include "core/app/app.h"
 #include "core/app/framework/apple_common.h"
+#include "core/app/framework/osx_common.h"
+
+@interface NativeAlert : NSObject<NSTextFieldDelegate>
+  @property (nonatomic, retain) NSAlert     *alert;
+  @property (nonatomic, retain) NSTextField *input;
+@end
+
+@implementation NativeAlert
+ {
+    bool add_text;
+    std::string style, cancel_cmd, confirm_cmd;
+  }
+
+  - (id)init:(const std::vector<std::pair<std::string, std::string>>&) kv {
+    CHECK_EQ(4, kv.size());
+    CHECK_EQ("style", kv[0].first);
+    style       = kv[0].second;
+    cancel_cmd  = kv[2].second;
+    confirm_cmd = kv[3].second;
+    _alert = [[NSAlert alloc] init];
+    [_alert addButtonWithTitle: [NSString stringWithUTF8String: kv[3].first.c_str()]];
+    [_alert addButtonWithTitle: [NSString stringWithUTF8String: kv[2].first.c_str()]];
+    [_alert setMessageText:     [NSString stringWithUTF8String: kv[1].first.c_str()]];
+    [_alert setInformativeText: [NSString stringWithUTF8String: kv[1].second.c_str()]];
+    [_alert setAlertStyle:NSWarningAlertStyle];
+    if ((add_text = style == "textinput")) {
+      _input = [[NSTextField alloc] initWithFrame:NSMakeRect(0, 0, 200, 24)];
+      _input.delegate = self;
+      [_alert setAccessoryView: _input];
+    }
+    return self;
+  }
+
+  - (void)alertDidEnd:(NSAlert *)alert returnCode:(NSInteger)returnCode contextInfo:(void *)contextInfo {
+    if (add_text) {
+      ShellRun(returnCode == NSAlertFirstButtonReturn ?
+               LFL::StrCat(confirm_cmd, " ", [[_input stringValue] UTF8String]).c_str() :
+               cancel_cmd.c_str());
+    } else {
+      ShellRun(returnCode == NSAlertFirstButtonReturn ? confirm_cmd.c_str() : cancel_cmd.c_str());
+    }
+  }
+
+  - (void)controlTextDidChange:(NSNotification *)notification {}
+  - (void)controlTextDidEndEditing:(NSNotification *)notification {}
+
+  + (void)addAlert:(const std::string&)name items:(const std::vector<std::pair<std::string, std::string>>&) kv {
+    alerts[name] = [[NativeAlert alloc] init: kv];
+  }
+
+  + (void)showAlert:(const std::string&)name arg:(const std::string&)a {
+    auto alert = alerts[name];
+    if (alert->add_text) [alert.input setStringValue: [NSString stringWithUTF8String: a.c_str()]];
+    [alert.alert beginSheetModalForWindow:[LFL::GetTyped<GameView*>(LFL::screen->id) window] modalDelegate:alert
+      didEndSelector:@selector(alertDidEnd:returnCode:contextInfo:) contextInfo:nil];
+  }
+
+  static std::unordered_map<std::string, NativeAlert*> alerts;
+@end
 
 @interface NativePanel : NSObject
   @property(readonly, assign) NSWindow *window;
@@ -143,6 +202,14 @@ static void AddNSMenuItems(NSMenu *menu, const vector<MenuItem>&items) {
                  keyEquivalent:    key];
     [item setRepresentedObject: [NSString stringWithUTF8String: v.c_str()]];
   }
+}
+
+void Application::AddNativeAlert(const string &name, const vector<pair<string, string>>&items) {
+  [NativeAlert addAlert:name items:items];
+}
+
+void Application::LaunchNativeAlert(const string &name, const string &arg) {
+  [NativeAlert showAlert:name arg:arg];
 }
 
 void Application::AddNativeMenu(const string &title_text, const vector<MenuItem>&items) {

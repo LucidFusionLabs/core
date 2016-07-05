@@ -229,8 +229,8 @@ static const char* const* ios_argv = 0;
 
   - (void)handleKey: (int)k {
     int fired = 0;
-    fired += KeyPress(k, 1);
-    fired += KeyPress(k, 0);
+    fired += KeyPress(k, 0, 1);
+    fired += KeyPress(k, 0, 0);
     if (fired && _frame_on_keyboard_input) [self.view setNeedsDisplay];
   }
 

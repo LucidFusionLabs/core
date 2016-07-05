@@ -93,8 +93,8 @@ struct X11FrameworkModule : public Module {
       XNextEvent(display, &xev);
       if (app->windows.size() > 1) SetNativeWindowByID(Void(xev.xany.window));
       switch (xev.type) {
-        case XKeyPress:       if (KeyPress(GetKeyCodeFromXEvent(display, xev), 1)) app->EventDrivenFrame(0); break;
-        case KeyRelease:      if (KeyPress(GetKeyCodeFromXEvent(display, xev), 0)) app->EventDrivenFrame(0); break;
+        case XKeyPress:       if (KeyPress(GetKeyCodeFromXEvent(display, xev), 0, 1)) app->EventDrivenFrame(0); break;
+        case KeyRelease:      if (KeyPress(GetKeyCodeFromXEvent(display, xev), 0, 0)) app->EventDrivenFrame(0); break;
         case ButtonPress:     if (screen && MouseClick(xev.xbutton.button, 1, xev.xbutton.x, screen->height-xev.xbutton.y)) app->EventDrivenFrame(0); break;
         case ButtonRelease:   if (screen && MouseClick(xev.xbutton.button, 0, xev.xbutton.x, screen->height-xev.xbutton.y)) app->EventDrivenFrame(0); break;
         case MotionNotify:    if (screen) { point p(xev.xmotion.x, screen->height-xev.xmotion.y); if (app->input->MouseMove(p, p - screen->mouse)) app->EventDrivenFrame(0); } break;

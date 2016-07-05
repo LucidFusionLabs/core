@@ -61,10 +61,10 @@ extern "C" void QueueWindowReshaped(int x, int y, int w, int h) { LFL::app->RunI
 extern "C" void QueueWindowMinimized()                          { LFL::app->RunInMainThread(LFL::bind(&LFL::Window::Minimized,   LFL::screen)); }
 extern "C" void QueueWindowUnMinimized()                        { LFL::app->RunInMainThread(LFL::bind(&LFL::Window::UnMinimized, LFL::screen)); }
 extern "C" void QueueWindowClosed()                             { LFL::app->RunInMainThread(LFL::bind([=](){ LFL::app->CloseWindow(LFL::screen); })); }
-extern "C" int  KeyPress  (int b, int d)                        { return LFL::app->input->KeyPress  (b, d); }
+extern "C" int  KeyPress  (int b, int m, int d)                 { return LFL::app->input->KeyPress  (b, m, d); }
 extern "C" int  MouseClick(int b, int d, int x,  int y)         { return LFL::app->input->MouseClick(b, d, LFL::point(x, y)); }
 extern "C" int  MouseMove (int x, int y, int dx, int dy)        { return LFL::app->input->MouseMove (LFL::point(x, y), LFL::point(dx, dy)); }
-extern "C" void QueueKeyPress  (int b, int d)                   { return LFL::app->input->QueueKeyPress  (b, d); }
+extern "C" void QueueKeyPress  (int b, int m, int d)            { return LFL::app->input->QueueKeyPress  (b, m, d); }
 extern "C" void QueueMouseClick(int b, int d, int x, int y)     { return LFL::app->input->QueueMouseClick(b, d, LFL::point(x, y)); }
 extern "C" void EndpointRead(void *svc, const char *name, const char *buf, int len) { LFL::app->net->EndpointRead(static_cast<LFL::Service*>(svc), name, buf, len); }
 

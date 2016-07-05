@@ -36,11 +36,12 @@ DEFINE_int(keyboard_repeat, 50, "Keyboard repeat in milliseconds");
 DEFINE_int(keyboard_delay, 180, "Keyboard delay until repeat in milliseconds");
 DEFINE_bool(input_debug, false, "Debug input events");
 
-const InputEvent::Id Key::Modifier::Ctrl   = 1LL<<32;
-const InputEvent::Id Key::Modifier::Cmd    = 1LL<<33;
-const InputEvent::Id Mouse::Button::_1     = 1LL<<34;
-const InputEvent::Id Mouse::Button::_2     = 1LL<<35;
-const InputEvent::Id MouseEvent            = 1LL<<36;
+const InputEvent::Id Key::Modifier::Shift  = 1LL<<32;
+const InputEvent::Id Key::Modifier::Ctrl   = 1LL<<33;
+const InputEvent::Id Key::Modifier::Cmd    = 1LL<<34;
+const InputEvent::Id Mouse::Button::_1     = 1LL<<35;
+const InputEvent::Id Mouse::Button::_2     = 1LL<<36;
+const InputEvent::Id MouseEvent            = 1LL<<37;
 const InputEvent::Id Mouse::Event::Motion  = MouseEvent+0;
 const InputEvent::Id Mouse::Event::Wheel   = MouseEvent+1;
 const InputEvent::Id Mouse::Event::Button1 = Mouse::Button::_1;
@@ -167,9 +168,9 @@ bool DragTracker::Update(const point &p, bool down) {
   return start;
 }
 
-void Input::QueueKeyPress(int key, bool down) {
+void Input::QueueKeyPress(int key, int mod, bool down) {
   ScopedMutex sm(queued_input_mutex);
-  queued_input.emplace_back(InputCB::KeyPress, 0, 0, key, down);
+  queued_input.emplace_back(InputCB::KeyPress, key, mod, down, 0);
 }
 
 void Input::QueueMouseClick(int button, bool down, const point &p) {
@@ -193,12 +194,12 @@ point Input::TransformMouseCoordinate(point p) {
 }
 
 void Input::ClearButtonsDown() {
-  if (left_shift_down)  { KeyPress(Key::LeftShift,  0);    left_shift_down = 0; }
-  if (right_shift_down) { KeyPress(Key::RightShift, 0);    left_shift_down = 0; }
-  if (left_ctrl_down)   { KeyPress(Key::LeftCtrl,   0);    left_ctrl_down  = 0; }
-  if (right_ctrl_down)  { KeyPress(Key::RightCtrl,  0);    right_ctrl_down = 0; }
-  if (left_cmd_down)    { KeyPress(Key::LeftCmd,    0);    left_cmd_down   = 0; }
-  if (right_cmd_down)   { KeyPress(Key::RightCmd,   0);    right_cmd_down  = 0; }
+  if (left_shift_down)  { KeyPress(Key::LeftShift,  0, 0); left_shift_down = 0; }
+  if (right_shift_down) { KeyPress(Key::RightShift, 0, 0); left_shift_down = 0; }
+  if (left_ctrl_down)   { KeyPress(Key::LeftCtrl,   0, 0); left_ctrl_down  = 0; }
+  if (right_ctrl_down)  { KeyPress(Key::RightCtrl,  0, 0); right_ctrl_down = 0; }
+  if (left_cmd_down)    { KeyPress(Key::LeftCmd,    0, 0); left_cmd_down   = 0; }
+  if (right_cmd_down)   { KeyPress(Key::RightCmd,   0, 0); right_cmd_down  = 0; }
   if (mouse_but1_down)  { MouseClick(1, 0, screen->mouse); mouse_but1_down = 0; }
   if (mouse_but2_down)  { MouseClick(2, 0, screen->mouse); mouse_but2_down = 0; }
 }
@@ -232,7 +233,7 @@ int Input::DispatchQueuedInput(bool event_on_keyboard_input, bool event_on_mouse
   int events = 0, v = 0;
   for (auto &i : icb)
     switch (i.type) { 
-      case InputCB::KeyPress:   v = KeyPress  (i.a, i.b);                         if (event_on_keyboard_input) events += v; break;
+      case InputCB::KeyPress:   v = KeyPress  (i.x, i.y, i.a);                    if (event_on_keyboard_input) events += v; break;
       case InputCB::MouseClick: v = MouseClick(i.a, i.b, point(i.x, i.y));        if (event_on_mouse_input)    events += v; break;
       case InputCB::MouseMove:  v = MouseMove (point(i.x, i.y), point(i.a, i.b)); if (event_on_mouse_input)    events += v; break;
       case InputCB::MouseWheel: v = MouseMove (point(i.x, i.y), point(i.a, i.b)); if (event_on_mouse_input)    events += v; break;
@@ -240,7 +241,7 @@ int Input::DispatchQueuedInput(bool event_on_keyboard_input, bool event_on_mouse
   return events;
 }
 
-int Input::KeyPress(int key, bool down) {
+int Input::KeyPress(int key, int mod, bool down) {
   if (!app->run) return 0;
 #ifdef LFL_DEBUG
   if (!app->MainThread()) ERROR("Input::KeyPress() called from thread ", Thread::GetId());
@@ -253,7 +254,14 @@ int Input::KeyPress(int key, bool down) {
   else if (key == Key::LeftCmd)       left_cmd_down = down;
   else if (key == Key::RightCmd)     right_cmd_down = down;
 
-  InputEvent::Id event = key | (CtrlKeyDown() ? Key::Modifier::Ctrl : 0) | (CmdKeyDown() ? Key::Modifier::Cmd : 0);
+  InputEvent::Id event = key;
+  if (mod) event |= Key::Modifier::FromID(mod);
+  else {
+    if (CtrlKeyDown ()) event |= Key::Modifier::Ctrl;
+    if (CmdKeyDown  ()) event |= Key::Modifier::Cmd;
+    if (ShiftKeyDown()) event |= Key::Modifier::Shift;
+  }
+
   int fired = KeyEventDispatch(event, down);
   if (fired) return fired;
 
@@ -266,7 +274,8 @@ int Input::KeyPress(int key, bool down) {
 int Input::KeyEventDispatch(InputEvent::Id event, bool down) {
   if (!down) return 0;
   int key = InputEvent::GetKey(event);
-  bool shift_down = ShiftKeyDown(), ctrl_down = CtrlKeyDown(), cmd_down = CmdKeyDown();
+  bool shift_down = event & Key::Modifier::Shift, ctrl_down = event & Key::Modifier::Ctrl,
+       cmd_down = event & Key::Modifier::Cmd;
   InputDebugIfDown("Input::KeyEventDispatch %s %d %d %d %d",
                    InputEvent::Name(event), key, shift_down, ctrl_down, cmd_down);
 

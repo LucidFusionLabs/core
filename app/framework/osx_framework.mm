@@ -21,12 +21,7 @@
 #include <AppKit/NSColor.h>
 #include <AppKit/NSColorSpace.h>
 #include "core/app/app.h"
-
-// GameView
-@interface GameView : NSView<NSWindowDelegate>
-  + (NSOpenGLPixelFormat *)defaultPixelFormat;
-  - (void)update;
-@end
+#include "core/app/framework/osx_common.h"
 
 @implementation GameView
   {
@@ -260,22 +255,22 @@
   - (void)keyPress:(NSEvent *)theEvent down:(bool)d {
     SetNativeWindow(screen);
     int c = getKeyCode([theEvent keyCode]);
-    int fired = c ? KeyPress(c, d) : 0;
+    int fired = c ? KeyPress(c, 0, d) : 0;
     if (fired && frame_on_keyboard_input) [self setNeedsDisplay:YES]; 
   }
 
   - (void)flagsChanged:(NSEvent *)theEvent {
     int flags = [theEvent modifierFlags];
     bool cmd = flags & NSCommandKeyMask, ctrl = flags & NSControlKeyMask, shift = flags & NSShiftKeyMask;
-    if (cmd   != cmd_down)   { KeyPress(0x82, cmd);   cmd_down   = cmd;   }
-    if (ctrl  != ctrl_down)  { KeyPress(0x86, ctrl);  ctrl_down  = ctrl;  }
-    if (shift != shift_down) { KeyPress(0x83, shift); shift_down = shift; }
+    if (cmd   != cmd_down)   { KeyPress(0x82, 0, cmd);   cmd_down   = cmd;   }
+    if (ctrl  != ctrl_down)  { KeyPress(0x86, 0, ctrl);  ctrl_down  = ctrl;  }
+    if (shift != shift_down) { KeyPress(0x83, 0, shift); shift_down = shift; }
   }
 
   - (void)clearKeyModifiers {
-    if (cmd_down)   { KeyPress(0x82, 0); cmd_down   = 0; }
-    if (ctrl_down)  { KeyPress(0x86, 0); ctrl_down  = 0; }
-    if (shift_down) { KeyPress(0x83, 0); shift_down = 0; }
+    if (cmd_down)   { KeyPress(0x82, 0, 0); cmd_down   = 0; }
+    if (ctrl_down)  { KeyPress(0x86, 0, 0); ctrl_down  = 0; }
+    if (shift_down) { KeyPress(0x83, 0, 0); shift_down = 0; }
   }
 
   static int getKeyCode(int c) {

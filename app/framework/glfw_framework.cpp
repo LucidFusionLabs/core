@@ -94,7 +94,7 @@ struct GLFWFrameworkModule : public Module {
   static void WindowClose(GLFWwindow *W)               { if (!LoadScreen(W)) return; app->CloseWindow(screen); }
   static void Key(GLFWwindow *W, int k, int s, int a, int m) {
     if (!LoadScreen(W)) return;
-    app->input->KeyPress((unsigned)k < 256 && isalpha((unsigned)k) ? ::tolower((unsigned)k) : k,
+    app->input->KeyPress((unsigned)k < 256 && isalpha((unsigned)k) ? ::tolower((unsigned)k) : k, 0,
                          (a == GLFW_PRESS || a == GLFW_REPEAT));
   }
 

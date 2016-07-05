@@ -28,7 +28,11 @@ struct InputEvent {
 
 struct Key {
   typedef long long Mod;
-  struct Modifier { static const InputEvent::Id Ctrl, Cmd; }; /// On PC Alt=Cmd
+  struct Modifier {
+    static const InputEvent::Id Shift, Ctrl, Cmd; /// On PC Alt=Cmd
+    struct ID { enum { Shift=1, Ctrl=2, Cmd=4 }; };
+    static Mod FromID(int id) { return Mod(id) << 32; }
+  };
   static const int Escape, Return, Up, Down, Left, Right, LeftShift, RightShift, LeftCtrl, RightCtrl, LeftCmd, RightCmd;
   static const int Tab, Space, Backspace, Delete, Quote, Backquote, PageUp, PageDown, Home, End;
   static const int F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F12;
@@ -195,7 +199,7 @@ struct Input : public Module {
   mutex queued_input_mutex;
   Bind paste_bind;
 
-  void QueueKeyPress(int key, bool down);
+  void QueueKeyPress(int key, int mod, bool down);
   void QueueMouseClick(int button, bool down, const point &p);
   void QueueMouseMovement(const point &p, const point &d);
   void QueueMouseWheel(const point &p, const point &d);
@@ -210,7 +214,7 @@ struct Input : public Module {
   int Init();
   int DispatchQueuedInput(bool event_on_keyboard_input, bool event_on_mouse_input);
 
-  int KeyPress(int key, bool down);
+  int KeyPress(int key, int mod, bool down);
   int KeyEventDispatch(InputEvent::Id event, bool down);
   int HandleSpecialKey(InputEvent::Id, KeyboardController*);
 
