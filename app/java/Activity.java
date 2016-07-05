@@ -5,12 +5,17 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.HashMap;
 
 import android.os.*;
 import android.view.*;
 import android.widget.FrameLayout;
 import android.widget.FrameLayout.LayoutParams;
+import android.widget.LinearLayout;
+import android.widget.TableLayout;
 import android.widget.RelativeLayout;
+import android.widget.Button;
+import android.widget.EditText;
 import android.media.*;
 import android.content.*;
 import android.content.res.Configuration;
@@ -20,6 +25,7 @@ import android.util.Log;
 import android.net.Uri;
 import android.graphics.Rect;
 import android.app.ActionBar;
+import android.app.AlertDialog;
 
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.egl.*;
@@ -37,6 +43,7 @@ public class Activity extends android.app.Activity {
     public static native void Fling(float x, float y, float vx, float vy);
     public static native void Scroll(float x, float y, float sx, float sy);
     public static native void Accel(float x, float y, float z);
+    public static native void ShellRun(String text);
 
     public static Activity instance;
     public static boolean init;
@@ -51,6 +58,9 @@ public class Activity extends android.app.Activity {
     public Advertising advertising;
     public boolean waiting_activity_result;
     public int surface_width, surface_height, egl_version;
+    public ArrayList<View> toolbar_top, toolbar_bottom;
+    public HashMap<String, View> toolbars;
+    public HashMap<String, AlertDialog> alerts;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -61,6 +71,10 @@ public class Activity extends android.app.Activity {
         root_window = getWindow();
         frame_layout = new FrameLayout(this);
         view = new GameView(this, getApplication());
+        toolbar_top = new ArrayList<View>();
+        toolbar_bottom = new ArrayList<View>();
+        toolbars = new HashMap<String, View>();
+        alerts = new HashMap<String, AlertDialog>();
 
         if (ActivityConfig.advertising) advertising = new Advertising(this, frame_layout);
         if (ActivityConfig.play_services) gplus = new GPlusClient(this);
@@ -82,10 +96,12 @@ public class Activity extends android.app.Activity {
 
                 int actionbar_h = action_bar == null ? 0 : action_bar.getHeight();
                 int h = r.bottom - r.top - actionbar_h;
-                FrameLayout.LayoutParams params = (FrameLayout.LayoutParams)tb.getLayoutParams();
-                params.bottomMargin = surface_height - h;
-                tb.setLayoutParams(params);
-                h -= params.height;
+                for (View tb : toolbar_bottom) {
+                    FrameLayout.LayoutParams params = (FrameLayout.LayoutParams)tb.getLayoutParams();
+                    params.bottomMargin = surface_height - h;
+                    tb.setLayoutParams(params);
+                    h -= tb.getHeight();
+                }
 
                 // Log.i("lfl", "onGlobalLayout(" + r.left + ", " + r.top + ", " + r.right + ", " + r.bottom + ", " + actionbar_h + ") = " + h);
                 Reshaped(r.left, surface_height - h, r.right - r.left, h); 
@@ -183,14 +199,17 @@ public class Activity extends android.app.Activity {
         android.view.inputmethod.InputMethodManager imm = (android.view.inputmethod.InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
         imm.toggleSoftInput(android.view.inputmethod.InputMethodManager.SHOW_FORCED, 0);
     }
+
     public void showKeyboard() {
         android.view.inputmethod.InputMethodManager imm = (android.view.inputmethod.InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
         imm.showSoftInput(view, android.view.inputmethod.InputMethodManager.SHOW_FORCED);
     }
+
     public void hideKeyboard() {
         android.view.inputmethod.InputMethodManager imm = (android.view.inputmethod.InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
         imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
     }
+
     public void hideKeyboardAfteEnter() {
         android.view.inputmethod.InputMethodManager imm = (android.view.inputmethod.InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
         imm.hideSoftInputFromWindow(view.getWindowToken(), android.view.inputmethod.InputMethodManager.HIDE_NOT_ALWAYS); 
@@ -272,17 +291,70 @@ public class Activity extends android.app.Activity {
 
     public void hideAds() { /* advertising.hideAds(); */ }
     public void showAds() { /* advertising.showAds(); */ }
+    
+    public void addAlert(final String title, final String[] k, final String[] v) {
+        runOnUiThread(new Runnable() { public void run() {
+            AlertDialog.Builder alert = new AlertDialog.Builder(Activity.instance);
+            alert.setTitle(k[1]);
+            alert.setMessage(v[1]);
 
-    public View addToolbar() {
-        RelativeLayout toolbar = new RelativeLayout(this);
-        android.widget.Button bt = new android.widget.Button(this);
-        bt.setText("A Button");
-        bt.setLayoutParams(new RelativeLayout.LayoutParams(50, 44)); 
-        toolbar.addView(bt);
+            final EditText input = v[0].equals("textinput") ? new EditText(Activity.instance) : null;
+            if (input != null) {
+                input.setInputType(android.text.InputType.TYPE_CLASS_TEXT);
+                alert.setView(input);
+            }
 
-        frame_layout.addView(toolbar, new LayoutParams(RelativeLayout.LayoutParams.MATCH_PARENT,
-                                                       44, Gravity.BOTTOM));
-        return toolbar;
+            alert.setPositiveButton(k[2], new DialogInterface.OnClickListener() {
+                                          public void onClick(DialogInterface dialog, int which) {
+                ShellRun((input == null) ? v[2] : (v[2] + " " + input.getText().toString()));
+            }});
+            alert.setNegativeButton(k[3], new DialogInterface.OnClickListener() {
+                                          public void onClick(DialogInterface dialog, int which) {
+                ShellRun((input == null) ? v[3] : (v[3] + " " + input.getText().toString()));
+            }});
+
+            AlertDialog dialog = alert.create();
+            alerts.put(title, dialog);
+        }});
+    }
+
+    public void showAlert(final String title) {
+        runOnUiThread(new Runnable() { public void run() {
+            // EditText input = (EditText) ((AlertDialog) dialog).findViewById(R.id.editText1);
+            // EditText input = (EditText)dialog.getView();
+            alerts.get(title).show();
+        }});
+    }
+
+    public void addToolbar(final String title, final String[] k, final String[] v) {
+        runOnUiThread(new Runnable() { public void run() {
+            LinearLayout toolbar = new LinearLayout(Activity.instance);
+            View.OnClickListener listener = new View.OnClickListener() { public void onClick(View v) {
+                Button bt = (Button)v;
+                ShellRun((String)bt.getTag());
+            }};
+
+            for (int i = 0; i < k.length; i++) {
+                Button bt = new Button(Activity.instance);
+                bt.setId(i);
+                bt.setTag(v[i]);
+                bt.setText(k[i]);
+                bt.setOnClickListener(listener);
+                bt.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f)); 
+                toolbar.addView(bt);
+            }
+            toolbars.put(title, toolbar);
+        }});
+    }
+
+    public void showToolbar(final String title) {
+        runOnUiThread(new Runnable() { public void run() {
+            View toolbar = toolbars.get(title);
+            toolbar_bottom.add(toolbar);
+            frame_layout.addView(toolbar, new LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,
+                                                           ViewGroup.LayoutParams.WRAP_CONTENT,
+                                                           Gravity.BOTTOM));
+        }});
     }
 }
 

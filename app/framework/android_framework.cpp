@@ -379,6 +379,7 @@ extern "C" void Java_com_lucidfusionlabs_app_Activity_Create(JNIEnv *e, jclass c
   jni->Init(a, true);
 
   CHECK(jni->view_class         = (jclass)e->NewGlobalRef(e->GetObjectClass(jni->view)));
+  CHECK(jni->string_class       = (jclass)e->NewGlobalRef(e->FindClass("java/lang/String")));
   CHECK(jni->throwable_class    = (jclass)e->NewGlobalRef(e->FindClass("java/lang/Throwable")));
   CHECK(jni->frame_class        = (jclass)e->NewGlobalRef(e->FindClass("java/lang/StackTraceElement")));
   CHECK(jni->assetmgr_class     = (jclass)e->NewGlobalRef(e->FindClass("android/content/res/AssetManager")));
@@ -475,6 +476,10 @@ extern "C" void Java_com_lucidfusionlabs_app_Activity_Scroll(JNIEnv *e, jclass c
 }
 
 extern "C" void Java_com_lucidfusionlabs_app_Activity_Accel(JNIEnv *e, jclass c, jfloat x, jfloat y, jfloat z) {}
+
+extern "C" void Java_com_lucidfusionlabs_app_Activity_ShellRun(JNIEnv *e, jclass c, jstring text) {
+  ShellRun(e->GetStringUTFChars(text, 0));
+}
 
 extern "C" void Java_com_lucidfusionlabs_app_GPlusClient_startGame(JNIEnv *e, jclass c, jboolean server, jstring pid) {
   char buf[128];
