@@ -50,7 +50,7 @@ extern "C" int LFAppFrame(bool handle_ev)  { return LFL::app->EventDrivenFrame(h
 extern "C" void LFAppTimerDrivenFrame()    { LFL::app->TimerDrivenFrame(true); }
 extern "C" void LFAppWakeup()              { return LFL::app->scheduler.Wakeup(LFL::screen); }
 extern "C" void LFAppResetGL()             { return LFL::app->ResetGL(); }
-extern "C" const char *LFAppDownloadDir()  { return LFL::app->dldir.c_str(); }
+extern "C" const char *LFAppSaveDir()      { return LFL::app->savedir.c_str(); }
 extern "C" void LFAppAtExit()              { delete LFL::app; }
 extern "C" void LFAppShutdown()                   { LFL::app->run=0; LFAppWakeup(); }
 extern "C" void WindowReshaped(int x, int y, int w, int h)      { LFL::screen->Reshaped(LFL::Box(x, y, w, h)); }
@@ -494,19 +494,19 @@ int Application::Create(const char *source_filename) {
     JNI *jni = LFL::Singleton<LFL::JNI>::Get();
     jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "getFilesDirCanonicalPath", "()Ljava/lang/String;"));
     jstring path = jstring(jni->env->CallObjectMethod(jni->activity, mid));
-    dldir = jni->GetJNIString(path);
+    savedir = jni->GetJNIString(path);
     jni->env->DeleteLocalRef(path);
 #elif defined(LFL_APPLE) && !defined(LFL_IOS_SIM)
-    dldir = StrCat(GetNSDocumentDirectory(), "/");
+    savedir = StrCat(GetNSDocumentDirectory(), "/");
 #elif defined(LFL_WINDOWS)
     char path[MAX_PATH] = { 0 };
     if (!SUCCEEDED(SHGetFolderPath(NULL, CSIDL_PERSONAL|CSIDL_FLAG_CREATE, NULL, 0, path))) return -1;
-    dldir = StrCat(path, "/");
+    savedir = StrCat(path, "/");
 #endif
   }
 
 #ifdef LFL_DEBUG
-  if (FLAGS_logfile.empty() && !FLAGS_logfile_.override) FLAGS_logfile = StrCat(dldir, name, ".txt");
+  if (FLAGS_logfile.empty() && !FLAGS_logfile_.override) FLAGS_logfile = StrCat(savedir, name, ".txt");
 #endif
   if (!FLAGS_logfile.empty()) {
     logfile = fopen(FLAGS_logfile.c_str(), "a");
@@ -515,7 +515,7 @@ int Application::Create(const char *source_filename) {
 
   INFO("startdir = ", startdir);
   INFO("assetdir = ", assetdir);
-  INFO("dldir = ", dldir);
+  INFO("savedir = ", savedir);
   INFO("rand_seed = ", init_rand_seed);
 
 #ifndef LFL_WINDOWS
@@ -733,7 +733,7 @@ Window::Window() : caption(app->name), fps(128), tex_mode(2, 1, 0), grab_mode(2,
 Window::~Window() {
   dialogs.clear();
   my_gui.clear();
-  if (console) console->WriteHistory(LFAppDownloadDir(), StrCat(app->name, "_console"), "");
+  if (console) console->WriteHistory(app->savedir, StrCat(app->name, "_console"), "");
   console.reset();
   delete gd;
 }
@@ -749,7 +749,7 @@ Box Window::Box(float xp, float yp, float xs, float ys, float xbl, float ybt, fl
 
 void Window::InitConsole(const Callback &animating_cb) {
   gui.push_back((console = make_unique<Console>(this, animating_cb)).get());
-  console->ReadHistory(LFAppDownloadDir(), StrCat(app->name, "_console"));
+  console->ReadHistory(app->savedir, StrCat(app->name, "_console"));
   console->Write(StrCat(caption, " started"));
   console->Write("Try console commands 'cmds' and 'flags'");
 }

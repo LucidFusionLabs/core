@@ -393,7 +393,7 @@ bool HTTPClient::WGet(const string &url, File *out, const ResponseCB &cb, const 
   if (!out && !cb) {
     string fn = BaseName(handler->path);
     if (fn.empty()) fn = "index.html";
-    unique_ptr<LocalFile> f = make_unique<LocalFile>(StrCat(LFAppDownloadDir(), fn), "w");
+    unique_ptr<LocalFile> f = make_unique<LocalFile>(StrCat(app->savedir, fn), "w");
     if (!f->Opened()) return ERRORv(false, "open file");
     handler->out = f.release();
   }

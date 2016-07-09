@@ -93,3 +93,6 @@
 [submodule "imports/libpng"]
 	path = imports/libpng
 	url = https://github.com/LucidFusionLabs/libpng
+[submodule "imports/sqlite-amalgamation"]
+	path = imports/sqlite-amalgamation
+	url = https://github.com/azadkuh/sqlite-amalgamation

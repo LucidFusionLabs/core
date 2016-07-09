@@ -31,7 +31,7 @@ Shell::Shell() {
   command.emplace_back("constants",    bind(&Shell::constants,     this, _1));
   command.emplace_back("conscolor",    bind(&Shell::consolecolor,  this, _1));
   command.emplace_back("clipboard",    bind(&Shell::clipboard,     this, _1));
-  command.emplace_back("dldir",        bind(&Shell::dldir,         this, _1));
+  command.emplace_back("savedir",      bind(&Shell::savedir,       this, _1));
   command.emplace_back("savesettings", bind(&Shell::savesettings,  this, _1));
   command.emplace_back("screenshot",   bind(&Shell::screenshot,    this, _1));
   command.emplace_back("fillmode",     bind(&Shell::fillmode,      this, _1));
@@ -110,7 +110,7 @@ void Shell::consolecolor(const vector<string>&) {
   screen->console->style.font.SetFont(app->fonts->Get(FLAGS_font, "", 9, Color::black));
 }
 
-void Shell::dldir(const vector<string>&) { INFO(LFAppDownloadDir()); }
+void Shell::savedir(const vector<string>&) { INFO(LFAppSaveDir()); }
 
 void Shell::savesettings(const vector<string> &a) {
   if (a.empty()) return INFO("usage: savesettings <fields>");
@@ -281,7 +281,7 @@ void Shell::sinth(const vector<string> &a) {
 void Shell::writesnap(const vector<string> &a) {
   SoundAsset *sa = app->soundasset(a.size() ? a[0] : "snap");
   if (sa) {
-    string filename = StrCat(LFAppDownloadDir(), "snap.wav"); 
+    string filename = StrCat(app->savedir, "snap.wav"); 
     RingSampler::Handle B(sa->wav.get());
     LocalFile lf(filename, "r");
     WavWriter w(&lf);

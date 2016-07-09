@@ -280,7 +280,7 @@ void QueueKeyPress(int button, int mod, int down);
 void QueueMouseClick(int button, int down, int x, int y);
 void EndpointRead(void*, const char *name, const char *buf, int len);
 void ShellRun(const char *text);
-const char *LFAppDownloadDir();
+const char *LFAppSaveDir();
 void BreakHook();
 
 #ifdef __cplusplus

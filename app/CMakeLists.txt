@@ -20,6 +20,7 @@ endmacro()
 
 add_app_def(LFL32)
 add_app_def(LFL64)
+add_app_def(LFL_IPC)
 add_app_def(LFL_DEBUG)
 add_app_def(LFL_APPLE)
 add_app_def(LFL_LINUX)

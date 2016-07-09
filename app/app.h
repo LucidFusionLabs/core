@@ -550,7 +550,7 @@ struct Window : public ::NativeWindow {
 };
 
 struct Application : public ::LFApp {
-  string name, progname, startdir, bindir, assetdir, dldir;
+  string name, progname, startdir, bindir, assetdir, savedir;
   int pid=0, opengles_version=2, argc=0;
   const char* const* argv=0;
   FILE *logfile=0;

@@ -155,14 +155,15 @@ if(LFL_PROTOBUF)
   option(protobuf_BUILD_TESTS OFF)
   add_subdirectory(protobuf/cmake protobuf)
   set(PROTOBUF_LIBRARY libprotobuf PARENT_SCOPE)
-  set(PROTOBUF_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/protobuf/src PARENT_SCOPE)
-  set(PROTOBUF_PROTOC_EXECUTABLE ${CMAKE_CURRENT_BINARY_DIR}/protobuf/protoc PARENT_SCOPE)
 endif()
 
 # flatbuffers
 if(LFL_FLATBUFFERS)
+  set(CMAKE_CXX_FLAGS_ORIG ${CMAKE_CXX_FLAGS})
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsigned-char")
   add_subdirectory(flatbuffers)
   set(FLATBUFFERS_LIB flatbuffers PARENT_SCOPE)
+  set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS_ORIG})
 endif()
 
 # capnproto
@@ -237,6 +238,18 @@ if(LFL_BOX2D)
   add_subdirectory(Box2D/Box2D)
   set(BOX2D_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/Box2D/Box2D PARENT_SCOPE)
   set(BOX2D_LIB Box2D PARENT_SCOPE)
+endif()
+
+# sqlite
+if(LFL_SQLITE)
+  if(LFL_IOS)
+    set(SQLITE_INCLUDE PARENT_SCOPE)
+    set(SQLITE_LIB -lsqlite3 PARENT_SCOPE)
+  else()
+    add_subdirectory(sqlite-amalgamation)
+    set(SQLITE_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/sqlite-amalgamation PARENT_SCOPE)
+    set(SQLITE_LIB sqlite3)
+  endif()
 endif()
 
 # assimp

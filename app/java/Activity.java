@@ -22,6 +22,7 @@ import android.content.res.Configuration;
 import android.content.pm.ActivityInfo;
 import android.hardware.*;
 import android.util.Log;
+import android.util.Pair;
 import android.net.Uri;
 import android.graphics.Rect;
 import android.app.ActionBar;
@@ -60,7 +61,7 @@ public class Activity extends android.app.Activity {
     public int surface_width, surface_height, egl_version;
     public ArrayList<View> toolbar_top, toolbar_bottom;
     public HashMap<String, View> toolbars;
-    public HashMap<String, AlertDialog> alerts;
+    public HashMap<String, Pair<AlertDialog, EditText>> alerts;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -74,7 +75,7 @@ public class Activity extends android.app.Activity {
         toolbar_top = new ArrayList<View>();
         toolbar_bottom = new ArrayList<View>();
         toolbars = new HashMap<String, View>();
-        alerts = new HashMap<String, AlertDialog>();
+        alerts = new HashMap<String, Pair<AlertDialog, EditText>>();
 
         if (ActivityConfig.advertising) advertising = new Advertising(this, frame_layout);
         if (ActivityConfig.play_services) gplus = new GPlusClient(this);
@@ -313,16 +314,15 @@ public class Activity extends android.app.Activity {
                 ShellRun((input == null) ? v[3] : (v[3] + " " + input.getText().toString()));
             }});
 
-            AlertDialog dialog = alert.create();
-            alerts.put(title, dialog);
+            alerts.put(title, new Pair<AlertDialog, EditText>(alert.create(), input));
         }});
     }
 
-    public void showAlert(final String title) {
+    public void showAlert(final String title, final String arg) {
         runOnUiThread(new Runnable() { public void run() {
-            // EditText input = (EditText) ((AlertDialog) dialog).findViewById(R.id.editText1);
-            // EditText input = (EditText)dialog.getView();
-            alerts.get(title).show();
+            Pair<AlertDialog, EditText> alert = alerts.get(title);
+            if (alert.second != null) { alert.second.setText(arg); }
+            alert.first.show();
         }});
     }
 

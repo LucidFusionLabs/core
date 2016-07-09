@@ -1001,7 +1001,7 @@ struct BerkeliumModule : public Module {
   int Frame(unsigned t) { Berkelium::update(); return 0; }
   int Free() { Berkelium::destroy(); return 0; }
   int Init() {
-    const char *homedir = LFAppDownloadDir();
+    const char *homedir = app->savedir;
     INFO("berkelium init");
     Berkelium::init(
 #ifdef _WIN32

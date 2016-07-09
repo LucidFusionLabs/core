@@ -40,7 +40,7 @@ void Application::AddNativeAlert(const string &name, const vector<pair<string, s
 
 void Application::LaunchNativeAlert(const string &name, const string &arg) {
   static jmethodID mid = CheckNotNull
-    (jni->env->GetMethodID(jni->activity_class, "showAlert", "(Ljava/lang/String;)V"));
+    (jni->env->GetMethodID(jni->activity_class, "showAlert", "(Ljava/lang/String;Ljava/lang/String;)V"));
   jni->env->CallVoidMethod(jni->activity, mid, jni->env->NewStringUTF(name.c_str()),
                            jni->env->NewStringUTF(arg.c_str()));
 }

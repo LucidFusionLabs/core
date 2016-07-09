@@ -4,6 +4,7 @@ set(LFL_ANDROID_NDK "$ENV{HOME}/android-ndk-r10d")
 set(LFL_ANDROID_ROOT "$ENV{HOME}/android-toolchain")
 set(LFL_GRADLE_BIN "$ENV{HOME}/gradle-2.4/bin/gradle")
 
+include(core/CMake/LFLOS.cmake)
 set(CMAKE_SYSTEM_NAME Linux)
 set(CMAKE_C_COMPILER ${LFL_ANDROID_ROOT}/bin/arm-linux-androideabi-gcc CACHE PATH "C compiler")
 set(CMAKE_CXX_COMPILER ${LFL_ANDROID_ROOT}/bin/arm-linux-androideabi-g++ CACHE PATH "C++ compiler")

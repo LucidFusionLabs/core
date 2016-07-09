@@ -186,7 +186,7 @@ string LocalFile::CreateTemporaryNameTemplate(const string &prefix) {
 #ifdef LFL_APPLE
   string dir = "/var/tmp/";
 #else
-  string dir = app->dldir;
+  string dir = app->savedir;
 #endif
   return StrCat(dir, app->name, "_", prefix, ".XXXXXXXX");
 }
@@ -753,7 +753,7 @@ int MatrixFile::WriteRow(File *file, const double *row, int N, bool lastrow) {
 /* SettingsFile */
 
 int SettingsFile::Load() {
-  int ret = SettingsFile::Read(LFAppDownloadDir(), StrCat(app->name, "_settings"));
+  int ret = SettingsFile::Read(app->savedir, StrCat(app->name, "_settings"));
   Singleton<FlagMap>::Get()->dirty = false;
   return ret;
 }
@@ -781,7 +781,7 @@ int SettingsFile::Write(const vector<string> &fields, const string &dir, const s
 int SettingsFile::Save(const vector<string> &fields) {
   Singleton<FlagMap>::Get()->dirty = false;
   chdir(app->startdir.c_str());
-  int ret = SettingsFile::Write(fields, LFAppDownloadDir(), StrCat(app->name, "_settings"));
+  int ret = SettingsFile::Write(fields, app->savedir, StrCat(app->name, "_settings"));
   INFO("wrote settings");
   return ret;
 }

@@ -124,7 +124,7 @@
       NSString *K = [NSString stringWithUTF8String: kv[i].first.c_str()];
       UIBarButtonItem *item =
         [[UIBarButtonItem alloc] initWithTitle:[NSString stringWithFormat:@"%@\U0000FE0E", K]
-        style:UIBarButtonItemStyleBordered target:self action:@selector(onClick:)];
+        style:UIBarButtonItemStylePlain target:self action:@selector(onClick:)];
       [items addObject:item];
       toolbar_titles[kv[i].first] = item;
       toolbar_cmds[item] = kv[i].second;
@@ -195,49 +195,85 @@
     std::vector<std::string> rows;
   }
   @property (nonatomic, retain) UITableView *table;
+  @property (nonatomic, retain) UIView *header;
+  @property (nonatomic, retain) UILabel *header_label;
 @end
 
 @implementation NativeTable
-  - (id)init {
+  {
+    int section_index;
+    std::vector<std::vector<LFL::MenuItem>> data;
+  }
+
+  - (id)init: (const std::string&)title items:(const std::vector<LFL::MenuItem>&)item {
+    data.emplace_back();
+    for (auto i : item) {
+      if (tuple_get<0>(i) == "<seperator>") {
+        data.emplace_back();
+        section_index++;
+      } else {
+        data[section_index].push_back(i);
+      }
+    }
+
     self = [super init];
-    _table = [[UITableView alloc] initWithFrame: [LFUIApplication sharedAppDelegate].view.bounds style:UITableViewStyleGrouped];
+    _table = [[UITableView alloc] initWithFrame: [LFUIApplication sharedAppDelegate].view.bounds
+              style:UITableViewStyleGrouped];
     _table.delegate = self;
     _table.dataSource = self;
+    _table.separatorInset = UIEdgeInsetsZero;
+    [_table setSeparatorStyle:UITableViewCellSeparatorStyleSingleLine];
+    [_table setSeparatorColor:[UIColor blackColor]];
+
+    _header_label = [[UILabel alloc] initWithFrame:CGRectZero];
+    UIFontDescriptor *font_desc = [_header_label.font.fontDescriptor
+      fontDescriptorWithSymbolicTraits:UIFontDescriptorTraitBold];
+    _header_label.font = [UIFont fontWithDescriptor:font_desc size:0];
+    _header_label.text = [NSString stringWithUTF8String: title.c_str()];
+    _header_label.textAlignment = NSTextAlignmentCenter;
+    [_header_label sizeToFit];
+
+    int label_height = _header_label.frame.size.height;
+    int header_height = fmax(label_height + 10, _table.sectionHeaderHeight);
+    _header_label.frame = CGRectMake(0, (header_height - label_height) / 2,
+                                     _table.frame.size.width, label_height);
+    _header = [[UIView alloc] initWithFrame:CGRectMake(0, 0, _table.frame.size.width, header_height)];
+    [_header addSubview: _header_label];
+    _table.tableHeaderView = _header;
     return self;
   }
 
-  - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-    return 2;
-  }
-
+  - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { return data.size(); }
   - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-    return 2;
+    CHECK_LT(section, data.size());
+    return data[section].size();
   }
 
   - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
     static NSString *cellIdentifier = @"cellIdentifier";
     UITableViewCell *cell = [self.table dequeueReusableCellWithIdentifier:cellIdentifier];
     if (cell == nil) {
+      CHECK_LT(indexPath.section, data.size());
+      CHECK_LT(indexPath.row, data[indexPath.section].size());
       cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:cellIdentifier];
-      cell.textLabel.text = @"foo"; // [_content objectAtIndex:indexPath.row];
+      cell.textLabel.text = [NSString stringWithUTF8String: tuple_get<0>(data[indexPath.section][indexPath.row]).c_str()];
     }
     return cell;
   }
 
   - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
     INFOf("select row %d", indexPath.row);
+    [_table removeFromSuperview];
   }
 
-  + (void)addTable:(const std::string&)title_text items:(const std::vector<LFL::MenuItem>&)item {
-    NSString *title = [NSString stringWithUTF8String: title_text.c_str()];
-    NativeTable *table = [[NativeTable alloc] init];
-    tables[title_text] = table;
+  + (void)addTable:(const std::string&)title items:(const std::vector<LFL::MenuItem>&)item {
+    NativeTable *table = [[NativeTable alloc] init: title items: item];
+    tables[title] = table;
   }
 
   + (void)launchTable:(const std::string&)title_text {
     auto it = tables.find(title_text);
     if (it == tables.end()) { ERRORf("unknown menu: %s", title_text.c_str()); return; }
-    INFOf("launching table %p ", it->second->_table);
     [[LFUIApplication sharedAppDelegate].view addSubview: it->second->_table];
   }
 

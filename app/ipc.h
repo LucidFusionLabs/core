@@ -19,7 +19,7 @@
 #ifndef LFL_CORE_APP_IPC_H__
 #define LFL_CORE_APP_IPC_H__
 
-#ifdef LFL_FLATBUFFERS
+#ifdef LFL_IPC
 #include "app/ipc_generated.h"
 #endif
 
@@ -209,7 +209,7 @@ struct TilesIPCClient : public TilesIPC { using TilesIPC::TilesIPC; void Run(int
 typedef LayersT<TilesIPCServer> LayersIPCServer;
 typedef LayersT<TilesIPCClient> LayersIPCClient;
 
-#ifndef LFL_FLATBUFFERS
+#ifndef LFL_IPC
 namespace IPC {
 struct Color {
   unsigned char r() const { return 0; }
@@ -282,7 +282,7 @@ struct MouseMoveResponse {};
 struct ExecuteScriptRequest {};
 struct ExecuteScriptResponse { struct String { string str() { return ""; } }; String *text() const { return 0; } };
 }; // namespace IPC
-#endif // LFL_FLATBUFFERS
+#endif // LFL_IPC
 
 struct ProcessAPI : public InterProcessComm {
   ProcessAPI(const string &n) : InterProcessComm(n) {}
