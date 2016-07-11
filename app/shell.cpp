@@ -22,6 +22,8 @@
 #include "core/web/document.h"
 
 namespace LFL {
+DEFINE_bool(shell_debug, false, "Print shell commands");
+
 Shell::Shell() {
   command.emplace_back("quit",         bind(&Shell::quit,          this, _1));
   command.emplace_back("console",      bind(&Shell::console,       this, _1));
@@ -67,6 +69,7 @@ bool Shell::FGets() {
 
 void Shell::Run(const string &text) {
   if (!app->MainThread()) return app->RunInMainThread(bind(&Shell::Run, this, string(text)));
+  if (FLAGS_shell_debug) INFO("Shell::Run(", text, ")");
 
   string cmd;
   vector<string> arg;

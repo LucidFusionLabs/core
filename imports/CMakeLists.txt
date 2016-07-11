@@ -248,7 +248,7 @@ if(LFL_SQLITE)
   else()
     add_subdirectory(sqlite-amalgamation)
     set(SQLITE_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/sqlite-amalgamation PARENT_SCOPE)
-    set(SQLITE_LIB sqlite3)
+    set(SQLITE_LIB sqlite3 PARENT_SCOPE)
   endif()
 endif()
 

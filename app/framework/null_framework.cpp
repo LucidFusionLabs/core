@@ -75,7 +75,6 @@ void Application::ReleaseMouseFocus() {}
 
 string Application::GetClipboardText() { return ""; }
 void Application::SetClipboardText(const string &s) {}
-void Application::LaunchNativeContextMenu(const vector<MenuItem>&items) {}
 
 void Application::OpenTouchKeyboard() {}
 void Application::SetTouchKeyboardTiled(bool v) {}

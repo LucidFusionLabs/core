@@ -277,21 +277,6 @@ string Application::GetClipboardText() {
   return ret;
 }
 
-void Application::AddNativeEditMenu(const vector<MenuItem>&items) {}
-void Application::AddNativeMenu(const string &title, const vector<MenuItem>&items) {
-  WinWindow *win = GetTyped<WinWindow*>(screen->impl);
-  if (!win->menu) { win->menu = CreateMenu(); win->context_menu = CreatePopupMenu(); }
-  HMENU hAddMenu = CreatePopupMenu();
-  for (auto &i : items) {
-    if (tuple_get<1>(i) == "<seperator>") AppendMenu(hAddMenu, MF_MENUBARBREAK, 0, NULL);
-    else AppendMenu(hAddMenu, MF_STRING, win->start_msg_id + win->menu_cmds.size(), tuple_get<1>(i).c_str());
-    win->menu_cmds.push_back(tuple_get<2>(i));
-  }
-  AppendMenu(win->menu, MF_STRING | MF_POPUP, (UINT)hAddMenu, title.c_str());
-  AppendMenu(win->context_menu, MF_STRING | MF_POPUP, (UINT)hAddMenu, title.c_str());
-  if (win->menubar) SetMenu(GetTyped<HWND>(screen->id), win->menu);
-}
-
 void Window::SetCaption(const string &v) { SetWindowText(GetTyped<HWND>(screen->id), v.c_str()); }
 void Window::SetResizeIncrements(float x, float y) {
   WinWindow *win = GetTyped<WinWindow*>(screen->impl);

@@ -129,7 +129,7 @@ void Application::GrabMouseFocus() {}
 
 void Application::SetClipboardText(const string &s) {}
 string Application::GetClipboardText() { return string(); }
-void Application::LaunchNativeContextMenu(const vector<MenuItem>&items) {}
+void Application::ShowNativeContextMenu(const vector<MenuItem>&items) {}
 
 void Application::OpenTouchKeyboard() {}
 void Application::SetTouchKeyboardTiled(bool v) {}

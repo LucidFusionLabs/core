@@ -1,5 +1,5 @@
 /*
- * $Id: osx_common.h 1336 2014-12-08 09:29:59Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -16,8 +16,11 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-@interface GameView : NSView<NSWindowDelegate>
-  + (NSOpenGLPixelFormat*)defaultPixelFormat;
-  - (void)clearKeyModifiers;
-  - (void)update;
-@end
+#include "core/app/db/sqlite.h"
+
+namespace LFL {
+void SQLite::Close(SQLite::Database db) {}
+SQLite::Database SQLite::Open(const string &fn) { return 0; }
+bool SQLite::Exec(SQLite::Database db, const string &q) { return false; }
+
+}; // namespace LFL

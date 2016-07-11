@@ -55,6 +55,7 @@ add_subdirectory(crypto)
 add_subdirectory(bindings)
 add_subdirectory(camera)
 add_subdirectory(cuda)
+add_subdirectory(db)
 
 add_library(lfl_app ${LFL_APP_TYPE} gui.cpp font.cpp flow.cpp app.cpp types/types.cpp
             types/string.cpp types/time.cpp bindings/syntax.cpp "file.cpp" assets.cpp loader.cpp

@@ -28,49 +28,56 @@ static pair<jobjectArray, jobjectArray> ToJObjectArray(const vector<pair<string,
   return make_pair(k, v);
 }
 
-void Application::AddNativeAlert(const string &name, const vector<pair<string, string>>&items) {
+NativeAlert::~NativeAlert() {}
+NativeAlert::NativeAlert(const StringPairVec &items) {
   CHECK_EQ(4, items.size());
   CHECK_EQ("style", items[0].first);
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->activity_class,
-                           "addAlert", "(Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;)V"));
+                           "addAlert", "([Ljava/lang/String;[Ljava/lang/String;)I"));
   auto kv = ToJObjectArray(items);
-  jni->env->CallVoidMethod(jni->activity, mid, jni->env->NewStringUTF(name.c_str()), kv.first, kv.second);
+  impl.v = Void(jni->env->CallIntMethod(jni->activity, mid, kv.first, kv.second));
 }
 
-void Application::LaunchNativeAlert(const string &name, const string &arg) {
+void NativeAlert::Show(const string &arg) {
   static jmethodID mid = CheckNotNull
-    (jni->env->GetMethodID(jni->activity_class, "showAlert", "(Ljava/lang/String;Ljava/lang/String;)V"));
-  jni->env->CallVoidMethod(jni->activity, mid, jni->env->NewStringUTF(name.c_str()),
-                           jni->env->NewStringUTF(arg.c_str()));
+    (jni->env->GetMethodID(jni->activity_class, "showAlert", "(ILjava/lang/String;)V"));
+  jni->env->CallVoidMethod(jni->activity, mid, jint(impl.v), jni->env->NewStringUTF(arg.c_str()));
 }
 
-void Application::AddNativeMenu(const string &title, const vector<MenuItem>&items) {}
-void Application::AddNativeEditMenu(const vector<MenuItem>&items) {}
-void Application::LaunchNativeMenu(const string &title) {}
-void Application::LaunchNativeFontChooser(const FontDesc &cur_font, const string &choose_cmd) {}
-void Application::LaunchNativeFileChooser(bool files, bool dirs, bool multi, const string &choose_cmd) {}
+NativeMenu::~NativeMenu() {}
+NativeMenu::NativeMenu(const string &title, const vector<MenuItem>&items) {}
+unique_ptr<NativeMenu> NativeMenu::CreateEditMenu(const vector<MenuItem> &items) { return nullptr; }
+void NativeMenu::Show() {}
 
-void Application::AddToolbar(const string &title, const vector<pair<string, string>>&items) {
+NativeToolbar::NativeToolbar(const StringPairVec &items) {
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->activity_class,
-                           "addToolbar", "(Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;)V"));
+                           "addToolbar", "([Ljava/lang/String;[Ljava/lang/String;)I"));
   auto kv = ToJObjectArray(items);
-  jni->env->CallVoidMethod(jni->activity, mid, jni->env->NewStringUTF(title.c_str()), kv.first, kv.second);
+  impl.v = Void(jni->env->CallIntMethod(jni->activity, mid, kv.first, kv.second));
 }
 
-void Application::ToggleToolbarButton(const string&, const string &n) {}
-void Application::ShowToolbar(const string &title, bool show_or_hide) {
+NativeToolbar::~NativeToolbar() {}
+void NativeToolbar::ToggleButton(const string &n) {}
+void NativeToolbar::Show(bool show_or_hide) {
   static jmethodID mid = CheckNotNull
-    (jni->env->GetMethodID(jni->activity_class, "showToolbar", "(Ljava/lang/String;)V"));
-  jni->env->CallVoidMethod(jni->activity, mid, jni->env->NewStringUTF(title.c_str()));
+    (jni->env->GetMethodID(jni->activity_class, "showToolbar", "(I)V"));
+  jni->env->CallVoidMethod(jni->activity, mid, jint(impl.v));
 }
 
-void Application::AddNativeTable(const string &title, const vector<MenuItem> &items) {}
-void Application::LaunchNativeTable(const string &title) {}
+NativeTable::~NativeTable() {}
+NativeTable::NativeTable(const string &title, const vector<MenuItem> &items) {}
+void NativeTable::AddToolbar(NativeToolbar*) {}
+void NativeTable::Show(bool show_or_hide) {}
 
-void Application::SavePassword(const string &h, const string &u, const string &pw) {}
-bool Application::LoadPassword(const string &h, const string &u, string *pw) { return false; }
+NativeNavigation::~NativeNavigation() {}
+NativeNavigation::NativeNavigation(NativeTable *r) {}
+void NativeNavigation::Show(bool show_or_hide) {}
+void NativeNavigation::PushTable(NativeTable *t) {}
+
+void Application::ShowNativeFontChooser(const FontDesc &cur_font, const string &choose_cmd) {}
+void Application::ShowNativeFileChooser(bool files, bool dirs, bool multi, const string &choose_cmd) {}
 
 void Application::OpenSystemBrowser(const string &url_text) {
   static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "openBrowser", "(Ljava/lang/String;)V"));
@@ -78,6 +85,9 @@ void Application::OpenSystemBrowser(const string &url_text) {
   jni->env->CallVoidMethod(jni->activity, mid, jurl);
   jni->env->DeleteLocalRef(jurl);
 }
+
+void Application::SavePassword(const string &h, const string &u, const string &pw) {}
+bool Application::LoadPassword(const string &h, const string &u, string *pw) { return false; }
 
 void Application::ShowAds() {
   static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "showAds", "()V"));

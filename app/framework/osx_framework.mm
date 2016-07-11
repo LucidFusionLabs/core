@@ -409,31 +409,6 @@ extern "C" void OSXCreateNativeApplicationMenu() {
   [item release];
 }
 
-extern "C" void OSXLaunchNativeContextMenu(typed_ptr O, int x, int y, int n, const char **key, const char **name, const char **val) {
-  NSEvent *event = [NSEvent mouseEventWithType: NSLeftMouseDown
-                            location:           NSMakePoint(x, y)
-                            modifierFlags:      NSLeftMouseDownMask
-                            timestamp:          0
-                            windowNumber:       [[LFL::GetTyped<GameView*>(O) window] windowNumber]
-                            context:            [[LFL::GetTyped<GameView*>(O) window] graphicsContext]
-                            eventNumber:        0
-                            clickCount:         1
-                            pressure:           1];
-
-  NSMenuItem *item;
-  NSMenu *menu = [[NSMenu alloc] init];
-  for (int i=0; i<n; i++) {
-    if (!strcmp(name[i], "<seperator>")) { [menu addItem:[NSMenuItem separatorItem]]; continue; }
-    item = [menu addItemWithTitle: [NSString stringWithUTF8String: name[i]]
-                 action:           (val[i][0] ? @selector(shellRun:) : nil)
-                 keyEquivalent:    [NSString stringWithUTF8String: key[i]]];
-    [item setRepresentedObject: [NSString stringWithUTF8String: val[i]]];
-  }
-
-  [NSMenu popUpContextMenu:menu withEvent:event forView:LFL::GetTyped<GameView*>(O)];
-  [LFL::GetTyped<GameView*>(O) clearKeyModifiers];
-}
-
 namespace LFL {
 const int Key::Escape = 0x81;
 const int Key::Return = '\r';
@@ -521,12 +496,6 @@ string Application::GetClipboardText() {
   NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
   NSString *v = [pasteboard stringForType:NSPasteboardTypeString];
   return [v UTF8String];
-}
-
-void Application::LaunchNativeContextMenu(const vector<MenuItem>&items) {
-  vector<const char *> k, n, v;
-  for (auto &i : items) { k.push_back(tuple_get<0>(i).c_str()); n.push_back(tuple_get<1>(i).c_str()); v.push_back(tuple_get<2>(i).c_str()); }
-  OSXLaunchNativeContextMenu(screen->id, screen->mouse.x, screen->mouse.y, items.size(), &k[0], &n[0], &v[0]);
 }
 
 void Application::OpenTouchKeyboard() {}

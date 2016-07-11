@@ -1,5 +1,5 @@
 /*
- * $Id: osx_common.h 1336 2014-12-08 09:29:59Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -16,8 +16,15 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-@interface GameView : NSView<NSWindowDelegate>
-  + (NSOpenGLPixelFormat*)defaultPixelFormat;
-  - (void)clearKeyModifiers;
-  - (void)update;
-@end
+#ifndef LFL_CORE_APP_DB_SQLITE_H__
+#define LFL_CORE_APP_DB_SQLITE_H__
+
+namespace LFL {
+  struct SQLite {
+    struct Database : public VoidPtr { using VoidPtr::VoidPtr; };
+    static void Close(Database db);
+    static Database Open(const string &fn);
+    static bool Exec(Database db, const string&);
+  };
+}; // namespace LFL
+#endif // LFL_CORE_APP_DB_SQLITE_H__

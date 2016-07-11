@@ -42,7 +42,7 @@
   - (CGRect)getKeyboardFrame;
 @end
 
-@interface NativeToolbar : NSObject
+@interface IOSToolbar : NSObject
   + (int)getBottomHeight;
   + (void)updateFrame;
 @end

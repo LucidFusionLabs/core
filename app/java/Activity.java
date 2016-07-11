@@ -60,8 +60,8 @@ public class Activity extends android.app.Activity {
     public boolean waiting_activity_result;
     public int surface_width, surface_height, egl_version;
     public ArrayList<View> toolbar_top, toolbar_bottom;
-    public HashMap<String, View> toolbars;
-    public HashMap<String, Pair<AlertDialog, EditText>> alerts;
+    public ArrayList<View> toolbars;
+    public ArrayList<Pair<AlertDialog, EditText>> alerts;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -74,8 +74,8 @@ public class Activity extends android.app.Activity {
         view = new GameView(this, getApplication());
         toolbar_top = new ArrayList<View>();
         toolbar_bottom = new ArrayList<View>();
-        toolbars = new HashMap<String, View>();
-        alerts = new HashMap<String, Pair<AlertDialog, EditText>>();
+        toolbars = new ArrayList<View>();
+        alerts = new ArrayList<Pair<AlertDialog, EditText>>();
 
         if (ActivityConfig.advertising) advertising = new Advertising(this, frame_layout);
         if (ActivityConfig.play_services) gplus = new GPlusClient(this);
@@ -293,7 +293,9 @@ public class Activity extends android.app.Activity {
     public void hideAds() { /* advertising.hideAds(); */ }
     public void showAds() { /* advertising.showAds(); */ }
     
-    public void addAlert(final String title, final String[] k, final String[] v) {
+    public int addAlert(final String[] k, final String[] v) {
+        final int id = alerts.size();
+        alerts.add(null);
         runOnUiThread(new Runnable() { public void run() {
             AlertDialog.Builder alert = new AlertDialog.Builder(Activity.instance);
             alert.setTitle(k[1]);
@@ -314,19 +316,22 @@ public class Activity extends android.app.Activity {
                 ShellRun((input == null) ? v[3] : (v[3] + " " + input.getText().toString()));
             }});
 
-            alerts.put(title, new Pair<AlertDialog, EditText>(alert.create(), input));
+            alerts.set(id, new Pair<AlertDialog, EditText>(alert.create(), input));
         }});
+        return id;
     }
 
-    public void showAlert(final String title, final String arg) {
+    public void showAlert(final int id, final String arg) {
         runOnUiThread(new Runnable() { public void run() {
-            Pair<AlertDialog, EditText> alert = alerts.get(title);
+            Pair<AlertDialog, EditText> alert = alerts.get(id);
             if (alert.second != null) { alert.second.setText(arg); }
             alert.first.show();
         }});
     }
 
-    public void addToolbar(final String title, final String[] k, final String[] v) {
+    public int addToolbar(final String[] k, final String[] v) {
+        final int id = toolbars.size();
+        toolbars.add(null);
         runOnUiThread(new Runnable() { public void run() {
             LinearLayout toolbar = new LinearLayout(Activity.instance);
             View.OnClickListener listener = new View.OnClickListener() { public void onClick(View v) {
@@ -343,13 +348,14 @@ public class Activity extends android.app.Activity {
                 bt.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f)); 
                 toolbar.addView(bt);
             }
-            toolbars.put(title, toolbar);
+            toolbars.set(id, toolbar);
         }});
+        return id;
     }
 
-    public void showToolbar(final String title) {
+    public void showToolbar(final int id) {
         runOnUiThread(new Runnable() { public void run() {
-            View toolbar = toolbars.get(title);
+            View toolbar = toolbars.get(id);
             toolbar_bottom.add(toolbar);
             frame_layout.addView(toolbar, new LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,
                                                            ViewGroup.LayoutParams.WRAP_CONTENT,

@@ -21,30 +21,27 @@
 #include "core/app/framework/apple_common.h"
 #include "core/app/framework/osx_common.h"
 
-@interface NativeAlert : NSObject<NSTextFieldDelegate>
+@interface OSXAlert : NSObject<NSTextFieldDelegate>
   @property (nonatomic, retain) NSAlert     *alert;
   @property (nonatomic, retain) NSTextField *input;
+  @property (nonatomic)         bool         add_text;
+  @property (nonatomic)         std::string  style, cancel_cmd, confirm_cmd;
 @end
 
-@implementation NativeAlert
- {
-    bool add_text;
-    std::string style, cancel_cmd, confirm_cmd;
-  }
-
+@implementation OSXAlert
   - (id)init:(const std::vector<std::pair<std::string, std::string>>&) kv {
     CHECK_EQ(4, kv.size());
     CHECK_EQ("style", kv[0].first);
-    style       = kv[0].second;
-    cancel_cmd  = kv[2].second;
-    confirm_cmd = kv[3].second;
+    _style       = kv[0].second;
+    _cancel_cmd  = kv[2].second;
+    _confirm_cmd = kv[3].second;
     _alert = [[NSAlert alloc] init];
     [_alert addButtonWithTitle: [NSString stringWithUTF8String: kv[3].first.c_str()]];
     [_alert addButtonWithTitle: [NSString stringWithUTF8String: kv[2].first.c_str()]];
     [_alert setMessageText:     [NSString stringWithUTF8String: kv[1].first.c_str()]];
     [_alert setInformativeText: [NSString stringWithUTF8String: kv[1].second.c_str()]];
     [_alert setAlertStyle:NSWarningAlertStyle];
-    if ((add_text = style == "textinput")) {
+    if ((_add_text = _style == "textinput")) {
       _input = [[NSTextField alloc] initWithFrame:NSMakeRect(0, 0, 200, 24)];
       _input.delegate = self;
       [_alert setAccessoryView: _input];
@@ -53,39 +50,26 @@
   }
 
   - (void)alertDidEnd:(NSAlert *)alert returnCode:(NSInteger)returnCode contextInfo:(void *)contextInfo {
-    if (add_text) {
+    if (_add_text) {
       ShellRun(returnCode == NSAlertFirstButtonReturn ?
-               LFL::StrCat(confirm_cmd, " ", [[_input stringValue] UTF8String]).c_str() :
-               cancel_cmd.c_str());
+               LFL::StrCat(_confirm_cmd, " ", [[_input stringValue] UTF8String]).c_str() :
+               _cancel_cmd.c_str());
     } else {
-      ShellRun(returnCode == NSAlertFirstButtonReturn ? confirm_cmd.c_str() : cancel_cmd.c_str());
+      ShellRun(returnCode == NSAlertFirstButtonReturn ? _confirm_cmd.c_str() : _cancel_cmd.c_str());
     }
   }
 
   - (void)controlTextDidChange:(NSNotification *)notification {}
   - (void)controlTextDidEndEditing:(NSNotification *)notification {}
-
-  + (void)addAlert:(const std::string&)name items:(const std::vector<std::pair<std::string, std::string>>&) kv {
-    alerts[name] = [[NativeAlert alloc] init: kv];
-  }
-
-  + (void)showAlert:(const std::string&)name arg:(const std::string&)a {
-    auto alert = alerts[name];
-    if (alert->add_text) [alert.input setStringValue: [NSString stringWithUTF8String: a.c_str()]];
-    [alert.alert beginSheetModalForWindow:[LFL::GetTyped<GameView*>(LFL::screen->id) window] modalDelegate:alert
-      didEndSelector:@selector(alertDidEnd:returnCode:contextInfo:) contextInfo:nil];
-  }
-
-  static std::unordered_map<std::string, NativeAlert*> alerts;
 @end
 
-@interface NativePanel : NSObject
+@interface OSXPanel : NSObject
   @property(readonly, assign) NSWindow *window;
   - (void) show;
   - (void) addTextField: (NSTextField*) tf withCommand: (const std::string&) cmd;
 @end
 
-@implementation NativePanel
+@implementation OSXPanel
   {
     std::vector<std::pair<NSButton*,    std::string>> buttons;
     std::vector<std::pair<NSTextField*, std::string>> textfields;
@@ -132,29 +116,6 @@
     CHECK_RANGE(tag, 0, textfields.size());
     ShellRun(LFL::StrCat(textfields[tag].second, " ", [[sender stringValue] UTF8String]).c_str());
   }
-
-  + (NativePanel*) addPanelNamed: (const std::string&) n withBox: (const LFL::Box&) b {
-    if (panels.find(n) != panels.end()) return nullptr;
-    NativePanel *ret = [[NativePanel alloc] initWithBox: b];
-    panels[n] = ret;
-    return ret;
-  }
-
-  + (bool) showPanelNamed: (const std::string&) n {
-    auto it = panels.find(n);
-    if (it == panels.end()) return false;
-    [it->second show];
-    return true;
-  }
-
-  + (bool) setPanelTitle: (const std::string&) title withName: (const std::string&) n {
-    auto it = panels.find(n);
-    if (it == panels.end()) return false;
-    [[it->second window] setTitle: [NSString stringWithUTF8String: title.c_str()]];
-    return true;
-  }
-
-  static std::unordered_map<std::string, NativePanel*> panels;
 @end
 
 @interface FontChooser : NSObject
@@ -204,15 +165,21 @@ static void AddNSMenuItems(NSMenu *menu, const vector<MenuItem>&items) {
   }
 }
 
-void Application::AddNativeAlert(const string &name, const vector<pair<string, string>>&items) {
-  [NativeAlert addAlert:name items:items];
+NativeAlert::~NativeAlert() { if (auto alert = FromVoid<OSXAlert*>(impl)) [alert release]; }
+NativeAlert::NativeAlert(const string &name, const vector<pair<string, string>>&items) {
+  impl = [[OSXAlert alloc] init: items];
 }
 
-void Application::LaunchNativeAlert(const string &name, const string &arg) {
-  [NativeAlert showAlert:name arg:arg];
+void NativeAlert::Show(const string &arg) {
+  auto alert = FromVoid<OSXAlert*>(impl);
+  if (alert.add_text) [alert.input setStringValue: [NSString stringWithUTF8String: arg.c_str()]];
+  [alert.alert beginSheetModalForWindow:[GetTyped<GameView*>(screen->id) window] modalDelegate:alert
+    didEndSelector:@selector(alertDidEnd:returnCode:contextInfo:) contextInfo:nil];
+  [GetTyped<GameView*>(screen->id) clearKeyModifiers];
 }
 
-void Application::AddNativeMenu(const string &title_text, const vector<MenuItem>&items) {
+NativeMenu::~NativeMenu() { if (auto menu = FromVoid<NSMenu*>(impl)) [menu release]; }
+NativeMenu::NativeMenu(const string &title_text, const vector<MenuItem>&items) {
   NSString *title = [NSString stringWithUTF8String: title_text.c_str()];
   NSMenu *menu = [[NSMenu alloc] initWithTitle: title];
   AddNSMenuItems(menu, items);
@@ -223,7 +190,7 @@ void Application::AddNativeMenu(const string &title_text, const vector<MenuItem>
   [item release];
 }
 
-void Application::AddNativeEditMenu(const vector<MenuItem>&items) {
+unique_ptr<NativeMenu> NativeMenu::CreateEditMenu(const vector<MenuItem>&items) {
   NSMenuItem *item; 
   NSMenu *menu = [[NSMenu alloc] initWithTitle:@"Edit"];
   item = [menu addItemWithTitle:@"Copy"  action:@selector(copy:)  keyEquivalent:@"c"];
@@ -234,13 +201,12 @@ void Application::AddNativeEditMenu(const vector<MenuItem>&items) {
   [[NSApp mainMenu] addItem: item];
   [menu release];
   [item release];
+  return make_unique<NativeMenu>(nullptr);
 }
 
-void Application::LaunchNativePanel(const string &n) { [NativePanel showPanelNamed: n]; }
-void Application::SetNativePanelTitle(const string &n, const string &title) { [NativePanel setPanelTitle: title withName: n]; }
-void Application::AddNativePanel(const string &name, const Box &b, const string &title, const vector<PanelItem> &items) {
-  NativePanel *panel = [NativePanel addPanelNamed: name withBox: b];
-  CHECK(panel);
+NativePanel::~NativePanel() { if (auto panel = FromVoid<OSXPanel*>(impl)) [panel release]; }
+NativePanel::NativePanel(const Box &b, const string &title, const vector<PanelItem> &items) {
+  OSXPanel *panel = [[OSXPanel alloc] initWithBox: b];
   [[panel window] setTitle: [NSString stringWithUTF8String: title.c_str()]];
   for (auto &i : items) {
     const Box &b = tuple_get<1>(i);
@@ -258,14 +224,20 @@ void Application::AddNativePanel(const string &name, const Box &b, const string 
       [button setBezelStyle:NSRoundedBezelStyle];
     } else ERROR("unknown panel item ", t);
   }
+  impl = panel;
 }
 
-void Application::LaunchNativeFontChooser(const FontDesc &cur_font, const string &choose_cmd) {
+void NativePanel::Show() { [FromVoid<OSXPanel*>(impl) show]; }
+void NativePanel::SetTitle(const string &title) { 
+  [[FromVoid<OSXPanel*>(impl) window] setTitle: [NSString stringWithUTF8String: title.c_str()]];
+}
+
+void Application::ShowNativeFontChooser(const FontDesc &cur_font, const string &choose_cmd) {
   static FontChooser *font_chooser = [FontChooser alloc];
   [font_chooser selectFont:cur_font.name.c_str() size:cur_font.size cmd:choose_cmd.c_str()];
 }
 
-void Application::LaunchNativeFileChooser(bool choose_files, bool choose_dirs, bool choose_multi,
+void Application::ShowNativeFileChooser(bool choose_files, bool choose_dirs, bool choose_multi,
                                           const string &choose_cmd) {
   NSOpenPanel *panel = [NSOpenPanel openPanel];
   [panel setCanChooseFiles:choose_files];
@@ -281,6 +253,32 @@ void Application::LaunchNativeFileChooser(bool choose_files, bool choose_dirs, b
     run.append([[url absoluteString] UTF8String]);
   }
   if (run.size() > start.size()) ShellRun(run.c_str());
+}
+
+void Application::ShowNativeContextMenu(const vector<MenuItem>&items) {
+  NSEvent *event = [NSEvent mouseEventWithType: NSLeftMouseDown
+                            location:           NSMakePoint(screen->mouse.x, screen->mouse.y)
+                            modifierFlags:      NSLeftMouseDownMask
+                            timestamp:          0
+                            windowNumber:       [[LFL::GetTyped<GameView*>(screen->id) window] windowNumber]
+                            context:            [[LFL::GetTyped<GameView*>(screen->id) window] graphicsContext]
+                            eventNumber:        0
+                            clickCount:         1
+                            pressure:           1];
+
+  NSMenuItem *item;
+  NSMenu *menu = [[NSMenu alloc] init];
+  for (auto &i : items) {
+    const char *k = tuple_get<0>(i).c_str(), *n = tuple_get<1>(i).c_str(), *v = tuple_get<2>(i).c_str();
+    if (!strcmp(n, "<seperator>")) { [menu addItem:[NSMenuItem separatorItem]]; continue; }
+    item = [menu addItemWithTitle: [NSString stringWithUTF8String: n]
+                 action:           (v[0] ? @selector(shellRun:) : nil)
+                 keyEquivalent:    [NSString stringWithUTF8String: k]];
+    [item setRepresentedObject: [NSString stringWithUTF8String: v]];
+  }
+
+  [NSMenu popUpContextMenu:menu withEvent:event forView:LFL::GetTyped<GameView*>(screen->id)];
+  [LFL::GetTyped<GameView*>(screen->id) clearKeyModifiers];
 }
 
 void Application::OpenSystemBrowser(const string &url_text) {

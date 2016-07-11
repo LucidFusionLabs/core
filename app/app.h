@@ -222,10 +222,11 @@ template <class X> struct Singleton { static X *Get() { static X instance; retur
 template <class X> struct V2;
 typedef V2<float> v2;
 typedef V2<int> point;
-typedef vector<string> StringVec;
 typedef lock_guard<mutex> ScopedMutex;
 typedef function<void()> Callback;
 typedef function<void(const string&)> StringCB;
+typedef vector<string> StringVec;
+typedef vector<pair<string, string>> StringPairVec;
 void Log(int level, const char *file, int line, const string &m);
 }; // namespace LFL
 
@@ -620,24 +621,9 @@ struct Application : public ::LFApp {
   void SetClipboardText(const string &s);
   void OpenSystemBrowser(const string &url);
 
-  void AddNativeAlert(const string &name, const vector<pair<string, string>>&items);
-  void AddNativeMenu(const string &title, const vector<MenuItem> &items);
-  void AddNativeTable(const string &title, const vector<MenuItem> &items);
-  void AddNativeEditMenu(const vector<MenuItem>&items);
-  void AddNativePanel(const string &name, const Box&, const string &title, const vector<PanelItem>&);
-  void LaunchNativeAlert(const string &name, const string &arg);
-  void LaunchNativeMenu(const string &title);
-  void LaunchNativeTable(const string &title);
-  void LaunchNativeContextMenu(const vector<MenuItem> &items);
-  void LaunchNativeFontChooser(const FontDesc &cur_font, const string &choose_cmd);
-  void LaunchNativeFileChooser(bool files, bool dirs, bool multi, const string &choose_cmd);
-  void LaunchNativePanel(const string &n);
-  void SetNativePanelTitle(const string &n, const string &title);
-
-  /// AddToolbar item values with prefix "toggle" stay depressed
-  void AddToolbar(const string &title, const vector<pair<string, string>>&items);
-  void ShowToolbar(const string &title, bool show_or_hide);
-  void ToggleToolbarButton(const string &title, const string &n);
+  void ShowNativeContextMenu(const vector<MenuItem> &items);
+  void ShowNativeFontChooser(const FontDesc &cur_font, const string &choose_cmd);
+  void ShowNativeFileChooser(bool files, bool dirs, bool multi, const string &choose_cmd);
 
   void OpenTouchKeyboard();
   void CloseTouchKeyboard();
@@ -682,6 +668,55 @@ struct Application : public ::LFApp {
   static StringPiece LoadResource(int id);
   static void WriteLogLine(const char *tbuf, const char *message, const char *file, int line);
   static void WriteDebugLine(const char *message, const char *file, int line);
+};
+
+struct NativeAlert {
+  VoidPtr impl;
+  virtual ~NativeAlert();
+  NativeAlert(const StringPairVec &items);
+  void Show(const string &arg);
+};
+
+struct NativePanel {
+  VoidPtr impl;
+  virtual ~NativePanel();
+  NativePanel(const Box&, const string &title, const vector<PanelItem>&);
+  void Show();
+  void SetTitle(const string &title);
+};
+
+struct NativeToolbar {
+  VoidPtr impl;
+  /// item values with prefix "toggle" stay depressed
+  virtual ~NativeToolbar();
+  NativeToolbar(const StringPairVec &items);
+  void Show(bool show_or_hide);
+  void ToggleButton(const string &n);
+};
+
+struct NativeMenu {
+  VoidPtr impl;
+  virtual ~NativeMenu();
+  NativeMenu(VoidPtr i) : impl(i) {}
+  NativeMenu(const string &title, const vector<MenuItem> &items);
+  static unique_ptr<NativeMenu> CreateEditMenu(const vector<MenuItem>&items);
+  void Show();
+};
+
+struct NativeTable {
+  VoidPtr impl;
+  virtual ~NativeTable();
+  NativeTable(const string &title, const vector<MenuItem> &items);
+  void AddToolbar(NativeToolbar*);
+  void Show(bool show_or_hide);
+};
+
+struct NativeNavigation {
+  VoidPtr impl;
+  virtual ~NativeNavigation();
+  NativeNavigation(NativeTable *root);
+  void PushTable(NativeTable*);
+  void Show(bool show_or_hide);
 };
 
 unique_ptr<Module> CreateFrameworkModule();

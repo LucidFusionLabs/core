@@ -20,7 +20,24 @@
 #include <commdlg.h>
 
 namespace LFL {
-void Application::LaunchNativeFontChooser(const FontDesc &cur_font, const string &choose_cmd) {
+NativeMenu::~NativeMenu() {}
+NativeMenu::NativeMenu(const string &title_text, const vector<MenuItem>&items) {
+  WinWindow *win = GetTyped<WinWindow*>(screen->impl);
+  if (!win->menu) { win->menu = CreateMenu(); win->context_menu = CreatePopupMenu(); }
+  HMENU hAddMenu = CreatePopupMenu();
+  for (auto &i : items) {
+    if (tuple_get<1>(i) == "<seperator>") AppendMenu(hAddMenu, MF_MENUBARBREAK, 0, NULL);
+    else AppendMenu(hAddMenu, MF_STRING, win->start_msg_id + win->menu_cmds.size(), tuple_get<1>(i).c_str());
+    win->menu_cmds.push_back(tuple_get<2>(i));
+  }
+  AppendMenu(win->menu, MF_STRING | MF_POPUP, (UINT)hAddMenu, title.c_str());
+  AppendMenu(win->context_menu, MF_STRING | MF_POPUP, (UINT)hAddMenu, title.c_str());
+  if (win->menubar) SetMenu(GetTyped<HWND>(screen->id), win->menu);
+}
+
+unique_ptr<NativeMenu> NativeMenu::CreateEditMenu(const vector<MenuItem>&items) { return nullptr; }
+
+void Application::ShowNativeFontChooser(const FontDesc &cur_font, const string &choose_cmd) {
   LOGFONT lf;
   memzero(lf);
   HDC hdc = GetDC(NULL);

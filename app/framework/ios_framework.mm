@@ -395,11 +395,11 @@ static const char* const* ios_argv = 0;
 
   - (CGRect)getKeyboardToolbarFrame {
     CGRect kbd = [[LFUIApplication sharedAppDelegate] getKeyboardFrame];
-    return CGRectMake(kbd.origin.x, kbd.origin.y, kbd.size.width, kbd.size.height + [NativeToolbar getBottomHeight]);
+    return CGRectMake(kbd.origin.x, kbd.origin.y, kbd.size.width, kbd.size.height + [IOSToolbar getBottomHeight]);
   }
 
   - (void)updateToolbarFrame {
-    [NativeToolbar updateFrame];
+    [IOSToolbar updateFrame];
     [self.view setNeedsLayout];
   }
 @end
