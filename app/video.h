@@ -116,118 +116,6 @@ struct Material {
 
 struct Light { v4 pos; Material color; };
 
-struct Border {
-  int top, right, bottom, left;
-  Border() : top(0), right(0), bottom(0), left(0) {}
-  Border(int S) : top(S), right(S), bottom(S), left(S) {}
-  Border(int T, int R, int B, int L) : top(T), right(R), bottom(B), left(L) {}
-  Border &operator+=(const Border &v) { top+=v.top; right+=v.right; bottom+=v.bottom; left+=v.left; return *this; }
-  Border &operator-=(const Border &v) { top-=v.top; right-=v.right; bottom-=v.bottom; left-=v.left; return *this; }
-  int Width() const { return right + left; }
-  int Height() const { return top + bottom; }
-  Border TopBottom() const { return Border(top, 0, bottom, 0); }
-  Border LeftRight() const { return Border(0, right, 0, left); }
-  string DebugString() const { return StrCat("{", top, ", ", right, ", ", bottom, ", ", left, "}"); }
-};
-
-struct Box {
-  int x, y, w, h;
-  void clear() { x=y=w=h=0; }
-  Box() : x(0), y(0), w(0), h(0) {}
-  Box(int W, int H) : x(0), y(0), w(W), h(H) {}
-  Box(const point &D) : x(0), y(0), w(D.x), h(D.y) {}
-  Box(int X, int Y, int W, int H) : x(X), y(Y), w(W), h(H) {}
-  Box(const point &P, int W, int H) : x(P.x), y(P.y), w(W), h(H) {}
-  Box(const point &P, const point &D) : x(P.x), y(P.y), w(D.x), h(D.y) {}
-  Box(float X, float Y, float W, float H, bool round);
-  Box(const float *v4, bool round);
-
-  virtual const FloatContainer *AsFloatContainer() const { return 0; }
-  virtual       FloatContainer *AsFloatContainer()       { return 0; }
-  virtual float baseleft (float py, float ph, int *ao=0) const { if (ao) *ao=-1; return x;   }
-  virtual float baseright(float py, float ph, int *ao=0) const { if (ao) *ao=-1; return x+w; }
-  virtual string DebugString() const;
-  point Position () const { return point(x, y); }
-  point Dimension() const { return point(w, h); }
-
-  Box &SetX        (int nx)         { x=nx;         return *this; }
-  Box &SetY        (int ny)         { y=ny;         return *this; }
-  Box &SetPosition (const v2 &p)    { x=p.x; y=p.y; return *this; }
-  Box &SetPosition (const point &p) { x=p.x; y=p.y; return *this; }
-  Box &SetDimension(const v2 &p)    { w=p.x; h=p.y; return *this; }
-  Box &SetDimension(const point &p) { w=p.x; h=p.y; return *this; }
-  Box &operator+=(const point &p) { x+=p.x; y+=p.y; return *this; }
-  Box &operator-=(const point &p) { x-=p.x; y-=p.y; return *this; }
-  Box  operator+ (const point &p) const { return Box(x+p.x, y+p.y, w, h); }
-  Box  operator- (const point &p) const { return Box(x-p.x, y-p.y, w, h); }
-  int top    () const { return y+h; }
-  int right  () const { return x+w; }
-  int centerX() const { return x+w/2; }
-  int centerY() const { return y+h/2; }
-  v2  center () const { return v2(centerX(), centerY()); }
-  Box center(const Box &w) const { return Box(centerX(w.w), centerY(w.h), w.w, w.h); }
-  int centerX (int cw)   const { return x+(w-cw)/2; }
-  int centerY (int ch)   const { return y+(h-ch)/2; }
-  int percentX(float px) const { return x+w*px; }
-  int percentY(float py) const { return y+h*py; }
-  bool Empty() const { return !w && !h; }
-  bool within(const point &p) const { return p.x >= x && p.x < right() && p.y >= y && p.y < top(); }
-  bool outside(const point &p) const { return p.x < x || p.y < y || p.x > right() || p.y > top(); }
-  bool outside(const Box &b) const { return b.right() < x || b.top() < y || b.x > right() || b.y > top(); }
-  bool operator==(const Box &c) const { return x == c.x && y == c.y && w == c.w && h == c.h; }
-  bool operator!=(const Box &c) const { return !(*this == c); }
-  bool operator<(const Box &c) const { SortImpl4(x, c.x, y, c.y, w, c.w, h, c.h); }
-  void scale(float xf, float yf) { x = RoundF(x*xf); w = RoundF(w*xf); y = RoundF(y*yf); h = RoundF(h*yf); }
-  void swapaxis(int width, int height) { x += w; y += h; swap(x,y); swap(w,h); y = width - y; x = height - x; } 
-  void AddBorder(const Border &b) { *this = AddBorder(*this, b); }
-  void DelBorder(const Border &b) { *this = DelBorder(*this, b); }
-  Box Intersect(const Box &w) const { Box ret(max(x, w.x), max(y, w.y), min(right(), w.right()), min(top(), w.top())); ret.w -= ret.x; ret.h -= ret.y; return (ret.w >= 0 && ret.h >= 0) ? ret : Box(); }
-  Box BottomLeft(const Box &sub) const { return Box(x+sub.x, y+sub.y,           sub.w, sub.h); }
-  Box    TopLeft(const Box &sub) const { return Box(x+sub.x, top()-sub.y-sub.h, sub.w, sub.h); }
-  point  TopLeft   () const { return point(x,       top()); }
-  point  TopRight  () const { return point(right(), top()); }
-  point BottomLeft () const { return point(x,       y);     }
-  point BottomRight() const { return point(right(), y);     }
-  void Draw(GraphicsDevice*, const float *texcoord=0) const;
-  void DrawGradient(GraphicsDevice*, const Color*) const;
-  void DrawCrimped(GraphicsDevice*, const float *texcoord, int orientation, float scrollX=0, float scrollY=0) const;
-
-  static float ScrollCrimped(float tex0, float tex1, float scroll, float *min, float *mid1, float *mid2, float *max);
-  static bool   VerticalIntersect(const Box &w1, const Box &w2) { return w1.y < (w2.y + w2.h) && w2.y < (w1.y + w1.h); }
-  static bool HorizontalIntersect(const Box &w1, const Box &w2) { return w1.x < (w2.x + w2.w) && w2.x < (w1.x + w1.w); }
-  static Box Add(const Box &w, const point &p) { return Box(w.x+p.x, w.y+p.y, w.w, w.h); }
-  static Box AddBorder(const Box &w, int xb, int yb) { return Box(w.x-RoundF(xb/2.0, 1), w.y-RoundF(yb/2.0, 1), max(0,w.w+xb), max(0,w.h+yb)); }
-  static Box DelBorder(const Box &w, int xb, int yb) { return Box(w.x+RoundF(xb/2.0, 1), w.y+RoundF(yb/2.0, 1), max(0,w.w-xb), max(0,w.h-yb)); }
-  static Box AddBorder(const Box &w, int tb, int rb, int bb, int lb) { return Box(w.x-lb, w.y-bb, max(0,w.w+lb+rb), max(0,w.h+tb+bb)); }
-  static Box DelBorder(const Box &w, int tb, int rb, int bb, int lb) { return Box(w.x+lb, w.y+bb, max(0,w.w-lb-rb), max(0,w.h-tb-bb)); }
-  static Box AddBorder(const Box &w, const Border &b) { return AddBorder(w, b.top, b.right, b.bottom, b.left); }
-  static Box DelBorder(const Box &w, const Border &b) { return DelBorder(w, b.top, b.right, b.bottom, b.left); }
-  static Box TopBorder(const Box &w, const Border &b) { return Box(w.x, w.top()-b.top, w.w, b.top); }
-  static Box BotBorder(const Box &w, const Border &b) { return Box(w.x, w.y,           w.w, b.bottom); }
-};
-
-struct Box3 {
-  Box v[3];
-  Box3() {}
-  Box3(const Box &b) { v[0]=b; }
-  Box3(const Box &cont, const point &pb, const point &pe, int first_line_height, int last_line_height);
-
-  const Box *begin() const { return &v[0]; }
-  const Box *end()   const { return &v[0] + 3; }
-  const Box &operator[](int i) const { return v[i]; }
-  Box       &operator[](int i)       { return v[i]; }
-  bool Null() const { return !v[0].h; }
-  void Clear() { for (int i=0; i<3; i++) v[i].clear(); }
-  Box3 &operator+=(const point &p) { for (int i=0; i<3; i++) if (!i || v[i].h) v[i] += p; return *this; }
-  Box3 &operator-=(const point &p) { for (int i=0; i<3; i++) if (!i || v[i].h) v[i] -= p; return *this; }
-  string DebugString() const { string ret = "Box3{"; for (int i=0; i<3; i++) if (!i || v[i].h) StrAppend(&ret, v[i].DebugString(), ", "); return ret + "}"; }
-  void AddBorder(const Border &b, Box3 *out) const { for (int i=0; i<3; i++) if (!i || v[i].h) out->v[i] = Box::AddBorder(v[i], b); }
-  void DelBorder(const Border &b, Box3 *out) const { for (int i=0; i<3; i++) if (!i || v[i].h) out->v[i] = Box::DelBorder(v[i], b); }
-  bool VerticalIntersect(const Box &w) const { for (int i=0; i<3; i++) if (v[i].h && Box::VerticalIntersect(v[i], w)) return 1; return 0; }
-  void Draw(GraphicsDevice*, const point &p=point(), const Color *c=0) const;
-  Box BoundingBox() const;
-};
-
 struct Drawable {
   struct Attr { 
     Font *font=0;
@@ -271,6 +159,14 @@ struct GraphicsContext {
   GraphicsDevice *gd;
   const Drawable::Attr *attr;
   GraphicsContext(GraphicsDevice *d=0, const Drawable::Attr *a=0) : gd(d), attr(a) {}
+  void DrawTexturedBox(const Box &b, const float *texcoord=0) { return DrawTexturedBox1(gd, b, texcoord); }
+  void DrawGradientBox(const Box &b, const Color *c) { return DrawGradientBox1(gd, b, c); }
+  void DrawCrimpedBox(const Box &b, const float *tc, int o, float sx=0, float sy=0) { return DrawCrimpedBox1(gd, b, tc, o, sx, sy); }
+  void DrawBox3(const Box3 &b, const point &p=point(), const Color *c=0) { return DrawTexturedBox3(gd, b, p, c); }
+  static void DrawTexturedBox1(GraphicsDevice*, const Box&, const float *texcoord=0);
+  static void DrawGradientBox1(GraphicsDevice*, const Box&, const Color*);
+  static void DrawCrimpedBox1(GraphicsDevice*, const Box&, const float *texcoord, int orientation, float scrollX=0, float scrollY=0);
+  static void DrawTexturedBox3(GraphicsDevice*, const Box3&, const point &p=point(), const Color *c=0);
 };
 
 struct DrawableNop : public Drawable {
@@ -335,8 +231,8 @@ struct Texture : public Drawable {
 
   virtual int Id() const { return 0; }
   virtual int LayoutAtPoint(const point &p, LFL::Box *out) const { *out = LFL::Box(p, width, height); return width; } 
-  virtual void Draw(GraphicsContext *gc, const LFL::Box &B) const { Bind(); B.Draw(gc->gd, coord); }
-  virtual void DrawCrimped(GraphicsDevice *d, const LFL::Box &B, int ort, float sx, float sy) const { Bind(); B.DrawCrimped(d, coord, ort, sx, sy); }
+  virtual void Draw(GraphicsContext *gc, const LFL::Box &b) const { Bind(); gc->DrawTexturedBox(b, coord); }
+  virtual void DrawCrimped(GraphicsDevice *d, const LFL::Box &b, int ort, float sx, float sy) const { Bind(); GraphicsContext::DrawCrimpedBox1(d, b, coord, ort, sx, sy); }
 
 #ifdef LFL_APPLE
   CGContextRef CGBitMap();

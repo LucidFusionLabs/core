@@ -109,7 +109,7 @@ void Glyph::Draw(GraphicsContext *gc, const LFL::Box &b) const {
   if (!gc->attr || !gc->attr->font) return tex.Draw(gc, b);
   if (!ready) gc->attr->font->engine->LoadGlyphs(gc->attr->font, this, 1);
   if (tex.buf) gc->gd->DrawPixels(b, tex);
-  else b.Draw(gc->gd, tex.coord);
+  else gc->DrawTexturedBox(b, tex.coord);
 }
 
 void FillColor::Draw(GraphicsContext *gc, const LFL::Box &b) const {
@@ -130,7 +130,7 @@ void FillColor::Draw(GraphicsContext *gc, const LFL::Box &b) const {
       ready = true;
     }
   }
-  b.Draw(gc->gd, tex.coord);
+  gc->DrawTexturedBox(b, tex.coord);
 }
 
 GlyphCache::GlyphCache(unsigned T, int W, int H) : dim(W, H ? H : W), tex(dim.w, dim.h, Texture::preferred_pf, T), flow(make_unique<Flow>(&dim)) {}

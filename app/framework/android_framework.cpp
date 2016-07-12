@@ -21,7 +21,6 @@
 #include <libgen.h>
 
 namespace LFL {
-static Box activity_box;
 static JNI *jni = Singleton<JNI>::Get();
 
 const int Key::Escape     = 0xE100;
@@ -64,10 +63,10 @@ struct AndroidFrameworkModule : public Module {
 
   int Init() {
     INFO("AndroidFrameworkModule::Init()");
-    screen->x      = activity_box.x;
-    screen->y      = activity_box.y;
-    screen->width  = activity_box.w;
-    screen->height = activity_box.h;
+    screen->x      = jni->activity_box.x;
+    screen->y      = jni->activity_box.y;
+    screen->width  = jni->activity_box.w;
+    screen->height = jni->activity_box.h;
 
     jfieldID fid = CheckNotNull(jni->env->GetFieldID(jni->activity_class, "egl_version", "I"));
     jint v = CheckNotNull(jni->env->GetIntField(jni->activity, fid));
@@ -80,7 +79,7 @@ struct AndroidFrameworkModule : public Module {
 
     Socket fd[2];
     CHECK(SystemNetwork::OpenSocketPair(fd));
-    app->scheduler.AddWaitForeverSocket(screen, (app->scheduler.system_event_socket = fd[0]), SocketSet::READABLE);
+    app->scheduler.AddFrameWaitSocket(screen, (app->scheduler.system_event_socket = fd[0]), SocketSet::READABLE);
     app->scheduler.wait_forever_wakeup_socket = fd[1];
     app->scheduler.Wakeup(screen);
     return 0;
@@ -106,108 +105,6 @@ struct AndroidAssetLoader : public SimpleAssetLoader {
   virtual void LoadAudio(void *handle, SoundAsset *a, int seconds, int flag) { a->handle = handle; }
   virtual int RefillAudio(SoundAsset *a, int reset) { return 0; }
 };
-
-void JNI::Init(jobject a, bool first) {
-  if      (1)           CHECK(activity = env->NewGlobalRef(a));
-  if      (1)           CHECK(view     = env->NewGlobalRef(env->GetObjectField(activity, view_id)));
-  if      (first)             gplus    = env->NewGlobalRef(env->GetObjectField(activity, gplus_id));
-  else if (gplus_class) CHECK(gplus    = env->NewGlobalRef(env->GetObjectField(activity, gplus_id)));
-}
-
-void JNI::Free() {
-  if (gplus_class) env->DeleteGlobalRef(gplus);    gplus    = 0;
-  if (1)           env->DeleteGlobalRef(view);     view     = 0;
-  if (1)           env->DeleteGlobalRef(activity); activity = 0;
-  activity_box = Box(-1, -1);
-}
-
-string JNI::GetJNIString(jstring x) {
-  const char *buf = env->GetStringUTFChars(x, 0);
-  string ret = buf;
-  env->ReleaseStringUTFChars(x, buf);
-  return ret;
-}
-
-int JNI::CheckForException() {
-  jthrowable exception = jni->env->ExceptionOccurred();
-  if (!exception) return 0;
-  jni->env->ExceptionClear();
-  LogException(exception);
-  return -1;
-}
-
-void JNI::LogException(jthrowable &exception) {
-  static jmethodID jni_throwable_method_get_cause =
-    CheckNotNull(jni->env->GetMethodID(jni->throwable_class, "getCause", "()Ljava/lang/Throwable;"));
-  static jmethodID jni_throwable_method_get_stack_trace =
-    CheckNotNull(jni->env->GetMethodID(jni->throwable_class, "getStackTrace", "()[Ljava/lang/StackTraceElement;"));
-  static jmethodID jni_throwable_method_tostring =
-    CheckNotNull(jni->env->GetMethodID(jni->throwable_class, "toString", "()Ljava/lang/String;"));
-  static jmethodID jni_frame_method_tostring =
-    CheckNotNull(jni->env->GetMethodID(jni->frame_class, "toString", "()Ljava/lang/String;"));
-
-  jobjectArray frames = (jobjectArray)jni->env->CallObjectMethod(exception, jni_throwable_method_get_stack_trace);
-  jsize frames_length = jni->env->GetArrayLength(frames);
-  string out;
-
-  if (frames > 0) {
-    jstring msg = (jstring)jni->env->CallObjectMethod(exception, jni_throwable_method_tostring);
-    out += jni->GetJNIString(msg);
-    jni->env->DeleteLocalRef(msg);
-  }
-  for (jsize i = 0; i < frames_length; i++) { 
-    jobject frame = jni->env->GetObjectArrayElement(frames, i);
-    jstring msg = (jstring)jni->env->CallObjectMethod(frame, jni_frame_method_tostring);
-    out += "\n    " + jni->GetJNIString(msg);
-    jni->env->DeleteLocalRef(msg);
-    jni->env->DeleteLocalRef(frame);
-  }
-  if (frames > 0) {
-    jthrowable cause = (jthrowable)jni->env->CallObjectMethod(exception, jni_throwable_method_get_cause);
-    if (cause) LogException(cause);
-  }  
-
-  INFOf("JNI::LogException: %s", out.c_str());
-}
-
-BufferFile *JNI::OpenAsset(const string &fn) {
-  static jmethodID get_assets_mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "getAssets", "()Landroid/content/res/AssetManager;"));
-  static jmethodID assetmgr_open_mid = CheckNotNull(jni->env->GetMethodID(jni->assetmgr_class, "open", "(Ljava/lang/String;)Ljava/io/InputStream;"));
-  static jmethodID inputstream_avail_mid = CheckNotNull(jni->env->GetMethodID(jni->inputstream_class, "available", "()I"));
-  static jmethodID channels_newchan_mid = CheckNotNull(jni->env->GetStaticMethodID(jni->channels_class, "newChannel", "(Ljava/io/InputStream;)Ljava/nio/channels/ReadableByteChannel;"));
-  static jmethodID readbytechan_read_mid = CheckNotNull(jni->env->GetMethodID(jni->readbytechan_class, "read", "(Ljava/nio/ByteBuffer;)I"));
-
-  jstring jfn = jni->env->NewStringUTF(fn.c_str());
-  jobject assets = jni->env->CallObjectMethod(jni->activity, get_assets_mid);
-  jobject input = jni->env->CallObjectMethod(assets, assetmgr_open_mid, jfn);
-  jni->env->DeleteLocalRef(jfn);
-  jni->env->DeleteLocalRef(assets);
-  if (!input || jni->CheckForException()) return nullptr;
-
-  int len = jni->env->CallIntMethod(input, inputstream_avail_mid);
-  if (jni->CheckForException()) { jni->env->DeleteLocalRef(input); return nullptr; }
-
-  unique_ptr<BufferFile> ret = make_unique<BufferFile>(string(), fn.c_str());
-  if (!len) { jni->env->DeleteLocalRef(input); return ret.release(); }
-  ret->buf.resize(len);
-
-  jobject readable = jni->env->CallStaticObjectMethod(jni->channels_class, channels_newchan_mid, input);
-  jni->env->DeleteLocalRef(input);
-
-  jobject bytes = jni->env->NewDirectByteBuffer(&ret->buf[0], ret->buf.size());
-  len = jni->env->CallIntMethod(readable, readbytechan_read_mid, bytes);
-  jni->env->DeleteLocalRef(readable);
-  jni->env->DeleteLocalRef(bytes);
-
-  if (len != ret->buf.size() || jni->CheckForException()) return nullptr;
-  return ret.release();
-}
-
-string JNI::GetDeviceName() {
-  static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "getModelName", "()Ljava/lang/String;"));
-  jstring ret = (jstring)jni->env->CallObjectMethod(jni->activity, mid);
-  return GetJNIString(ret);
-}
 
 void Application::CloseWindow(Window *W) {}
 void Application::MakeCurrentWindow(Window *W) {}
@@ -288,7 +185,7 @@ void FrameScheduler::Setup() {
   synchronize_waits = wait_forever_thread = 0;
 }
 
-bool FrameScheduler::DoWait() {
+bool FrameScheduler::DoFrameWait() {
   wait_forever_sockets.Select(-1);
   if (wait_forever_sockets.GetReadable(system_event_socket)) {
     char buf[512];
@@ -307,63 +204,18 @@ bool FrameScheduler::WakeupIn(Window*, Time interval, bool force) { return 0; }
 void FrameScheduler::ClearWakeupIn(Window*) {}
 void FrameScheduler::UpdateWindowTargetFPS(Window *w) {}
 
-void FrameScheduler::AddWaitForeverMouse(Window*)    { dynamic_cast<AndroidFrameworkModule*>(app->framework.get())->frame_on_mouse_input    = true;  }
-void FrameScheduler::DelWaitForeverMouse(Window*)    { dynamic_cast<AndroidFrameworkModule*>(app->framework.get())->frame_on_mouse_input    = false; }
-void FrameScheduler::AddWaitForeverKeyboard(Window*) { dynamic_cast<AndroidFrameworkModule*>(app->framework.get())->frame_on_keyboard_input = true;  }
-void FrameScheduler::DelWaitForeverKeyboard(Window*) { dynamic_cast<AndroidFrameworkModule*>(app->framework.get())->frame_on_keyboard_input = false; }
-void FrameScheduler::AddWaitForeverSocket(Window *w, Socket fd, int flag) {
+void FrameScheduler::AddFrameWaitMouse(Window*)    { dynamic_cast<AndroidFrameworkModule*>(app->framework.get())->frame_on_mouse_input    = true;  }
+void FrameScheduler::DelFrameWaitMouse(Window*)    { dynamic_cast<AndroidFrameworkModule*>(app->framework.get())->frame_on_mouse_input    = false; }
+void FrameScheduler::AddFrameWaitKeyboard(Window*) { dynamic_cast<AndroidFrameworkModule*>(app->framework.get())->frame_on_keyboard_input = true;  }
+void FrameScheduler::DelFrameWaitKeyboard(Window*) { dynamic_cast<AndroidFrameworkModule*>(app->framework.get())->frame_on_keyboard_input = false; }
+void FrameScheduler::AddFrameWaitSocket(Window *w, Socket fd, int flag) {
   if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, w);
   wait_forever_sockets.Add(fd, flag, w);
 }
 
-void FrameScheduler::DelWaitForeverSocket(Window*, Socket fd) {
+void FrameScheduler::DelFrameWaitSocket(Window*, Socket fd) {
   if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd);
   wait_forever_sockets.Del(fd);
-}
-
-void GPlus::SignIn() {
-  if (jni->gplus) {
-    static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->gplus_class, "signIn", "()V"));
-    jni->env->CallVoidMethod(jni->gplus, mid);
-  } else ERRORf("no gplus %p", jni->gplus);
-}
-
-void GPlus::SignOut() {
-  if (jni->gplus) {
-    static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->gplus_class, "signOut", "()V"));
-    jni->env->CallVoidMethod(jni->gplus, mid);
-  } else ERRORf("no gplus %p", jni->gplus);
-}
-
-int GPlus::GetSignedIn() {
-  if (jni->gplus) {
-    static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->gplus_class, "signedIn", "()Z"));
-    return jni->env->CallBooleanMethod(jni->gplus, mid);
-  } else { ERRORf("no gplus %p", jni->gplus); return 0; }
-}
-
-int GPlus::QuickGame() {
-  if (jni->gplus) {
-    static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->gplus_class, "quickGame", "()V"));
-    jni->env->CallVoidMethod(jni->gplus, mid);
-  } else ERRORf("no gplus %p", jni->gplus);
-  return 0;
-}
-
-int GPlus::Invite() {
-  if (jni->gplus) {
-    static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->gplus_class, "inviteGUI", "()V"));
-    jni->env->CallVoidMethod(jni->gplus, mid);
-  } else ERRORf("no gplus %p", jni->gplus);
-  return 0;
-}
-
-int GPlus::Accept() {
-  if (jni->gplus) {
-    static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->gplus_class, "acceptGUI", "()V"));
-    jni->env->CallVoidMethod(jni->gplus, mid);
-  } else ERRORf("no gplus %p", jni->gplus);
-  return 0;
 }
 
 unique_ptr<Module> CreateFrameworkModule() { return make_unique<AndroidFrameworkModule>(); }
@@ -418,10 +270,11 @@ extern "C" void Java_com_lucidfusionlabs_app_Activity_Minimize(JNIEnv* env, jcla
 }
 
 extern "C" void Java_com_lucidfusionlabs_app_Activity_Reshaped(JNIEnv *e, jclass c, jint x, jint y, jint w, jint h) { 
-  bool init = !activity_box.w && !activity_box.h;
-  if (init) { activity_box = Box(x, y, w, h); return; }
-  if (activity_box.x == x && activity_box.y == y && activity_box.w == w && activity_box.h == h) return;
-  activity_box = Box(x, y, w, h);
+  bool init = !jni->activity_box.w && !jni->activity_box.h;
+  if (init) { jni->activity_box = Box(x, y, w, h); return; }
+  if (jni->activity_box.x == x && jni->activity_box.y == y &&
+      jni->activity_box.w == w && jni->activity_box.h == h) return;
+  jni->activity_box = Box(x, y, w, h);
   QueueWindowReshaped(x, y, w, h);
 }
 

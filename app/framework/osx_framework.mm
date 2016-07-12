@@ -47,7 +47,7 @@
   - (void)dealloc {
     if (trigger_timer) [self clearTriggerTimer];
     if (runloop_timer) ERRORf("%s", "runloop_timer remaining");
-    if (wait_forever_fh) [self delWaitForeverSocket: [wait_forever_fh fileDescriptor]];
+    if (wait_forever_fh) [self delFrameWaitSocket: [wait_forever_fh fileDescriptor]];
     CVDisplayLinkRelease(displayLink);
     [pixel_format release];
     [context release];
@@ -137,7 +137,7 @@
       if (first) INFOf("OSXModule impl = %s", "PassThru");
       exit(LFAppMainLoop());
     } else if (screen->target_fps == 0) {
-      if (first) INFOf("OSXModule impl = %s", "WaitForever");
+      if (first) INFOf("OSXModule impl = %s", "FrameWait");
       [self setNeedsDisplay:YES];
     } else if (use_display_link) {
       if (first) INFOf("OSXModule impl = %s", "DisplayLink");
@@ -199,7 +199,7 @@
     if (WindowClosed()) LFAppAtExit();
   }
 
-  - (void)setWaitForeverSocket: (int)fd {
+  - (void)setFrameWaitSocket: (int)fd {
     if (wait_forever_fh) FATALf("wait_forever_fh already set: %p", wait_forever_fh);
     wait_forever_fh = [[NSFileHandle alloc] initWithFileDescriptor:fd];
     [[NSNotificationCenter defaultCenter] addObserver:self
@@ -207,7 +207,7 @@
     [wait_forever_fh waitForDataInBackgroundAndNotify];
   }
 
-  - (void)delWaitForeverSocket: (int)fd {
+  - (void)delFrameWaitSocket: (int)fd {
     if (!wait_forever_fh) return ERRORf("del missing wait_forever_fh fd=%d", fd);
     if ([wait_forever_fh fileDescriptor] != fd) FATALf("del mismatching wait_forever_fh %o", wait_forever_fh);
     [[NSNotificationCenter defaultCenter] removeObserver:self
@@ -385,7 +385,7 @@ extern "C" void ConvertColorFromGenericToDeviceRGB(const float *i, float *o) {
   for (auto e = o + 4; o != e; ) *o++ = *oi++;
 }
 
-extern "C" void OSXCreateNativeApplicationMenu() {
+extern "C" void OSXCreateSystemApplicationMenu() {
   NSMenuItem *item; 
   NSMenu *menu = [[NSMenu alloc] initWithTitle:@""];
   NSString *app_name = [[NSRunningApplication currentApplication] localizedName];
@@ -560,7 +560,7 @@ int Video::Swap() {
   return 0;
 }
 
-bool FrameScheduler::DoWait() { return false; }
+bool FrameScheduler::DoFrameWait() { return false; }
 void FrameScheduler::Setup() { rate_limit = synchronize_waits = wait_forever_thread = monolithic_frame = run_main_loop = 0; }
 
 void FrameScheduler::Wakeup(Window *w) {
@@ -578,22 +578,22 @@ void FrameScheduler::UpdateWindowTargetFPS(Window *w) {
   [GetTyped<GameView*>(w->id) startThread:false];
 }
 
-void FrameScheduler::AddWaitForeverMouse(Window *w) { [GetTyped<GameView*>(w->id) setFrameOnMouseInput:1]; }
-void FrameScheduler::DelWaitForeverMouse(Window *w) { [GetTyped<GameView*>(w->id) setFrameOnMouseInput:0]; }
-void FrameScheduler::AddWaitForeverKeyboard(Window *w) { [GetTyped<GameView*>(w->id) setFrameOnKeyboardInput:1]; }
-void FrameScheduler::DelWaitForeverKeyboard(Window *w) { [GetTyped<GameView*>(w->id) setFrameOnKeyboardInput:0]; }
-void FrameScheduler::AddWaitForeverSocket(Window *w, Socket fd, int flag) {
+void FrameScheduler::AddFrameWaitMouse(Window *w) { [GetTyped<GameView*>(w->id) setFrameOnMouseInput:1]; }
+void FrameScheduler::DelFrameWaitMouse(Window *w) { [GetTyped<GameView*>(w->id) setFrameOnMouseInput:0]; }
+void FrameScheduler::AddFrameWaitKeyboard(Window *w) { [GetTyped<GameView*>(w->id) setFrameOnKeyboardInput:1]; }
+void FrameScheduler::DelFrameWaitKeyboard(Window *w) { [GetTyped<GameView*>(w->id) setFrameOnKeyboardInput:0]; }
+void FrameScheduler::AddFrameWaitSocket(Window *w, Socket fd, int flag) {
   if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, w);
   if (!wait_forever_thread) {
     CHECK_EQ(SocketSet::READABLE, flag);
-    [GetTyped<GameView*>(w->id) setWaitForeverSocket: fd];
+    [GetTyped<GameView*>(w->id) setFrameWaitSocket: fd];
   }
 }
 
-void FrameScheduler::DelWaitForeverSocket(Window *w, Socket fd) {
+void FrameScheduler::DelFrameWaitSocket(Window *w, Socket fd) {
   if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd);
   CHECK(w->id.v);
-  [GetTyped<GameView*>(w->id) delWaitForeverSocket: fd];
+  [GetTyped<GameView*>(w->id) delFrameWaitSocket: fd];
 }
 
 unique_ptr<Module> CreateFrameworkModule() { return make_unique<OSXFrameworkModule>(); }
@@ -605,6 +605,6 @@ extern "C" int main(int argc, const char** argv) {
   AppDelegate *app_delegate = [[AppDelegate alloc] init];
   [[NSApplication sharedApplication] setDelegate: app_delegate];
   [NSApp setMainMenu:[[NSMenu alloc] init]];
-  OSXCreateNativeApplicationMenu();
+  OSXCreateSystemApplicationMenu();
   return NSApplicationMain(argc, argv);
 }

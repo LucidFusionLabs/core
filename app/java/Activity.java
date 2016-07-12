@@ -362,6 +362,20 @@ public class Activity extends android.app.Activity {
                                                            Gravity.BOTTOM));
         }});
     }
+    
+    public int addMenu(final String title, final String[] k, final String[] v, final String[] w) {
+        return 0;
+    }
+
+    public void showMenu(final int id) {
+    }
+
+    public int addTable(final String[] k, final String[] v, final String[] w) {
+        return 0;
+    }
+
+    public void showTable(final int id) {
+    }
 }
 
 class MyGestureListener extends android.view.GestureDetector.SimpleOnGestureListener {

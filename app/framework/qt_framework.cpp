@@ -148,8 +148,8 @@ class QtWindow : public QWindow {
   }
 
   void RequestRender() { QCoreApplication::postEvent(this, new QEvent(QEvent::UpdateRequest)); }
-  void DelWaitForeverSocket(Socket fd) {}
-  void AddWaitForeverSocket(Socket fd) {
+  void DelFrameWaitSocket(Socket fd) {}
+  void AddFrameWaitSocket(Socket fd) {
     CHECK(!wait_forever_socket);
     wait_forever_socket = new QSocketNotifier(fd, QSocketNotifier::Read, this);
     lfl_qapp->connect(wait_forever_socket, SIGNAL(activated(int)), this, SLOT(ReadInputChannel(int)));
@@ -229,23 +229,23 @@ void Application::SetTouchKeyboardTiled(bool v) {}
 string Application::GetClipboardText() { QByteArray v = QApplication::clipboard()->text().toUtf8(); return string(v.constData(), v.size()); }
 void Application::SetClipboardText(const string &s) { QApplication::clipboard()->setText(QString::fromUtf8(s.data(), s.size())); }
 
-bool FrameScheduler::DoWait() { return false; }
+bool FrameScheduler::DoFrameWait() { return false; }
 void FrameScheduler::Setup() { rate_limit = synchronize_waits = wait_forever_thread = monolithic_frame = run_main_loop = 0; }
 void FrameScheduler::Wakeup(Window *w) { if (wait_forever && w) GetTyped<QtWindow*>(w->impl)->RequestRender(); }
 bool FrameScheduler::WakeupIn(Window *w, Time interval, bool force) { return false; }
 void FrameScheduler::ClearWakeupIn(Window*) {}
 void FrameScheduler::UpdateWindowTargetFPS(Window *w) { /*QTTriggerFrame(w->id.value);*/ }
-void FrameScheduler::AddWaitForeverMouse(Window *w) { if (w) GetTyped<QtWindow*>(w->impl)->frame_on_mouse_input = true; }
-void FrameScheduler::DelWaitForeverMouse(Window *w) { if (w) GetTyped<QtWindow*>(w->impl)->frame_on_mouse_input = false; }
-void FrameScheduler::AddWaitForeverKeyboard(Window *w) { if (w) GetTyped<QtWindow*>(w->impl)->frame_on_keyboard_input = true; }
-void FrameScheduler::DelWaitForeverKeyboard(Window *w) { if (w) GetTyped<QtWindow*>(w->impl)->frame_on_keyboard_input = false; }
-void FrameScheduler::AddWaitForeverSocket(Window *w, Socket fd, int flag) {
+void FrameScheduler::AddFrameWaitMouse(Window *w) { if (w) GetTyped<QtWindow*>(w->impl)->frame_on_mouse_input = true; }
+void FrameScheduler::DelFrameWaitMouse(Window *w) { if (w) GetTyped<QtWindow*>(w->impl)->frame_on_mouse_input = false; }
+void FrameScheduler::AddFrameWaitKeyboard(Window *w) { if (w) GetTyped<QtWindow*>(w->impl)->frame_on_keyboard_input = true; }
+void FrameScheduler::DelFrameWaitKeyboard(Window *w) { if (w) GetTyped<QtWindow*>(w->impl)->frame_on_keyboard_input = false; }
+void FrameScheduler::AddFrameWaitSocket(Window *w, Socket fd, int flag) {
   if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, w);
-  if (w) GetTyped<QtWindow*>(w->impl)->AddWaitForeverSocket(fd);
+  if (w) GetTyped<QtWindow*>(w->impl)->AddFrameWaitSocket(fd);
 }
-void FrameScheduler::DelWaitForeverSocket(Window *w, Socket fd) {
+void FrameScheduler::DelFrameWaitSocket(Window *w, Socket fd) {
   if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd);
-  if (w) GetTyped<QtWindow*>(w->impl)->DelWaitForeverSocket(fd);
+  if (w) GetTyped<QtWindow*>(w->impl)->DelFrameWaitSocket(fd);
 }
 
 #if 0

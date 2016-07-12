@@ -494,7 +494,7 @@ int Application::Create(const char *source_filename) {
     JNI *jni = LFL::Singleton<LFL::JNI>::Get();
     jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "getFilesDirCanonicalPath", "()Ljava/lang/String;"));
     jstring path = jstring(jni->env->CallObjectMethod(jni->activity, mid));
-    savedir = jni->GetJNIString(path);
+    savedir = jni->GetJString(path);
     jni->env->DeleteLocalRef(path);
 #elif defined(LFL_APPLE) && !defined(LFL_IOS_SIM)
     savedir = StrCat(GetNSDocumentDirectory(), "/");
@@ -882,7 +882,7 @@ bool FrameScheduler::FrameWait() {
       wait_mutex.lock();
       frame_mutex.unlock();
     }
-    ret = DoWait();
+    ret = DoFrameWait();
     if (synchronize_waits) {
       frame_mutex.lock();
       wait_mutex.unlock();

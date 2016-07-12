@@ -80,7 +80,7 @@ TEST(GLTest, Texture) {
   gc.gd->DisableBlend();
   gc.gd->Clear();
   tex.Bind();
-  Box(dim, dim).Draw(gc.gd, tex.coord);
+  gc.DrawTexturedBox(Box(dim, dim), tex.coord);
   EXPECT_EQ(0, CompareTextureToBuffer(fb.tex.ID, pdata, dim, lsize, "gl_tests_03.png"));
 
   gc.gd->Clear();
@@ -88,7 +88,7 @@ TEST(GLTest, Texture) {
 
   gc.gd->Clear();
   tex.Bind();
-  Box(dim, dim).DrawCrimped(gc.gd, tex.coord, 0);
+  gc.DrawCrimpedBox(Box(dim, dim), tex.coord, 0);
   EXPECT_EQ(0, CompareTextureToBuffer(fb.tex.ID, pdata, dim, lsize, "gl_tests_04.png"));
 
   gc.gd->Clear();
@@ -98,13 +98,13 @@ TEST(GLTest, Texture) {
   fb.Attach(0, 0, false);
   gc.gd->Clear();
   tex.Bind();
-  Box(dim, dim).Draw(gc.gd, tex.coord);
+  gc.DrawTexturedBox(Box(dim, dim), tex.coord);
   EXPECT_EQ(0, CompareTextureToBuffer(fb.tex.ID, pdata, dim, lsize, "gl_tests_05.png"));
   fb.Release(false);
 
   gc.gd->Clear();
   tex.Bind();
-  Box(dim, dim).Draw(gc.gd, tex.coord);
+  gc.DrawTexturedBox(Box(dim, dim), tex.coord);
   gc.gd->ScreenshotBox(&tex2, Box(dim, dim), 0);
   EXPECT_EQ(0, CompareTextureToBuffer(tex2, pdata, dim, lsize, "gl_tests_06.png"));
   fb.Release(true);

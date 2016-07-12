@@ -196,15 +196,15 @@ int Video::Swap() {
   return 0;
 }
 
-void FrameScheduler::DoWait() {}
+void FrameScheduler::DoFrameWait() {}
 void FrameScheduler::Setup() { rate_limit = synchronize_waits = monolithic_frame = run_main_loop = 0; }
 void FrameScheduler::Wakeup(Window *w) { if (wait_forever && w && wait_forever_thread) GetTyped<wxGLCanvas*>(w->id)->Refresh(); }
-void FrameScheduler::AddWaitForeverMouse(Window*) {}
-void FrameScheduler::DelWaitForeverMouse(Window*) {}
-void FrameScheduler::AddWaitForeverKeyboard(Window*) {}
-void FrameScheduler::DelWaitForeverKeyboard(Window*) {}
-void FrameScheduler::AddWaitForeverSocket(Window *w, Socket fd, int flag) { if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, w); }
-void FrameScheduler::DelWaitForeverSocket(Window *w, Socket fd) { if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd); }
+void FrameScheduler::AddFrameWaitMouse(Window*) {}
+void FrameScheduler::DelFrameWaitMouse(Window*) {}
+void FrameScheduler::AddFrameWaitKeyboard(Window*) {}
+void FrameScheduler::DelFrameWaitKeyboard(Window*) {}
+void FrameScheduler::AddFrameWaitSocket(Window *w, Socket fd, int flag) { if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, w); }
+void FrameScheduler::DelFrameWaitSocket(Window *w, Socket fd) { if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd); }
 
 extern "C" void *LFAppCreatePlatformModule() { return new IPhoneVideoModule(); }
 

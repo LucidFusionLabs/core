@@ -211,7 +211,7 @@ void SMTP::HTMLMessage(const string& from, const string& to, const string& subje
   StrAppend(out, "--", seperator, "\nContent-type: text/html\n\n", content, "\n--", seperator, "--\n");
 }
 
-void SMTP::NativeSendmail(const string &message) {
+void SMTP::SystemSendmail(const string &message) {
 #ifdef LFL_LINUX
   ProcessPipe smtp;
   const char *argv[] = { "/usr/bin/sendmail", "-i", "-t", 0 };

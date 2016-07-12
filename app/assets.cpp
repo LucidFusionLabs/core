@@ -306,11 +306,11 @@ void glShadertoyShaderWindows(GraphicsDevice *gd, Shader *shader, const Color &b
   else gd->SetColor(backup_color);
   if (tex) { gd->EnableLayering(); tex->Bind(); }
   else gd->DisableTexture();
-  for (auto w : wins) w->Draw(gd, tex ? tex->coord : 0);
+  for (auto w : wins) GraphicsContext::DrawTexturedBox1(gd, *w, tex ? tex->coord : 0);
   if (shader) gd->UseShader(0);
 }
 
-void BoxFilled::Draw(GraphicsContext *gc, const LFL::Box &b) const { b.Draw(gc->gd); }
+void BoxFilled::Draw(GraphicsContext *gc, const LFL::Box &b) const { gc->DrawTexturedBox(b); }
 void BoxOutline::Draw(GraphicsContext *gc, const LFL::Box &b) const {
   gc->gd->DisableTexture();
   int line_width = gc->attr ? gc->attr->line_width : 1;

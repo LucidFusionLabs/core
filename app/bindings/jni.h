@@ -29,6 +29,7 @@ struct AndroidEvent {
 
 struct JNI {
   JNIEnv *env=0;
+  Box activity_box;
   jobject activity=0, view=0, gplus=0;
   jclass activity_class=0, view_class=0, gplus_class=0, throwable_class=0, frame_class=0, assetmgr_class=0;
   jclass string_class=0, inputstream_class=0, channels_class=0, readbytechan_class=0;
@@ -36,12 +37,13 @@ struct JNI {
 
   void Init(jobject a, bool first);
   void Free();
-
   int CheckForException();
   void LogException(jthrowable &exception);
-  string GetJNIString(jstring);
+  string GetJString(jstring);
+  jstring ToJString(const string  &x) { return env->NewStringUTF(x.c_str()); }
+  pair<jobjectArray, jobjectArray> ToJObjectArray(const StringPairVec& items);
+  tuple<jobjectArray, jobjectArray, jobjectArray> ToJObjectArray(const MenuItemVec &items);
   BufferFile *OpenAsset(const string &fn);
-  string GetDeviceName();
 };
 
 struct GPlus {

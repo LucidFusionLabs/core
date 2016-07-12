@@ -233,9 +233,6 @@ void Log(int level, const char *file, int line, const string &m);
 #include "core/app/export.h"
 #include "core/app/types/string.h"
 #include "core/app/types/time.h"
-#ifdef LFL_ANDROID
-#include "core/app/bindings/jni.h"
-#endif
 
 namespace LFL {
 extern Window *screen;
@@ -281,6 +278,19 @@ struct Module {
 }; // namespace LFL
 
 #include "core/app/math.h"
+
+namespace LFL {
+typedef tuple<string, string, string> MenuItem;
+typedef tuple<string, Box, string> PanelItem;
+typedef vector<MenuItem> MenuItemVec;
+typedef vector<PanelItem> PanelItemVec;
+::std::ostream& operator<<(::std::ostream& os, const point &x);
+::std::ostream& operator<<(::std::ostream& os, const Box   &x);
+};
+
+#ifdef LFL_ANDROID
+#include "core/app/bindings/jni.h"
+#endif
 #include "core/app/file.h"
 #include "core/app/types/types.h"
 
@@ -402,11 +412,6 @@ struct PerformanceTimers {
 #include "core/app/camera.h"
 
 namespace LFL {
-typedef tuple<string, string, string> MenuItem;
-typedef tuple<string, Box, string> PanelItem;
-::std::ostream& operator<<(::std::ostream& os, const point &x);
-::std::ostream& operator<<(::std::ostream& os, const Box   &x);
-
 struct RateLimiter {
   int *target_hz;
   float avgframe;
@@ -430,21 +435,21 @@ struct FrameScheduler {
   void Init();
   void Free();
   void Start();
-  bool DoWait();
   bool FrameWait();
   void FrameDone();
+  bool DoFrameWait();
   void Wakeup(Window*);
   bool WakeupIn(Window*, Time interval, bool force=0);
   void ClearWakeupIn(Window*);
   void UpdateTargetFPS(Window*, int fps);
   void UpdateWindowTargetFPS(Window*);
   void SetAnimating(Window*, bool);
-  void AddWaitForeverMouse(Window*);
-  void DelWaitForeverMouse(Window*);
-  void AddWaitForeverKeyboard(Window*);
-  void DelWaitForeverKeyboard(Window*);
-  void AddWaitForeverSocket(Window*, Socket fd, int flag);
-  void DelWaitForeverSocket(Window*, Socket fd);
+  void AddFrameWaitMouse(Window*);
+  void DelFrameWaitMouse(Window*);
+  void AddFrameWaitKeyboard(Window*);
+  void DelFrameWaitKeyboard(Window*);
+  void AddFrameWaitSocket(Window*, Socket fd, int flag);
+  void DelFrameWaitSocket(Window*, Socket fd);
 };
 
 struct BrowserInterface {
@@ -620,10 +625,10 @@ struct Application : public ::LFApp {
   string GetClipboardText();
   void SetClipboardText(const string &s);
   void OpenSystemBrowser(const string &url);
-
-  void ShowNativeContextMenu(const vector<MenuItem> &items);
-  void ShowNativeFontChooser(const FontDesc &cur_font, const string &choose_cmd);
-  void ShowNativeFileChooser(bool files, bool dirs, bool multi, const string &choose_cmd);
+  string GetSystemDeviceName();
+  void ShowSystemContextMenu(const vector<MenuItem> &items);
+  void ShowSystemFontChooser(const FontDesc &cur_font, const string &choose_cmd);
+  void ShowSystemFileChooser(bool files, bool dirs, bool multi, const string &choose_cmd);
 
   void OpenTouchKeyboard();
   void CloseTouchKeyboard();
@@ -670,52 +675,52 @@ struct Application : public ::LFApp {
   static void WriteDebugLine(const char *message, const char *file, int line);
 };
 
-struct NativeAlert {
+struct SystemAlertWidget {
   VoidPtr impl;
-  virtual ~NativeAlert();
-  NativeAlert(const StringPairVec &items);
+  virtual ~SystemAlertWidget();
+  SystemAlertWidget(const StringPairVec &items);
   void Show(const string &arg);
 };
 
-struct NativePanel {
+struct SystemPanelWidget {
   VoidPtr impl;
-  virtual ~NativePanel();
-  NativePanel(const Box&, const string &title, const vector<PanelItem>&);
+  virtual ~SystemPanelWidget();
+  SystemPanelWidget(const Box&, const string &title, const vector<PanelItem>&);
   void Show();
   void SetTitle(const string &title);
 };
 
-struct NativeToolbar {
+struct SystemToolbarWidget {
   VoidPtr impl;
   /// item values with prefix "toggle" stay depressed
-  virtual ~NativeToolbar();
-  NativeToolbar(const StringPairVec &items);
+  virtual ~SystemToolbarWidget();
+  SystemToolbarWidget(const StringPairVec &items);
   void Show(bool show_or_hide);
   void ToggleButton(const string &n);
 };
 
-struct NativeMenu {
+struct SystemMenuWidget {
   VoidPtr impl;
-  virtual ~NativeMenu();
-  NativeMenu(VoidPtr i) : impl(i) {}
-  NativeMenu(const string &title, const vector<MenuItem> &items);
-  static unique_ptr<NativeMenu> CreateEditMenu(const vector<MenuItem>&items);
+  virtual ~SystemMenuWidget();
+  SystemMenuWidget(VoidPtr i) : impl(i) {}
+  SystemMenuWidget(const string &title, const vector<MenuItem> &items);
+  static unique_ptr<SystemMenuWidget> CreateEditMenu(const vector<MenuItem>&items);
   void Show();
 };
 
-struct NativeTable {
+struct SystemTableWidget {
   VoidPtr impl;
-  virtual ~NativeTable();
-  NativeTable(const string &title, const vector<MenuItem> &items);
-  void AddToolbar(NativeToolbar*);
+  virtual ~SystemTableWidget();
+  SystemTableWidget(const string &title, const vector<MenuItem> &items);
+  void AddToolbar(SystemToolbarWidget*);
   void Show(bool show_or_hide);
 };
 
-struct NativeNavigation {
+struct SystemNavigationWidget {
   VoidPtr impl;
-  virtual ~NativeNavigation();
-  NativeNavigation(NativeTable *root);
-  void PushTable(NativeTable*);
+  virtual ~SystemNavigationWidget();
+  SystemNavigationWidget(SystemTableWidget *root);
+  void PushTable(SystemTableWidget*);
   void Show(bool show_or_hide);
 };
 

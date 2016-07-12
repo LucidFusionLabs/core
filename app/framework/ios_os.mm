@@ -354,36 +354,36 @@
 @end
 
 namespace LFL {
-NativeAlert::~NativeAlert() { if (auto alert = FromVoid<IOSAlert*>(impl)) [alert release]; }
-NativeAlert::NativeAlert(const StringPairVec &items) : impl([[IOSAlert alloc] init: items]) {}
-void NativeAlert::Show(const string &arg) {
+SystemAlertWidget::~SystemAlertWidget() { if (auto alert = FromVoid<IOSAlert*>(impl)) [alert release]; }
+SystemAlertWidget::SystemAlertWidget(const StringPairVec &items) : impl([[IOSAlert alloc] init: items]) {}
+void SystemAlertWidget::Show(const string &arg) {
   auto alert = FromVoid<IOSAlert*>(impl);
   [alert.alert show];
   if (alert.add_text) [alert.alert textFieldAtIndex:0].text = [NSString stringWithUTF8String: arg.c_str()];
 }
 
-NativeMenu::~NativeMenu() { if (auto menu = FromVoid<IOSMenu*>(impl)) [menu release]; }
-NativeMenu::NativeMenu(const string &t, const vector<MenuItem> &i) : impl([[IOSMenu alloc] init:t items:i]) {}
-void NativeMenu::Show() { [FromVoid<IOSMenu*>(impl).actions showInView:[UIApplication sharedApplication].keyWindow]; }
-unique_ptr<NativeMenu> NativeMenu::CreateEditMenu(const vector<MenuItem> &items) { return nullptr; }
+SystemMenuWidget::~SystemMenuWidget() { if (auto menu = FromVoid<IOSMenu*>(impl)) [menu release]; }
+SystemMenuWidget::SystemMenuWidget(const string &t, const vector<MenuItem> &i) : impl([[IOSMenu alloc] init:t items:i]) {}
+void SystemMenuWidget::Show() { [FromVoid<IOSMenu*>(impl).actions showInView:[UIApplication sharedApplication].keyWindow]; }
+unique_ptr<SystemMenuWidget> SystemMenuWidget::CreateEditMenu(const vector<MenuItem> &items) { return nullptr; }
 
-NativeToolbar::~NativeToolbar() { if (auto toolbar = FromVoid<IOSToolbar*>(impl)) [toolbar release]; }
-NativeToolbar::NativeToolbar(const StringPairVec &items) : impl([[IOSToolbar alloc] init: items]) {}
-void NativeToolbar::Show(bool show_or_hide) { [FromVoid<IOSToolbar*>(impl) show:show_or_hide]; }
-void NativeToolbar::ToggleButton(const string &n) { [FromVoid<IOSToolbar*>(impl) toggleButtonNamed: n]; }
+SystemToolbarWidget::~SystemToolbarWidget() { if (auto toolbar = FromVoid<IOSToolbar*>(impl)) [toolbar release]; }
+SystemToolbarWidget::SystemToolbarWidget(const StringPairVec &items) : impl([[IOSToolbar alloc] init: items]) {}
+void SystemToolbarWidget::Show(bool show_or_hide) { [FromVoid<IOSToolbar*>(impl) show:show_or_hide]; }
+void SystemToolbarWidget::ToggleButton(const string &n) { [FromVoid<IOSToolbar*>(impl) toggleButtonNamed: n]; }
 
-NativeTable::~NativeTable() { if (auto table = FromVoid<IOSTable*>(impl)) [table release]; }
-NativeTable::NativeTable(const string &title, const vector<MenuItem>&items) {
+SystemTableWidget::~SystemTableWidget() { if (auto table = FromVoid<IOSTable*>(impl)) [table release]; }
+SystemTableWidget::SystemTableWidget(const string &title, const vector<MenuItem>&items) {
   auto table = [[IOSTable alloc] initWithStyle: UITableViewStyleGrouped];
   [table load:title items:items];
   impl = table;
 }
-void NativeTable::AddToolbar(NativeToolbar *t) { [FromVoid<IOSTable*>(impl) setToolbar: FromVoid<IOSToolbar*>(t->impl)]; }
-void NativeTable::Show(bool show_or_hide) { [FromVoid<IOSTable*>(impl) show:show_or_hide]; }
+void SystemTableWidget::AddToolbar(SystemToolbarWidget *t) { [FromVoid<IOSTable*>(impl) setToolbar: FromVoid<IOSToolbar*>(t->impl)]; }
+void SystemTableWidget::Show(bool show_or_hide) { [FromVoid<IOSTable*>(impl) show:show_or_hide]; }
 
-NativeNavigation::~NativeNavigation() { if (auto nav = FromVoid<IOSNavigation*>(impl)) [nav release]; }
-NativeNavigation::NativeNavigation(NativeTable *r) : impl([[IOSNavigation alloc] init: FromVoid<IOSTable*>(r->impl)]) {}
-void NativeNavigation::Show(bool show_or_hide) {
+SystemNavigationWidget::~SystemNavigationWidget() { if (auto nav = FromVoid<IOSNavigation*>(impl)) [nav release]; }
+SystemNavigationWidget::SystemNavigationWidget(SystemTableWidget *r) : impl([[IOSNavigation alloc] init: FromVoid<IOSTable*>(r->impl)]) {}
+void SystemNavigationWidget::Show(bool show_or_hide) {
   auto nav = FromVoid<IOSNavigation*>(impl);
   if (show_or_hide) {
     [[LFUIApplication sharedAppDelegate].controller presentViewController: nav.controller
@@ -393,11 +393,11 @@ void NativeNavigation::Show(bool show_or_hide) {
   }
 }
 
-void NativeNavigation::PushTable(NativeTable *t) {
+void SystemNavigationWidget::PushTable(SystemTableWidget *t) {
   [FromVoid<IOSNavigation*>(impl).controller pushViewController: FromVoid<IOSTable*>(t->impl) animated: YES];
 }
 
-void Application::ShowNativeFontChooser(const FontDesc &cur_font, const string &choose_cmd) {
+void Application::ShowSystemFontChooser(const FontDesc &cur_font, const string &choose_cmd) {
   static IOSFontPicker *font_chooser = [[IOSFontPicker alloc] init];
   [font_chooser selectFont:cur_font.name size:cur_font.size cmd:choose_cmd];
   [[LFUIApplication sharedAppDelegate].view addSubview: font_chooser.picker];

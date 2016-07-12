@@ -329,7 +329,7 @@ static const char* const* ios_argv = 0;
     }
   }
 
-  - (void)setWaitForeverSocket: (int)fd {
+  - (void)setFrameWaitSocket: (int)fd {
     if (wait_forever_fh) FATALf("wait_forever_fh already set: %p", wait_forever_fh);
     wait_forever_fh = [[NSFileHandle alloc] initWithFileDescriptor:fd];
     [[NSNotificationCenter defaultCenter] addObserver:self
@@ -337,7 +337,7 @@ static const char* const* ios_argv = 0;
     [wait_forever_fh waitForDataInBackgroundAndNotify];
   }
 
-  - (void)delWaitForeverSocket: (int)fd {
+  - (void)delFrameWaitSocket: (int)fd {
     if (!wait_forever_fh || [wait_forever_fh fileDescriptor] != fd) FATALf("del mismatching wait_forever_fh %o", wait_forever_fh);
     [[NSNotificationCenter defaultCenter] removeObserver:self name:NSFileHandleDataAvailableNotification object:wait_forever_fh];
     // [wait_forever_fh closeFile];
@@ -541,7 +541,7 @@ int Video::Swap() {
   return 0;
 }
 
-bool FrameScheduler::DoWait() { return false; }
+bool FrameScheduler::DoFrameWait() { return false; }
 void FrameScheduler::Setup() { rate_limit = synchronize_waits = wait_forever_thread = monolithic_frame = run_main_loop = 0; }
 void FrameScheduler::Wakeup(Window *w) {
   dispatch_async(dispatch_get_main_queue(), ^{ [GetTyped<GLKView*>(w->id) setNeedsDisplay]; });
@@ -554,33 +554,33 @@ void FrameScheduler::UpdateWindowTargetFPS(Window *w) {
   [[LFUIApplication sharedAppDelegate] updateTargetFPS: w->target_fps];
 }
 
-void FrameScheduler::AddWaitForeverMouse(Window*) {
+void FrameScheduler::AddFrameWaitMouse(Window*) {
   [LFUIApplication sharedAppDelegate].frame_on_mouse_input = YES;
 }
 
-void FrameScheduler::DelWaitForeverMouse(Window*) {
+void FrameScheduler::DelFrameWaitMouse(Window*) {
   [LFUIApplication sharedAppDelegate].frame_on_mouse_input = NO;
 }
 
-void FrameScheduler::AddWaitForeverKeyboard(Window*) {
+void FrameScheduler::AddFrameWaitKeyboard(Window*) {
   [LFUIApplication sharedAppDelegate].frame_on_keyboard_input = YES;
 }
 
-void FrameScheduler::DelWaitForeverKeyboard(Window*) {
+void FrameScheduler::DelFrameWaitKeyboard(Window*) {
  [LFUIApplication sharedAppDelegate].frame_on_keyboard_input = NO;
 }
 
-void FrameScheduler::AddWaitForeverSocket(Window *w, Socket fd, int flag) {
+void FrameScheduler::AddFrameWaitSocket(Window *w, Socket fd, int flag) {
   if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, w);
   if (!wait_forever_thread) {
     CHECK_EQ(SocketSet::READABLE, flag);
-    [[LFUIApplication sharedAppDelegate] setWaitForeverSocket: fd];
+    [[LFUIApplication sharedAppDelegate] setFrameWaitSocket: fd];
   }
 }
 
-void FrameScheduler::DelWaitForeverSocket(Window *w, Socket fd) {
+void FrameScheduler::DelFrameWaitSocket(Window *w, Socket fd) {
   if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd);
-  [[LFUIApplication sharedAppDelegate] delWaitForeverSocket: fd];
+  [[LFUIApplication sharedAppDelegate] delFrameWaitSocket: fd];
 }
 
 unique_ptr<Module> CreateFrameworkModule() { return make_unique<iOSFrameworkModule>(); }

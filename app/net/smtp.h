@@ -27,7 +27,7 @@ struct SMTP {
     void clear() { mail_from.clear(); content.clear(); rcpt_to.clear(); }
   };
   static void HTMLMessage(const string& from, const string& to, const string& subject, const string& content, string *out);
-  static void NativeSendmail(const string &message);
+  static void SystemSendmail(const string &message);
   static string EmailFrom(const string &message);
   static int SuccessCode  (int code) { return code == 250; }
   static int RetryableCode(int code) {

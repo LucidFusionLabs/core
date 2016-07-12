@@ -538,7 +538,7 @@ void TextBox::DrawCursor(point p) {
     gc.gd->EnableBlend();
     gc.gd->BlendMode(GraphicsDevice::OneMinusDstColor, GraphicsDevice::OneMinusSrcAlpha);
     gc.gd->FillColor(cmd_color);
-    Box(p.x, p.y - style.font->Height(), style.font->max_width, style.font->Height()).Draw(gc.gd);
+    gc.DrawTexturedBox(Box(p.x, p.y - style.font->Height(), style.font->max_width, style.font->Height()));
     gc.gd->BlendMode(GraphicsDevice::SrcAlpha, GraphicsDevice::One);
     gc.gd->DisableBlend();
   } else {
@@ -815,7 +815,7 @@ void TextArea::DrawSelection() {
   GraphicsContext gc(root->gd);
   gc.gd->EnableBlend();
   gc.gd->FillColor(selection_color);
-  selection.box.Draw(gc.gd, box.BottomLeft());
+  gc.DrawBox3(selection.box, box.BottomLeft());
   gc.gd->SetColor(Color::white);
 }
 
@@ -993,7 +993,7 @@ void PropertyView::Draw(const Box &b, int flag, Shader *shader) {
   if (Within(selected_line_no_offset, 0, GetFrameBuffer()->lines)) {
     gc.gd->EnableBlend();
     gc.gd->FillColor(selected_color);
-    Box(b.x, b.top()-(selected_line_no_offset+1)*fh, b.w, fh).Draw(gc.gd);
+    gc.DrawTexturedBox(Box(b.x, b.top()-(selected_line_no_offset+1)*fh, b.w, fh));
   }
 }
 
@@ -1755,7 +1755,7 @@ void Terminal::Draw(const Box &b, int flag, Shader *shader) {
   if (flag & DrawFlag::DrawCursor) TextBox::DrawCursor(b.Position() + cursor.p);
   if (extra_height && !shader) {
     ScopedFillColor c(gc.gd, *bg_color);
-    Box(b.x, b.y + (line_fb.align_top_or_bot ? 0 : line_fb.h), b.w, extra_height).Draw(gc.gd);
+    gc.DrawTexturedBox(Box(b.x, b.y + (line_fb.align_top_or_bot ? 0 : line_fb.h), b.w, extra_height));
   }
   if (selection.changing) DrawSelection();
 }
@@ -2081,7 +2081,7 @@ void Console::Draw(const Box &b, int flag, Shader *shader) {
   Box tb(b.x, b.y + fh, b.w, b.h - fh);
   if (blend) gc.gd->EnableBlend(); 
   else       gc.gd->DisableBlend();
-  if (blend) { gc.gd->FillColor(color); b.Draw(gc.gd); gc.gd->SetColor(Color::white); }
+  if (blend) { gc.gd->FillColor(color); gc.DrawTexturedBox(b); gc.gd->SetColor(Color::white); }
   TextBox::Draw(b);
   TextArea::Draw(tb, flag & ~DrawFlag::DrawCursor, shader);
   if (scissor) gc.gd->PopScissor();
@@ -2163,7 +2163,7 @@ void Dialog::Draw() {
   if (child_box.data.empty() && !reshaping) Layout();
 
   gc.gd->FillColor(color);
-  box.Draw(gc.gd);
+  gc.DrawTexturedBox(box);
   gc.gd->SetColor(Color::white);
   if (reshaping) BoxOutline().Draw(&gc, outline);
 
@@ -2176,7 +2176,7 @@ void Dialog::Draw() {
 
 void DialogTab::Draw(GraphicsDevice *gd, const Box &b, const point &tab_dim, const vector<DialogTab> &t) {
   gd->FillColor(Color::grey70);
-  Box(b.x, b.y+b.h-tab_dim.y, b.w, tab_dim.y).Draw(gd);
+  GraphicsContext::DrawTexturedBox1(gd, Box(b.x, b.y+b.h-tab_dim.y, b.w, tab_dim.y));
   gd->EnableVertexColor();
   for (int i=0, l=t.size(); i<l; ++i) t[i].dialog->DrawGradient(b.TopLeft() + point(i*tab_dim.x, 0));
   gd->DisableVertexColor();
@@ -2328,7 +2328,7 @@ void HelperGUI::Draw() {
     glLine(root->gd, point(i->label_center.x, i->label_center.y),
                      point(i->target_center.x, i->target_center.y), &font->fg);
     gc.gd->FillColor(Color::black);
-    Box::AddBorder(i->label, 4, 0).Draw(gc.gd);
+    gc.DrawTexturedBox(Box::AddBorder(i->label, 4, 0));
     font->Draw(i->description, point(i->label.x, i->label.y));
   }
 }

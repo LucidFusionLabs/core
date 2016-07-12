@@ -73,7 +73,7 @@ struct X11FrameworkModule : public Module {
     if (!(display = XOpenDisplay(NULL))) return ERRORv(-1, "XOpenDisplay");
     if (!(vi = glXChooseVisual(display, 0, att))) return ERRORv(-1, "glXChooseVisual");
     app->scheduler.system_event_socket = ConnectionNumber(display);
-    app->scheduler.AddWaitForeverSocket(screen, app->scheduler.system_event_socket, SocketSet::READABLE);
+    app->scheduler.AddFrameWaitSocket(screen, app->scheduler.system_event_socket, SocketSet::READABLE);
     SystemNetwork::SetSocketCloseOnExec(app->scheduler.system_event_socket, true);
     INFO("X11VideoModule::Init()");
     return Video::CreateWindow(screen) ? 0 : -1;
@@ -129,7 +129,7 @@ void Application::GrabMouseFocus() {}
 
 void Application::SetClipboardText(const string &s) {}
 string Application::GetClipboardText() { return string(); }
-void Application::ShowNativeContextMenu(const vector<MenuItem>&items) {}
+void Application::ShowSystemContextMenu(const vector<MenuItem>&items) {}
 
 void Application::OpenTouchKeyboard() {}
 void Application::SetTouchKeyboardTiled(bool v) {}
@@ -179,7 +179,7 @@ int Video::Swap() {
   return 0;
 }
 
-bool FrameScheduler::DoWait() {
+bool FrameScheduler::DoFrameWait() {
   unordered_set<Window*> wokeup;
   wait_forever_sockets.Select(-1);
   for (auto &s : wait_forever_sockets.socket)
@@ -201,15 +201,15 @@ void FrameScheduler::Wakeup(Window *w) {
 }
 
 void FrameScheduler::UpdateWindowTargetFPS(Window *w) {}
-void FrameScheduler::AddWaitForeverMouse(Window *w) { }
-void FrameScheduler::DelWaitForeverMouse(Window *w) {  }
-void FrameScheduler::AddWaitForeverKeyboard(Window *w) {  }
-void FrameScheduler::DelWaitForeverKeyboard(Window *w) {  }
-void FrameScheduler::AddWaitForeverSocket(Window *w, Socket fd, int flag) {
+void FrameScheduler::AddFrameWaitMouse(Window *w) { }
+void FrameScheduler::DelFrameWaitMouse(Window *w) {  }
+void FrameScheduler::AddFrameWaitKeyboard(Window *w) {  }
+void FrameScheduler::DelFrameWaitKeyboard(Window *w) {  }
+void FrameScheduler::AddFrameWaitSocket(Window *w, Socket fd, int flag) {
   if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, w);
   wait_forever_sockets.Add(fd, flag, w);
 }
-void FrameScheduler::DelWaitForeverSocket(Window *w, Socket fd) {
+void FrameScheduler::DelFrameWaitSocket(Window *w, Socket fd) {
   if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd);
   wait_forever_sockets.Del(fd);
 }

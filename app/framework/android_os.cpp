@@ -18,72 +18,213 @@
 
 namespace LFL {
 static JNI *jni = Singleton<JNI>::Get();
-static pair<jobjectArray, jobjectArray> ToJObjectArray(const vector<pair<string, string>>&items) {
-  jobjectArray k = jni->env->NewObjectArray(items.size(), jni->string_class, NULL);
-  jobjectArray v = jni->env->NewObjectArray(items.size(), jni->string_class, NULL);
+
+void JNI::Init(jobject a, bool first) {
+  if      (1)           CHECK(activity = env->NewGlobalRef(a));
+  if      (1)           CHECK(view     = env->NewGlobalRef(env->GetObjectField(activity, view_id)));
+  if      (first)             gplus    = env->NewGlobalRef(env->GetObjectField(activity, gplus_id));
+  else if (gplus_class) CHECK(gplus    = env->NewGlobalRef(env->GetObjectField(activity, gplus_id)));
+}
+
+void JNI::Free() {
+  if (gplus_class) env->DeleteGlobalRef(gplus);    gplus    = 0;
+  if (1)           env->DeleteGlobalRef(view);     view     = 0;
+  if (1)           env->DeleteGlobalRef(activity); activity = 0;
+  activity_box = Box(-1, -1);
+}
+
+int JNI::CheckForException() {
+  jthrowable exception = env->ExceptionOccurred();
+  if (!exception) return 0;
+  env->ExceptionClear();
+  LogException(exception);
+  return -1;
+}
+
+void JNI::LogException(jthrowable &exception) {
+  static jmethodID jni_throwable_method_get_cause =
+    CheckNotNull(env->GetMethodID(throwable_class, "getCause", "()Ljava/lang/Throwable;"));
+  static jmethodID jni_throwable_method_get_stack_trace =
+    CheckNotNull(env->GetMethodID(throwable_class, "getStackTrace", "()[Ljava/lang/StackTraceElement;"));
+  static jmethodID jni_throwable_method_tostring =
+    CheckNotNull(env->GetMethodID(throwable_class, "toString", "()Ljava/lang/String;"));
+  static jmethodID jni_frame_method_tostring =
+    CheckNotNull(env->GetMethodID(frame_class, "toString", "()Ljava/lang/String;"));
+
+  jobjectArray frames = (jobjectArray)env->CallObjectMethod(exception, jni_throwable_method_get_stack_trace);
+  jsize frames_length = env->GetArrayLength(frames);
+  string out;
+
+  if (frames > 0) {
+    jstring msg = (jstring)env->CallObjectMethod(exception, jni_throwable_method_tostring);
+    out += GetJString(msg);
+    env->DeleteLocalRef(msg);
+  }
+  for (jsize i = 0; i < frames_length; i++) { 
+    jobject frame = env->GetObjectArrayElement(frames, i);
+    jstring msg = (jstring)env->CallObjectMethod(frame, jni_frame_method_tostring);
+    out += "\n    " + GetJString(msg);
+    env->DeleteLocalRef(msg);
+    env->DeleteLocalRef(frame);
+  }
+  if (frames > 0) {
+    jthrowable cause = (jthrowable)env->CallObjectMethod(exception, jni_throwable_method_get_cause);
+    if (cause) LogException(cause);
+  }  
+
+  INFOf("JNI::LogException: %s", out.c_str());
+}
+
+string JNI::GetJString(jstring x) {
+  const char *buf = env->GetStringUTFChars(x, 0);
+  string ret = buf;
+  env->ReleaseStringUTFChars(x, buf);
+  return ret;
+}
+
+pair<jobjectArray, jobjectArray> JNI::ToJObjectArray(const StringPairVec& items) {
+  jobjectArray k = env->NewObjectArray(items.size(), string_class, NULL);
+  jobjectArray v = env->NewObjectArray(items.size(), string_class, NULL);
   for (int i=0, l=items.size(); i != l; ++i) {
-    jni->env->SetObjectArrayElement(k, i, jni->env->NewStringUTF(items[i].first .c_str()));
-    jni->env->SetObjectArrayElement(v, i, jni->env->NewStringUTF(items[i].second.c_str()));
+    env->SetObjectArrayElement(k, i, ToJString(items[i].first));
+    env->SetObjectArrayElement(v, i, ToJString(items[i].second));
   }
   return make_pair(k, v);
 }
 
-NativeAlert::~NativeAlert() {}
-NativeAlert::NativeAlert(const StringPairVec &items) {
+tuple<jobjectArray, jobjectArray, jobjectArray> JNI::ToJObjectArray(const MenuItemVec &items) {
+  jobjectArray k = env->NewObjectArray(items.size(), string_class, NULL);
+  jobjectArray v = env->NewObjectArray(items.size(), string_class, NULL);
+  jobjectArray w = env->NewObjectArray(items.size(), string_class, NULL);
+  for (int i=0, l=items.size(); i != l; ++i) {
+    env->SetObjectArrayElement(k, i, ToJString(tuple_get<0>(items[i])));
+    env->SetObjectArrayElement(v, i, ToJString(tuple_get<1>(items[i])));
+    env->SetObjectArrayElement(w, i, ToJString(tuple_get<2>(items[i])));
+  }
+  return make_tuple(k, v, w);
+}
+
+BufferFile *JNI::OpenAsset(const string &fn) {
+  static jmethodID get_assets_mid = CheckNotNull(env->GetMethodID(activity_class, "getAssets", "()Landroid/content/res/AssetManager;"));
+  static jmethodID assetmgr_open_mid = CheckNotNull(env->GetMethodID(assetmgr_class, "open", "(Ljava/lang/String;)Ljava/io/InputStream;"));
+  static jmethodID inputstream_avail_mid = CheckNotNull(env->GetMethodID(inputstream_class, "available", "()I"));
+  static jmethodID channels_newchan_mid = CheckNotNull(env->GetStaticMethodID(channels_class, "newChannel", "(Ljava/io/InputStream;)Ljava/nio/channels/ReadableByteChannel;"));
+  static jmethodID readbytechan_read_mid = CheckNotNull(env->GetMethodID(readbytechan_class, "read", "(Ljava/nio/ByteBuffer;)I"));
+
+  jstring jfn = ToJString(fn);
+  jobject assets = env->CallObjectMethod(activity, get_assets_mid);
+  jobject input = env->CallObjectMethod(assets, assetmgr_open_mid, jfn);
+  env->DeleteLocalRef(jfn);
+  env->DeleteLocalRef(assets);
+  if (!input || CheckForException()) return nullptr;
+
+  int len = env->CallIntMethod(input, inputstream_avail_mid);
+  if (CheckForException()) { env->DeleteLocalRef(input); return nullptr; }
+
+  unique_ptr<BufferFile> ret = make_unique<BufferFile>(string(), fn.c_str());
+  if (!len) { env->DeleteLocalRef(input); return ret.release(); }
+  ret->buf.resize(len);
+
+  jobject readable = env->CallStaticObjectMethod(channels_class, channels_newchan_mid, input);
+  env->DeleteLocalRef(input);
+
+  jobject bytes = env->NewDirectByteBuffer(&ret->buf[0], ret->buf.size());
+  len = env->CallIntMethod(readable, readbytechan_read_mid, bytes);
+  env->DeleteLocalRef(readable);
+  env->DeleteLocalRef(bytes);
+
+  if (len != ret->buf.size() || CheckForException()) return nullptr;
+  return ret.release();
+}
+
+SystemAlertWidget::~SystemAlertWidget() {}
+
+SystemAlertWidget::SystemAlertWidget(const StringPairVec &items) {
   CHECK_EQ(4, items.size());
   CHECK_EQ("style", items[0].first);
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->activity_class,
                            "addAlert", "([Ljava/lang/String;[Ljava/lang/String;)I"));
-  auto kv = ToJObjectArray(items);
+  auto kv = jni->ToJObjectArray(items);
   impl.v = Void(jni->env->CallIntMethod(jni->activity, mid, kv.first, kv.second));
 }
 
-void NativeAlert::Show(const string &arg) {
+void SystemAlertWidget::Show(const string &arg) {
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->activity_class, "showAlert", "(ILjava/lang/String;)V"));
-  jni->env->CallVoidMethod(jni->activity, mid, jint(impl.v), jni->env->NewStringUTF(arg.c_str()));
+  jni->env->CallVoidMethod(jni->activity, mid, jint(impl.v), jni->ToJString(arg));
 }
 
-NativeMenu::~NativeMenu() {}
-NativeMenu::NativeMenu(const string &title, const vector<MenuItem>&items) {}
-unique_ptr<NativeMenu> NativeMenu::CreateEditMenu(const vector<MenuItem> &items) { return nullptr; }
-void NativeMenu::Show() {}
+SystemToolbarWidget::~SystemToolbarWidget() {}
+void SystemToolbarWidget::ToggleButton(const string &n) {}
 
-NativeToolbar::NativeToolbar(const StringPairVec &items) {
-  static jmethodID mid = CheckNotNull
-    (jni->env->GetMethodID(jni->activity_class,
-                           "addToolbar", "([Ljava/lang/String;[Ljava/lang/String;)I"));
-  auto kv = ToJObjectArray(items);
-  impl.v = Void(jni->env->CallIntMethod(jni->activity, mid, kv.first, kv.second));
-}
-
-NativeToolbar::~NativeToolbar() {}
-void NativeToolbar::ToggleButton(const string &n) {}
-void NativeToolbar::Show(bool show_or_hide) {
+void SystemToolbarWidget::Show(bool show_or_hide) {
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->activity_class, "showToolbar", "(I)V"));
   jni->env->CallVoidMethod(jni->activity, mid, jint(impl.v));
 }
 
-NativeTable::~NativeTable() {}
-NativeTable::NativeTable(const string &title, const vector<MenuItem> &items) {}
-void NativeTable::AddToolbar(NativeToolbar*) {}
-void NativeTable::Show(bool show_or_hide) {}
+SystemToolbarWidget::SystemToolbarWidget(const StringPairVec &items) {
+  static jmethodID mid = CheckNotNull
+    (jni->env->GetMethodID(jni->activity_class,
+                           "addToolbar", "([Ljava/lang/String;[Ljava/lang/String;)I"));
+  auto kv = jni->ToJObjectArray(items);
+  impl.v = Void(jni->env->CallIntMethod(jni->activity, mid, kv.first, kv.second));
+}
 
-NativeNavigation::~NativeNavigation() {}
-NativeNavigation::NativeNavigation(NativeTable *r) {}
-void NativeNavigation::Show(bool show_or_hide) {}
-void NativeNavigation::PushTable(NativeTable *t) {}
+SystemMenuWidget::~SystemMenuWidget() {}
+unique_ptr<SystemMenuWidget> SystemMenuWidget::CreateEditMenu(const vector<MenuItem> &items) { return nullptr; }
+SystemMenuWidget::SystemMenuWidget(const string &title, const vector<MenuItem>&items) {
+  static jmethodID mid = CheckNotNull
+    (jni->env->GetMethodID(jni->activity_class,
+                           "addMenu", "(Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;)I"));
+  auto kvw = jni->ToJObjectArray(items);
+  impl.v = Void(jni->env->CallIntMethod(jni->activity, mid, jni->ToJString(title),
+                                        tuple_get<0>(kvw), tuple_get<1>(kvw), tuple_get<2>(kvw)));
+}
 
-void Application::ShowNativeFontChooser(const FontDesc &cur_font, const string &choose_cmd) {}
-void Application::ShowNativeFileChooser(bool files, bool dirs, bool multi, const string &choose_cmd) {}
+void SystemMenuWidget::Show() {
+  static jmethodID mid = CheckNotNull
+    (jni->env->GetMethodID(jni->activity_class, "showMenu", "(I)V"));
+  jni->env->CallVoidMethod(jni->activity, mid, jint(impl.v));
+}
+
+SystemTableWidget::~SystemTableWidget() {}
+SystemTableWidget::SystemTableWidget(const string &title, const vector<MenuItem> &items) {
+  static jmethodID mid = CheckNotNull
+    (jni->env->GetMethodID(jni->activity_class,
+                           "addTable", "([Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;)I"));
+  auto kvw = jni->ToJObjectArray(items);
+  impl.v = Void(jni->env->CallIntMethod(jni->activity, mid, jni->ToJString(title),
+                                        tuple_get<0>(kvw), tuple_get<1>(kvw), tuple_get<2>(kvw)));
+}
+
+void SystemTableWidget::AddToolbar(SystemToolbarWidget*) {}
+void SystemTableWidget::Show(bool show_or_hide) {
+  static jmethodID mid = CheckNotNull
+    (jni->env->GetMethodID(jni->activity_class, "showTable", "(I)V"));
+    jni->env->CallVoidMethod(jni->activity, mid, jint(impl.v));
+}
+
+SystemNavigationWidget::~SystemNavigationWidget() {}
+SystemNavigationWidget::SystemNavigationWidget(SystemTableWidget *r) {}
+void SystemNavigationWidget::Show(bool show_or_hide) {}
+void SystemNavigationWidget::PushTable(SystemTableWidget *t) {}
+
+void Application::ShowSystemFontChooser(const FontDesc &cur_font, const string &choose_cmd) {}
+void Application::ShowSystemFileChooser(bool files, bool dirs, bool multi, const string &choose_cmd) {}
 
 void Application::OpenSystemBrowser(const string &url_text) {
   static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "openBrowser", "(Ljava/lang/String;)V"));
-  jstring jurl = jni->env->NewStringUTF(url_text.c_str());
+  jstring jurl = jni->ToJString(url_text);
   jni->env->CallVoidMethod(jni->activity, mid, jurl);
   jni->env->DeleteLocalRef(jurl);
+}
+
+string Application::GetSystemDeviceName() {
+  static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "getModelName", "()Ljava/lang/String;"));
+  jstring ret = (jstring)jni->env->CallObjectMethod(jni->activity, mid);
+  return jni->GetJString(ret);
 }
 
 void Application::SavePassword(const string &h, const string &u, const string &pw) {}
@@ -97,6 +238,51 @@ void Application::ShowAds() {
 void Application::HideAds() {
   static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "hideAds", "()V"));
   jni->env->CallVoidMethod(jni->activity, mid);
+}
+
+void GPlus::SignIn() {
+  if (jni->gplus) {
+    static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->gplus_class, "signIn", "()V"));
+    jni->env->CallVoidMethod(jni->gplus, mid);
+  } else ERRORf("no gplus %p", jni->gplus);
+}
+
+void GPlus::SignOut() {
+  if (jni->gplus) {
+    static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->gplus_class, "signOut", "()V"));
+    jni->env->CallVoidMethod(jni->gplus, mid);
+  } else ERRORf("no gplus %p", jni->gplus);
+}
+
+int GPlus::GetSignedIn() {
+  if (jni->gplus) {
+    static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->gplus_class, "signedIn", "()Z"));
+    return jni->env->CallBooleanMethod(jni->gplus, mid);
+  } else { ERRORf("no gplus %p", jni->gplus); return 0; }
+}
+
+int GPlus::QuickGame() {
+  if (jni->gplus) {
+    static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->gplus_class, "quickGame", "()V"));
+    jni->env->CallVoidMethod(jni->gplus, mid);
+  } else ERRORf("no gplus %p", jni->gplus);
+  return 0;
+}
+
+int GPlus::Invite() {
+  if (jni->gplus) {
+    static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->gplus_class, "inviteGUI", "()V"));
+    jni->env->CallVoidMethod(jni->gplus, mid);
+  } else ERRORf("no gplus %p", jni->gplus);
+  return 0;
+}
+
+int GPlus::Accept() {
+  if (jni->gplus) {
+    static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->gplus_class, "acceptGUI", "()V"));
+    jni->env->CallVoidMethod(jni->gplus, mid);
+  } else ERRORf("no gplus %p", jni->gplus);
+  return 0;
 }
 
 }; // namespace LFL

@@ -165,12 +165,12 @@ static void AddNSMenuItems(NSMenu *menu, const vector<MenuItem>&items) {
   }
 }
 
-NativeAlert::~NativeAlert() { if (auto alert = FromVoid<OSXAlert*>(impl)) [alert release]; }
-NativeAlert::NativeAlert(const string &name, const vector<pair<string, string>>&items) {
+SystemAlertWidget::~SystemAlertWidget() { if (auto alert = FromVoid<OSXAlert*>(impl)) [alert release]; }
+SystemAlertWidget::SystemAlertWidget(const StringPairVec &items) {
   impl = [[OSXAlert alloc] init: items];
 }
 
-void NativeAlert::Show(const string &arg) {
+void SystemAlertWidget::Show(const string &arg) {
   auto alert = FromVoid<OSXAlert*>(impl);
   if (alert.add_text) [alert.input setStringValue: [NSString stringWithUTF8String: arg.c_str()]];
   [alert.alert beginSheetModalForWindow:[GetTyped<GameView*>(screen->id) window] modalDelegate:alert
@@ -178,8 +178,8 @@ void NativeAlert::Show(const string &arg) {
   [GetTyped<GameView*>(screen->id) clearKeyModifiers];
 }
 
-NativeMenu::~NativeMenu() { if (auto menu = FromVoid<NSMenu*>(impl)) [menu release]; }
-NativeMenu::NativeMenu(const string &title_text, const vector<MenuItem>&items) {
+SystemMenuWidget::~SystemMenuWidget() { if (auto menu = FromVoid<NSMenu*>(impl)) [menu release]; }
+SystemMenuWidget::SystemMenuWidget(const string &title_text, const vector<MenuItem>&items) {
   NSString *title = [NSString stringWithUTF8String: title_text.c_str()];
   NSMenu *menu = [[NSMenu alloc] initWithTitle: title];
   AddNSMenuItems(menu, items);
@@ -190,7 +190,7 @@ NativeMenu::NativeMenu(const string &title_text, const vector<MenuItem>&items) {
   [item release];
 }
 
-unique_ptr<NativeMenu> NativeMenu::CreateEditMenu(const vector<MenuItem>&items) {
+unique_ptr<SystemMenuWidget> SystemMenuWidget::CreateEditMenu(const vector<MenuItem>&items) {
   NSMenuItem *item; 
   NSMenu *menu = [[NSMenu alloc] initWithTitle:@"Edit"];
   item = [menu addItemWithTitle:@"Copy"  action:@selector(copy:)  keyEquivalent:@"c"];
@@ -201,11 +201,11 @@ unique_ptr<NativeMenu> NativeMenu::CreateEditMenu(const vector<MenuItem>&items) 
   [[NSApp mainMenu] addItem: item];
   [menu release];
   [item release];
-  return make_unique<NativeMenu>(nullptr);
+  return make_unique<SystemMenuWidget>(nullptr);
 }
 
-NativePanel::~NativePanel() { if (auto panel = FromVoid<OSXPanel*>(impl)) [panel release]; }
-NativePanel::NativePanel(const Box &b, const string &title, const vector<PanelItem> &items) {
+SystemPanelWidget::~SystemPanelWidget() { if (auto panel = FromVoid<OSXPanel*>(impl)) [panel release]; }
+SystemPanelWidget::SystemPanelWidget(const Box &b, const string &title, const vector<PanelItem> &items) {
   OSXPanel *panel = [[OSXPanel alloc] initWithBox: b];
   [[panel window] setTitle: [NSString stringWithUTF8String: title.c_str()]];
   for (auto &i : items) {
@@ -227,17 +227,17 @@ NativePanel::NativePanel(const Box &b, const string &title, const vector<PanelIt
   impl = panel;
 }
 
-void NativePanel::Show() { [FromVoid<OSXPanel*>(impl) show]; }
-void NativePanel::SetTitle(const string &title) { 
+void SystemPanelWidget::Show() { [FromVoid<OSXPanel*>(impl) show]; }
+void SystemPanelWidget::SetTitle(const string &title) { 
   [[FromVoid<OSXPanel*>(impl) window] setTitle: [NSString stringWithUTF8String: title.c_str()]];
 }
 
-void Application::ShowNativeFontChooser(const FontDesc &cur_font, const string &choose_cmd) {
+void Application::ShowSystemFontChooser(const FontDesc &cur_font, const string &choose_cmd) {
   static FontChooser *font_chooser = [FontChooser alloc];
   [font_chooser selectFont:cur_font.name.c_str() size:cur_font.size cmd:choose_cmd.c_str()];
 }
 
-void Application::ShowNativeFileChooser(bool choose_files, bool choose_dirs, bool choose_multi,
+void Application::ShowSystemFileChooser(bool choose_files, bool choose_dirs, bool choose_multi,
                                           const string &choose_cmd) {
   NSOpenPanel *panel = [NSOpenPanel openPanel];
   [panel setCanChooseFiles:choose_files];
@@ -255,7 +255,7 @@ void Application::ShowNativeFileChooser(bool choose_files, bool choose_dirs, boo
   if (run.size() > start.size()) ShellRun(run.c_str());
 }
 
-void Application::ShowNativeContextMenu(const vector<MenuItem>&items) {
+void Application::ShowSystemContextMenu(const vector<MenuItem>&items) {
   NSEvent *event = [NSEvent mouseEventWithType: NSLeftMouseDown
                             location:           NSMakePoint(screen->mouse.x, screen->mouse.y)
                             modifierFlags:      NSLeftMouseDownMask

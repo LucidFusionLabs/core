@@ -82,7 +82,7 @@ struct DrawableBoxRun {
   point Draw(GraphicsDevice *d, point p, DrawCB = &DefaultDrawCB, const Box *scissor=0) const;
   void draw(GraphicsDevice *d, point p) const { Draw(d, p); }
 
-  static void DefaultDrawBackgroundCB(GraphicsDevice *d, const Box &w) { w.Draw(d); }
+  static void DefaultDrawBackgroundCB(GraphicsDevice *d, const Box &w) { GraphicsContext::DrawTexturedBox1(d, w); }
   void DrawBackground(GraphicsDevice *d, point p, DrawBackgroundCB = &DefaultDrawBackgroundCB) const;
 };
 

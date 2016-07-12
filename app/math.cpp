@@ -72,6 +72,49 @@ bool m44::Invert(const m44 &in, m44 *out, float *det_out)  {
   return true;
 }
 
+Box::Box(float X, float Y, float W, float H, bool round) {
+  if (round) { x=RoundF(X); y=RoundF(Y); w=RoundF(W); h=RoundF(H); }
+  else       { x=   int(X); y=   int(Y); w=   int(W); h=   int(H); }
+}
+
+Box::Box(const float *v4, bool round) {
+  if (round) { x=RoundF(v4[0]); y=RoundF(v4[1]); w=RoundF(v4[2]); h=RoundF(v4[3]); }
+  else       { x=   int(v4[0]); y=   int(v4[1]); w=   int(v4[2]); h=   int(v4[3]); }
+}
+
+string Box::DebugString() const { return StringPrintf("Box = { %d, %d, %d, %d }", x, y, w, h); }
+
+float Box::ScrollCrimped(float tex0, float tex1, float scroll, float *min, float *mid1, float *mid2, float *max) {
+  if (tex1 <= 1.0 && tex0 == 0.0) {
+    *mid1=tex1; *mid2=0;
+    if (scroll > 0) *min = *max = tex1 - scroll;
+    else            *min = *max = tex0 - scroll;
+  } else if (tex0 > 0.0 && tex1 == 1.0) {
+    *mid1=1; *mid2=tex0;
+    if (scroll > 0) *min = *max = tex0 + scroll;
+    else            *min = *max = tex1 + scroll;
+  } else { FATAL("invalid tex coords ", tex0, ", ", tex1); }
+  return (*mid1 - *min) / (tex1 - tex0); 
+}
+
+Box3::Box3(const Box &cont, const point &pb, const point &pe, int first_line_height, int last_line_height) {
+  if (pb.y == pe.y) {
+    v[0] = Box(pb.x, pb.y, pe.x - pb.x, first_line_height);
+    v[1] = v[2] = Box();
+  } else {
+    v[0] = Box(pb.x, pb.y, cont.w - pb.x, first_line_height);
+    v[1] = Box(0, pe.y + last_line_height, cont.w, pb.y - pe.y - first_line_height);
+    v[2] = Box(0, pe.y, pe.x, last_line_height);
+  }
+}
+
+Box Box3::BoundingBox() const {
+  int min_x = v[0].x, min_y = v[0].y, max_x = v[0].x + v[0].w, max_y = v[0].y + v[0].h;
+  if (v[1].h) { min_x = min(min_x, v[1].x); min_y = min(min_y, v[1].y); max_x = max(max_x, v[1].x + v[1].w); max_y = max(max_y, v[1].y + v[1].h); }
+  if (v[2].h) { min_x = min(min_x, v[2].x); min_y = min(min_y, v[2].y); max_x = max(max_x, v[2].x + v[2].w); max_y = max(max_y, v[2].y + v[2].h); }
+  return Box(min_x, min_y, max_x - min_x, max_y - min_y);
+}
+
 v3 Clamp(const v3& x, float floor, float ceil) {
   return v3(Clamp(x.x, floor, ceil), Clamp(x.y, floor, ceil), Clamp(x.z, floor, ceil));
 }

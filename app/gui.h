@@ -752,7 +752,7 @@ struct Dialog : public GUI {
   void LayoutTitle(const Box &b, MouseController*, DrawableBoxArray*);
   void LayoutReshapeControls(const point &d, MouseController*);
   bool HandleReshape(Box *outline);
-  void DrawGradient(const point &p) const { (title + p).DrawGradient(root->gd, title_gradient); }
+  void DrawGradient(const point &p) const { GraphicsContext::DrawGradientBox1(root->gd, (title + p), title_gradient); }
   void Reshape(bool *down) { mouse_start = screen->mouse; win_start = point(box.x, box.y); *down = 1; }
 
   static bool LessThan(const unique_ptr<Dialog> &l, const unique_ptr<Dialog> &r) { return l->zsort < r->zsort; }

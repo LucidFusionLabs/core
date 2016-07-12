@@ -47,7 +47,7 @@ template <class Line> struct RingFrameBuffer {
     Box box(pos.x, pos.y, w, h);
     if (scissor) fb.gd->PushScissor(box);
     fb.tex.Bind();
-    (box + adjust).DrawCrimped(fb.gd, fb.tex.coord, 0, 0, scroll.y);
+    GraphicsContext::DrawCrimpedBox1(fb.gd, (box + adjust), fb.tex.coord, 0, 0, scroll.y);
     if (scissor) fb.gd->PopScissor();
   }
 
@@ -249,7 +249,8 @@ template<class CB, class CBL, class CBLI> struct TilesT : public TilesInterface 
         if (!tile || !tile->id) continue;
         GetSpaceCoords(y, x, &sx, &sy);
         fb.gd->BindTexture(GraphicsDevice::Texture2D, tile->id);
-        Box(sx - doc_to_view.x, sy - doc_to_view.y, W, H).Draw(fb.gd, Texture::unit_texcoord);
+        GraphicsContext::DrawTexturedBox1
+          (fb.gd, Box(sx - doc_to_view.x, sy - doc_to_view.y, W, H), Texture::unit_texcoord);
       }
     }
   }

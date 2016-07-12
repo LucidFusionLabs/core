@@ -19,26 +19,6 @@
 #ifndef LFL_CORE_APP_TYPES_TYPES_H__
 #define LFL_CORE_APP_TYPES_TYPES_H__
 
-#define SortImpl1(x1, y2) return x1 < y2;
-#define SortImpl2(x1, y1, x2, y2) \
-  if      (x1 < y1) return true;  \
-  else if (y1 < x1) return false; \
-  else return x2 < y2;
-#define SortImpl3(x1, y1, x2, y2, x3, y3) \
-  if      (x1 < y1) return true;  \
-  else if (y1 < x1) return false; \
-  if      (x2 < y2) return true;  \
-  else if (y2 < x2) return false; \
-  else return x3 < y3;
-#define SortImpl4(x1, y1, x2, y2, x3, y3, x4, y4) \
-  if      (x1 < y1) return true;  \
-  else if (y1 < x1) return false; \
-  if      (x2 < y2) return true;  \
-  else if (y2 < x2) return false; \
-  if      (x3 < y3) return true;  \
-  else if (y3 < x3) return false; \
-  else return x4 < y4;
-
 namespace LFL {
 #ifdef LFL_WINDOWS
 using LFL_STL11_NAMESPACE::make_unique;

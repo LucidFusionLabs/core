@@ -71,7 +71,7 @@ void Tiles::DrawBox(GraphicsContext *gc, const Drawable *d, const Box &b) {
 }
 
 void Tiles::DrawBackground(GraphicsDevice *gd, const Box &b) {
-  AddCallback(&b, bind(&Box::Draw, b, gd, NullPointer<float>()));
+  AddCallback(&b, bind(&GraphicsContext::DrawTexturedBox1, gd, b, NullPointer<float>()));
 }
 
 void Tiles::AddScissor(const Box &b) {
@@ -139,7 +139,7 @@ int MultiProcessPaintResource::Run(const Box &t) const {
       case SetAttr           ::Type: { auto c=i.Get<SetAttr>           (); c->Update(&attr, app->render_process.get());           i.offset += SetAttr           ::Size; TilesIPCDebug("MPPR SetAttr %s",     attr.DebugString().c_str()); } break;
       case InitDrawBox       ::Type: { auto c=i.Get<InitDrawBox>       (); DrawableBoxRun(0,0,&attr).draw(gc.gd, c->p);           i.offset += InitDrawBox       ::Size; TilesIPCDebug("MPPR InitDrawBox %s", c->p.DebugString().c_str()); } break;
       case InitDrawBackground::Type: { auto c=i.Get<InitDrawBackground>(); DrawableBoxRun(0,0,&attr).DrawBackground(gc.gd, c->p); i.offset += InitDrawBackground::Size; TilesIPCDebug("MPPR InitDrawBG %s",  c->p.DebugString().c_str()); } break;
-      case DrawBackground    ::Type: { auto c=i.Get<DrawBackground>    (); c->b.Draw(gc.gd);                                      i.offset += DrawBackground    ::Size; TilesIPCDebug("MPPR DrawBG %s",      c->b.DebugString().c_str()); } break;
+      case DrawBackground    ::Type: { auto c=i.Get<DrawBackground>    (); gc.DrawTexturedBox(c->b);                                      i.offset += DrawBackground    ::Size; TilesIPCDebug("MPPR DrawBG %s",      c->b.DebugString().c_str()); } break;
       case PushScissor       ::Type: { auto c=i.Get<PushScissor>       (); gc.gd->PushScissorOffset(t, c->b);     si++;           i.offset += PushScissor       ::Size; TilesIPCDebug("MPPR PushScissor %s", c->b.DebugString().c_str()); } break;
       case PopScissor        ::Type: { auto c=i.Get<PopScissor>        (); gc.gd->PopScissor(); CHECK_LT(sd, si); sd++;           i.offset += PopScissor        ::Size; TilesIPCDebug("MPPR PopScissor");                                 } break;
       case DrawBox           ::Type: { auto c=i.Get<DrawBox>           ();

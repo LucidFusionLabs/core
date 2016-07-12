@@ -161,28 +161,18 @@ void Material::SetMaterialColor(const Color &color) {
 }
 #endif
 
-Box::Box(float X, float Y, float W, float H, bool round) {
-  if (round) { x=RoundF(X); y=RoundF(Y); w=RoundF(W); h=RoundF(H); }
-  else       { x=   int(X); y=   int(Y); w=   int(W); h=   int(H); }
-}
+/* GrahicsContext */
 
-Box::Box(const float *v4, bool round) {
-  if (round) { x=RoundF(v4[0]); y=RoundF(v4[1]); w=RoundF(v4[2]); h=RoundF(v4[3]); }
-  else       { x=   int(v4[0]); y=   int(v4[1]); w=   int(v4[2]); h=   int(v4[3]); }
-}
-
-string Box::DebugString() const { return StringPrintf("Box = { %d, %d, %d, %d }", x, y, w, h); }
-
-void Box::Draw(GraphicsDevice *gd, const float *texcoord) const {
+void GraphicsContext::DrawTexturedBox1(GraphicsDevice *gd, const Box &b, const float *texcoord) {
   static const float default_texcoord[4] = {0, 0, 1, 1};
   const float *tc = X_or_Y(texcoord, default_texcoord);
 #if 1
-  float verts[] = { float(x),   float(y),   tc[Texture::minx_coord_ind], tc[Texture::miny_coord_ind],
-                    float(x),   float(y+h), tc[Texture::minx_coord_ind], tc[Texture::maxy_coord_ind],
-                    float(x+w), float(y),   tc[Texture::maxx_coord_ind], tc[Texture::miny_coord_ind],
-                    float(x),   float(y+h), tc[Texture::minx_coord_ind], tc[Texture::maxy_coord_ind],
-                    float(x+w), float(y),   tc[Texture::maxx_coord_ind], tc[Texture::miny_coord_ind],
-                    float(x+w), float(y+h), tc[Texture::maxx_coord_ind], tc[Texture::maxy_coord_ind] };
+  float verts[] = { float(b.x),     float(b.y),     tc[Texture::minx_coord_ind], tc[Texture::miny_coord_ind],
+                    float(b.x),     float(b.y+b.h), tc[Texture::minx_coord_ind], tc[Texture::maxy_coord_ind],
+                    float(b.x+b.w), float(b.y),     tc[Texture::maxx_coord_ind], tc[Texture::miny_coord_ind],
+                    float(b.x),     float(b.y+b.h), tc[Texture::minx_coord_ind], tc[Texture::maxy_coord_ind],
+                    float(b.x+b.w), float(b.y),     tc[Texture::maxx_coord_ind], tc[Texture::miny_coord_ind],
+                    float(b.x+b.w), float(b.y+b.h), tc[Texture::maxx_coord_ind], tc[Texture::maxy_coord_ind] };
   bool changed = gd->VertexPointer(2, GraphicsDevice::Float, sizeof(float)*4, 0,               verts, sizeof(verts), NULL, true, GraphicsDevice::Triangles);
   if (changed)   gd->TexPointer   (2, GraphicsDevice::Float, sizeof(float)*4, sizeof(float)*2, verts, sizeof(verts), NULL, false);
   if (1)         gd->DeferDrawArrays(GraphicsDevice::Triangles, 0, 6);
@@ -197,7 +187,7 @@ void Box::Draw(GraphicsDevice *gd, const float *texcoord) const {
 #endif
 }
 
-void Box::DrawGradient(GraphicsDevice *gd, const Color *c) const {
+void GraphicsContext::DrawGradientBox1(GraphicsDevice *gd, const Box &b, const Color *c) {
 #if 0
   float verts[] = { float(x),   float(y),   c[0].r(), c[0].g(), c[0].b(), c[0].a(),
                     float(x),   float(y+h), c[3].r(), c[3].g(), c[3].b(), c[3].a(),
@@ -209,24 +199,24 @@ void Box::DrawGradient(GraphicsDevice *gd, const Color *c) const {
   if (changed)   gd->ColorPointer (4, GraphicsDevice::Float, sizeof(float)*6, sizeof(float)*2, verts, sizeof(verts), NULL, false);
   if (1)         gd->DeferDrawArrays(GraphicsDevice::Triangles, 0, 6);
 #else
-  float verts[] = { float(x),   float(y),   c[0].r(), c[0].g(), c[0].b(), c[0].a(),
-                    float(x),   float(y+h), c[3].r(), c[3].g(), c[3].b(), c[3].a(),
-                    float(x+w), float(y),   c[1].r(), c[1].g(), c[1].b(), c[1].a(),
-                    float(x+w), float(y+h), c[2].r(), c[2].g(), c[2].b(), c[2].a() };
+  float verts[] = { float(b.x),     float(b.y),     c[0].r(), c[0].g(), c[0].b(), c[0].a(),
+                    float(b.x),     float(b.y+b.h), c[3].r(), c[3].g(), c[3].b(), c[3].a(),
+                    float(b.x+b.w), float(b.y),     c[1].r(), c[1].g(), c[1].b(), c[1].a(),
+                    float(b.x+b.w), float(b.y+b.h), c[2].r(), c[2].g(), c[2].b(), c[2].a() };
   bool changed = gd->VertexPointer(2, GraphicsDevice::Float, sizeof(float)*6, 0,               verts, sizeof(verts), NULL, true, GraphicsDevice::TriangleStrip);
   if  (changed)  gd->ColorPointer (4, GraphicsDevice::Float, sizeof(float)*6, sizeof(float)*2, verts, sizeof(verts), NULL, false);
   if (1)         gd->DeferDrawArrays(GraphicsDevice::TriangleStrip, 0, 4);
 #endif
 }
 
-void Box::DrawCrimped(GraphicsDevice *gd, const float *texcoord, int orientation, float scrollX, float scrollY) const {
-  float left=x, right=x+w, top=y, bottom=y+h;
+void GraphicsContext::DrawCrimpedBox1(GraphicsDevice *gd, const Box &b, const float *texcoord, int orientation, float scrollX, float scrollY) {
+  float left=b.x, right=b.x+b.w, top=b.y, bottom=b.y+b.h;
   float texMinX, texMinY, texMaxX, texMaxY, texMidX1, texMidX2, texMidY1, texMidY2;
 
   scrollX *= (texcoord[2] - texcoord[0]);
   scrollY *= (texcoord[3] - texcoord[1]);
-  scrollX = ScrollCrimped(texcoord[0], texcoord[2], scrollX, &texMinX, &texMidX1, &texMidX2, &texMaxX);
-  scrollY = ScrollCrimped(texcoord[1], texcoord[3], scrollY, &texMinY, &texMidY1, &texMidY2, &texMaxY);
+  scrollX = Box::ScrollCrimped(texcoord[0], texcoord[2], scrollX, &texMinX, &texMidX1, &texMidX2, &texMaxX);
+  scrollY = Box::ScrollCrimped(texcoord[1], texcoord[3], scrollY, &texMinY, &texMidY1, &texMidY2, &texMaxY);
 
 #define DrawCrimpedBoxTriangleStrip() \
   gd->VertexPointer(2, GraphicsDevice::Float, 4*sizeof(float), 0,               verts, sizeof(verts), NULL, true, GraphicsDevice::TriangleStrip); \
@@ -238,7 +228,7 @@ void Box::DrawCrimped(GraphicsDevice *gd, const float *texcoord, int orientation
 
   switch (orientation) {
     case 0: {
-      float xmid = x + w * scrollX, ymid = y + h * scrollY, verts[] = {
+      float xmid = b.x + b.w * scrollX, ymid = b.y + b.h * scrollY, verts[] = {
         /*02*/ xmid,  top,  texMidX1, texMaxY,  /*01*/ left, top,  texMinX,  texMaxY,  /*03*/ xmid,  ymid,   texMidX1, texMidY1, /*04*/ left, ymid,   texMinX,  texMidY1,
         /*06*/ right, top,  texMaxX,  texMaxY,  /*05*/ xmid, top,  texMidX2, texMaxY,  /*07*/ right, ymid,   texMaxX,  texMidY1, /*08*/ xmid, ymid,   texMidX2, texMidY1,
         /*10*/ right, ymid, texMaxX,  texMidY2, /*09*/ xmid, ymid, texMidX2, texMidY2, /*11*/ right, bottom, texMaxX,  texMinY,  /*12*/ xmid, bottom, texMidX2, texMinY,
@@ -247,7 +237,7 @@ void Box::DrawCrimped(GraphicsDevice *gd, const float *texcoord, int orientation
       DrawCrimpedBoxTriangleStrip();
     } break;
     case 1: {
-      float xmid = x + w * scrollX, ymid = y + h * (1-scrollY), verts[] = {
+      float xmid = b.x + b.w * scrollX, ymid = b.y + b.h * (1-scrollY), verts[] = {
         /*02*/ xmid,  top,  texMidX1, texMinY,  /*01*/ left,  top,  texMinX,  texMinY,  /*03*/ xmid, ymid,    texMidX1, texMidY2, /*04*/ left, ymid,   texMinX,  texMidY2,
         /*06*/ right, top,  texMaxX,  texMinY,  /*05*/ xmid,  top,  texMidX2, texMinY,  /*07*/ right, ymid,   texMaxX,  texMidY2, /*08*/ xmid, ymid,   texMidX2, texMidY2,
         /*10*/ right, ymid, texMaxX,  texMidY1, /*09*/ xmid,  ymid, texMidX2, texMidY1, /*11*/ right, bottom, texMaxX,  texMaxY,  /*12*/ xmid, bottom, texMidX2, texMaxY,
@@ -256,7 +246,7 @@ void Box::DrawCrimped(GraphicsDevice *gd, const float *texcoord, int orientation
       DrawCrimpedBoxTriangleStrip();
     } break;
     case 2: {
-      float xmid = x + w * (1-scrollX), ymid = y + h * scrollY, verts[] = {
+      float xmid = b.x + b.w * (1-scrollX), ymid = b.y + b.h * scrollY, verts[] = {
         /*02*/ xmid,  top,  texMidX2, texMaxY,  /*01*/ left,  top,  texMaxX,  texMaxY,  /*03*/ xmid, ymid,    texMidX2, texMidY1, /*04*/ left, ymid,   texMaxX,  texMidY1,
         /*06*/ right, top,  texMinX,  texMaxY,  /*05*/ xmid,  top,  texMidX1, texMaxY,  /*07*/ right, ymid,   texMinX,  texMidY1, /*08*/ xmid, ymid,   texMidX1, texMidY1,
         /*10*/ right, ymid, texMinX,  texMidY2, /*09*/ xmid,  ymid, texMidX1, texMidY2, /*11*/ right, bottom, texMinX,  texMinY,  /*12*/ xmid, bottom, texMidX1, texMinY,
@@ -265,7 +255,7 @@ void Box::DrawCrimped(GraphicsDevice *gd, const float *texcoord, int orientation
       DrawCrimpedBoxTriangleStrip();
     } break;
     case 3: {
-      float xmid = x + w * (1-scrollX), ymid = y + h * (1-scrollY), verts[] = {
+      float xmid = b.x + b.w * (1-scrollX), ymid = b.y + b.h * (1-scrollY), verts[] = {
         /*02*/ xmid,  top,  texMidX2, texMinY,  /*01*/ left,  top,   texMaxX,  texMinY,  /*03*/ xmid, ymid,    texMidX2, texMidY2, /*04*/ left, ymid,   texMaxX,  texMidY2,
         /*06*/ right, top,  texMinX,  texMinY,  /*05*/ xmid,  top,   texMidX1, texMinY,  /*07*/ right, ymid,   texMinX,  texMidY2, /*08*/ xmid, ymid,   texMidX1, texMidY2,
         /*10*/ right, ymid, texMinX,  texMidY1, /*09*/ xmid,  ymid,  texMidX1, texMidY1, /*11*/ right, bottom, texMinX,  texMaxY,  /*12*/ xmid, bottom, texMidX1, texMaxY,
@@ -274,7 +264,7 @@ void Box::DrawCrimped(GraphicsDevice *gd, const float *texcoord, int orientation
       DrawCrimpedBoxTriangleStrip();
     } break;
     case 4: {
-      float xmid = x + w * (1-scrollY), ymid = y + h * scrollX, verts[] = {
+      float xmid = b.x + b.w * (1-scrollY), ymid = b.y + b.h * scrollX, verts[] = {
         /*13*/ xmid,  top,  texMinX,  texMidY2, /*16*/ left,  top,  texMinX,  texMaxY,  /*14*/ xmid, ymid,    texMidX1, texMidY2, /*15*/ left, ymid,   texMidX1, texMaxY, 
         /*01*/ right, top,  texMinX,  texMinY,  /*04*/ xmid,  top,  texMinX,  texMidY1, /*02*/ right, ymid,   texMidX1, texMinY,  /*03*/ xmid, ymid,   texMidX1, texMidY1,
         /*05*/ right, ymid, texMidX2, texMinY,  /*08*/ xmid,  ymid, texMidX2, texMidY1, /*06*/ right, bottom, texMaxX,  texMinY,  /*07*/ xmid, bottom, texMaxX,  texMidY1,
@@ -283,7 +273,7 @@ void Box::DrawCrimped(GraphicsDevice *gd, const float *texcoord, int orientation
       DrawCrimpedBoxTriangleStrip();
     } break;
     case 5: {
-      float xmid = x + w * scrollY, ymid = y + h * scrollX, verts[] = {
+      float xmid = b.x + b.w * scrollY, ymid = b.y + b.h * scrollX, verts[] = {
         /*13*/ xmid,  top,  texMinX,  texMidY1, /*16*/ left,  top,  texMinX,  texMinY,  /*14*/ xmid, ymid,    texMidX1, texMidY1, /*15*/ left, ymid,   texMidX1, texMinY, 
         /*01*/ right, top,  texMinX,  texMaxY,  /*04*/ xmid,  top,  texMinX,  texMidY2, /*02*/ right, ymid,   texMidX1, texMaxY,  /*03*/ xmid, ymid,   texMidX1, texMidY2,
         /*05*/ right, ymid, texMidX2, texMaxY,  /*08*/ xmid,  ymid, texMidX2, texMidY2, /*06*/ right, bottom, texMaxX,  texMaxY,  /*07*/ xmid, bottom, texMaxX,  texMidY2,
@@ -292,7 +282,7 @@ void Box::DrawCrimped(GraphicsDevice *gd, const float *texcoord, int orientation
       DrawCrimpedBoxTriangleStrip();
     } break;
     case 6: {
-      float xmid = x + w * (1-scrollY), ymid = y + h * (1-scrollX), verts[] = {
+      float xmid = b.x + b.w * (1-scrollY), ymid = b.y + b.h * (1-scrollX), verts[] = {
         /*13*/ xmid,  top,  texMaxX,  texMidY2, /*16*/ left,  top,  texMaxX,  texMaxY,  /*14*/ xmid, ymid,    texMidX2, texMidY2, /*15*/ left, ymid,   texMidX2, texMaxY, 
         /*01*/ right, top,  texMaxX,  texMinY,  /*04*/ xmid,  top,  texMaxX,  texMidY1, /*02*/ right, ymid,   texMidX2, texMinY,  /*03*/ xmid, ymid,   texMidX2, texMidY1,
         /*05*/ right, ymid, texMidX1, texMinY,  /*08*/ xmid,  ymid, texMidX1, texMidY1, /*06*/ right, bottom, texMinX,  texMinY,  /*07*/ xmid, bottom, texMinX,  texMidY1,
@@ -301,7 +291,7 @@ void Box::DrawCrimped(GraphicsDevice *gd, const float *texcoord, int orientation
       DrawCrimpedBoxTriangleStrip();
     } break;
     case 7: {
-      float xmid = x + w * scrollY, ymid = y + h * (1-scrollX), verts[] = {
+      float xmid = b.x + b.w * scrollY, ymid = b.y + b.h * (1-scrollX), verts[] = {
         /*13*/ xmid,  top,  texMaxX,  texMidY1, /*16*/ left,  top,  texMaxX,  texMinY,  /*14*/ xmid, ymid,    texMidX2, texMidY1, /*15*/ left, ymid,   texMidX2, texMinY, 
         /*01*/ right, top,  texMaxX,  texMaxY,  /*04*/ xmid,  top,  texMaxX,  texMidY2, /*02*/ right, ymid,   texMidX2, texMaxY,  /*03*/ xmid, ymid,   texMidX2, texMidY2,
         /*05*/ right, ymid, texMidX1, texMaxY,  /*08*/ xmid,  ymid, texMidX1, texMidY2, /*06*/ right, bottom, texMinX,  texMaxY,  /*07*/ xmid, bottom, texMinX,  texMidY2,
@@ -312,40 +302,9 @@ void Box::DrawCrimped(GraphicsDevice *gd, const float *texcoord, int orientation
   }
 }
 
-float Box::ScrollCrimped(float tex0, float tex1, float scroll, float *min, float *mid1, float *mid2, float *max) {
-  if (tex1 <= 1.0 && tex0 == 0.0) {
-    *mid1=tex1; *mid2=0;
-    if (scroll > 0) *min = *max = tex1 - scroll;
-    else            *min = *max = tex0 - scroll;
-  } else if (tex0 > 0.0 && tex1 == 1.0) {
-    *mid1=1; *mid2=tex0;
-    if (scroll > 0) *min = *max = tex0 + scroll;
-    else            *min = *max = tex1 + scroll;
-  } else { FATAL("invalid tex coords ", tex0, ", ", tex1); }
-  return (*mid1 - *min) / (tex1 - tex0); 
-}
-
-Box3::Box3(const Box &cont, const point &pb, const point &pe, int first_line_height, int last_line_height) {
-  if (pb.y == pe.y) {
-    v[0] = Box(pb.x, pb.y, pe.x - pb.x, first_line_height);
-    v[1] = v[2] = Box();
-  } else {
-    v[0] = Box(pb.x, pb.y, cont.w - pb.x, first_line_height);
-    v[1] = Box(0, pe.y + last_line_height, cont.w, pb.y - pe.y - first_line_height);
-    v[2] = Box(0, pe.y, pe.x, last_line_height);
-  }
-}
-
-void Box3::Draw(GraphicsDevice *gd, const point &p, const Color *c) const {
+void GraphicsContext::DrawTexturedBox3(GraphicsDevice *gd, const Box3 &b, const point &p, const Color *c) {
   if (c) gd->SetColor(*c);
-  for (int i=0; i<3; i++) if (v[i].h) (v[i] + p).Draw(gd);
-}
-
-Box Box3::BoundingBox() const {
-  int min_x = v[0].x, min_y = v[0].y, max_x = v[0].x + v[0].w, max_y = v[0].y + v[0].h;
-  if (v[1].h) { min_x = min(min_x, v[1].x); min_y = min(min_y, v[1].y); max_x = max(max_x, v[1].x + v[1].w); max_y = max(max_y, v[1].y + v[1].h); }
-  if (v[2].h) { min_x = min(min_x, v[2].x); min_y = min(min_y, v[2].y); max_x = max(max_x, v[2].x + v[2].w); max_y = max(max_y, v[2].y + v[2].h); }
-  return Box(min_x, min_y, max_x - min_x, max_y - min_y);
+  for (int i=0; i<3; i++) if (b.v[i].h) GraphicsContext::DrawTexturedBox1(gd, Box(b.v[i] + p));
 }
 
 /* Drawable */
@@ -798,7 +757,7 @@ void GraphicsDevice::DrawPixels(const Box &b, const Texture &tex) {
   Texture temp;
   temp.Resize(tex.width, tex.height, tex.pf, Texture::Flag::CreateGL);
   temp.UpdateGL(tex.buf, LFL::Box(tex.width, tex.height), Texture::Flag::FlipY); 
-  b.Draw(this, temp.coord);
+  GraphicsContext::DrawTexturedBox1(this, b, temp.coord);
   temp.ClearGL();
 }
 

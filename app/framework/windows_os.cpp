@@ -20,8 +20,8 @@
 #include <commdlg.h>
 
 namespace LFL {
-NativeMenu::~NativeMenu() {}
-NativeMenu::NativeMenu(const string &title_text, const vector<MenuItem>&items) {
+SystemMenuWidget::~SystemMenuWidget() {}
+SystemMenuWidget::SystemMenuWidget(const string &title_text, const vector<MenuItem>&items) {
   WinWindow *win = GetTyped<WinWindow*>(screen->impl);
   if (!win->menu) { win->menu = CreateMenu(); win->context_menu = CreatePopupMenu(); }
   HMENU hAddMenu = CreatePopupMenu();
@@ -35,9 +35,9 @@ NativeMenu::NativeMenu(const string &title_text, const vector<MenuItem>&items) {
   if (win->menubar) SetMenu(GetTyped<HWND>(screen->id), win->menu);
 }
 
-unique_ptr<NativeMenu> NativeMenu::CreateEditMenu(const vector<MenuItem>&items) { return nullptr; }
+unique_ptr<SystemMenuWidget> SystemMenuWidget::CreateEditMenu(const vector<MenuItem>&items) { return nullptr; }
 
-void Application::ShowNativeFontChooser(const FontDesc &cur_font, const string &choose_cmd) {
+void Application::ShowSystemFontChooser(const FontDesc &cur_font, const string &choose_cmd) {
   LOGFONT lf;
   memzero(lf);
   HDC hdc = GetDC(NULL);
