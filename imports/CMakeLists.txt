@@ -160,7 +160,7 @@ endif()
 # flatbuffers
 if(LFL_FLATBUFFERS)
   set(CMAKE_CXX_FLAGS_ORIG ${CMAKE_CXX_FLAGS})
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsigned-char")
+  set(CMAKE_CXX_FLAGS "-fsigned-char")
   add_subdirectory(flatbuffers)
   set(FLATBUFFERS_LIB flatbuffers PARENT_SCOPE)
   set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS_ORIG})
