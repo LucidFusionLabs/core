@@ -27,7 +27,7 @@ script:
   - if [ $TRAVIS_OS_NAME == linux ]; then mkdir linux; cd linux; fi
   - cmake ..
   - cd app_tests
-  - make -j4 tests
+  - VERBOSE=1 make -j4 tests
   - LD_LIBRARY_PATH=./lib ./tests
 
 after_success:
