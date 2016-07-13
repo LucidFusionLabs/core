@@ -286,6 +286,13 @@ void Application::OpenSystemBrowser(const string &url_text) {
   if (url) { LSOpenCFURLRef(url, 0); CFRelease(url); }
 }
 
+string Application::GetSystemDeviceName() {
+  string ret(1024, 0);
+  if (gethostname(&ret[0], ret.size())) return "";
+  ret.resize(strlen(ret.c_str()));
+  return ret;
+}
+
 void Application::ShowAds() {}
 void Application::HideAds() {}
 

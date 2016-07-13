@@ -20,10 +20,11 @@ namespace LFL {
 static JNI *jni = Singleton<JNI>::Get();
 
 void JNI::Init(jobject a, bool first) {
-  if      (1)           CHECK(activity = env->NewGlobalRef(a));
-  if      (1)           CHECK(view     = env->NewGlobalRef(env->GetObjectField(activity, view_id)));
-  if      (first)             gplus    = env->NewGlobalRef(env->GetObjectField(activity, gplus_id));
-  else if (gplus_class) CHECK(gplus    = env->NewGlobalRef(env->GetObjectField(activity, gplus_id)));
+  if      (1)           CHECK(activity  = env->NewGlobalRef(a));
+  if      (1)           CHECK(resources = env->NewGlobalRef(env->GetObjectField(activity, resources_id)));
+  if      (1)           CHECK(view      = env->NewGlobalRef(env->GetObjectField(activity, view_id)));
+  if      (first)             gplus     = env->NewGlobalRef(env->GetObjectField(activity, gplus_id));
+  else if (gplus_class) CHECK(gplus     = env->NewGlobalRef(env->GetObjectField(activity, gplus_id)));
 }
 
 void JNI::Free() {
@@ -193,7 +194,7 @@ SystemTableWidget::~SystemTableWidget() {}
 SystemTableWidget::SystemTableWidget(const string &title, const vector<MenuItem> &items) {
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->activity_class,
-                           "addTable", "([Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;)I"));
+                           "addTable", "(Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;)I"));
   auto kvw = jni->ToJObjectArray(items);
   impl.v = Void(jni->env->CallIntMethod(jni->activity, mid, jni->ToJString(title),
                                         tuple_get<0>(kvw), tuple_get<1>(kvw), tuple_get<2>(kvw)));
@@ -202,7 +203,7 @@ SystemTableWidget::SystemTableWidget(const string &title, const vector<MenuItem>
 void SystemTableWidget::AddToolbar(SystemToolbarWidget*) {}
 void SystemTableWidget::Show(bool show_or_hide) {
   static jmethodID mid = CheckNotNull
-    (jni->env->GetMethodID(jni->activity_class, "showTable", "(I)V"));
+    (jni->env->GetMethodID(jni->activity_class, "showToolbar", "(I)V"));
     jni->env->CallVoidMethod(jni->activity, mid, jint(impl.v));
 }
 
@@ -238,6 +239,20 @@ void Application::ShowAds() {
 void Application::HideAds() {
   static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "hideAds", "()V"));
   jni->env->CallVoidMethod(jni->activity, mid);
+}
+
+String16 Application::GetLocalizedString16(const char *key) { return String16(); }
+string Application::GetLocalizedString(const char *key) {
+  static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->resources_class, "getString", "(I)Ljava/lang/String;"));
+  jfieldID fid = CheckNotNull(jni->env->GetStaticFieldID(jni->r_string_class, key, "I"));
+  int resource_id = jni->env->GetStaticIntField(jni->r_string_class, fid);
+  jstring ret = (jstring)jni->env->CallObjectMethod(jni->resources, mid, resource_id);
+  return jni->GetJString(ret);
+}
+
+String16 Application::GetLocalizedInteger16(int number) { return String16(); }
+string Application::GetLocalizedInteger(int number) {
+  return StrCat(number);
 }
 
 void GPlus::SignIn() {

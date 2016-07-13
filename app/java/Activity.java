@@ -16,13 +16,16 @@ import android.widget.TableLayout;
 import android.widget.RelativeLayout;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.TextView;
 import android.media.*;
 import android.content.*;
 import android.content.res.Configuration;
+import android.content.res.Resources;
 import android.content.pm.ActivityInfo;
 import android.hardware.*;
 import android.util.Log;
 import android.util.Pair;
+import android.util.TypedValue;
 import android.net.Uri;
 import android.graphics.Rect;
 import android.app.ActionBar;
@@ -48,6 +51,7 @@ public class Activity extends android.app.Activity {
 
     public static Activity instance;
     public static boolean init;
+    public Resources resources;
     public FrameLayout frame_layout;
     public ActionBar action_bar;
     public Window root_window;
@@ -60,8 +64,10 @@ public class Activity extends android.app.Activity {
     public boolean waiting_activity_result;
     public int surface_width, surface_height, egl_version;
     public ArrayList<View> toolbar_top, toolbar_bottom;
-    public ArrayList<View> toolbars;
+    public ArrayList<View> toolbars, tables;
     public ArrayList<Pair<AlertDialog, EditText>> alerts;
+    public int attr_listPreferredItemHeight, attr_scrollbarSize;
+    public float display_density;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -69,12 +75,15 @@ public class Activity extends android.app.Activity {
         instance = this;
         super.onCreate(savedInstanceState);
 
+        Context context = getApplication();
         root_window = getWindow();
+        resources = getResources();
         frame_layout = new FrameLayout(this);
-        view = new GameView(this, getApplication());
+        view = new GameView(this, context);
         toolbar_top = new ArrayList<View>();
         toolbar_bottom = new ArrayList<View>();
         toolbars = new ArrayList<View>();
+        tables = new ArrayList<View>();
         alerts = new ArrayList<Pair<AlertDialog, EditText>>();
 
         if (ActivityConfig.advertising) advertising = new Advertising(this, frame_layout);
@@ -84,6 +93,12 @@ public class Activity extends android.app.Activity {
         Create(instance);
         frame_layout.addView(view, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
         setContentView(frame_layout, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
+        display_density = resources.getDisplayMetrics().density;
+
+        int[] attr = new int[] { android.R.attr.listPreferredItemHeight, android.R.attr.scrollbarSize };
+        android.content.res.TypedArray attr_val = context.obtainStyledAttributes(attr);
+        attr_listPreferredItemHeight = attr_val.getDimensionPixelSize(0, -1);
+        attr_scrollbarSize           = attr_val.getDimensionPixelSize(1, -1);
 
         action_bar = getActionBar();
         root_view = root_window.getDecorView().findViewById(android.R.id.content);
@@ -229,9 +244,8 @@ public class Activity extends android.app.Activity {
     }
 
     public MediaPlayer loadMusicResource(String filename) {
-        android.content.res.Resources res = getResources();
         String package_name = getPackageName();
-        int soundId = res.getIdentifier(filename, "raw", getPackageName());
+        int soundId = resources.getIdentifier(filename, "raw", getPackageName());
         Log.i("lfl", "loadMusicAsset " + package_name + " " + filename + " " + soundId);
         return MediaPlayer.create(this, soundId);
     }
@@ -364,17 +378,61 @@ public class Activity extends android.app.Activity {
     }
     
     public int addMenu(final String title, final String[] k, final String[] v, final String[] w) {
+        runOnUiThread(new Runnable() { public void run() {
+        }});
         return 0;
     }
 
     public void showMenu(final int id) {
+        runOnUiThread(new Runnable() { public void run() {
+        }});
     }
 
-    public int addTable(final String[] k, final String[] v, final String[] w) {
-        return 0;
+    public int addTable(final String title, final String[] k, final String[] v, final String[] w) {
+        final int id = tables.size();
+        tables.add(null);
+        runOnUiThread(new Runnable() { public void run() {
+            LinearLayout table = new LinearLayout(Activity.instance);
+            table.setLayoutParams(new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,
+                                                               FrameLayout.LayoutParams.MATCH_PARENT,
+                                                               Gravity.CENTER_VERTICAL));
+            table.setPadding(0, 0, attr_scrollbarSize, 0);
+            table.setMinimumHeight(attr_listPreferredItemHeight);
+
+            RelativeLayout header = new RelativeLayout(Activity.instance);
+            LinearLayout.LayoutParams header_layoutparams =
+                new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT,
+                                              LinearLayout.LayoutParams.WRAP_CONTENT);
+            header_layoutparams.setMargins((int)(15 * display_density), (int)(6 * display_density),
+                                           (int)( 6 * display_density), (int)(6 * display_density));
+            header.setLayoutParams(header_layoutparams);
+            table.addView(header);
+
+            TextView header_text = new TextView(Activity.instance);
+            header_text.setText(title);
+            header_text.setLayoutParams(new RelativeLayout.LayoutParams(RelativeLayout.LayoutParams.WRAP_CONTENT,
+                                                                        RelativeLayout.LayoutParams.WRAP_CONTENT));
+            header_text.setSingleLine(true);
+            header_text.setTextAppearance(Activity.instance, android.R.attr.textAppearanceLarge);
+            header_text.setEllipsize(android.text.TextUtils.TruncateAt.MARQUEE);
+            header.addView(header_text);
+
+            TextView header_subtext = new TextView(Activity.instance);
+            header_subtext.setText(title);
+            header_subtext.setLayoutParams(new RelativeLayout.LayoutParams(RelativeLayout.LayoutParams.WRAP_CONTENT,
+                                                                           RelativeLayout.LayoutParams.WRAP_CONTENT));
+            header_subtext.setTextAppearance(Activity.instance, android.R.attr.textAppearanceSmall);
+            header.addView(header_subtext);
+            toolbars.set(id, table);
+        }});
+        return id;
     }
 
     public void showTable(final int id) {
+        runOnUiThread(new Runnable() { public void run() {
+            View table = tables.get(id);
+            frame_layout.addView(table);
+        }});
     }
 }
 

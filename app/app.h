@@ -649,6 +649,11 @@ struct Application : public ::LFApp {
   void ShowAds();
   void HideAds();
 
+  string   GetLocalizedString   (const char *key);
+  String16 GetLocalizedString16 (const char *key);
+  string   GetLocalizedInteger  (int number);
+  String16 GetLocalizedInteger16(int number);
+
   int GetVolume();
   int GetMaxVolume();
   void SetVolume(int v);

@@ -226,12 +226,20 @@ extern "C" jint JNI_OnLoad(JavaVM* vm, void* reserved) { return JNI_VERSION_1_4;
 extern "C" void Java_com_lucidfusionlabs_app_Activity_Create(JNIEnv *e, jclass c, jobject a) {
   CHECK(jni->env = e);
   CHECK(jni->activity_class = (jclass)e->NewGlobalRef(e->GetObjectClass(a)));
-  CHECK(jni->view_id  = e->GetFieldID(jni->activity_class, "view",  "Lcom/lucidfusionlabs/app/GameView;"));
-  CHECK(jni->gplus_id = e->GetFieldID(jni->activity_class, "gplus", "Lcom/lucidfusionlabs/app/GPlusClient;"));
+  CHECK(jni->resources_id = e->GetFieldID(jni->activity_class, "resources", "Landroid/content/res/Resources;"));
+  CHECK(jni->view_id      = e->GetFieldID(jni->activity_class, "view",      "Lcom/lucidfusionlabs/app/GameView;"));
+  CHECK(jni->gplus_id     = e->GetFieldID(jni->activity_class, "gplus",     "Lcom/lucidfusionlabs/app/GPlusClient;"));
+  static jmethodID activity_getpkgname_mid =
+    CheckNotNull(jni->env->GetMethodID(jni->activity_class, "getPackageName", "()Ljava/lang/String;"));
+
   jni->Init(a, true);
+  jni->package_name = jni->GetJString((jstring)jni->env->CallObjectMethod(jni->activity, activity_getpkgname_mid));
+  std::replace(jni->package_name.begin(), jni->package_name.end(), '.', '/');
 
   CHECK(jni->view_class         = (jclass)e->NewGlobalRef(e->GetObjectClass(jni->view)));
   CHECK(jni->string_class       = (jclass)e->NewGlobalRef(e->FindClass("java/lang/String")));
+  CHECK(jni->resources_class    = (jclass)e->NewGlobalRef(e->FindClass("android/content/res/Resources")));
+  CHECK(jni->r_string_class     = (jclass)e->NewGlobalRef(e->FindClass(StrCat(jni->package_name, "/R$string").c_str())));
   CHECK(jni->throwable_class    = (jclass)e->NewGlobalRef(e->FindClass("java/lang/Throwable")));
   CHECK(jni->frame_class        = (jclass)e->NewGlobalRef(e->FindClass("java/lang/StackTraceElement")));
   CHECK(jni->assetmgr_class     = (jclass)e->NewGlobalRef(e->FindClass("android/content/res/AssetManager")));

@@ -79,6 +79,7 @@ elseif(LFL_IOS)
       COMMAND cp -r ${CMAKE_CURRENT_SOURCE_DIR}/assets i${pkgname}.app
       COMMAND cp ${LFL_APP_ASSET_FILES} i${pkgname}.app/assets
       COMMAND cp ${CMAKE_CURRENT_SOURCE_DIR}/${target}-iphone/Images/* i${pkgname}.app
+      COMMAND for d in ${CMAKE_CURRENT_SOURCE_DIR}/${target}-iphone/\*.lproj\; do cp -R $$d i${pkgname}.app\; done
       COMMAND for f in ${CMAKE_CURRENT_SOURCE_DIR}/${target}-iphone/Resources/\*\; do o=`basename $$f | sed s/xib$$/nib/`\; ${LFL_APPLE_DEVELOPER}/usr/bin/ibtool --warnings --errors --notices --compile ${CMAKE_CURRENT_BINARY_DIR}/i${pkgname}.app/$$o $$f\; done
       COMMAND cp ${target} i${pkgname}.app
       COMMAND if ! [ ${LFL_IOS_SIM} ]\; then codesign -f -s \"${LFL_IOS_CERT}\" --entitlements ${entitlements_plist} i${pkgname}.app\; fi)
