@@ -80,10 +80,10 @@ int Game::Network::BroadcastWithRetry(Service *svc, Serializable *msg, Connectio
 int Game::GoogleMultiplayerNetwork::Write(Connection *c, int method, const char *data, int len) {
   if (c->endpoint_name.empty()) return ERRORv(-1, c->Name(), " blank send");
 
-  static JNI *jni = Singleton<LFL::JNI>::Get();
+  static JNI *jni = Singleton<JNI>::Get();
   if (jni->gplus) {
     static jmethodID jni_gplus_method_write =
-      LFL::CheckNotNull(jni->env->GetMethodID(jni->gplus_class, "write", "(Ljava/lang/String;Ljava/nio/ByteBuffer;)V"));
+      CheckNotNull(jni->env->GetMethodID(jni->gplus_class, "write", "(Ljava/lang/String;Ljava/nio/ByteBuffer;)V"));
     jstring pn = jni->env->NewStringUTF(c->endpoint_name.c_str());
     jobject bytes = jni->env->NewDirectByteBuffer(Void(data), len);
     jni->env->CallVoidMethod(jni->gplus, jni_gplus_method_write, pn, bytes);
@@ -98,11 +98,11 @@ void Game::GoogleMultiplayerNetwork::WriteWithRetry(ReliableNetwork *n, Connecti
   string v;
   req->ToString(&v, seq);
 
-  static JNI *jni = Singleton<LFL::JNI>::Get();
+  static JNI *jni = Singleton<JNI>::Get();
   if (jni->gplus) {
     static jmethodID jni_gplus_method_write_with_retry =
-      LFL::CheckNotNull(jni->env->GetMethodID(jni->gplus_class, "writeWithRetry",
-                                              "(Ljava/lang/String;Ljava/nio/ByteBuffer;)V"));
+      CheckNotNull(jni->env->GetMethodID(jni->gplus_class, "writeWithRetry",
+                                         "(Ljava/lang/String;Ljava/nio/ByteBuffer;)V"));
     jstring pn = jni->env->NewStringUTF(c->endpoint_name.c_str());
     jobject bytes = jni->env->NewDirectByteBuffer(Void(v.c_str()), v.size());
     jni->env->CallVoidMethod(jni->gplus, jni_gplus_method_write_with_retry, pn, bytes);

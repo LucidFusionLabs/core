@@ -23,10 +23,10 @@ import javax.microedition.khronos.egl.*;
 import com.google.android.gms.ads.*;
 
 class Advertising {
-    public Activity activity;
+    public MainActivity activity;
     public AdView adView;
     public AdRequest adRequest;
-    public Advertising(Activity act, FrameLayout frameLayout) {
+    public Advertising(MainActivity act, FrameLayout frameLayout) {
         activity = act;
         adView = new AdView(activity);
         adView.setAdSize(AdSize.BANNER);

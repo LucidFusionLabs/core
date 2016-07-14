@@ -35,21 +35,21 @@ class GPlusClient implements GameHelper.GameHelperListener, OnInvitationReceived
     public static final int RC_INVITATION_INBOX = 10001;
     public static final int RC_WAITING_ROOM = 10002;
 
-    public Activity activity;
+    public MainActivity activity;
     public GameHelper google;
     public boolean google_signed_in, server_role, server_started, auto_match;
     public String room_id, server_pid;
     public List<String> room_pids;
     public ByteBuffer read_buffer;
 
-    public GPlusClient(Activity act) {
+    public GPlusClient(MainActivity act) {
         activity = act;
         google = new GameHelper(activity, GameHelper.CLIENT_GAMES);
         google.setup(this);
         read_buffer = ByteBuffer.allocateDirect(4096);
     }
     
-    public void onStart(Activity act) { google.onStart(act); }
+    public void onStart(MainActivity act) { google.onStart(act); }
     public void onStop() { leaveRoom(); google.onStop(); }
     
     @Override
@@ -68,12 +68,12 @@ class GPlusClient implements GameHelper.GameHelperListener, OnInvitationReceived
         if (google != null) { google.onActivityResult(request, response, data); }
         
         if (request == RC_INVITATION_INBOX) {
-            if (response != Activity.RESULT_OK) { return; }
+            if (response != MainActivity.RESULT_OK) { return; }
             Invitation invitation = data.getExtras().getParcelable(Multiplayer.EXTRA_INVITATION);
             acceptInvitation(invitation.getInvitationId());
         }
         else if (request == RC_SELECT_PLAYERS) {
-            if (response != Activity.RESULT_OK) { return; }
+            if (response != MainActivity.RESULT_OK) { return; }
             RoomConfig.Builder roomConfigBuilder = makeBasicRoomConfigBuilder();
 
             final ArrayList<String> invitees = data.getStringArrayListExtra(Games.EXTRA_PLAYER_IDS);
@@ -88,7 +88,7 @@ class GPlusClient implements GameHelper.GameHelperListener, OnInvitationReceived
             createRoom(roomConfigBuilder.build());
         }
         else if (request == RC_WAITING_ROOM) {
-            if (response != Activity.RESULT_OK) { leaveRoom(); return; }
+            if (response != MainActivity.RESULT_OK) { leaveRoom(); return; }
             Log.i("lfl", "startGame(" + server_role + ", " + server_pid + ")");
             startGame(server_role, server_pid);
         }

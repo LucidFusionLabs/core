@@ -223,7 +223,7 @@ unique_ptr<AssetLoaderInterface> CreateAssetLoader() { return make_unique<Androi
 
 extern "C" jint JNI_OnLoad(JavaVM* vm, void* reserved) { return JNI_VERSION_1_4; }
 
-extern "C" void Java_com_lucidfusionlabs_app_Activity_Create(JNIEnv *e, jclass c, jobject a) {
+extern "C" void Java_com_lucidfusionlabs_app_MainActivity_Create(JNIEnv *e, jclass c, jobject a) {
   CHECK(jni->env = e);
   CHECK(jni->activity_class = (jclass)e->NewGlobalRef(e->GetObjectClass(a)));
   CHECK(jni->resources_id = e->GetFieldID(jni->activity_class, "resources", "Landroid/content/res/Resources;"));
@@ -252,7 +252,7 @@ extern "C" void Java_com_lucidfusionlabs_app_Activity_Create(JNIEnv *e, jclass c
   MyAppCreate(1, argv);
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_Activity_Main(JNIEnv *e, jclass c, jobject a) {
+extern "C" void Java_com_lucidfusionlabs_app_MainActivity_Main(JNIEnv *e, jclass c, jobject a) {
   CHECK(jni->env = e);
   INFOf("Main: env=%p", jni->env);
   int ret = MyAppMain();
@@ -260,7 +260,7 @@ extern "C" void Java_com_lucidfusionlabs_app_Activity_Main(JNIEnv *e, jclass c, 
   jni->Free();
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_Activity_NewMainLoop(JNIEnv *e, jclass c, jobject a, bool reset) {
+extern "C" void Java_com_lucidfusionlabs_app_MainActivity_NewMainLoop(JNIEnv *e, jclass c, jobject a, bool reset) {
   CHECK(jni->env = e);
   INFOf("NewMainLoop: env=%p reset=%d", jni->env, reset);
   jni->Init(a, false);
@@ -272,12 +272,12 @@ extern "C" void Java_com_lucidfusionlabs_app_Activity_NewMainLoop(JNIEnv *e, jcl
   jni->Free();
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_Activity_Minimize(JNIEnv* env, jclass c) {
+extern "C" void Java_com_lucidfusionlabs_app_MainActivity_Minimize(JNIEnv* env, jclass c) {
   INFOf("%s", "minimize");
   QueueWindowMinimized();
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_Activity_Reshaped(JNIEnv *e, jclass c, jint x, jint y, jint w, jint h) { 
+extern "C" void Java_com_lucidfusionlabs_app_MainActivity_Reshaped(JNIEnv *e, jclass c, jint x, jint y, jint w, jint h) { 
   bool init = !jni->activity_box.w && !jni->activity_box.h;
   if (init) { jni->activity_box = Box(x, y, w, h); return; }
   if (jni->activity_box.x == x && jni->activity_box.y == y &&
@@ -286,12 +286,12 @@ extern "C" void Java_com_lucidfusionlabs_app_Activity_Reshaped(JNIEnv *e, jclass
   QueueWindowReshaped(x, y, w, h);
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_Activity_KeyPress(JNIEnv *e, jclass c, jint keycode, jint mod, jint down) {
+extern "C" void Java_com_lucidfusionlabs_app_MainActivity_KeyPress(JNIEnv *e, jclass c, jint keycode, jint mod, jint down) {
   QueueKeyPress(keycode, mod, down);
   LFAppWakeup();
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_Activity_Touch(JNIEnv *e, jclass c, jint action, jfloat x, jfloat y, jfloat p) {
+extern "C" void Java_com_lucidfusionlabs_app_MainActivity_Touch(JNIEnv *e, jclass c, jint action, jfloat x, jfloat y, jfloat p) {
   static float lx[2]={0,0}, ly[2]={0,0};
   int dpind = (/*FLAGS_swap_axis*/ 0) ? y < screen->width/2 : x < screen->width/2;
   if (action == AndroidEvent::ACTION_DOWN || action == AndroidEvent::ACTION_POINTER_DOWN) {
@@ -325,20 +325,20 @@ extern "C" void Java_com_lucidfusionlabs_app_Activity_Touch(JNIEnv *e, jclass c,
   } else INFOf("unhandled action %d", action);
 } 
 
-extern "C" void Java_com_lucidfusionlabs_app_Activity_Fling(JNIEnv *e, jclass c, jfloat x, jfloat y, jfloat vx, jfloat vy) {
+extern "C" void Java_com_lucidfusionlabs_app_MainActivity_Fling(JNIEnv *e, jclass c, jfloat x, jfloat y, jfloat vx, jfloat vy) {
   int dpind = y < screen->width/2;
   screen->gesture_dpad_dx[dpind] = vx;
   screen->gesture_dpad_dy[dpind] = vy;
   INFOf("fling(%f, %f) = %d of (%d, %d) and vel = (%f, %f)", x, y, dpind, screen->width, screen->height, vx, vy);
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_Activity_Scroll(JNIEnv *e, jclass c, jfloat x, jfloat y, jfloat vx, jfloat vy) {
+extern "C" void Java_com_lucidfusionlabs_app_MainActivity_Scroll(JNIEnv *e, jclass c, jfloat x, jfloat y, jfloat vx, jfloat vy) {
   screen->gesture_swipe_up = screen->gesture_swipe_down = 0;
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_Activity_Accel(JNIEnv *e, jclass c, jfloat x, jfloat y, jfloat z) {}
+extern "C" void Java_com_lucidfusionlabs_app_MainActivity_Accel(JNIEnv *e, jclass c, jfloat x, jfloat y, jfloat z) {}
 
-extern "C" void Java_com_lucidfusionlabs_app_Activity_ShellRun(JNIEnv *e, jclass c, jstring text) {
+extern "C" void Java_com_lucidfusionlabs_app_MainActivity_ShellRun(JNIEnv *e, jclass c, jstring text) {
   ShellRun(e->GetStringUTFChars(text, 0));
 }
 

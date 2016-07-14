@@ -157,14 +157,6 @@ void SystemAlertWidget::Show(const string &arg) {
 }
 
 SystemToolbarWidget::~SystemToolbarWidget() {}
-void SystemToolbarWidget::ToggleButton(const string &n) {}
-
-void SystemToolbarWidget::Show(bool show_or_hide) {
-  static jmethodID mid = CheckNotNull
-    (jni->env->GetMethodID(jni->activity_class, "showToolbar", "(I)V"));
-  jni->env->CallVoidMethod(jni->activity, mid, jint(impl.v));
-}
-
 SystemToolbarWidget::SystemToolbarWidget(const StringPairVec &items) {
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->activity_class,
@@ -173,8 +165,14 @@ SystemToolbarWidget::SystemToolbarWidget(const StringPairVec &items) {
   impl.v = Void(jni->env->CallIntMethod(jni->activity, mid, kv.first, kv.second));
 }
 
+void SystemToolbarWidget::ToggleButton(const string &n) {}
+void SystemToolbarWidget::Show(bool show_or_hide) {
+  static jmethodID mid = CheckNotNull
+    (jni->env->GetMethodID(jni->activity_class, "showToolbar", "(I)V"));
+  jni->env->CallVoidMethod(jni->activity, mid, jint(impl.v));
+}
+
 SystemMenuWidget::~SystemMenuWidget() {}
-unique_ptr<SystemMenuWidget> SystemMenuWidget::CreateEditMenu(const vector<MenuItem> &items) { return nullptr; }
 SystemMenuWidget::SystemMenuWidget(const string &title, const vector<MenuItem>&items) {
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->activity_class,
@@ -184,6 +182,7 @@ SystemMenuWidget::SystemMenuWidget(const string &title, const vector<MenuItem>&i
                                         tuple_get<0>(kvw), tuple_get<1>(kvw), tuple_get<2>(kvw)));
 }
 
+unique_ptr<SystemMenuWidget> SystemMenuWidget::CreateEditMenu(const vector<MenuItem> &items) { return nullptr; }
 void SystemMenuWidget::Show() {
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->activity_class, "showMenu", "(I)V"));
@@ -203,7 +202,7 @@ SystemTableWidget::SystemTableWidget(const string &title, const vector<MenuItem>
 void SystemTableWidget::AddToolbar(SystemToolbarWidget*) {}
 void SystemTableWidget::Show(bool show_or_hide) {
   static jmethodID mid = CheckNotNull
-    (jni->env->GetMethodID(jni->activity_class, "showToolbar", "(I)V"));
+    (jni->env->GetMethodID(jni->activity_class, "showTable", "(I)V"));
     jni->env->CallVoidMethod(jni->activity, mid, jint(impl.v));
 }
 
