@@ -223,7 +223,7 @@ unique_ptr<AssetLoaderInterface> CreateAssetLoader() { return make_unique<Androi
 
 extern "C" jint JNI_OnLoad(JavaVM* vm, void* reserved) { return JNI_VERSION_1_4; }
 
-extern "C" void Java_com_lucidfusionlabs_app_MainActivity_Create(JNIEnv *e, jclass c, jobject a) {
+extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppCreate(JNIEnv *e, jobject a) {
   CHECK(jni->env = e);
   CHECK(jni->activity_class = (jclass)e->NewGlobalRef(e->GetObjectClass(a)));
   CHECK(jni->resources_id = e->GetFieldID(jni->activity_class, "resources", "Landroid/content/res/Resources;"));
@@ -248,11 +248,12 @@ extern "C" void Java_com_lucidfusionlabs_app_MainActivity_Create(JNIEnv *e, jcla
   CHECK(jni->readbytechan_class = (jclass)e->NewGlobalRef(e->FindClass("java/nio/channels/ReadableByteChannel")));
   if (jni->gplus) CHECK(jni->gplus_class = (jclass)e->NewGlobalRef(e->GetObjectClass(jni->gplus)));
 
-  static const char *argv[2] = { "lfl_jni", 0 };
+  static const char *argv[2] = { "LFLApp", 0 };
   MyAppCreate(1, argv);
+  INFOf("okok2 %p %d", jni->activity, jni->resources_id);
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_MainActivity_Main(JNIEnv *e, jclass c, jobject a) {
+extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppMain(JNIEnv *e, jobject a) {
   CHECK(jni->env = e);
   INFOf("Main: env=%p", jni->env);
   int ret = MyAppMain();
@@ -260,7 +261,7 @@ extern "C" void Java_com_lucidfusionlabs_app_MainActivity_Main(JNIEnv *e, jclass
   jni->Free();
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_MainActivity_NewMainLoop(JNIEnv *e, jclass c, jobject a, bool reset) {
+extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppNewMainLoop(JNIEnv *e, jobject a, bool reset) {
   CHECK(jni->env = e);
   INFOf("NewMainLoop: env=%p reset=%d", jni->env, reset);
   jni->Init(a, false);
@@ -272,12 +273,12 @@ extern "C" void Java_com_lucidfusionlabs_app_MainActivity_NewMainLoop(JNIEnv *e,
   jni->Free();
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_MainActivity_Minimize(JNIEnv* env, jclass c) {
+extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppMinimize(JNIEnv* env, jobject a) {
   INFOf("%s", "minimize");
   QueueWindowMinimized();
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_MainActivity_Reshaped(JNIEnv *e, jclass c, jint x, jint y, jint w, jint h) { 
+extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppReshaped(JNIEnv *e, jobject a, jint x, jint y, jint w, jint h) { 
   bool init = !jni->activity_box.w && !jni->activity_box.h;
   if (init) { jni->activity_box = Box(x, y, w, h); return; }
   if (jni->activity_box.x == x && jni->activity_box.y == y &&
@@ -286,12 +287,12 @@ extern "C" void Java_com_lucidfusionlabs_app_MainActivity_Reshaped(JNIEnv *e, jc
   QueueWindowReshaped(x, y, w, h);
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_MainActivity_KeyPress(JNIEnv *e, jclass c, jint keycode, jint mod, jint down) {
+extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppKeyPress(JNIEnv *e, jobject a, jint keycode, jint mod, jint down) {
   QueueKeyPress(keycode, mod, down);
   LFAppWakeup();
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_MainActivity_Touch(JNIEnv *e, jclass c, jint action, jfloat x, jfloat y, jfloat p) {
+extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppTouch(JNIEnv *e, jobject a, jint action, jfloat x, jfloat y, jfloat p) {
   static float lx[2]={0,0}, ly[2]={0,0};
   int dpind = (/*FLAGS_swap_axis*/ 0) ? y < screen->width/2 : x < screen->width/2;
   if (action == AndroidEvent::ACTION_DOWN || action == AndroidEvent::ACTION_POINTER_DOWN) {
@@ -325,24 +326,24 @@ extern "C" void Java_com_lucidfusionlabs_app_MainActivity_Touch(JNIEnv *e, jclas
   } else INFOf("unhandled action %d", action);
 } 
 
-extern "C" void Java_com_lucidfusionlabs_app_MainActivity_Fling(JNIEnv *e, jclass c, jfloat x, jfloat y, jfloat vx, jfloat vy) {
+extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppFling(JNIEnv *e, jobject a, jfloat x, jfloat y, jfloat vx, jfloat vy) {
   int dpind = y < screen->width/2;
   screen->gesture_dpad_dx[dpind] = vx;
   screen->gesture_dpad_dy[dpind] = vy;
   INFOf("fling(%f, %f) = %d of (%d, %d) and vel = (%f, %f)", x, y, dpind, screen->width, screen->height, vx, vy);
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_MainActivity_Scroll(JNIEnv *e, jclass c, jfloat x, jfloat y, jfloat vx, jfloat vy) {
+extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppScroll(JNIEnv *e, jobject a, jfloat x, jfloat y, jfloat vx, jfloat vy) {
   screen->gesture_swipe_up = screen->gesture_swipe_down = 0;
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_MainActivity_Accel(JNIEnv *e, jclass c, jfloat x, jfloat y, jfloat z) {}
+extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppAccel(JNIEnv *e, jobject a, jfloat x, jfloat y, jfloat z) {}
 
-extern "C" void Java_com_lucidfusionlabs_app_MainActivity_ShellRun(JNIEnv *e, jclass c, jstring text) {
+extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppShellRun(JNIEnv *e, jobject a, jstring text) {
   ShellRun(e->GetStringUTFChars(text, 0));
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_GPlusClient_startGame(JNIEnv *e, jclass c, jboolean server, jstring pid) {
+extern "C" void Java_com_lucidfusionlabs_app_GPlusClient_startGame(JNIEnv *e, jobject a, jboolean server, jstring pid) {
   char buf[128];
   const char *participant_id = e->GetStringUTFChars(pid, 0);
   snprintf(buf, sizeof(buf), "%s %s", server ? "gplus_server" : "gplus_client", participant_id);
@@ -350,7 +351,7 @@ extern "C" void Java_com_lucidfusionlabs_app_GPlusClient_startGame(JNIEnv *e, jc
   e->ReleaseStringUTFChars(pid, participant_id);
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_GPlusClient_read(JNIEnv *e, jclass c, jstring pid, jobject bb, jint len) {
+extern "C" void Java_com_lucidfusionlabs_app_GPlusClient_read(JNIEnv *e, jobject a, jstring pid, jobject bb, jint len) {
   static GPlus *gplus = Singleton<GPlus>::Get();
   const char *participant_id = e->GetStringUTFChars(pid, 0);
   if (gplus->server) EndpointRead(gplus->server, participant_id, (const char*)e->GetDirectBufferAddress(bb), len);

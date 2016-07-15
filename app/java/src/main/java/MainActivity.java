@@ -37,20 +37,19 @@ import javax.microedition.khronos.egl.*;
 public class MainActivity extends android.app.Activity {
     static { System.loadLibrary("app"); }
     
-    public static native void Create(Object activity);
-    public static native void Main(Object activity);
-    public static native void NewMainLoop(Object activity, boolean reset);
-    public static native void Minimize();
-    public static native void Reshaped(int x, int y, int w, int h);
-    public static native void KeyPress(int keycode, int mod, int down);
-    public static native void Touch(int action, float x, float y, float p);
-    public static native void Fling(float x, float y, float vx, float vy);
-    public static native void Scroll(float x, float y, float sx, float sy);
-    public static native void Accel(float x, float y, float z);
-    public static native void ShellRun(String text);
+    public native void AppCreate();
+    public native void AppMain();
+    public native void AppNewMainLoop(boolean reset);
+    public native void AppMinimize();
+    public native void AppReshaped(int x, int y, int w, int h);
+    public native void AppKeyPress(int keycode, int mod, int down);
+    public native void AppTouch(int action, float x, float y, float p);
+    public native void AppFling(float x, float y, float vx, float vy);
+    public native void AppScroll(float x, float y, float sx, float sy);
+    public native void AppAccel(float x, float y, float z);
+    public native void AppShellRun(String text);
 
-    public static MainActivity instance;
-    public static boolean init;
+    public static boolean app_init, app_created, disable_title;
     public Resources resources;
     public FrameLayout frame_layout;
     public ActionBar action_bar;
@@ -71,28 +70,33 @@ public class MainActivity extends android.app.Activity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        Log.i("lfl", "MainActivity.onCreate()");
-        instance = this;
+        Log.i("lfl", "MainActivity.onCreate() app_created=" + app_created);
         super.onCreate(savedInstanceState);
-
         Context context = getApplication();
+        LayoutInflater inflater = (LayoutInflater)context.getSystemService(LAYOUT_INFLATER_SERVICE);
+
+        frame_layout = (FrameLayout)inflater.inflate(R.layout.main, null);
         root_window = getWindow();
         resources = getResources();
-        frame_layout = new FrameLayout(this);
         view = new GameView(this, context);
         toolbar_top = new ArrayList<View>();
         toolbar_bottom = new ArrayList<View>();
         toolbars = new ArrayList<View>();
         tables = new ArrayList<View>();
         alerts = new ArrayList<Pair<AlertDialog, EditText>>();
-
-        // if (MainActivityConfig.advertising) advertising = new Advertising(this, frame_layout);
-        // if (MainActivityConfig.play_services) gplus = new GPlusClient(this);
         audio = (AudioManager)getSystemService(Context.AUDIO_SERVICE);
+        action_bar = getActionBar();
 
-        Create(instance);
+        if (!app_created) {
+            Log.i("lfl", "MainActivity.AppCreate()");
+            app_created = true;
+            AppCreate();
+        } else {
+            if (disable_title) disableTitle();
+        }
+
+        setContentView(frame_layout);
         frame_layout.addView(view, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
-        setContentView(frame_layout, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
         display_density = resources.getDisplayMetrics().density;
 
         int[] attr = new int[] { android.R.attr.listPreferredItemHeight, android.R.attr.scrollbarSize };
@@ -100,17 +104,16 @@ public class MainActivity extends android.app.Activity {
         attr_listPreferredItemHeight = attr_val.getDimensionPixelSize(0, -1);
         attr_scrollbarSize           = attr_val.getDimensionPixelSize(1, -1);
 
-        action_bar = getActionBar();
         root_view = root_window.getDecorView().findViewById(android.R.id.content);
         root_view.getViewTreeObserver().addOnGlobalLayoutListener(
             new ViewTreeObserver.OnGlobalLayoutListener() {
             public void onGlobalLayout(){
-                if (!init) return;
+                if (!app_init) return;
                 Rect r = new Rect();
                 View view = root_window.getDecorView();
                 view.getWindowVisibleDisplayFrame(r);
 
-                int actionbar_h = action_bar == null ? 0 : action_bar.getHeight();
+                int actionbar_h = action_bar.isShowing() ? action_bar.getHeight() : 0;
                 int h = r.bottom - r.top - actionbar_h;
                 for (View tb : toolbar_bottom) {
                     FrameLayout.LayoutParams params = (FrameLayout.LayoutParams)tb.getLayoutParams();
@@ -120,22 +123,15 @@ public class MainActivity extends android.app.Activity {
                 }
 
                 // Log.i("lfl", "onGlobalLayout(" + r.left + ", " + r.top + ", " + r.right + ", " + r.bottom + ", " + actionbar_h + ") = " + h);
-                Reshaped(r.left, surface_height - h, r.right - r.left, h); 
+                AppReshaped(r.left, surface_height - h, r.right - r.left, h); 
             }});
-    }
-    
-    @Override
-    protected void onDestroy() {
-        Log.i("lfl", "MainActivity.onDestroy()");
-        if (advertising != null) advertising.onDestroy();
-        super.onDestroy();
     }
 
     @Override
-    protected void onStop() {
-        Log.i("lfl", "MainActivity.onStop()");
-        super.onStop();
-        if (gplus != null) gplus.onStop();
+    protected void onStart() {
+        Log.i("lfl", "MainActivity.onStart()");
+        super.onStart();
+        if (gplus != null) gplus.onStart(this);
     }
     
     @Override
@@ -146,17 +142,24 @@ public class MainActivity extends android.app.Activity {
 
         Thread t = thread;
         thread = null;        
-        Minimize();
+        AppMinimize();
         try { t.join(); }
         catch(Exception e) { Log.e("lfl", e.toString()); }
         Log.i("lfl", "MainActivity.onPause() exit");
     }
+    
+    @Override
+    protected void onStop() {
+        Log.i("lfl", "MainActivity.onStop()");
+        super.onStop();
+        if (gplus != null) gplus.onStop();
+    }
 
     @Override
-    protected void onStart() {
-        Log.i("lfl", "MainActivity.onStart()");
-        super.onStart();
-        if (gplus != null) gplus.onStart(this);
+    protected void onDestroy() {
+        Log.i("lfl", "MainActivity.onDestroy()");
+        if (advertising != null) advertising.onDestroy();
+        super.onDestroy();
     }
 
     @Override
@@ -186,24 +189,27 @@ public class MainActivity extends android.app.Activity {
         surface_height = height;
         boolean thread_exists = thread != null;
         Log.i("lfl", "surfaceChanged thread_exists=" + thread_exists);
-        Reshaped(0, 0, width, height);
+        AppReshaped(0, 0, width, height);
         if (thread_exists) return;
         startRenderThread(true);
     }
 
-    void startRenderThread(boolean reset) {
-        Log.i("lfl", "startRenderThread init= " + init);
-        if      (!init) thread = new Thread(new Runnable() { public void run() { view.initEGL();        Main       (MainActivity.instance);        } }, "JNIMainThread");
-        else if (reset) thread = new Thread(new Runnable() { public void run() { view.initEGL();        NewMainLoop(MainActivity.instance, true);  } }, "JNIMainThread");
-        else            thread = new Thread(new Runnable() { public void run() { view.makeCurrentEGL(); NewMainLoop(MainActivity.instance, false); } }, "JNIMainThread");
+    void startRenderThread(boolean app_reset) {
+        Log.i("lfl", "startRenderThread app_init= " + app_init);
+        if      (!app_init) thread = new Thread(new Runnable() { public void run() { view.initEGL();        AppMain       ();      } }, "JNIMainThread");
+        else if (app_reset) thread = new Thread(new Runnable() { public void run() { view.initEGL();        AppNewMainLoop(true);  } }, "JNIMainThread");
+        else                thread = new Thread(new Runnable() { public void run() { view.makeCurrentEGL(); AppNewMainLoop(false); } }, "JNIMainThread");
         thread.start();
-        init = true;
+        app_init = true;
     }
 
     void forceExit() {
         Log.i("lfl", "MainActivity.froceExit()");
         android.os.Process.killProcess(android.os.Process.myPid());
     }
+
+    public void createAdvertising() { advertising = new Advertising(this, frame_layout); }
+    public void createGPLus()       { gplus       = new GPlusClient(this); }
 
     public String getFilesDirCanonicalPath() {
         try {
@@ -232,7 +238,9 @@ public class MainActivity extends android.app.Activity {
     }
 
     public void disableTitle() {
-        requestWindowFeature(Window.FEATURE_NO_TITLE);
+        disable_title = true;
+        action_bar.hide();
+        // requestWindowFeature(Window.FEATURE_NO_TITLE);
     }
 
     public void enableKeepScreenOn() {
@@ -249,13 +257,9 @@ public class MainActivity extends android.app.Activity {
         Log.i("lfl", "loadMusicAsset " + package_name + " " + filename + " " + soundId);
         return MediaPlayer.create(this, soundId);
     }
-    public void playMusic(MediaPlayer mp) {
-        mp.start();
-    }
-    public void playBackgroundMusic(MediaPlayer mp) {
-        mp.setLooping(true);
-        mp.start();
-    }
+
+    public void playMusic(MediaPlayer mp) { mp.start(); }
+    public void playBackgroundMusic(MediaPlayer mp) { mp.setLooping(true); mp.start(); }
 
     public int maxVolume() { return audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC); }
     public int getVolume() { return audio.getStreamVolume(AudioManager.STREAM_MUSIC); }
@@ -309,18 +313,19 @@ public class MainActivity extends android.app.Activity {
         startActivity(intent);
     }
 
-    public void hideAds() { /* advertising.hideAds(); */ }
-    public void showAds() { /* advertising.showAds(); */ }
+    public void hideAds() { if (advertising != null) advertising.hideAds(); }
+    public void showAds() { if (advertising != null) advertising.showAds(); }
     
     public int addAlert(final String[] k, final String[] v) {
+        final MainActivity self = this;
         final int id = alerts.size();
         alerts.add(null);
         runOnUiThread(new Runnable() { public void run() {
-            AlertDialog.Builder alert = new AlertDialog.Builder(MainActivity.instance);
+            AlertDialog.Builder alert = new AlertDialog.Builder(self);
             alert.setTitle(k[1]);
             alert.setMessage(v[1]);
 
-            final EditText input = v[0].equals("textinput") ? new EditText(MainActivity.instance) : null;
+            final EditText input = v[0].equals("textinput") ? new EditText(self) : null;
             if (input != null) {
                 input.setInputType(android.text.InputType.TYPE_CLASS_TEXT);
                 alert.setView(input);
@@ -328,11 +333,11 @@ public class MainActivity extends android.app.Activity {
 
             alert.setPositiveButton(k[2], new DialogInterface.OnClickListener() {
                                           public void onClick(DialogInterface dialog, int which) {
-                ShellRun((input == null) ? v[2] : (v[2] + " " + input.getText().toString()));
+                AppShellRun((input == null) ? v[2] : (v[2] + " " + input.getText().toString()));
             }});
             alert.setNegativeButton(k[3], new DialogInterface.OnClickListener() {
                                           public void onClick(DialogInterface dialog, int which) {
-                ShellRun((input == null) ? v[3] : (v[3] + " " + input.getText().toString()));
+                AppShellRun((input == null) ? v[3] : (v[3] + " " + input.getText().toString()));
             }});
 
             alerts.set(id, new Pair<AlertDialog, EditText>(alert.create(), input));
@@ -349,17 +354,18 @@ public class MainActivity extends android.app.Activity {
     }
 
     public int addToolbar(final String[] k, final String[] v) {
+        final MainActivity self = this;
         final int id = toolbars.size();
         toolbars.add(null);
         runOnUiThread(new Runnable() { public void run() {
-            LinearLayout toolbar = new LinearLayout(MainActivity.instance);
+            LinearLayout toolbar = new LinearLayout(self);
             View.OnClickListener listener = new View.OnClickListener() { public void onClick(View v) {
                 Button bt = (Button)v;
-                ShellRun((String)bt.getTag());
+                AppShellRun((String)bt.getTag());
             }};
 
             for (int i = 0; i < k.length; i++) {
-                Button bt = new Button(MainActivity.instance);
+                Button bt = new Button(self);
                 bt.setId(i);
                 bt.setTag(v[i]);
                 bt.setText(k[i]);
@@ -394,17 +400,18 @@ public class MainActivity extends android.app.Activity {
     }
 
     public int addTable(final String title, final String[] k, final String[] v, final String[] w) {
+        final MainActivity self = this;
         final int id = tables.size();
         tables.add(null);
         runOnUiThread(new Runnable() { public void run() {
-            LinearLayout table = new LinearLayout(MainActivity.instance);
+            LinearLayout table = new LinearLayout(self);
             table.setLayoutParams(new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,
                                                                FrameLayout.LayoutParams.MATCH_PARENT,
                                                                Gravity.CENTER_VERTICAL));
             table.setPadding(0, 0, attr_scrollbarSize, 0);
             table.setMinimumHeight(attr_listPreferredItemHeight);
 
-            RelativeLayout header = new RelativeLayout(MainActivity.instance);
+            RelativeLayout header = new RelativeLayout(self);
             LinearLayout.LayoutParams header_layoutparams =
                 new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT,
                                               LinearLayout.LayoutParams.WRAP_CONTENT);
@@ -413,20 +420,20 @@ public class MainActivity extends android.app.Activity {
             header.setLayoutParams(header_layoutparams);
             table.addView(header);
 
-            TextView header_text = new TextView(MainActivity.instance);
+            TextView header_text = new TextView(self);
             header_text.setText(title);
             header_text.setLayoutParams(new RelativeLayout.LayoutParams(RelativeLayout.LayoutParams.WRAP_CONTENT,
                                                                         RelativeLayout.LayoutParams.WRAP_CONTENT));
             header_text.setSingleLine(true);
-            header_text.setTextAppearance(MainActivity.instance, android.R.attr.textAppearanceLarge);
+            header_text.setTextAppearance(self, android.R.attr.textAppearanceLarge);
             header_text.setEllipsize(android.text.TextUtils.TruncateAt.MARQUEE);
             header.addView(header_text);
 
-            TextView header_subtext = new TextView(MainActivity.instance);
+            TextView header_subtext = new TextView(self);
             header_subtext.setText(title);
             header_subtext.setLayoutParams(new RelativeLayout.LayoutParams(RelativeLayout.LayoutParams.WRAP_CONTENT,
                                                                            RelativeLayout.LayoutParams.WRAP_CONTENT));
-            header_subtext.setTextAppearance(MainActivity.instance, android.R.attr.textAppearanceSmall);
+            header_subtext.setTextAppearance(self, android.R.attr.textAppearanceSmall);
             header.addView(header_subtext);
             toolbars.set(id, table);
         }});
@@ -438,20 +445,26 @@ public class MainActivity extends android.app.Activity {
             View table = tables.get(id);
             Log.i("lfl", "Here");
             // frame_layout.addView(table);
-            openListView();
+            // openListView();
+            action_bar.show();
+            getFragmentManager().beginTransaction()
+                .replace(R.id.content_frame, new ListViewFragment()).addToBackStack("tagZZ").commit();
         }});
     }
 }
 
 class MyGestureListener extends android.view.GestureDetector.SimpleOnGestureListener {
+    public MainActivity main_activity;
+
     @Override
     public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
-        MainActivity.Fling(e1.getX(), e1.getY(), velocityX, velocityY);
+        main_activity.AppFling(e1.getX(), e1.getY(), velocityX, velocityY);
         return false;
     }
 }
 
 class GameView extends android.view.SurfaceView implements SurfaceHolder.Callback, View.OnKeyListener, View.OnTouchListener, SensorEventListener {
+    public MainActivity main_activity;
     public EGLContext egl_context;
     public EGLSurface egl_surface;
     public EGLDisplay egl_display;
@@ -461,8 +474,9 @@ class GameView extends android.view.SurfaceView implements SurfaceHolder.Callbac
 
     public GameView(MainActivity activity, Context context) {
         super(context);
-        // gesture = new GestureDetector(new MyGestureListener());
+        main_activity = activity;
         sensor = (SensorManager)context.getSystemService("sensor");  
+        // gesture = new GestureDetector(new MyGestureListener(this));
         setFocusable(true);
         setFocusableInTouchMode(true);
         setOnKeyListener(this); 
@@ -484,7 +498,7 @@ class GameView extends android.view.SurfaceView implements SurfaceHolder.Callbac
 
     public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
         Log.i("lfl", "GameView.surfaceChanged(" + width + ", " + height + ")");
-        MainActivity.instance.surfaceChanged(format, width, height);
+        main_activity.surfaceChanged(format, width, height);
     }
 
     public void surfaceDestroyed(SurfaceHolder holder) {
@@ -494,7 +508,8 @@ class GameView extends android.view.SurfaceView implements SurfaceHolder.Callbac
     }
 
     public void onSensorChanged(SensorEvent event) {
-        if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) MainActivity.Accel(event.values[0], event.values[1], event.values[2]);
+        if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER)
+            main_activity.AppAccel(event.values[0], event.values[1], event.values[2]);
     }
 
     public boolean onKey(View v, int key_code, KeyEvent event) {
@@ -557,8 +572,8 @@ class GameView extends android.view.SurfaceView implements SurfaceHolder.Callbac
             }
         }
         if (key_char == 0) return false;
-        else if (event.getAction() == KeyEvent.ACTION_UP)   { MainActivity.KeyPress(key_char, mod, 0); return true; }
-        else if (event.getAction() == KeyEvent.ACTION_DOWN) { MainActivity.KeyPress(key_char, mod, 1); return true; }
+        else if (event.getAction() == KeyEvent.ACTION_UP)   { main_activity.AppKeyPress(key_char, mod, 0); return true; }
+        else if (event.getAction() == KeyEvent.ACTION_DOWN) { main_activity.AppKeyPress(key_char, mod, 1); return true; }
         else return false;
     }
 
@@ -567,11 +582,11 @@ class GameView extends android.view.SurfaceView implements SurfaceHolder.Callbac
         final int action = event.getAction() & MotionEvent.ACTION_MASK;
         if (action == MotionEvent.ACTION_MOVE) {
             for (int i = 0; i < event.getPointerCount(); i++) {
-                MainActivity.Touch(action, event.getX(i), event.getY(i), event.getPressure(i));
+                main_activity.AppTouch(action, event.getX(i), event.getY(i), event.getPressure(i));
             }
         } else {
             int action_index = (action == MotionEvent.ACTION_POINTER_DOWN || action == MotionEvent.ACTION_POINTER_UP) ? event.getActionIndex() : 0;
-            MainActivity.Touch(action, event.getX(action_index), event.getY(action_index), event.getPressure(action_index));
+            main_activity.AppTouch(action, event.getX(action_index), event.getY(action_index), event.getPressure(action_index));
         }
         return true; 
     }
@@ -579,9 +594,9 @@ class GameView extends android.view.SurfaceView implements SurfaceHolder.Callbac
     public void onAccuracyChanged(Sensor sensor, int accuracy) {}
 
     public void initEGL() {
-        if      (initEGL(2)) MainActivity.instance.egl_version = 2;
-        else if (initEGL(1)) MainActivity.instance.egl_version = 1;
-        else                 MainActivity.instance.egl_version = 0;
+        if      (initEGL(2)) main_activity.egl_version = 2;
+        else if (initEGL(1)) main_activity.egl_version = 1;
+        else                 main_activity.egl_version = 0;
     }
 
     public boolean initEGL(int requestedVersion) {
