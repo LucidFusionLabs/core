@@ -179,7 +179,7 @@
   - (void)load: (const std::string&)title items:(const std::vector<LFL::MenuItem>&)item {
     data.emplace_back();
     for (auto i : item) {
-      if (tuple_get<0>(i) == "<seperator>") {
+      if (tuple_get<0>(i) == "<separator>") {
         data.emplace_back();
         section_index++;
       } else {
@@ -199,22 +199,62 @@
     return data[section].size();
   }
 
-  - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
+  - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)path {
     static NSString *cellIdentifier = @"cellIdentifier";
     UITableViewCell *cell = [self.tableView dequeueReusableCellWithIdentifier:cellIdentifier];
     if (cell == nil) {
-      CHECK_LT(indexPath.section, data.size());
-      CHECK_LT(indexPath.row, data[indexPath.section].size());
+      CHECK_LT(path.section, data.size());
+      CHECK_LT(path.row, data[path.section].size());
       cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:cellIdentifier];
-      cell.textLabel.text = [NSString stringWithUTF8String: tuple_get<0>(data[indexPath.section][indexPath.row]).c_str()];
+      const LFL::MenuItem &item = data[path.section][path.row];
+      const std::string &kt = tuple_get<0>(item), tt = tuple_get<1>(item);
+      std::vector<std::string> kv, tv;
+      bool dropdown = kt.find(',') != std::string::npos;
+      if (dropdown) {
+        LFL::Split(kt, LFL::iscomma, &kv);
+        LFL::Split(tt, LFL::iscomma, &tv);
+        CHECK_GT(kv.size(), 0);
+        CHECK_EQ(kv.size(), tv.size());
+      }
+      const std::string &k = dropdown ? kv[0] : kt, &type = dropdown ? tv[0] : tt, &v = tuple_get<2>(item);
+
+      bool textinput=0, numinput=0, pwinput=0;
+      if ((textinput = type == "textinput") || (numinput = type == "numinput") || (pwinput = type == "pwinput")) {
+        UITextField *text_field = [[UITextField alloc] initWithFrame:CGRectMake(110, 10, 385, 30)];
+        text_field.autoresizingMask = UIViewAutoresizingFlexibleHeight;
+        text_field.adjustsFontSizeToFitWidth = YES;
+        text_field.autoresizesSubviews = YES;
+        text_field.autocorrectionType = UITextAutocorrectionTypeNo;
+        text_field.autocapitalizationType = UITextAutocapitalizationTypeNone;
+        text_field.clearButtonMode = UITextFieldViewModeNever;
+        if      (pwinput)  text_field.secureTextEntry = YES;
+        else if (numinput) text_field.keyboardType = UIKeyboardTypeNumberPad;
+        else               text_field.keyboardType = UIKeyboardTypeDefault;
+        text_field.returnKeyType = UIReturnKeyDone;
+        text_field.layer.cornerRadius = 10.0;
+        [text_field setBorderStyle: UITextBorderStyleRoundedRect];
+        [text_field setPlaceholder: LFL::MakeNSString(v)];
+
+        cell.textLabel.text = LFL::MakeNSString(k);
+        [cell.contentView addSubview: text_field];
+        if (path.section == 0 && path.row == 0) [text_field becomeFirstResponder];
+        [text_field release];
+      } else if (type == "button") {
+        cell.textLabel.text = LFL::MakeNSString(k);
+        cell.textLabel.textAlignment =  NSTextAlignmentCenter;
+      } else {
+        cell.textLabel.text = LFL::MakeNSString(k);
+      }
     }
     return cell;
   }
 
-  - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-    CHECK_LT(indexPath.section, data.size());
-    CHECK_LT(indexPath.row, data[indexPath.section].size());
-    ShellRun(tuple_get<2>(data[indexPath.section][indexPath.row]).c_str());
+  - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)path {
+    CHECK_LT(path.section, data.size());
+    CHECK_LT(path.row, data[path.section].size());
+    const LFL::MenuItem &item = data[path.section][path.row];
+    const std::string &k = tuple_get<1>(item);
+    if (k == "command" || k == "button") ShellRun(tuple_get<2>(item).c_str());
   }
 
   - (void)show:(bool)show_or_hide {
@@ -224,6 +264,35 @@
 
   - (void)viewWillAppear:   (BOOL)animated { if (_toolbar) [_toolbar show: true];  }
   - (void)viewWillDisappear:(BOOL)animated { if (_toolbar) [_toolbar show: false]; }
+
+  - (LFL::StringPairVec)dumpDataForSection: (int)ind {
+    LFL::StringPairVec ret;
+    CHECK_LT(ind, data.size());
+    for (int i=0, l=data[ind].size(); i != l; i++) {
+      NSIndexPath *path = [NSIndexPath indexPathForRow: i inSection: ind];
+      UITableViewCell *cell = [self.tableView cellForRowAtIndexPath: path];
+      const LFL::MenuItem &item = data[path.section][path.row];
+      const std::string &kt = tuple_get<0>(item), tt = tuple_get<1>(item);
+      std::vector<std::string> kv, tv;
+      bool dropdown = kt.find(',') != std::string::npos;
+      if (dropdown) {
+        LFL::Split(kt, LFL::iscomma, &kv);
+        LFL::Split(tt, LFL::iscomma, &tv);
+        CHECK_GT(kv.size(), 0);
+        CHECK_EQ(kv.size(), tv.size());
+      }
+      int subind = 0;
+      const std::string &k = dropdown ? kv[subind] : kt, &type = dropdown ? tv[subind] : tt;
+      std::string val;
+      if ((type == "textinput") || (type == "numinput") || (type == "pwinput")) {
+        UITextField *text_field = [[cell.contentView subviews] lastObject];
+        val = LFL::GetNSString(text_field.text);
+        if (val.empty()) val = tuple_get<2>(item);
+      }
+      ret.emplace_back(k, val);
+    }
+    return ret;
+  }
 @end
 
 @interface IOSNavigation : NSObject<UINavigationControllerDelegate>
@@ -356,6 +425,7 @@
 namespace LFL {
 SystemAlertWidget::~SystemAlertWidget() { if (auto alert = FromVoid<IOSAlert*>(impl)) [alert release]; }
 SystemAlertWidget::SystemAlertWidget(const StringPairVec &items) : impl([[IOSAlert alloc] init: items]) {}
+UIAlertView *GetUIAlertView(SystemToolbarWidget *w) { return FromVoid<IOSAlert*>(w->impl).alert; }
 void SystemAlertWidget::Show(const string &arg) {
   auto alert = FromVoid<IOSAlert*>(impl);
   [alert.alert show];
@@ -380,6 +450,7 @@ SystemTableWidget::SystemTableWidget(const string &title, const vector<MenuItem>
 }
 void SystemTableWidget::AddToolbar(SystemToolbarWidget *t) { [FromVoid<IOSTable*>(impl) setToolbar: FromVoid<IOSToolbar*>(t->impl)]; }
 void SystemTableWidget::Show(bool show_or_hide) { [FromVoid<IOSTable*>(impl) show:show_or_hide]; }
+StringPairVec SystemTableWidget::GetSectionText(int section) { return [FromVoid<IOSTable*>(impl) dumpDataForSection: section]; }
 
 SystemNavigationWidget::~SystemNavigationWidget() { if (auto nav = FromVoid<IOSNavigation*>(impl)) [nav release]; }
 SystemNavigationWidget::SystemNavigationWidget(SystemTableWidget *r) : impl([[IOSNavigation alloc] init: FromVoid<IOSTable*>(r->impl)]) {}

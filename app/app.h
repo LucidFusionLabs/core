@@ -719,6 +719,7 @@ struct SystemTableWidget {
   SystemTableWidget(const string &title, const vector<MenuItem> &items);
   void AddToolbar(SystemToolbarWidget*);
   void Show(bool show_or_hide);
+  StringPairVec GetSectionText(int section=0);
 };
 
 struct SystemNavigationWidget {

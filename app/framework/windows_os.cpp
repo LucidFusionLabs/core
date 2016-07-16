@@ -26,7 +26,7 @@ SystemMenuWidget::SystemMenuWidget(const string &title_text, const vector<MenuIt
   if (!win->menu) { win->menu = CreateMenu(); win->context_menu = CreatePopupMenu(); }
   HMENU hAddMenu = CreatePopupMenu();
   for (auto &i : items) {
-    if (tuple_get<1>(i) == "<seperator>") AppendMenu(hAddMenu, MF_MENUBARBREAK, 0, NULL);
+    if (tuple_get<1>(i) == "<separator>") AppendMenu(hAddMenu, MF_MENUBARBREAK, 0, NULL);
     else AppendMenu(hAddMenu, MF_STRING, win->start_msg_id + win->menu_cmds.size(), tuple_get<1>(i).c_str());
     win->menu_cmds.push_back(tuple_get<2>(i));
   }

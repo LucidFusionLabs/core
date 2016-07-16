@@ -149,7 +149,7 @@ static void AddNSMenuItems(NSMenu *menu, const vector<MenuItem>&items) {
   NSMenuItem *item;
   for (auto &i : items) { 
     const string &k=tuple_get<0>(i), &n=tuple_get<1>(i), &v=tuple_get<2>(i);
-    if (n == "<seperator>") { [menu addItem:[NSMenuItem separatorItem]]; continue; }
+    if (n == "<separator>") { [menu addItem:[NSMenuItem separatorItem]]; continue; }
 
     NSString *key = nil;
     if      (k == "<left>")  { unichar fk = NSLeftArrowFunctionKey;  key = [NSString stringWithCharacters:&fk length:1]; }
@@ -270,7 +270,7 @@ void Application::ShowSystemContextMenu(const vector<MenuItem>&items) {
   NSMenu *menu = [[NSMenu alloc] init];
   for (auto &i : items) {
     const char *k = tuple_get<0>(i).c_str(), *n = tuple_get<1>(i).c_str(), *v = tuple_get<2>(i).c_str();
-    if (!strcmp(n, "<seperator>")) { [menu addItem:[NSMenuItem separatorItem]]; continue; }
+    if (!strcmp(n, "<separator>")) { [menu addItem:[NSMenuItem separatorItem]]; continue; }
     item = [menu addItemWithTitle: [NSString stringWithUTF8String: n]
                  action:           (v[0] ? @selector(shellRun:) : nil)
                  keyEquivalent:    [NSString stringWithUTF8String: k]];

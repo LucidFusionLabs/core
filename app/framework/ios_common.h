@@ -46,3 +46,11 @@
   + (int)getBottomHeight;
   + (void)updateFrame;
 @end
+
+namespace LFL {
+  UIAlertView            *GetUIAlertView(SystemAlertWidget*);
+  UIActionSheet          *GetUIActionSheet(SystemMenuWidget*);
+  UIToolbar              *GetUIToolbar(SystemToolbarWidget*);
+  UITableViewController  *GetUITableViewController(SystemTableWidget*);
+  UINavigationController *GetUINavigationController(SystemNavigationWidget*);
+};

@@ -17,15 +17,13 @@
  */
 
 namespace LFL {
-void NSLogString(const string &text) {
-  NSString *t = [[NSString alloc] initWithUTF8String: text.c_str()];
-  NSLog(@"%@", t);
-  [t release];
-}
+string GetNSString(NSString *x) { return [x UTF8String]; }
+NSString *MakeNSString(const string &x) { return [NSString stringWithUTF8String: x.c_str()]; }
+void NSLogString(const string &text) { NSLog(@"%@", MakeNSString(text)); }
 
 string GetNSDocumentDirectory() {
   NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
-  return [[paths objectAtIndex:0] UTF8String];
+  return GetNSString([paths objectAtIndex:0]);
 }
 
 }; // namespace LFL

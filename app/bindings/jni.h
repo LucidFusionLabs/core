@@ -57,5 +57,11 @@ struct GPlus {
   int  QuickGame();
 };
 
+int GetAlertWidgetID(SystemAlertWidget*);
+int GetToolbarWidgetID(SystemToolbarWidget*);
+int GetMenuWidgetID(SystemMenuWidget*);
+int GetTableWidgetID(SystemTableWidget*);
+int GetNavigationWidgetID(SystemNavigationWidget*);
+
 }; // namespace LFL
 #endif // LFL_CORE_APP_BINDINGS_JNI_H__

@@ -30,6 +30,7 @@ import android.net.Uri;
 import android.graphics.Rect;
 import android.app.ActionBar;
 import android.app.AlertDialog;
+import android.app.Fragment;
 
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.egl.*;
@@ -49,7 +50,9 @@ public class MainActivity extends android.app.Activity {
     public native void AppAccel(float x, float y, float z);
     public native void AppShellRun(String text);
 
-    public static boolean app_init, app_created, disable_title;
+    public static boolean app_created, app_init, disable_title;
+    public static AppWidgets app_widgets = new AppWidgets();
+
     public Resources resources;
     public FrameLayout frame_layout;
     public ActionBar action_bar;
@@ -62,9 +65,6 @@ public class MainActivity extends android.app.Activity {
     public Advertising advertising;
     public boolean waiting_activity_result;
     public int surface_width, surface_height, egl_version;
-    public ArrayList<View> toolbar_top, toolbar_bottom;
-    public ArrayList<View> toolbars, tables;
-    public ArrayList<Pair<AlertDialog, EditText>> alerts;
     public int attr_listPreferredItemHeight, attr_scrollbarSize;
     public float display_density;
 
@@ -79,11 +79,6 @@ public class MainActivity extends android.app.Activity {
         root_window = getWindow();
         resources = getResources();
         view = new GameView(this, context);
-        toolbar_top = new ArrayList<View>();
-        toolbar_bottom = new ArrayList<View>();
-        toolbars = new ArrayList<View>();
-        tables = new ArrayList<View>();
-        alerts = new ArrayList<Pair<AlertDialog, EditText>>();
         audio = (AudioManager)getSystemService(Context.AUDIO_SERVICE);
         action_bar = getActionBar();
 
@@ -115,7 +110,9 @@ public class MainActivity extends android.app.Activity {
 
                 int actionbar_h = action_bar.isShowing() ? action_bar.getHeight() : 0;
                 int h = r.bottom - r.top - actionbar_h;
-                for (View tb : toolbar_bottom) {
+                for (Integer id : app_widgets.toolbar_bottom) {
+                    View tb = app_widgets.toolbars.get(id);
+                    if (tb == null) continue;
                     FrameLayout.LayoutParams params = (FrameLayout.LayoutParams)tb.getLayoutParams();
                     params.bottomMargin = surface_height - h;
                     tb.setLayoutParams(params);
@@ -132,6 +129,15 @@ public class MainActivity extends android.app.Activity {
         Log.i("lfl", "MainActivity.onStart()");
         super.onStart();
         if (gplus != null) gplus.onStart(this);
+    }
+
+    @Override
+    public void onResume() {
+        boolean have_surface = view.have_surface, thread_exists = thread != null;
+        Log.i("lfl", "MainActivity.onResume() have_surface=" + have_surface + " thread_exists=" + thread_exists);
+        super.onResume();
+        app_widgets.onResume(this);
+        if (have_surface && !thread_exists) startRenderThread(false);
     }
     
     @Override
@@ -158,16 +164,9 @@ public class MainActivity extends android.app.Activity {
     @Override
     protected void onDestroy() {
         Log.i("lfl", "MainActivity.onDestroy()");
+        app_widgets.onDestroy();
         if (advertising != null) advertising.onDestroy();
         super.onDestroy();
-    }
-
-    @Override
-    public void onResume() {
-        boolean have_surface = view.have_surface, thread_exists = thread != null;
-        Log.i("lfl", "MainActivity.onResume() have_surface=" + have_surface + " thread_exists=" + thread_exists);
-        super.onResume();
-        if (have_surface && !thread_exists) startRenderThread(false);
     }
 
     @Override
@@ -308,7 +307,7 @@ public class MainActivity extends android.app.Activity {
         startActivity(intent);
     }
 
-    public void openListView() {
+    public void openListViewActivity() {
         final Intent intent = new Intent(this, com.lucidfusionlabs.app.ListViewActivity.class);
         startActivity(intent);
     }
@@ -317,71 +316,31 @@ public class MainActivity extends android.app.Activity {
     public void showAds() { if (advertising != null) advertising.showAds(); }
     
     public int addAlert(final String[] k, final String[] v) {
-        final MainActivity self = this;
-        final int id = alerts.size();
-        alerts.add(null);
-        runOnUiThread(new Runnable() { public void run() {
-            AlertDialog.Builder alert = new AlertDialog.Builder(self);
-            alert.setTitle(k[1]);
-            alert.setMessage(v[1]);
-
-            final EditText input = v[0].equals("textinput") ? new EditText(self) : null;
-            if (input != null) {
-                input.setInputType(android.text.InputType.TYPE_CLASS_TEXT);
-                alert.setView(input);
-            }
-
-            alert.setPositiveButton(k[2], new DialogInterface.OnClickListener() {
-                                          public void onClick(DialogInterface dialog, int which) {
-                AppShellRun((input == null) ? v[2] : (v[2] + " " + input.getText().toString()));
-            }});
-            alert.setNegativeButton(k[3], new DialogInterface.OnClickListener() {
-                                          public void onClick(DialogInterface dialog, int which) {
-                AppShellRun((input == null) ? v[3] : (v[3] + " " + input.getText().toString()));
-            }});
-
-            alerts.set(id, new Pair<AlertDialog, EditText>(alert.create(), input));
-        }});
-        return id;
+        app_widgets.alert_specs.add(app_widgets.new Spec(k, v));
+        app_widgets.alerts.add(null);
+        return app_widgets.alert_specs.size() - 1;
     }
 
     public void showAlert(final int id, final String arg) {
+        final MainActivity self = this;
         runOnUiThread(new Runnable() { public void run() {
-            Pair<AlertDialog, EditText> alert = alerts.get(id);
+            Pair<AlertDialog, EditText> alert = app_widgets.getAlert(self, id);
             if (alert.second != null) { alert.second.setText(arg); }
             alert.first.show();
         }});
     }
 
     public int addToolbar(final String[] k, final String[] v) {
-        final MainActivity self = this;
-        final int id = toolbars.size();
-        toolbars.add(null);
-        runOnUiThread(new Runnable() { public void run() {
-            LinearLayout toolbar = new LinearLayout(self);
-            View.OnClickListener listener = new View.OnClickListener() { public void onClick(View v) {
-                Button bt = (Button)v;
-                AppShellRun((String)bt.getTag());
-            }};
-
-            for (int i = 0; i < k.length; i++) {
-                Button bt = new Button(self);
-                bt.setId(i);
-                bt.setTag(v[i]);
-                bt.setText(k[i]);
-                bt.setOnClickListener(listener);
-                bt.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f)); 
-                toolbar.addView(bt);
-            }
-            toolbars.set(id, toolbar);
-        }});
-        return id;
+        app_widgets.toolbar_specs.add(app_widgets.new Spec(k, v));
+        app_widgets.toolbars.add(null);
+        return app_widgets.toolbar_specs.size() - 1;
     }
 
     public void showToolbar(final int id) {
+        final MainActivity self = this;
         runOnUiThread(new Runnable() { public void run() {
-            View toolbar = toolbars.get(id);
-            toolbar_bottom.add(toolbar);
+            app_widgets.toolbar_bottom.add(id);
+            View toolbar = app_widgets.getToolbar(self, id);
             frame_layout.addView(toolbar, new LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,
                                                            ViewGroup.LayoutParams.WRAP_CONTENT,
                                                            Gravity.BOTTOM));
@@ -389,8 +348,6 @@ public class MainActivity extends android.app.Activity {
     }
     
     public int addMenu(final String title, final String[] k, final String[] v, final String[] w) {
-        runOnUiThread(new Runnable() { public void run() {
-        }});
         return 0;
     }
 
@@ -400,55 +357,42 @@ public class MainActivity extends android.app.Activity {
     }
 
     public int addTable(final String title, final String[] k, final String[] v, final String[] w) {
-        final MainActivity self = this;
-        final int id = tables.size();
-        tables.add(null);
-        runOnUiThread(new Runnable() { public void run() {
-            LinearLayout table = new LinearLayout(self);
-            table.setLayoutParams(new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,
-                                                               FrameLayout.LayoutParams.MATCH_PARENT,
-                                                               Gravity.CENTER_VERTICAL));
-            table.setPadding(0, 0, attr_scrollbarSize, 0);
-            table.setMinimumHeight(attr_listPreferredItemHeight);
-
-            RelativeLayout header = new RelativeLayout(self);
-            LinearLayout.LayoutParams header_layoutparams =
-                new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT,
-                                              LinearLayout.LayoutParams.WRAP_CONTENT);
-            header_layoutparams.setMargins((int)(15 * display_density), (int)(6 * display_density),
-                                           (int)( 6 * display_density), (int)(6 * display_density));
-            header.setLayoutParams(header_layoutparams);
-            table.addView(header);
-
-            TextView header_text = new TextView(self);
-            header_text.setText(title);
-            header_text.setLayoutParams(new RelativeLayout.LayoutParams(RelativeLayout.LayoutParams.WRAP_CONTENT,
-                                                                        RelativeLayout.LayoutParams.WRAP_CONTENT));
-            header_text.setSingleLine(true);
-            header_text.setTextAppearance(self, android.R.attr.textAppearanceLarge);
-            header_text.setEllipsize(android.text.TextUtils.TruncateAt.MARQUEE);
-            header.addView(header_text);
-
-            TextView header_subtext = new TextView(self);
-            header_subtext.setText(title);
-            header_subtext.setLayoutParams(new RelativeLayout.LayoutParams(RelativeLayout.LayoutParams.WRAP_CONTENT,
-                                                                           RelativeLayout.LayoutParams.WRAP_CONTENT));
-            header_subtext.setTextAppearance(self, android.R.attr.textAppearanceSmall);
-            header.addView(header_subtext);
-            toolbars.set(id, table);
-        }});
-        return id;
+        app_widgets.table_specs.add(app_widgets.new Spec(title, k, v, w));
+        app_widgets.tables.add(null);
+        return app_widgets.table_specs.size() - 1;
     }
 
-    public void showTable(final int id) {
+    public void showTable(final int id, final boolean show_or_hide) {
+        final MainActivity self = this;
         runOnUiThread(new Runnable() { public void run() {
-            View table = tables.get(id);
-            Log.i("lfl", "Here");
-            // frame_layout.addView(table);
-            // openListView();
-            action_bar.show();
+            ListViewFragment table = app_widgets.getTable(self, id);
+            if (show_or_hide) {
+                action_bar.show();
+                getFragmentManager().beginTransaction().replace(R.id.content_frame, table).commit();
+            } else {
+                if (disable_title) action_bar.hide();
+                getFragmentManager().beginTransaction().remove(table).commit();
+            }
+        }});
+    }
+
+    public int addNavigation(final int root_table_id) {
+        app_widgets.navigations.add(root_table_id);
+        return app_widgets.navigations.size()-1;
+    }
+
+    public void showNavigation(final int id, final boolean show_or_hide) {
+        if (show_or_hide) app_widgets.navigation_stack.add(id);
+        else              app_widgets.navigation_stack.remove(app_widgets.navigation_stack.size()-1);
+        showTable(app_widgets.navigations.get(id), show_or_hide);
+    }
+
+    public void pushNavigationTable(final int id, final int table_id) {
+        final MainActivity self = this;
+        runOnUiThread(new Runnable() { public void run() {
+            ListViewFragment table = app_widgets.getTable(self, table_id);
             getFragmentManager().beginTransaction()
-                .replace(R.id.content_frame, new ListViewFragment()).addToBackStack("tagZZ").commit();
+                .replace(R.id.content_frame, table).addToBackStack(table.title).commit();
         }});
     }
 }

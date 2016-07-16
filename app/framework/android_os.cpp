@@ -138,8 +138,8 @@ BufferFile *JNI::OpenAsset(const string &fn) {
   return ret.release();
 }
 
+int GetAlertWidgetID(SystemAlertWidget *w) { return int(w->impl); }
 SystemAlertWidget::~SystemAlertWidget() {}
-
 SystemAlertWidget::SystemAlertWidget(const StringPairVec &items) {
   CHECK_EQ(4, items.size());
   CHECK_EQ("style", items[0].first);
@@ -156,6 +156,7 @@ void SystemAlertWidget::Show(const string &arg) {
   jni->env->CallVoidMethod(jni->activity, mid, jint(impl.v), jni->ToJString(arg));
 }
 
+int GetToolbarWidgetID(SystemToolbarWidget *w) { return int(w->impl); }
 SystemToolbarWidget::~SystemToolbarWidget() {}
 SystemToolbarWidget::SystemToolbarWidget(const StringPairVec &items) {
   static jmethodID mid = CheckNotNull
@@ -172,6 +173,7 @@ void SystemToolbarWidget::Show(bool show_or_hide) {
   jni->env->CallVoidMethod(jni->activity, mid, jint(impl.v));
 }
 
+int GetMenuWidgetID(SystemMenuWidget *w) { return int(w->impl); }
 SystemMenuWidget::~SystemMenuWidget() {}
 SystemMenuWidget::SystemMenuWidget(const string &title, const vector<MenuItem>&items) {
   static jmethodID mid = CheckNotNull
@@ -189,6 +191,7 @@ void SystemMenuWidget::Show() {
   jni->env->CallVoidMethod(jni->activity, mid, jint(impl.v));
 }
 
+int GetTableWidgetID(SystemTableWidget *w) { return int(w->impl); }
 SystemTableWidget::~SystemTableWidget() {}
 SystemTableWidget::SystemTableWidget(const string &title, const vector<MenuItem> &items) {
   static jmethodID mid = CheckNotNull
@@ -202,14 +205,31 @@ SystemTableWidget::SystemTableWidget(const string &title, const vector<MenuItem>
 void SystemTableWidget::AddToolbar(SystemToolbarWidget*) {}
 void SystemTableWidget::Show(bool show_or_hide) {
   static jmethodID mid = CheckNotNull
-    (jni->env->GetMethodID(jni->activity_class, "showTable", "(I)V"));
-    jni->env->CallVoidMethod(jni->activity, mid, jint(impl.v));
+    (jni->env->GetMethodID(jni->activity_class, "showTable", "(IZ)V"));
+    jni->env->CallVoidMethod(jni->activity, mid, jint(impl.v), jboolean(show_or_hide));
 }
 
+StringPairVec SystemTableWidget::GetSectionText(int section) { return StringPairVec(); }
+
+int GetNavigationWidgetID(SystemNavigationWidget *w) { return int(w->impl); }
 SystemNavigationWidget::~SystemNavigationWidget() {}
-SystemNavigationWidget::SystemNavigationWidget(SystemTableWidget *r) {}
-void SystemNavigationWidget::Show(bool show_or_hide) {}
-void SystemNavigationWidget::PushTable(SystemTableWidget *t) {}
+SystemNavigationWidget::SystemNavigationWidget(SystemTableWidget *r) {
+  static jmethodID mid = CheckNotNull
+    (jni->env->GetMethodID(jni->activity_class, "addNavigation", "(I)I"));
+  impl.v = Void(jni->env->CallIntMethod(jni->activity, mid, jint(r->impl.v)));
+}
+
+void SystemNavigationWidget::Show(bool show_or_hide) {
+  static jmethodID mid = CheckNotNull
+    (jni->env->GetMethodID(jni->activity_class, "showNavigation", "(IZ)V"));
+    jni->env->CallVoidMethod(jni->activity, mid, jint(impl.v), jboolean(show_or_hide));
+}
+
+void SystemNavigationWidget::PushTable(SystemTableWidget *t) {
+  static jmethodID mid = CheckNotNull
+    (jni->env->GetMethodID(jni->activity_class, "pushNavigationTable", "(II)V"));
+    jni->env->CallVoidMethod(jni->activity, mid, jint(impl.v), jint(t->impl.v));
+}
 
 void Application::ShowSystemFontChooser(const FontDesc &cur_font, const string &choose_cmd) {}
 void Application::ShowSystemFileChooser(bool files, bool dirs, bool multi, const string &choose_cmd) {}
