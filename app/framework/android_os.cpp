@@ -21,10 +21,10 @@ static JNI *jni = Singleton<JNI>::Get();
 
 void JNI::Init(jobject a, bool first) {
   if      (1)           CHECK(activity  = env->NewGlobalRef(a));
-  if      (1)           CHECK(resources = env->NewGlobalRef(env->GetObjectField(activity, resources_id)));
-  if      (1)           CHECK(view      = env->NewGlobalRef(env->GetObjectField(activity, view_id)));
-  if      (first)             gplus     = env->NewGlobalRef(env->GetObjectField(activity, gplus_id));
-  else if (gplus_class) CHECK(gplus     = env->NewGlobalRef(env->GetObjectField(activity, gplus_id)));
+  if      (1)           CHECK(resources = env->NewGlobalRef(env->GetObjectField(activity, activity_resources)));
+  if      (1)           CHECK(view      = env->NewGlobalRef(env->GetObjectField(activity, activity_view)));
+  if      (first)             gplus     = env->NewGlobalRef(env->GetObjectField(activity, activity_gplus));
+  else if (gplus_class) CHECK(gplus     = env->NewGlobalRef(env->GetObjectField(activity, activity_gplus)));
 }
 
 void JNI::Free() {
@@ -209,7 +209,20 @@ void SystemTableWidget::Show(bool show_or_hide) {
     jni->env->CallVoidMethod(jni->activity, mid, jint(impl.v), jboolean(show_or_hide));
 }
 
-StringPairVec SystemTableWidget::GetSectionText(int section) { return StringPairVec(); }
+StringPairVec SystemTableWidget::GetSectionText(int section) {
+  static jmethodID mid = CheckNotNull
+    (jni->env->GetMethodID(jni->activity_class, "getTableSectionText", "(II)Ljava/util/ArrayList;"));
+  jobject arraylist = jni->env->CallObjectMethod(jni->activity, mid, jint(impl.v), section);
+  int size = jni->env->CallIntMethod(arraylist, jni->arraylist_size);
+  StringPairVec ret;
+  for (int i = 0; i != size; ++i) {
+    jobject pair = jni->env->CallObjectMethod(arraylist, jni->arraylist_get, i);
+    jstring ki = (jstring)jni->env->GetObjectField(pair, jni->pair_first);
+    jstring vi = (jstring)jni->env->GetObjectField(pair, jni->pair_second);
+    ret.emplace_back(jni->GetJString(ki), jni->GetJString(vi));
+  }
+  return ret;
+}
 
 int GetNavigationWidgetID(SystemNavigationWidget *w) { return int(w->impl); }
 SystemNavigationWidget::~SystemNavigationWidget() {}

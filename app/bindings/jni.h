@@ -32,8 +32,9 @@ struct JNI {
   Box activity_box;
   jobject activity=0, resources=0, view=0, gplus=0;
   jclass activity_class=0, resources_class=0, view_class=0, gplus_class=0, throwable_class=0, frame_class=0, assetmgr_class=0;
-  jclass string_class=0, inputstream_class=0, channels_class=0, readbytechan_class=0, r_string_class=0;
-  jfieldID resources_id=0, view_id=0, gplus_id=0;
+  jclass string_class=0, arraylist_class=0, pair_class=0, inputstream_class=0, channels_class=0, readbytechan_class=0, r_string_class=0;
+  jmethodID arraylist_size=0, arraylist_get=0;
+  jfieldID activity_resources=0, activity_view=0, activity_gplus=0, pair_first=0, pair_second=0;
   string package_name;
 
   void Init(jobject a, bool first);

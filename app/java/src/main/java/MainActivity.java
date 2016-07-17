@@ -376,15 +376,26 @@ public class MainActivity extends android.app.Activity {
         }});
     }
 
+    public ArrayList<Pair<String, String>> getTableSectionText(final int id, final int section) {
+        ListViewFragment table = app_widgets.tables.get(id);
+        if (table == null) return new ArrayList<Pair<String, String>>();
+        return table.data.getSectionText(table.listview, section);
+    }
+
     public int addNavigation(final int root_table_id) {
         app_widgets.navigations.add(root_table_id);
         return app_widgets.navigations.size()-1;
     }
 
     public void showNavigation(final int id, final boolean show_or_hide) {
-        if (show_or_hide) app_widgets.navigation_stack.add(id);
-        else              app_widgets.navigation_stack.remove(app_widgets.navigation_stack.size()-1);
-        showTable(app_widgets.navigations.get(id), show_or_hide);
+        if (show_or_hide) {
+           app_widgets.navigation_stack.add(id);
+           showTable(app_widgets.navigations.get(id), true);
+        } else runOnUiThread(new Runnable() { public void run() {
+           app_widgets.navigation_stack.remove(app_widgets.navigation_stack.size()-1);
+           getFragmentManager().popBackStackImmediate(null, android.app.FragmentManager.POP_BACK_STACK_INCLUSIVE);
+           showTable(app_widgets.navigations.get(id), false);
+        }});
     }
 
     public void pushNavigationTable(final int id, final int table_id) {

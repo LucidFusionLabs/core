@@ -226,9 +226,9 @@ extern "C" jint JNI_OnLoad(JavaVM* vm, void* reserved) { return JNI_VERSION_1_4;
 extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppCreate(JNIEnv *e, jobject a) {
   CHECK(jni->env = e);
   CHECK(jni->activity_class = (jclass)e->NewGlobalRef(e->GetObjectClass(a)));
-  CHECK(jni->resources_id = e->GetFieldID(jni->activity_class, "resources", "Landroid/content/res/Resources;"));
-  CHECK(jni->view_id      = e->GetFieldID(jni->activity_class, "view",      "Lcom/lucidfusionlabs/app/GameView;"));
-  CHECK(jni->gplus_id     = e->GetFieldID(jni->activity_class, "gplus",     "Lcom/lucidfusionlabs/app/GPlusClient;"));
+  CHECK(jni->activity_resources = e->GetFieldID(jni->activity_class, "resources", "Landroid/content/res/Resources;"));
+  CHECK(jni->activity_view      = e->GetFieldID(jni->activity_class, "view",      "Lcom/lucidfusionlabs/app/GameView;"));
+  CHECK(jni->activity_gplus     = e->GetFieldID(jni->activity_class, "gplus",     "Lcom/lucidfusionlabs/app/GPlusClient;"));
   static jmethodID activity_getpkgname_mid =
     CheckNotNull(jni->env->GetMethodID(jni->activity_class, "getPackageName", "()Ljava/lang/String;"));
 
@@ -237,7 +237,9 @@ extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppCreate(JNIEnv *e, j
   std::replace(jni->package_name.begin(), jni->package_name.end(), '.', '/');
 
   CHECK(jni->view_class         = (jclass)e->NewGlobalRef(e->GetObjectClass(jni->view)));
+  CHECK(jni->arraylist_class    = (jclass)e->NewGlobalRef(e->FindClass("java/util/ArrayList")));
   CHECK(jni->string_class       = (jclass)e->NewGlobalRef(e->FindClass("java/lang/String")));
+  CHECK(jni->pair_class         = (jclass)e->NewGlobalRef(e->FindClass("android/util/Pair")));
   CHECK(jni->resources_class    = (jclass)e->NewGlobalRef(e->FindClass("android/content/res/Resources")));
   CHECK(jni->r_string_class     = (jclass)e->NewGlobalRef(e->FindClass(StrCat(jni->package_name, "/R$string").c_str())));
   CHECK(jni->throwable_class    = (jclass)e->NewGlobalRef(e->FindClass("java/lang/Throwable")));
@@ -246,11 +248,14 @@ extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppCreate(JNIEnv *e, j
   CHECK(jni->inputstream_class  = (jclass)e->NewGlobalRef(e->FindClass("java/io/InputStream")));
   CHECK(jni->channels_class     = (jclass)e->NewGlobalRef(e->FindClass("java/nio/channels/Channels")));
   CHECK(jni->readbytechan_class = (jclass)e->NewGlobalRef(e->FindClass("java/nio/channels/ReadableByteChannel")));
+  CHECK(jni->arraylist_size = e->GetMethodID(jni->arraylist_class, "size", "()I"));
+  CHECK(jni->arraylist_get  = e->GetMethodID(jni->arraylist_class, "get", "(I)Ljava/lang/Object;"));
+  CHECK(jni->pair_first  = e->GetFieldID(jni->pair_class, "first",  "Ljava/lang/Object;"));
+  CHECK(jni->pair_second = e->GetFieldID(jni->pair_class, "second", "Ljava/lang/Object;"));
   if (jni->gplus) CHECK(jni->gplus_class = (jclass)e->NewGlobalRef(e->GetObjectClass(jni->gplus)));
 
   static const char *argv[2] = { "LFLApp", 0 };
   MyAppCreate(1, argv);
-  INFOf("okok2 %p %d", jni->activity, jni->resources_id);
 }
 
 extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppMain(JNIEnv *e, jobject a) {

@@ -19,38 +19,30 @@ import android.util.Log;
 public class ListViewFragment extends Fragment implements OnItemClickListener {
     public MainActivity main_activity;
     public String title;
-    public ArrayList<String> list, type, val;
+    public ListAdapter data;
+    public ListView listview;
 
-    ListViewFragment(MainActivity activity,
+    ListViewFragment(final MainActivity activity,
                      final String t, final String[] k, final String[] v, final String[] w) {
         main_activity = activity;
         title = t;
-        list = new ArrayList<String>();
-        type = new ArrayList<String>();
-        val  = new ArrayList<String>();
-        for (int i = 0; i < k.length; i++) {
-            list.add(k[i].equals("<separator>") ? "" : k[i]);
-            type.add(v[i]);
-            val.add(w[i]);
-        }
+        data = new ListAdapter(activity, k, v, w);
     }
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.listview_main, container, false);
-        ArrayAdapter<String> adapter = new ArrayAdapter<String>
-            (getActivity(), R.layout.listview_cell, R.id.listview_cell_title, list);
-        ListView listView = (ListView)view.findViewById(R.id.list);
-        listView.setAdapter(adapter);
-        listView.setOnItemClickListener(this);
+        listview = (ListView)view.findViewById(R.id.list);
+        listview.setAdapter(data);
+        listview.setOnItemClickListener(this);
         return view;
     }
 
     @Override
     public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-        String t = type.get(position);
-        if (t.equals("command") || t.equals("button")) {
-            main_activity.AppShellRun(val.get(position));
+        int t = data.types.get(position);
+        if (t == ListAdapter.TYPE_COMMAND || t == ListAdapter.TYPE_BUTTON) {
+            main_activity.AppShellRun(data.vals.get(position));
         }
     }
 }

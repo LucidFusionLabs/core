@@ -114,7 +114,6 @@ public class AppWidgets {
 
     View getToolbar(final MainActivity activity, int id) {
         if (toolbars.get(id) == null) {
-            Log.i("lfl", "showtoolbar2 " + id);
             Spec spec = toolbar_specs.get(id);
             LinearLayout toolbar = new LinearLayout(activity);
             View.OnClickListener listener = new View.OnClickListener() { public void onClick(View v) {
