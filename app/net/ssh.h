@@ -24,7 +24,7 @@ struct SSHClient {
   typedef function<void(Connection*, const StringPiece&)> ResponseCB;
   typedef function<bool(const string&, const string&,       string*)> LoadPasswordCB;
   typedef function<void(const string&, const string&, const string&)> SavePasswordCB;
-  static Connection *Open(const string &hostport, const ResponseCB &cb, Callback *detach=0);
+  static Connection *Open(const string &hostport, const ResponseCB &cb, Callback *detach=0, Callback *success=0);
 
   static void SetUser(Connection *c, const string &user);
   static void SetPasswordCB(Connection *c, const LoadPasswordCB&, const SavePasswordCB&);

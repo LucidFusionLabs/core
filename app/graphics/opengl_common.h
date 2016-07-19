@@ -109,7 +109,7 @@ void DelFrameBuffers(int n, const unsigned *id) {
   glDeleteFramebuffersEXT(n, id);
 }
 
-void BindFrameBuffer(int id) { ClearDeferred(); glBindFramebufferEXT(GL_FRAMEBUFFER, id); GDDebug("BindFrameBuffer ", id); }
+void BindFrameBuffer(int id) { ClearDeferred(); glBindFramebufferEXT(GL_FRAMEBUFFER, id); GDDebug("BindFrameBuffer ", id, " default_fb=", default_framebuffer); }
 void FrameBufferTexture(int id) { glFramebufferTexture2DEXT(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, id, 0); }
 void FrameBufferDepthTexture(int id) { glFramebufferRenderbufferEXT(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, id); }
 int CheckFrameBufferStatus() { return glCheckFramebufferStatusEXT(GL_FRAMEBUFFER); }

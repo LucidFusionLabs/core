@@ -29,6 +29,7 @@
 #import <AVFoundation/AVFoundation.h>
 
 #include "core/app/app.h"
+#include "core/app/framework/apple_common.h"
 #include "core/app/framework/ios_common.h"
 
 namespace LFL {
@@ -90,6 +91,18 @@ static const char* const* ios_argv = 0;
     CGRect wbounds = [[UIScreen mainScreen] bounds];
     scale = [[UIScreen mainScreen] scale];
     self.window = [[[UIWindow alloc] initWithFrame:wbounds] autorelease];
+    if (_title) {
+      _title_bar = [[UINavigationBar alloc] initWithFrame:CGRectMake(0, 0, CGRectGetWidth(wbounds), 44)];
+      [_title_bar setTintColor:[UIColor whiteColor]];
+      UINavigationItem *item = [[UINavigationItem alloc] init];
+      item.title = LFL::MakeNSString(LFL::screen->caption);
+      [_title_bar setItems:@[item]];
+      [window addSubview: _title_bar];
+
+      int title_height = _title_bar.bounds.size.height;
+      wbounds.origin.y    += title_height;
+      wbounds.size.height -= title_height;
+    }
 
     EAGLContext *context = [[EAGLContext alloc] initWithAPI:kEAGLRenderingAPIOpenGLES2];
     [EAGLContext setCurrentContext:context];
@@ -98,8 +111,8 @@ static const char* const* ios_argv = 0;
     self.view.delegate = self;
     self.view.enableSetNeedsDisplay = TRUE;
     self.view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight |
-      UIViewAutoresizingFlexibleBottomMargin | UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleRightMargin | 
-      UIViewAutoresizingFlexibleTopMargin | UIViewAutoresizingFlexibleBottomMargin;
+      UIViewAutoresizingFlexibleBottomMargin | UIViewAutoresizingFlexibleLeftMargin |
+      UIViewAutoresizingFlexibleRightMargin | UIViewAutoresizingFlexibleTopMargin;
     [context release];
 
     self.controller = [[[LFViewController alloc] initWithNibName:nil bundle:nil] autorelease];
@@ -155,7 +168,8 @@ static const char* const* ios_argv = 0;
 
   - (void)glkView:(GLKView *)v drawInRect:(CGRect)rect {
     if (!_screen_width || !_screen_height) return;
-    if (LFL::screen->width != _screen_width || LFL::screen->height != _screen_height)
+    if (LFL::screen->y != _screen_y ||
+        LFL::screen->width != _screen_width || LFL::screen->height != _screen_height)
       WindowReshaped(0, _screen_y, _screen_width, _screen_height);
 
     LFAppFrame(true); 
@@ -379,8 +393,8 @@ static const char* const* ios_argv = 0;
   }
   
   - (void)viewDidLayoutSubviews {
-    CGFloat s     = [uiapp getScale];
-    CGRect bounds = [[UIScreen mainScreen] bounds];
+    CGFloat s = [uiapp getScale];
+    CGRect bounds = self.view.bounds;
     int y = overlap_keyboard ? 0 : (s * [self getKeyboardToolbarFrame].size.height);
     uiapp.screen_y      = y;
     uiapp.screen_width  = s * bounds.size.width;
@@ -522,13 +536,19 @@ void Application::SetAutoRotateOrientation(bool v) { [LFUIApplication sharedAppD
 int Application::SetMultisample(bool v) { return [[LFUIApplication sharedAppDelegate] updateGLKMultisample:v]; }
 int Application::SetExtraScale(bool v) { return [[LFUIApplication sharedAppDelegate] updateScale:v]; }
 void Application::SetDownScale(bool v) { [[LFUIApplication sharedAppDelegate] downScale:v]; }
-void Application::SetTitleBar(bool v) {}
+void Application::SetTitleBar(bool v) { [LFUIApplication sharedAppDelegate].title = true; }
 void Application::SetKeepScreenOn(bool v) {}
 
 void Window::SetResizeIncrements(float x, float y) {}
 void Window::SetTransparency(float v) {}
-void Window::SetCaption(const string &v) {}
 bool Window::Reshape(int w, int h) { return false; }
+
+void Window::SetCaption(const string &v) {
+  auto title_bar = [LFUIApplication sharedAppDelegate].title_bar;
+  if (!title_bar) return;
+  UINavigationItem *newItem = title_bar.items[0];
+  newItem.title = MakeNSString(v);
+}
 
 bool Video::CreateWindow(Window *w) { return false; }
 void Video::StartWindow(Window *w) {

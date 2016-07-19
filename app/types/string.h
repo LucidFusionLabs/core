@@ -157,6 +157,11 @@ template <class X> struct ArrayPiece {
   void pop_front(int n=1) { if (n > len) FATALf("%d > %d", n, len); len -= n; buf += n; }
 };
 
+struct BlobPiece : public ArrayPiece<char> {
+  using ArrayPiece::ArrayPiece; 
+  string str() const { return this->buf ? string(this->buf, this->len) : string(); }
+};
+
 template <class X> struct StringPieceT : public ArrayPiece<X> {
   virtual ~StringPieceT() {}
   StringPieceT() {}
@@ -832,8 +837,8 @@ struct Serializable {
 };
 
 typedef pair<unique_ptr<uint8_t, function<void(uint8_t*)>>, size_t> FlatBufferPiece;
-inline StringPiece MakeStringPiece(const FlatBufferPiece &s)
-{ return StringPiece(reinterpret_cast<const char*>(s.first.get()), s.second); }
+inline StringPiece MakeStringPiece(const FlatBufferPiece &s) { return StringPiece(reinterpret_cast<const char*>(s.first.get()), s.second); }
+inline BlobPiece   MakeBlobPiece  (const FlatBufferPiece &s) { return BlobPiece  (reinterpret_cast<const char*>(s.first.get()), s.second); }
 #ifdef LFL_FLATBUFFERS
 using flatbuffers::FlatBufferBuilder;
 template<typename T> FlatBufferPiece CreateFlatBuffer(const std::function<flatbuffers::Offset<T>(FlatBufferBuilder &fb)> &f)

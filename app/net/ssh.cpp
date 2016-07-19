@@ -33,6 +33,7 @@ struct SSHClientConnection : public Connection::Handler {
   SSHClient::ResponseCB cb;
   SSHClient::LoadPasswordCB load_password_cb;
   SSHClient::SavePasswordCB save_password_cb;
+  Callback success_cb;
   string V_C, V_S, KEXINIT_C, KEXINIT_S, H_text, session_id, integrity_c2s, integrity_s2c, decrypt_buf, host, user, pw;
   int state=0, packet_len=0, packet_MAC_len=0, MAC_len_c=0, MAC_len_s=0, encrypt_block_size=0, decrypt_block_size=0;
   unsigned sequence_number_c2s=0, sequence_number_s2c=0, password_prompts=0, userauth_fail=0;
@@ -52,7 +53,7 @@ struct SSHClientConnection : public Connection::Handler {
   int kex_method=0, hostkey_type=0, mac_prefix_c2s=0, mac_prefix_s2c=0, window_c=0, window_s=0;
   int initial_window_size=1048576, max_packet_size=32768, term_width=80, term_height=25;
 
-  SSHClientConnection(const SSHClient::ResponseCB &CB, const string &H) : cb(CB), V_C("SSH-2.0-LFL_1.0"), host(H), rand_eng(std::random_device{}()),
+  SSHClientConnection(const SSHClient::ResponseCB &CB, const string &H, const Callback &s) : cb(CB), success_cb(s), V_C("SSH-2.0-LFL_1.0"), host(H), rand_eng(std::random_device{}()),
     pty_channel(1,-1), ctx(NewBigNumContext()), K(NewBigNum()), encrypt(Crypto::CipherInit()), decrypt(Crypto::CipherInit()) {}
   virtual ~SSHClientConnection() { ClearPassword(); FreeBigNumContext(ctx); FreeBigNum(K); Crypto::CipherFree(encrypt); Crypto::CipherFree(decrypt); }
 
@@ -239,6 +240,7 @@ struct SSHClientConnection : public Connection::Handler {
         case SSH::MSG_USERAUTH_SUCCESS::ID: {
           SSHTrace(c->Name(), ": MSG_USERAUTH_SUCCESS");
           window_s = initial_window_size;
+          if (success_cb) success_cb();
           if (!loaded_pw) { if (save_password_cb) save_password_cb(host, user, pw); ClearPassword(); }
           if (!WriteCipher(c, SSH::MSG_CHANNEL_OPEN("session", pty_channel.first, initial_window_size, max_packet_size)))
             return ERRORv(-1, c->Name(), ": write");
@@ -422,10 +424,10 @@ struct SSHClientConnection : public Connection::Handler {
   }
 };
 
-Connection *SSHClient::Open(const string &hostport, const SSHClient::ResponseCB &cb, Callback *detach) { 
+Connection *SSHClient::Open(const string &hostport, const SSHClient::ResponseCB &cb, Callback *detach, Callback *success) { 
   Connection *c = app->net->tcp_client->Connect(hostport, 22, detach);
   if (!c) return 0;
-  c->handler = make_unique<SSHClientConnection>(cb, hostport);
+  c->handler = make_unique<SSHClientConnection>(cb, hostport, success ? *success : Callback());
   return c;
 }
 int  SSHClient::WriteChannelData     (Connection *c, const StringPiece &b)                     { return dynamic_cast<SSHClientConnection*>(c->handler.get())->WriteChannelData(c, b); }
