@@ -67,6 +67,7 @@ public class MainActivity extends android.app.Activity {
     public int surface_width, surface_height, egl_version;
     public int attr_listPreferredItemHeight, attr_scrollbarSize;
     public float display_density;
+    public PreferenceFragment preferences;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -302,6 +303,13 @@ public class MainActivity extends android.app.Activity {
         return ret;
     }
 
+    public boolean openPreferences() {
+        if (preferences == null) return false;
+        getFragmentManager().beginTransaction()
+            .replace(R.id.content_frame, preferences).addToBackStack("Preferences").commit();
+        return true;
+    }
+
     public void openBrowser(String url) {
         final Intent intent = new Intent(Intent.ACTION_VIEW).setData(Uri.parse(url));
         startActivity(intent);
@@ -335,14 +343,14 @@ public class MainActivity extends android.app.Activity {
         app_widgets.toolbars.add(null);
         return app_widgets.toolbar_specs.size() - 1;
     }
-
+    
     public void showToolbar(final int id) {
         final MainActivity self = this;
         runOnUiThread(new Runnable() { public void run() {
             app_widgets.toolbar_bottom.add(id);
             View toolbar = app_widgets.getToolbar(self, id);
             frame_layout.addView(toolbar, new LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,
-                                                           ViewGroup.LayoutParams.WRAP_CONTENT,
+                                                           FrameLayout.LayoutParams.WRAP_CONTENT,
                                                            Gravity.BOTTOM));
         }});
     }
@@ -359,7 +367,12 @@ public class MainActivity extends android.app.Activity {
     public int addTable(final String title, final String[] k, final String[] v, final String[] w) {
         app_widgets.table_specs.add(app_widgets.new Spec(title, k, v, w));
         app_widgets.tables.add(null);
+        app_widgets.table_toolbars.add(new ArrayList<Integer>());
         return app_widgets.table_specs.size() - 1;
+    }
+
+    public void addTableToolbar(final int id, final int toolbar_id) {
+        app_widgets.table_toolbars.get(id).add(toolbar_id);
     }
 
     public void showTable(final int id, final boolean show_or_hide) {

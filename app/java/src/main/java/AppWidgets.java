@@ -13,6 +13,7 @@ import android.widget.LinearLayout;
 import android.widget.TableLayout;
 import android.widget.RelativeLayout;
 import android.widget.Button;
+import android.widget.ImageButton;
 import android.widget.EditText;
 import android.widget.TextView;
 import android.media.*;
@@ -51,6 +52,7 @@ public class AppWidgets {
     public ArrayList<Spec> table_specs = new ArrayList<Spec>();
     public ArrayList<Spec> alert_specs = new ArrayList<Spec>();
     public ArrayList<Spec> navigation_specs = new ArrayList<Spec>();
+    public ArrayList<ArrayList<Integer>> table_toolbars = new ArrayList<ArrayList<Integer>>();
 
     public ArrayList<Integer> toolbar_top = new ArrayList<Integer>();
     public ArrayList<Integer> toolbar_bottom = new ArrayList<Integer>();
@@ -116,16 +118,23 @@ public class AppWidgets {
         if (toolbars.get(id) == null) {
             Spec spec = toolbar_specs.get(id);
             LinearLayout toolbar = new LinearLayout(activity);
-            View.OnClickListener listener = new View.OnClickListener() { public void onClick(View v) {
-                Button bt = (Button)v;
+            View.OnClickListener listener = new View.OnClickListener() { public void onClick(View bt) {
                 activity.AppShellRun((String)bt.getTag());
             }};
             
             for (int i = 0; i < spec.k.length; i++) {
-                Button bt = new Button(activity);
+                View bt = null;
+                if (spec.k[i].equals("\u2699")) {
+                  ImageButton b = new ImageButton(activity);
+                  b.setImageResource(android.R.drawable.ic_menu_preferences);
+                  bt = b;
+                } else {
+                  Button b = new Button(activity);
+                  b.setText(spec.k[i]);
+                  bt = b;
+                }
                 bt.setId(i);
                 bt.setTag(spec.v[i]);
-                bt.setText(spec.k[i]);
                 bt.setOnClickListener(listener);
                 bt.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f)); 
                 toolbar.addView(bt);
@@ -138,7 +147,9 @@ public class AppWidgets {
     ListViewFragment getTable(final MainActivity activity, int id) {
         if (tables.get(id) == null) {
             Spec spec = table_specs.get(id);
-            ListViewFragment frag = new ListViewFragment(activity, spec.title, spec.k, spec.v, spec.w);
+            ArrayList<Integer> toolbars = table_toolbars.get(id);
+            ListViewFragment frag = new ListViewFragment(activity, spec.title, spec.k, spec.v, spec.w,
+                                                         toolbars.size() > 0 ? getToolbar(activity, toolbars.get(0)) : null);
             tables.set(id, frag);
         }
         return tables.get(id);

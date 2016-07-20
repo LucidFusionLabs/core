@@ -481,6 +481,14 @@ void Application::OpenSystemBrowser(const string &url_text) {
   [url_string release];
 }
 
+bool Application::OpenSystemAppPreferences() {
+  bool can_open_settings = &UIApplicationOpenSettingsURLString != NULL;
+  if (!can_open_settings) return false;
+  NSURL *url = [NSURL URLWithString:UIApplicationOpenSettingsURLString];
+  [[UIApplication sharedApplication] openURL:url];
+  return true;
+}
+
 void Application::SavePassword(const string &h, const string &u, const string &pw_in) {
   NSString *k = [[NSString stringWithFormat:@"%s://%s@%s", name.c_str(), u.c_str(), h.c_str()] retain];
   NSMutableString *pw = [[NSMutableString stringWithUTF8String: pw_in.c_str()] retain];

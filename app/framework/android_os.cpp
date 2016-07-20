@@ -202,7 +202,11 @@ SystemTableWidget::SystemTableWidget(const string &title, const vector<MenuItem>
                                         tuple_get<0>(kvw), tuple_get<1>(kvw), tuple_get<2>(kvw)));
 }
 
-void SystemTableWidget::AddToolbar(SystemToolbarWidget*) {}
+void SystemTableWidget::AddToolbar(SystemToolbarWidget *toolbar) {
+  static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "addTableToolbar", "(II)V"));
+  jni->env->CallVoidMethod(jni->activity, mid, jint(impl.v), jint(toolbar->impl.v));
+}
+
 void SystemTableWidget::Show(bool show_or_hide) {
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->activity_class, "showTable", "(IZ)V"));
@@ -258,6 +262,11 @@ string Application::GetSystemDeviceName() {
   static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "getModelName", "()Ljava/lang/String;"));
   jstring ret = (jstring)jni->env->CallObjectMethod(jni->activity, mid);
   return jni->GetJString(ret);
+}
+
+bool Application::OpenSystemAppPreferences() {
+  static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "openPreferences", "()Z"));
+  return jni->env->CallBooleanMethod(jni->activity, mid);
 }
 
 void Application::SavePassword(const string &h, const string &u, const string &pw) {}

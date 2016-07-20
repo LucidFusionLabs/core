@@ -629,6 +629,7 @@ struct Application : public ::LFApp {
   void ShowSystemContextMenu(const vector<MenuItem> &items);
   void ShowSystemFontChooser(const FontDesc &cur_font, const string &choose_cmd);
   void ShowSystemFileChooser(bool files, bool dirs, bool multi, const string &choose_cmd);
+  bool OpenSystemAppPreferences();
 
   void OpenTouchKeyboard();
   void CloseTouchKeyboard();
