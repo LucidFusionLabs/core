@@ -227,6 +227,26 @@ if(LFL_OPENSSL)
   elseif(LFL_IOS)
     set(OPENSSL_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/ios-openssl/include PARENT_SCOPE)
     set(OPENSSL_LIB ${CMAKE_CURRENT_SOURCE_DIR}/ios-openssl/lib/libssl.a ${CMAKE_CURRENT_SOURCE_DIR}/ios-openssl/lib/libcrypto.a PARENT_SCOPE)
+  elseif(LFL_APPLE)
+    set(OPENSSL_CONFIGURE_ENV ${CONFIGURE_ENV} PATH=$ENV{PATH}:/opt/X11/bin)
+    ExternalProject_Add(openssl PREFIX openssl LOG_CONFIGURE ON LOG_BUILD ON BUILD_IN_SOURCE ON
+                        CONFIGURE_COMMAND ${CMAKE_COMMAND} -E env ${OPENSSL_CONFIGURE_ENV}
+                        <SOURCE_DIR>/Configure darwin64-x86_64-cc shared enable-ec_nistp_64_gcc_128 no-ssl2 no-ssl3 no-comp $ENV{CFLAGS} --prefix=<INSTALL_DIR>
+                        COMMAND ${CMAKE_COMMAND} -E env ${OPENSSL_CONFIGURE_ENV} make depend
+                        DOWNLOAD_COMMAND rm -rf openssl
+                        COMMAND cp -R ${CMAKE_CURRENT_SOURCE_DIR}/openssl openssl)
+    ExternalProject_Get_Property(openssl INSTALL_DIR)
+
+    add_library(libssl IMPORTED SHARED GLOBAL)
+    add_dependencies(libssl openssl)
+    set_property(TARGET libssl PROPERTY IMPORTED_LOCATION ${INSTALL_DIR}/lib/libssl.a)
+
+    add_library(libcrypto IMPORTED SHARED GLOBAL)
+    add_dependencies(libcrypto openssl)
+    set_property(TARGET libcrypto PROPERTY IMPORTED_LOCATION ${INSTALL_DIR}/lib/libcrypto.a)
+
+    set(OPENSSL_INCLUDE ${INSTALL_DIR}/include PARENT_SCOPE)
+    set(OPENSSL_LIB libssl libcrypto PARENT_SCOPE)
   else()
     set(OPENSSL_LIB -lssl -lcrypto PARENT_SCOPE)
   endif()

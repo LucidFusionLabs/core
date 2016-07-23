@@ -2,6 +2,7 @@
 
 lfl_add_target(app_null_crypto STATIC_LIBRARY SOURCES null_crypto.cpp)
 lfl_add_target(app_null_dh STATIC_LIBRARY SOURCES null_dh.cpp)
+lfl_add_target(app_null_pk STATIC_LIBRARY SOURCES null_pk.cpp)
 
 if(LFL_APPLE)
   lfl_add_target(app_commoncrypto_crypto STATIC_LIBRARY SOURCES commoncrypto_crypto.cpp)
@@ -12,5 +13,8 @@ if(LFL_OPENSSL)
                  INCLUDE_DIRECTORIES ${OPENSSL_INCLUDE} LINK_LIBRARIES ${OPENSSL_LIB})
 
   lfl_add_target(app_openssl_dh STATIC_LIBRARY SOURCES openssl_dh.cpp
+                 INCLUDE_DIRECTORIES ${OPENSSL_INCLUDE} LINK_LIBRARIES ${OPENSSL_LIB})
+
+  lfl_add_target(app_openssl_pk STATIC_LIBRARY SOURCES openssl_pk.cpp
                  INCLUDE_DIRECTORIES ${OPENSSL_INCLUDE} LINK_LIBRARIES ${OPENSSL_LIB})
 endif()

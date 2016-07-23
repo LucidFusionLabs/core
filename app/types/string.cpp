@@ -685,6 +685,18 @@ template <class X> int ChompNewlineLength(const X *line, int len) {
   return ret;
 }
 
+const char *IncrementNewline(const char *in) {
+  if (*in == '\r') in++;
+  if (*in == '\n') in++;
+  return in;
+}
+
+const char *DecrementNewline(const char *in) {
+  if (*in == '\n') in--;
+  if (*in == '\r') in--;
+  return in;
+}
+
 const char *Default(const char *in, const char *default_in) { return (in && in[0]) ? in : default_in; }
 
 const char *ParseProtocol(const char *url, string *protO) {

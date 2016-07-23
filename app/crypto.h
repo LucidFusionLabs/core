@@ -74,6 +74,8 @@ void ECDSASigFree(ECDSASig);
 int RSAVerify(const StringPiece &digest, string *out, RSAKey rsa_key);
 int DSAVerify(const StringPiece &digest, DSASig dsa_sig, DSAKey dsa_key);
 int ECDSAVerify(const StringPiece &digest, ECDSASig dsa_sig, ECPair ecdsa_keypair);
+int RSASign(const StringPiece &digest, string *out, RSAKey rsa_key);
+DSASig DSASign(const StringPiece &digest, DSAKey dsa_key);
 
 struct Crypto {
   struct Cipher     : public VoidPtr      { using VoidPtr::VoidPtr; };
@@ -161,6 +163,10 @@ struct Crypto {
   static MAC MACOpen(MACAlgo, const StringPiece &key);
   static void MACUpdate(MAC, const StringPiece &in);
   static int  MACFinish(MAC, char *out, int outlen);
+
+  static bool ParsePEM(char *key, RSAKey *rsa_out, DSAKey *dsa_out, ECPair *ec_out,
+                       function<string(string)> passphrase_cb = function<string(string)>());
+  static string GetLastErrorText();
 };
 
 }; // namespace LFL

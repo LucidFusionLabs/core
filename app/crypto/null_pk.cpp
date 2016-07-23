@@ -1,5 +1,5 @@
 /*
- * $Id$
+ * $Id: camera.cpp 1330 2014-11-06 03:04:15Z justin $
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -16,11 +16,14 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "core/app/db/sqlite.h"
+#include "core/app/app.h"
+#include "core/app/crypto.h"
 
 namespace LFL {
-void SQLite::Close(SQLite::Database db) {}
-SQLite::Database SQLite::Open(const string &fn) { return 0; }
-bool SQLite::Exec(SQLite::Database db, const string&, const RowTextVisitor&) { return false; }
+void FreeECPoint(ECPoint p) { FATAL("not implemented"); }
+void FreeECPair(ECPair p) { FATAL("not implemented"); }
+int ECPointDataSize(const ECGroup g, const ECPoint p, BigNumContext x) { FATAL("not implemented"); }
+void ECPointGetData(const ECGroup g, const ECPoint p, char *out, int len, BigNumContext x) { FATAL("not implemented") }
+void ECPointSetData(const ECGroup g, ECPoint v, const StringPiece &data) { FATAL("not implemented"); }
 
 }; // namespace LFL

@@ -205,6 +205,7 @@ using LFL_STL11_NAMESPACE::chrono::duration_cast;
 using LFL_STL11_NAMESPACE::chrono::system_clock;
 using LFL_STL11_NAMESPACE::chrono::steady_clock;
 using LFL_STL11_NAMESPACE::chrono::high_resolution_clock;
+using LFL_STL11_NAMESPACE::remove_reference;
 using LFL_STL11_NAMESPACE::enable_if;
 using LFL_STL11_NAMESPACE::is_integral;
 using LFL_STL11_NAMESPACE::is_floating_point;
@@ -686,6 +687,7 @@ struct SystemAlertWidget {
   virtual ~SystemAlertWidget();
   SystemAlertWidget(const StringPairVec &items);
   void Show(const string &arg);
+  string RunModal(const string &arg);
 };
 
 struct SystemPanelWidget {

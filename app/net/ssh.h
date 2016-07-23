@@ -21,12 +21,25 @@
 namespace LFL {
 
 struct SSHClient {
+  struct Identity {
+    RSAKey rsa;
+    DSAKey dsa;
+    ECPair ec;
+    virtual ~Identity() {
+      if (rsa) RSAKeyFree(rsa);
+      if (dsa) DSAKeyFree(dsa);
+      if (ec)  FreeECPair(ec);
+    }
+  };
+
   typedef function<void(Connection*, const StringPiece&)> ResponseCB;
   typedef function<bool(const string&, const string&,       string*)> LoadPasswordCB;
   typedef function<void(const string&, const string&, const string&)> SavePasswordCB;
-  static Connection *Open(const string &hostport, const ResponseCB &cb, Callback *detach=0, Callback *success=0);
+  static Connection *Open(const string &hostport, const ResponseCB &cb,
+                          Callback *detach=0, Callback *success=0);
 
   static void SetUser(Connection *c, const string &user);
+  static void SetIdentity(Connection *c, shared_ptr<Identity>);
   static void SetPasswordCB(Connection *c, const LoadPasswordCB&, const SavePasswordCB&);
   static int SetTerminalWindowSize(Connection *c, int w, int h);
   static int WriteChannelData(Connection *c, const StringPiece &b);
@@ -46,12 +59,15 @@ struct SSH {
                                     Crypto::DiffieHellman*, Crypto::EllipticCurveDiffieHellman*);
   static int VerifyHostKey(const string &H_text, int hostkey_type, const StringPiece &key, const StringPiece &sig);
   static string DeriveKey(Crypto::DigestAlgo algo, const string &session_id, const string &H_text, BigNum K, char ID, int bytes);
+  static string DeriveChallenge(Crypto::DigestAlgo algo, const StringPiece &session_id, const StringPiece &user_name,
+                                const StringPiece &service_name, const StringPiece &method_name, const StringPiece &algo_name, const StringPiece &secret);
   static string MAC(Crypto::MACAlgo algo, int MAC_len, const StringPiece &m, int seq, const string &k, int prefix=0);
 
   struct Key {
     enum { ECDSA_SHA2_NISTP256=1, RSA=2, DSS=3, End=3 };
     static int Id(const string &n);
     static const char *Name(int id);
+    static bool Supported(int);
     static string PreferenceCSV(int start_after=0);
     static bool PreferenceIntersect(const StringPiece &pref_csv, int *out, int start_after=0);
   };
@@ -60,6 +76,7 @@ struct SSH {
     enum { ECDH_SHA2_NISTP256=1, ECDH_SHA2_NISTP384=2, ECDH_SHA2_NISTP521=3, DHGEX_SHA256=4, DHGEX_SHA1=5, DH14_SHA1=6, DH1_SHA1=7, End=7 };
     static int Id(const string &n);
     static const char *Name(int id);
+    static bool Supported(int);
     static string PreferenceCSV(int start_after=0);
     static bool PreferenceIntersect(const StringPiece &pref_csv, int *out, int start_after=0);
     static bool EllipticCurveDiffieHellman(int id) { return id==ECDH_SHA2_NISTP256 || id==ECDH_SHA2_NISTP384 || id==ECDH_SHA2_NISTP521; }
@@ -71,6 +88,7 @@ struct SSH {
     enum { AES128_CTR=1, AES128_CBC=2, TripDES_CBC=3, Blowfish_CBC=4, RC4=5, End=5 };
     static int Id(const string &n);
     static const char *Name(int id);
+    static bool Supported(int);
     static Crypto::CipherAlgo Algo(int id, int *blocksize=0);
     static string PreferenceCSV(int start_after=0);
     static bool PreferenceIntersect(const StringPiece &pref_csv, int *out, int start_after=0);
@@ -80,6 +98,7 @@ struct SSH {
     enum { MD5=1, SHA1=2, SHA1_96=3, MD5_96=4, SHA256=5, SHA256_96=6, SHA512=7, SHA512_96=8, End=8 };
     static int Id(const string &n);
     static const char *Name(int id);
+    static bool Supported(int);
     static Crypto::MACAlgo Algo(int id, int *prefix_bytes=0);
     static string PreferenceCSV(int start_after=0);
     static bool PreferenceIntersect(const StringPiece &pref_csv, int *out, int start_after=0);
@@ -412,45 +431,46 @@ struct SSH {
     int In(const Serializable::Stream *i) { return 0; }
   };
 
-  struct DSSKey {
+  struct DSSKey : public LFL::Serializable {
     StringPiece format_id;
     BigNum p, q, g, y;
-    DSSKey(BigNum P, BigNum Q, BigNum G, BigNum Y) : p(P), q(Q), g(G), y(Y) {}
+    DSSKey(BigNum P, BigNum Q, BigNum G, BigNum Y) : Serializable(0), format_id("ssh-dss"), p(P), q(Q), g(G), y(Y) {}
 
-    int HeaderSize() const { return 4*4; }
+    int HeaderSize() const { return 5*4; }
     int Size() const { return HeaderSize() + format_id.size() + BigNumSize(p) + BigNumSize(q) + BigNumSize(g) + BigNumSize(y); }
-    void Out(Serializable::Stream *o) const {}
+    void Out(Serializable::Stream *o) const;
     int In(const Serializable::Stream *i);
   };
 
-  struct DSSSignature {
+  struct DSSSignature : public LFL::Serializable {
     StringPiece format_id;
     BigNum r, s;
-    DSSSignature(BigNum R, BigNum S) : r(R), s(S) {}
+    DSSSignature(BigNum R, BigNum S) : Serializable(0), r(R), s(S), format_id("ssh-dss") {}
 
     int HeaderSize() const { return 4*2 + 7 + 20*2; }
     int Size() const { return HeaderSize(); }
-    void Out(Serializable::Stream *o) const {}
+    void Out(Serializable::Stream *o) const;
     int In(const Serializable::Stream *i);
   };
 
-  struct RSAKey {
+  struct RSAKey : public LFL::Serializable {
     StringPiece format_id;
     BigNum e, n;
-    RSAKey(BigNum E, BigNum N) : e(E), n(N) {}
+    RSAKey(BigNum E, BigNum N) : Serializable(0), format_id("ssh-rsa"), e(E), n(N) {}
 
-    int HeaderSize() const { return 2*4; }
+    int HeaderSize() const { return 3*4; }
     int Size() const { return HeaderSize() + format_id.size() + BigNumSize(e) + BigNumSize(n); }
-    void Out(Serializable::Stream *o) const {}
+    void Out(Serializable::Stream *o) const;
     int In(const Serializable::Stream *i);
   };
 
-  struct RSASignature {
+  struct RSASignature : public LFL::Serializable {
     StringPiece format_id, sig;
+    RSASignature(const StringPiece &s=StringPiece()) : Serializable(0), format_id("ssh-rsa"), sig(s) {}
 
     int HeaderSize() const { return 4*2 + 7; }
     int Size() const { return HeaderSize() + sig.size(); }
-    void Out(Serializable::Stream *o) const {}
+    void Out(Serializable::Stream *o) const;
     int In(const Serializable::Stream *i);
   };
 

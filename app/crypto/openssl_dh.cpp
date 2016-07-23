@@ -26,6 +26,8 @@
 #include "openssl/rsa.h"
 #include "openssl/dsa.h"
 #include "openssl/ecdsa.h"
+#include "openssl/pem.h"
+#include "openssl/err.h"
 
 namespace LFL {
 BigNum        NewBigNum       () { return BN_new(); }
@@ -39,46 +41,6 @@ BigNum BigNumSetData(BigNum v, const StringPiece &data) { BN_bin2bn(MakeUnsigned
 BigNum BigNumRand(BigNum v, int bits, int top, int bottom) { BN_rand(FromVoid<BIGNUM*>(v), bits, top, bottom); return v; }
 int BigNumDataSize(BigNum v) { return BN_num_bytes(FromVoid<BIGNUM*>(v)); }
 int BigNumSignificantBits(BigNum v) { return BN_num_bits(FromVoid<BIGNUM*>(v)); }
-ECPoint NewECPoint(ECGroup g) { return EC_POINT_new(FromVoid<EC_GROUP*>(g)); }
-void FreeECPoint(ECPoint p) { if (p) EC_POINT_free(FromVoid<EC_POINT*>(p)); }
-void FreeECPair(ECPair p) { if (p) EC_KEY_free(FromVoid<EC_KEY*>(p)); }
-ECGroup GetECPairGroup (ECPair p) { return const_cast<EC_GROUP*>(EC_KEY_get0_group(FromVoid<EC_KEY*>(p))); }
-ECPoint GetECPairPubKey(ECPair p) { return const_cast<EC_POINT*>(EC_KEY_get0_public_key(FromVoid<EC_KEY*>(p))); }
-bool SetECPairPubKey(ECPair p, ECPoint k) { return EC_KEY_set_public_key(FromVoid<EC_KEY*>(p), FromVoid<EC_POINT*>(k)); }
-int ECPointDataSize(ECGroup g, ECPoint p, BigNumContext x) { return EC_POINT_point2oct(FromVoid<EC_GROUP*>(g), FromVoid<EC_POINT*>(p), POINT_CONVERSION_UNCOMPRESSED, 0, 0, FromVoid<BN_CTX*>(x)); }
-void ECPointGetData(ECGroup g, ECPoint p, char *out, int len, BigNumContext x) { EC_POINT_point2oct(FromVoid<EC_GROUP*>(g), FromVoid<EC_POINT*>(p), POINT_CONVERSION_UNCOMPRESSED, MakeUnsigned(out), len, FromVoid<BN_CTX*>(x)); }
-void ECPointSetData(ECGroup g, ECPoint v, const StringPiece &data) { EC_POINT_oct2point(FromVoid<EC_GROUP*>(g), FromVoid<EC_POINT*>(v), MakeUnsigned(data.buf), data.len, 0); }
-
-RSAKey NewRSAPubKey() { RSA *v=RSA_new(); v->e=FromVoid<BIGNUM*>(NewBigNum()); v->n=FromVoid<BIGNUM*>(NewBigNum()); return RSAKey{v}; }
-DSAKey NewDSAPubKey() { DSA *v=DSA_new(); v->p=FromVoid<BIGNUM*>(NewBigNum()); v->q=FromVoid<BIGNUM*>(NewBigNum()); v->g=FromVoid<BIGNUM*>(NewBigNum()); v->pub_key=FromVoid<BIGNUM*>(NewBigNum()); return DSAKey{v}; }
-DSASig NewDSASig() { DSA_SIG *v=DSA_SIG_new(); v->r=FromVoid<BIGNUM*>(NewBigNum()); v->s=FromVoid<BIGNUM*>(NewBigNum()); return DSASig{v}; }
-ECDSASig NewECDSASig() { return ECDSASig{ECDSA_SIG_new()}; }
-BigNum GetRSAKeyE(RSAKey k) { return FromVoid<RSA*>(k)->e; }
-BigNum GetRSAKeyN(RSAKey k) { return FromVoid<RSA*>(k)->n; }
-BigNum GetDSAKeyP(DSAKey k) { return FromVoid<DSA*>(k)->p; }
-BigNum GetDSAKeyQ(DSAKey k) { return FromVoid<DSA*>(k)->q; }
-BigNum GetDSAKeyG(DSAKey k) { return FromVoid<DSA*>(k)->g; }
-BigNum GetDSAKeyK(DSAKey k) { return FromVoid<DSA*>(k)->pub_key; }
-BigNum GetDSASigR(DSASig k) { return FromVoid<DSA_SIG*>(k)->r; }
-BigNum GetDSASigS(DSASig k) { return FromVoid<DSA_SIG*>(k)->s; }
-BigNum GetECDSASigR(ECDSASig k) { return FromVoid<ECDSA_SIG*>(k)->r; }
-BigNum GetECDSASigS(ECDSASig k) { return FromVoid<ECDSA_SIG*>(k)->s; }
-void RSAKeyFree(RSAKey k) { RSA_free(FromVoid<RSA*>(k)); }
-void DSAKeyFree(DSAKey k) { DSA_free(FromVoid<DSA*>(k)); }
-void DSASigFree(DSASig s) { DSA_SIG_free(FromVoid<DSA_SIG*>(s)); }
-void ECDSASigFree(ECDSASig s) { ECDSA_SIG_free(FromVoid<ECDSA_SIG*>(s)); }
-int RSAVerify(const StringPiece &digest, string *out, RSAKey rsa_key) {
-  return RSA_verify(NID_sha1, MakeUnsigned(digest.data()), digest.size(),
-                    MakeUnsigned(&(*out)[0]), out->size(), FromVoid<RSA*>(rsa_key));
-}
-int DSAVerify(const StringPiece &digest, DSASig dsa_sig, DSAKey dsa_key) {
-  return DSA_do_verify(MakeUnsigned(digest.data()), digest.size(),
-                       FromVoid<DSA_SIG*>(dsa_sig), FromVoid<DSA*>(dsa_key));
-}
-int ECDSAVerify(const StringPiece &digest, ECDSASig ecdsa_sig, ECPair ecdsa_keypair) {
-  return ECDSA_do_verify(MakeUnsigned(digest.data()), digest.size(),
-                         FromVoid<ECDSA_SIG*>(ecdsa_sig), FromVoid<EC_KEY*>(ecdsa_keypair));
-}
 
 bool Crypto::DiffieHellman::GeneratePair(int secret_bits, BigNumContext ctx) {
   x = BigNumRand(x, secret_bits, 0, -1);
@@ -126,16 +88,6 @@ BigNum Crypto::DiffieHellman::Group14Modulus(BigNum g, BigNum p, int *rand_num_b
   BigNumSetValue(g, 2);
   *rand_num_bits = 224;
   return BigNumSetData(p, StringPiece(buf, sizeof(buf)-1));
-}
-
-ECDef Crypto::EllipticCurve::NISTP256() { return Void(NID_X9_62_prime256v1); };
-ECDef Crypto::EllipticCurve::NISTP384() { return Void(NID_secp384r1); };
-ECDef Crypto::EllipticCurve::NISTP521() { return Void(NID_secp521r1); };
-
-ECPair Crypto::EllipticCurve::NewPair(ECDef id, bool generate) {
-  EC_KEY *pair = EC_KEY_new_by_curve_name(long(id));
-  if (generate && pair && EC_KEY_generate_key(pair) != 1) { EC_KEY_free(pair); return NULL; }
-  return ECPair(pair);
 }
 
 bool Crypto::EllipticCurveDiffieHellman::GeneratePair(ECDef curve, BigNumContext ctx) {

@@ -34,6 +34,7 @@ struct SSHClientConnection : public Connection::Handler {
   SSHClient::LoadPasswordCB load_password_cb;
   SSHClient::SavePasswordCB save_password_cb;
   Callback success_cb;
+  shared_ptr<SSHClient::Identity> identity;
   string V_C, V_S, KEXINIT_C, KEXINIT_S, H_text, session_id, integrity_c2s, integrity_s2c, decrypt_buf, host, user, pw;
   int state=0, packet_len=0, packet_MAC_len=0, MAC_len_c=0, MAC_len_s=0, encrypt_block_size=0, decrypt_block_size=0;
   unsigned sequence_number_c2s=0, sequence_number_s2c=0, password_prompts=0, userauth_fail=0;
@@ -150,7 +151,7 @@ struct SSHClientConnection : public Connection::Handler {
               case SSH::KEX::ECDH_SHA2_NISTP521: curve_id=Crypto::EllipticCurve::NISTP521(); kex_hash=Crypto::DigestAlgos::SHA512(); break;
               default:                           return ERRORv(-1, c->Name(), ": ecdh curve");
             }
-            if (!ecdh.GeneratePair(curve_id, ctx)) return ERRORv(-1, c->Name(), ": generate ecdh key");
+            if (!ecdh.GeneratePair(curve_id, ctx)) return ERRORv(-1, c->Name(), ": generate ecdh key(", kex_method, "): ", Crypto::GetLastErrorText());
             if (!WriteClearOrEncrypted(c, SSH::MSG_KEX_ECDH_INIT(ecdh.c_text))) return ERRORv(-1, c->Name(), ": write");
 
           } else if (SSH::KEX::DiffieHellmanGroupExchange(kex_method)) {
@@ -223,6 +224,29 @@ struct SSHClientConnection : public Connection::Handler {
 
         case SSH::MSG_SERVICE_ACCEPT::ID: {
           SSHTrace(c->Name(), ": MSG_SERVICE_ACCEPT");
+
+          if (!identity) { /**/ }
+          else if (identity->rsa) {
+            string sig, pubkey = SSH::RSAKey(GetRSAKeyE(identity->rsa), GetRSAKeyN(identity->rsa)).ToString();
+            string challenge = SSH::DeriveChallenge(Crypto::DigestAlgos::SHA1(), session_id, user, "ssh-connection", "publickey", "ssh-rsa", pubkey);
+            if (RSASign(challenge, &sig, identity->rsa) != 1) { ERROR("RSASign failed: ", Crypto::GetLastErrorText()); break; }
+            if (!WriteCipher(c, SSH::MSG_USERAUTH_REQUEST(user, "ssh-connection", "publickey", "ssh-rsa", pubkey,
+                                                          SSH::RSASignature(sig).ToString())))
+              return ERRORv(-1, c->Name(), ": write");
+            break;
+          } else if (identity->dsa) {
+            string pubkey = SSH::DSSKey(GetDSAKeyP(identity->dsa), GetDSAKeyQ(identity->dsa),
+                                        GetDSAKeyG(identity->dsa), GetDSAKeyK(identity->dsa)).ToString();
+            string challenge = SSH::DeriveChallenge(Crypto::DigestAlgos::SHA1(), session_id, user, "ssh-connection", "publickey", "ssh-dss", pubkey);
+            DSASig dsa_sig = DSASign(challenge, identity->dsa);
+            if (!dsa_sig) { ERROR("DSASign failed: ", Crypto::GetLastErrorText()); break; }
+            string sig = SSH::DSSSignature(GetDSASigR(dsa_sig), GetDSASigS(dsa_sig)).ToString();
+            DSASigFree(dsa_sig);
+            if (!WriteCipher(c, SSH::MSG_USERAUTH_REQUEST(user, "ssh-connection", "publickey", "ssh-dss", pubkey, sig)))
+              return ERRORv(-1, c->Name(), ": write");
+            break;
+          }
+
           if (!WriteCipher(c, SSH::MSG_USERAUTH_REQUEST(user, "ssh-connection", "keyboard-interactive", "", "", "")))
             return ERRORv(-1, c->Name(), ": write");
         } break;
@@ -430,9 +454,11 @@ Connection *SSHClient::Open(const string &hostport, const SSHClient::ResponseCB 
   c->handler = make_unique<SSHClientConnection>(cb, hostport, success ? *success : Callback());
   return c;
 }
+
 int  SSHClient::WriteChannelData     (Connection *c, const StringPiece &b)                     { return dynamic_cast<SSHClientConnection*>(c->handler.get())->WriteChannelData(c, b); }
 int  SSHClient::SetTerminalWindowSize(Connection *c, int w, int h)                             { return dynamic_cast<SSHClientConnection*>(c->handler.get())->SetTerminalWindowSize(c, w, h); }
 void SSHClient::SetUser              (Connection *c, const string &user)                       { dynamic_cast<SSHClientConnection*>(c->handler.get())->user = user; }
+void SSHClient::SetIdentity          (Connection *c, shared_ptr<Identity> identity)            { dynamic_cast<SSHClientConnection*>(c->handler.get())->identity = identity; }
 void SSHClient::SetPasswordCB(Connection *c, const LoadPasswordCB &L, const SavePasswordCB &S) { dynamic_cast<SSHClientConnection*>(c->handler.get())->SetPasswordCB(L, S); }
 
 int SSH::BinaryPacketLength(const char *b, unsigned char *padding, unsigned char *id) {
@@ -570,6 +596,24 @@ string SSH::DeriveKey(Crypto::DigestAlgo algo, const string &session_id, const s
   return ret;
 }
 
+string SSH::DeriveChallenge(Crypto::DigestAlgo algo, const StringPiece &session_id, const StringPiece &user_name,
+                            const StringPiece &service_name, const StringPiece &method_name, const StringPiece &algo_name, const StringPiece &secret) {
+  Crypto::Digest digest = Crypto::DigestOpen(algo);
+  UpdateDigest(digest, session_id);
+
+  unsigned char c = MSG_USERAUTH_REQUEST::ID;
+  Crypto::DigestUpdate(digest, StringPiece(MakeSigned(&c), 1));
+  UpdateDigest(digest, user_name);
+  UpdateDigest(digest, service_name);
+  UpdateDigest(digest, method_name);
+
+  c = 1;
+  Crypto::DigestUpdate(digest, StringPiece(MakeSigned(&c), 1));
+  UpdateDigest(digest, algo_name);
+  UpdateDigest(digest, secret);
+  return Crypto::DigestFinish(digest);
+}
+
 string SSH::MAC(Crypto::MACAlgo algo, int MAC_len, const StringPiece &m, int seq, const string &k, int prefix) {
   char buf[4];
   Serializable::MutableStream(buf, 4).Htonl(seq);
@@ -587,15 +631,20 @@ bool SSH::KEX   ::PreferenceIntersect(const StringPiece &v, int *out, int po) { 
 bool SSH::MAC   ::PreferenceIntersect(const StringPiece &v, int *out, int po) { return (*out = Id(FirstMatchCSV(v, PreferenceCSV(po)))); }
 bool SSH::Cipher::PreferenceIntersect(const StringPiece &v, int *out, int po) { return (*out = Id(FirstMatchCSV(v, PreferenceCSV(po)))); }
 
-string SSH::Key   ::PreferenceCSV(int o) { static string v; ONCE({ for (int i=1+o; i<=End; ++i) StrAppendCSV(&v, Name(i)); }); return v; }
-string SSH::KEX   ::PreferenceCSV(int o) { static string v; ONCE({ for (int i=1+o; i<=End; ++i) StrAppendCSV(&v, Name(i)); }); return v; }
-string SSH::Cipher::PreferenceCSV(int o) { static string v; ONCE({ for (int i=1+o; i<=End; ++i) StrAppendCSV(&v, Name(i)); }); return v; }
-string SSH::MAC   ::PreferenceCSV(int o) { static string v; ONCE({ for (int i=1+o; i<=End; ++i) StrAppendCSV(&v, Name(i)); }); return v; }
+string SSH::Key   ::PreferenceCSV(int o) { static string v; ONCE({ for (int i=1+o; i<=End; ++i) if (Supported(i)) StrAppendCSV(&v, Name(i)); }); return v; }
+string SSH::KEX   ::PreferenceCSV(int o) { static string v; ONCE({ for (int i=1+o; i<=End; ++i) if (Supported(i)) StrAppendCSV(&v, Name(i)); }); return v; }
+string SSH::Cipher::PreferenceCSV(int o) { static string v; ONCE({ for (int i=1+o; i<=End; ++i) if (Supported(i)) StrAppendCSV(&v, Name(i)); }); return v; }
+string SSH::MAC   ::PreferenceCSV(int o) { static string v; ONCE({ for (int i=1+o; i<=End; ++i) if (Supported(i)) StrAppendCSV(&v, Name(i)); }); return v; }
 
 int SSH::Key   ::Id(const string &n) { static unordered_map<string, int> m; ONCE({ for (int i=1; i<=End; ++i) m[Name(i)] = i; }); return FindOrDefault(m, n, 0); }
 int SSH::KEX   ::Id(const string &n) { static unordered_map<string, int> m; ONCE({ for (int i=1; i<=End; ++i) m[Name(i)] = i; }); return FindOrDefault(m, n, 0); }
 int SSH::Cipher::Id(const string &n) { static unordered_map<string, int> m; ONCE({ for (int i=1; i<=End; ++i) m[Name(i)] = i; }); return FindOrDefault(m, n, 0); }
 int SSH::MAC   ::Id(const string &n) { static unordered_map<string, int> m; ONCE({ for (int i=1; i<=End; ++i) m[Name(i)] = i; }); return FindOrDefault(m, n, 0); }
+
+bool SSH::Key   ::Supported(int) { return true; }
+bool SSH::KEX   ::Supported(int) { return true; }
+bool SSH::Cipher::Supported(int) { return true; }
+bool SSH::MAC   ::Supported(int) { return true; }
 
 const char *SSH::Key::Name(int id) {
   switch(id) {
@@ -828,6 +877,14 @@ int SSH::DSSKey::In(const Serializable::Stream *i) {
   return i->Result();
 }
 
+void SSH::DSSKey::Out(Serializable::Stream *o) const {
+  o->BString(format_id);
+  WriteBigNum(p, o); 
+  WriteBigNum(q, o); 
+  WriteBigNum(g, o); 
+  WriteBigNum(y, o); 
+}
+
 int SSH::DSSSignature::In(const Serializable::Stream *i) {
   StringPiece blob;
   i->ReadString(&format_id);
@@ -838,6 +895,16 @@ int SSH::DSSSignature::In(const Serializable::Stream *i) {
   return i->Result();
 }
 
+void SSH::DSSSignature::Out(Serializable::Stream *o) const {
+  o->BString(format_id);
+  string blob(40, 0);
+  CHECK_EQ(20, BigNumDataSize(s));
+  CHECK_EQ(20, BigNumDataSize(s));
+  BigNumGetData(r, &blob[0]);
+  BigNumGetData(s, &blob[20]);
+  o->BString(blob);
+}
+
 int SSH::RSAKey::In(const Serializable::Stream *i) {
   i->ReadString(&format_id);
   if (format_id.str() != Key::Name(Key::RSA)) { i->error = true; return -1; }
@@ -846,12 +913,22 @@ int SSH::RSAKey::In(const Serializable::Stream *i) {
   return i->Result();
 }
 
+void SSH::RSAKey::Out(Serializable::Stream *o) const {
+  o->BString(format_id);
+  WriteBigNum(e, o); 
+  WriteBigNum(n, o); 
+}
+
 int SSH::RSASignature::In(const Serializable::Stream *i) {
-  StringPiece blob;
   i->ReadString(&format_id);
   i->ReadString(&sig);
   if (format_id.str() != "ssh-rsa") { i->error = true; return -1; }
   return i->Result();
+}
+
+void SSH::RSASignature::Out(Serializable::Stream *o) const {
+  o->BString(format_id);
+  o->BString(sig);
 }
 
 int SSH::ECDSAKey::In(const Serializable::Stream *i) {

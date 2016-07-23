@@ -58,6 +58,11 @@
       ShellRun(returnCode == NSAlertFirstButtonReturn ? _confirm_cmd.c_str() : _cancel_cmd.c_str());
     }
   }
+  
+  - (void)modalAlertDidEnd:(NSAlert *)alert returnCode:(NSInteger)returnCode contextInfo:(void *)contextInfo {
+    NSWindow *window = [LFL::GetTyped<GameView*>(LFL::screen->id) window];
+    [NSApp endSheet: window];
+  }
 
   - (void)controlTextDidChange:(NSNotification *)notification {}
   - (void)controlTextDidEndEditing:(NSNotification *)notification {}
@@ -176,6 +181,16 @@ void SystemAlertWidget::Show(const string &arg) {
   [alert.alert beginSheetModalForWindow:[GetTyped<GameView*>(screen->id) window] modalDelegate:alert
     didEndSelector:@selector(alertDidEnd:returnCode:contextInfo:) contextInfo:nil];
   [GetTyped<GameView*>(screen->id) clearKeyModifiers];
+}
+
+string SystemAlertWidget::RunModal(const string &arg) {
+  auto alert = FromVoid<OSXAlert*>(impl);
+  NSWindow *window = [GetTyped<GameView*>(screen->id) window];
+  if (alert.add_text) [alert.input setStringValue: MakeNSString(arg)];
+  [alert.alert beginSheetModalForWindow:window modalDelegate:alert
+    didEndSelector:@selector(modalAlertDidEnd:returnCode:contextInfo:) contextInfo:nil];
+  [NSApp runModalForWindow: window];
+  return alert.add_text ? GetNSString([alert.input stringValue]) : "";
 }
 
 SystemMenuWidget::~SystemMenuWidget() { if (auto menu = FromVoid<NSMenu*>(impl)) [menu release]; }

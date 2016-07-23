@@ -42,7 +42,8 @@
       delegate:          self
       cancelButtonTitle: [NSString stringWithUTF8String: kv[2].first.c_str()]
       otherButtonTitles: [NSString stringWithUTF8String: kv[3].first.c_str()], nil];
-    if ((_add_text = _style == "textinput")) _alert.alertViewStyle = UIAlertViewStylePlainTextInput;
+    if      ((_add_text = _style == "textinput")) _alert.alertViewStyle = UIAlertViewStylePlainTextInput;
+    else if ((_add_text = _style == "pwinput"))   _alert.alertViewStyle = UIAlertViewStyleSecureTextInput;
     return self;
   }
 

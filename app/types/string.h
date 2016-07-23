@@ -583,6 +583,8 @@ template <class X> void AccumulateAsciiDigit(X *v, unsigned char c) { *v = *v * 
 template <class X> int IsNewline(const X *str);
 template <class X> int ChompNewline(X *str, int len);
 template <class X> int ChompNewlineLength(const X *str, int len);
+const char *IncrementNewline(const char *in);
+const char *DecrementNewline(const char *in);
 const char *Default(const char *x, const char *default_x);
 const char *ParseProtocol(const char *url, string *protO);
 const char *BaseName(const StringPiece   &text, int *outlen=0);
