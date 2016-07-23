@@ -41,6 +41,7 @@ struct ECPair  : public VoidPtr { using VoidPtr::VoidPtr; };
 ECPoint NewECPoint(ECGroup);
 void FreeECPoint(ECPoint);
 void FreeECPair(ECPair);
+ECDef GetECGroupID(ECGroup);
 ECGroup GetECPairGroup(ECPair);
 ECPoint GetECPairPubKey(ECPair);
 bool SetECPairPubKey(ECPair, ECPoint);
@@ -76,6 +77,7 @@ int DSAVerify(const StringPiece &digest, DSASig dsa_sig, DSAKey dsa_key);
 int ECDSAVerify(const StringPiece &digest, ECDSASig dsa_sig, ECPair ecdsa_keypair);
 int RSASign(const StringPiece &digest, string *out, RSAKey rsa_key);
 DSASig DSASign(const StringPiece &digest, DSAKey dsa_key);
+ECDSASig ECDSASign(const StringPiece &digest, ECPair ecdsa_keypair);
 
 struct Crypto {
   struct Cipher     : public VoidPtr      { using VoidPtr::VoidPtr; };

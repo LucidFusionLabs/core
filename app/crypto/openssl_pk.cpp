@@ -33,6 +33,7 @@ namespace LFL {
 ECPoint NewECPoint(ECGroup g) { return EC_POINT_new(FromVoid<EC_GROUP*>(g)); }
 void FreeECPoint(ECPoint p) { if (p) EC_POINT_free(FromVoid<EC_POINT*>(p)); }
 void FreeECPair(ECPair p) { if (p) EC_KEY_free(FromVoid<EC_KEY*>(p)); }
+ECDef GetECGroupID(ECGroup g) { return Void(EC_GROUP_get_curve_name(FromVoid<EC_GROUP*>(g))); }
 ECGroup GetECPairGroup (ECPair p) { return const_cast<EC_GROUP*>(EC_KEY_get0_group(FromVoid<EC_KEY*>(p))); }
 ECPoint GetECPairPubKey(ECPair p) { return const_cast<EC_POINT*>(EC_KEY_get0_public_key(FromVoid<EC_KEY*>(p))); }
 bool SetECPairPubKey(ECPair p, ECPoint k) { return EC_KEY_set_public_key(FromVoid<EC_KEY*>(p), FromVoid<EC_POINT*>(k)); }
@@ -87,12 +88,16 @@ DSASig DSASign(const StringPiece &digest, DSAKey dsa_key) {
   return DSA_do_sign(MakeUnsigned(digest.data()), digest.size(), FromVoid<DSA*>(dsa_key));
 }
 
+ECDSASig ECDSASign(const StringPiece &digest, ECPair ecdsa_keypair) {
+  return ECDSA_do_sign(MakeUnsigned(digest.data()), digest.size(), FromVoid<EC_KEY*>(ecdsa_keypair));
+}
+
 ECDef Crypto::EllipticCurve::NISTP256() { return Void(NID_X9_62_prime256v1); };
 ECDef Crypto::EllipticCurve::NISTP384() { return Void(NID_secp384r1); };
 ECDef Crypto::EllipticCurve::NISTP521() { return Void(NID_secp521r1); };
 
 ECPair Crypto::EllipticCurve::NewPair(ECDef id, bool generate) {
-  EC_KEY *pair = EC_KEY_new_by_curve_name(long(id));
+  EC_KEY *pair = EC_KEY_new_by_curve_name(int(intptr_t(id.v)));
   if (generate && pair && EC_KEY_generate_key(pair) != 1) { EC_KEY_free(pair); return NULL; }
   return ECPair(pair);
 }

@@ -226,7 +226,27 @@ struct SSHClientConnection : public Connection::Handler {
           SSHTrace(c->Name(), ": MSG_SERVICE_ACCEPT");
 
           if (!identity) { /**/ }
-          else if (identity->rsa) {
+          else if (identity->ec) {
+            ECGroup group = GetECPairGroup(identity->ec);
+            ECDef curve_id = GetECGroupID(group);
+            string algo_name, curve_name;
+            Crypto::DigestAlgo hash_id;
+            if      (curve_id == Crypto::EllipticCurve::NISTP256()) { algo_name="ecdsa-sha2-nistp256"; curve_name="nistp256"; hash_id=Crypto::DigestAlgos::SHA256(); }
+            else if (curve_id == Crypto::EllipticCurve::NISTP384()) { algo_name="ecdsa-sha2-nistp384"; curve_name="nistp384"; hash_id=Crypto::DigestAlgos::SHA384(); }
+            else if (curve_id == Crypto::EllipticCurve::NISTP521()) { algo_name="ecdsa-sha2-nistp521"; curve_name="nistp521"; hash_id=Crypto::DigestAlgos::SHA512(); }
+            else { ERROR("unknown curve_id ", curve_id.v); break; }
+
+            string pubkey = SSH::ECDSAKey(algo_name, curve_name,
+                                          ECPointGetData(group, GetECPairPubKey(identity->ec), ctx)).ToString();
+            string challenge = SSH::DeriveChallenge(hash_id, session_id, user, "ssh-connection", "publickey", algo_name, pubkey);
+            ECDSASig ecdsa_sig = ECDSASign(challenge, identity->ec);
+            if (!ecdsa_sig) { ERROR("ECDSASign failed: ", Crypto::GetLastErrorText()); break; }
+            string sig = SSH::ECDSASignature(algo_name, GetECDSASigR(ecdsa_sig), GetECDSASigS(ecdsa_sig)).ToString();
+            ECDSASigFree(ecdsa_sig);
+            if (!WriteCipher(c, SSH::MSG_USERAUTH_REQUEST(user, "ssh-connection", "publickey", algo_name, pubkey, sig)))
+              return ERRORv(-1, c->Name(), ": write");
+            break;
+          } else if (identity->rsa) {
             string sig, pubkey = SSH::RSAKey(GetRSAKeyE(identity->rsa), GetRSAKeyN(identity->rsa)).ToString();
             string challenge = SSH::DeriveChallenge(Crypto::DigestAlgos::SHA1(), session_id, user, "ssh-connection", "publickey", "ssh-rsa", pubkey);
             if (RSASign(challenge, &sig, identity->rsa) != 1) { ERROR("RSASign failed: ", Crypto::GetLastErrorText()); break; }
@@ -528,24 +548,33 @@ int SSH::VerifyHostKey(const string &H_text, int hostkey_type, const StringPiece
     DSASigFree(dsa_sig);
     return verified;
     
-  } else if (hostkey_type == SSH::Key::ECDSA_SHA2_NISTP256) {
-    string H_hash = Crypto::SHA256(H_text);
+  } else if (Key::EllipticCurveDSA(hostkey_type)) {
+    ECDef curve_id;
+    Crypto::DigestAlgo hash_id;
+    switch (hostkey_type) {
+      case SSH::Key::ECDSA_SHA2_NISTP256: curve_id=Crypto::EllipticCurve::NISTP256(); hash_id=Crypto::DigestAlgos::SHA256(); break;
+      case SSH::Key::ECDSA_SHA2_NISTP384: curve_id=Crypto::EllipticCurve::NISTP384(); hash_id=Crypto::DigestAlgos::SHA384(); break;
+      case SSH::Key::ECDSA_SHA2_NISTP521: curve_id=Crypto::EllipticCurve::NISTP521(); hash_id=Crypto::DigestAlgos::SHA512(); break;
+      default:                            return ERRORv(-6, "ecdsa curve");
+    }
+    string H_hash = Crypto::ComputeDigest(hash_id, H_text);
     SSH::ECDSAKey key_msg;
     ECDSASig ecdsa_sig = NewECDSASig();
     Serializable::ConstStream ecdsakey_stream(key.data(), key.size());
     Serializable::ConstStream ecdsasig_stream(sig.data(), sig.size());
-    if (key_msg.In(&ecdsakey_stream)) { ECDSASigFree(ecdsa_sig); return -6; }
-    if (SSH::ECDSASignature(GetECDSASigR(ecdsa_sig), GetECDSASigS(ecdsa_sig)).In(&ecdsasig_stream)) { ECDSASigFree(ecdsa_sig); return -7; }
-    ECPair ecdsa_keypair = Crypto::EllipticCurve::NewPair(Crypto::EllipticCurve::NISTP256(), false);
+    if (key_msg.In(&ecdsakey_stream)) { ECDSASigFree(ecdsa_sig); return -7; }
+    if (SSH::ECDSASignature(GetECDSASigR(ecdsa_sig), GetECDSASigS(ecdsa_sig)).In(&ecdsasig_stream)) { ECDSASigFree(ecdsa_sig); return -8; }
+
+    ECPair ecdsa_keypair = Crypto::EllipticCurve::NewPair(curve_id, false);
     ECPoint ecdsa_key = NewECPoint(GetECPairGroup(ecdsa_keypair));
     ECPointSetData(GetECPairGroup(ecdsa_keypair), ecdsa_key, key_msg.q);
-    if (!SetECPairPubKey(ecdsa_keypair, ecdsa_key)) { FreeECPair(ecdsa_keypair); ECDSASigFree(ecdsa_sig); return -8; }
+    if (!SetECPairPubKey(ecdsa_keypair, ecdsa_key)) { FreeECPair(ecdsa_keypair); ECDSASigFree(ecdsa_sig); return -9; }
     int verified = ECDSAVerify(H_hash, ecdsa_sig, ecdsa_keypair);
     FreeECPair(ecdsa_keypair);
     ECDSASigFree(ecdsa_sig);
     return verified;
 
-  } else return -9;
+  } else return -10;
 }
 
 string SSH::ComputeExchangeHash(int kex_method, Crypto::DigestAlgo algo, const string &V_C, const string &V_S,
@@ -651,6 +680,8 @@ const char *SSH::Key::Name(int id) {
     case RSA:                 return "ssh-rsa";
     case DSS:                 return "ssh-dss";
     case ECDSA_SHA2_NISTP256: return "ecdsa-sha2-nistp256";
+    case ECDSA_SHA2_NISTP384: return "ecdsa-sha2-nistp384";
+    case ECDSA_SHA2_NISTP521: return "ecdsa-sha2-nistp521";
     default:                  return "";
   }
 };
@@ -898,7 +929,7 @@ int SSH::DSSSignature::In(const Serializable::Stream *i) {
 void SSH::DSSSignature::Out(Serializable::Stream *o) const {
   o->BString(format_id);
   string blob(40, 0);
-  CHECK_EQ(20, BigNumDataSize(s));
+  CHECK_EQ(20, BigNumDataSize(r));
   CHECK_EQ(20, BigNumDataSize(s));
   BigNumGetData(r, &blob[0]);
   BigNumGetData(s, &blob[20]);
@@ -939,6 +970,12 @@ int SSH::ECDSAKey::In(const Serializable::Stream *i) {
   return i->Result();
 }
 
+void SSH::ECDSAKey::Out(Serializable::Stream *o) const {
+  o->BString(format_id);
+  o->BString(curve_id);
+  o->BString(q);
+}
+
 int SSH::ECDSASignature::In(const Serializable::Stream *i) {
   StringPiece blob;
   i->ReadString(&format_id);
@@ -949,6 +986,15 @@ int SSH::ECDSASignature::In(const Serializable::Stream *i) {
   s = ReadBigNum(s, &bs); 
   if (bs.error) i->error = true;
   return i->Result();
+}
+
+void SSH::ECDSASignature::Out(Serializable::Stream *o) const {
+  o->BString(format_id);
+  string blob(4*2 + BigNumSize(r) + BigNumSize(s), 0);
+  Serializable::MutableStream blobo(&blob[0], blob.size());
+  WriteBigNum(r, &blobo);
+  WriteBigNum(s, &blobo);
+  o->BString(blob);
 }
 
 }; // namespace LFL

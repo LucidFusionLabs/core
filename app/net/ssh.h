@@ -64,12 +64,13 @@ struct SSH {
   static string MAC(Crypto::MACAlgo algo, int MAC_len, const StringPiece &m, int seq, const string &k, int prefix=0);
 
   struct Key {
-    enum { ECDSA_SHA2_NISTP256=1, RSA=2, DSS=3, End=3 };
+    enum { ECDSA_SHA2_NISTP256=1, ECDSA_SHA2_NISTP384=2, ECDSA_SHA2_NISTP521=3, RSA=4, DSS=5, End=6 };
     static int Id(const string &n);
     static const char *Name(int id);
     static bool Supported(int);
     static string PreferenceCSV(int start_after=0);
     static bool PreferenceIntersect(const StringPiece &pref_csv, int *out, int start_after=0);
+    static bool EllipticCurveDSA(int id) { return id==ECDSA_SHA2_NISTP256 || id==ECDSA_SHA2_NISTP384 || id==ECDSA_SHA2_NISTP521; }
   };
 
   struct KEX {
@@ -474,23 +475,26 @@ struct SSH {
     int In(const Serializable::Stream *i);
   };
 
-  struct ECDSAKey {
+  struct ECDSAKey : public LFL::Serializable {
     StringPiece format_id, curve_id, q;
+    ECDSAKey(const StringPiece &F=StringPiece(), const StringPiece &C=StringPiece(),
+             const StringPiece &Q=StringPiece()) : Serializable(0), format_id(F), curve_id(C), q(Q) {}
 
     int HeaderSize() const { return 3*4; }
     int Size() const { return HeaderSize() + format_id.size() + curve_id.size() + q.size(); }
-    void Out(Serializable::Stream *o) const {}
+    void Out(Serializable::Stream *o) const;
     int In(const Serializable::Stream *i);
   };
 
-  struct ECDSASignature {
+  struct ECDSASignature : public LFL::Serializable {
     StringPiece format_id;
     BigNum r, s;
-    ECDSASignature(BigNum R, BigNum S) : r(R), s(S) {}
+    ECDSASignature(BigNum R, BigNum S) : Serializable(0), r(R), s(S) {}
+    ECDSASignature(const StringPiece &F, BigNum R, BigNum S) : Serializable(0), format_id(F), r(R), s(S) {}
 
     int HeaderSize() const { return 4*4; }
     int Size() const { return HeaderSize() + format_id.size() + BigNumSize(r) + BigNumSize(s); }
-    void Out(Serializable::Stream *o) const {}
+    void Out(Serializable::Stream *o) const;
     int In(const Serializable::Stream *i);
   };
 };
