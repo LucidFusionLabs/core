@@ -219,14 +219,15 @@ endif()
 # openssl
 if(LFL_OPENSSL)
   if(LFL_WINDOWS)
-    set(OPENSSL_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/openssl/include PARENT_SCOPE)
-    set(OPENSSL_LIB ${CMAKE_CURRENT_BINARY_DIR}/openssl/lib/ssleay32.lib ${CMAKE_CURRENT_BINARY_DIR}/openssl/lib/libeay32.lib PARENT_SCOPE)
+    set(OPENSSL_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/openssl/include)
+    set(OPENSSL_LIB ${CMAKE_CURRENT_BINARY_DIR}/openssl/lib/ssleay32.lib ${CMAKE_CURRENT_BINARY_DIR}/openssl/lib/libeay32.lib)
   elseif(LFL_ANDROID)
-    set(OPENSSL_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/OpenSSL-for-Android-Prebuilt/openssl-1.0.2/include PARENT_SCOPE)
-    set(OPENSSL_LIB ${CMAKE_CURRENT_SOURCE_DIR}/OpenSSL-for-Android-Prebuilt/openssl-1.0.2/armeabi-v7a/lib/libssl.a ${CMAKE_CURRENT_SOURCE_DIR}/OpenSSL-for-Android-Prebuilt/openssl-1.0.2/armeabi-v7a/lib/libcrypto.a PARENT_SCOPE)
+    set(OPENSSL_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/OpenSSL-for-Android-Prebuilt/openssl-1.0.2/include)
+    set(OPENSSL_CRYPTO_LIB ${CMAKE_CURRENT_SOURCE_DIR}/OpenSSL-for-Android-Prebuilt/openssl-1.0.2/armeabi-v7a/lib/libcrypto.a)
+    set(OPENSSL_LIB ${CMAKE_CURRENT_SOURCE_DIR}/OpenSSL-for-Android-Prebuilt/openssl-1.0.2/armeabi-v7a/lib/libssl.a ${OPENSSL_CRYPTO_LIB})
   elseif(LFL_IOS)
-    set(OPENSSL_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/ios-openssl/include PARENT_SCOPE)
-    set(OPENSSL_LIB ${CMAKE_CURRENT_SOURCE_DIR}/ios-openssl/lib/libssl.a ${CMAKE_CURRENT_SOURCE_DIR}/ios-openssl/lib/libcrypto.a PARENT_SCOPE)
+    set(OPENSSL_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/ios-openssl/include)
+    set(OPENSSL_LIB ${CMAKE_CURRENT_SOURCE_DIR}/ios-openssl/lib/libssl.a ${CMAKE_CURRENT_SOURCE_DIR}/ios-openssl/lib/libcrypto.a)
   elseif(LFL_APPLE)
     set(OPENSSL_CONFIGURE_ENV ${CONFIGURE_ENV} PATH=$ENV{PATH}:/opt/X11/bin)
     ExternalProject_Add(openssl PREFIX openssl LOG_CONFIGURE ON LOG_BUILD ON BUILD_IN_SOURCE ON
@@ -245,11 +246,13 @@ if(LFL_OPENSSL)
     add_dependencies(libcrypto openssl)
     set_property(TARGET libcrypto PROPERTY IMPORTED_LOCATION ${INSTALL_DIR}/lib/libcrypto.a)
 
-    set(OPENSSL_INCLUDE ${INSTALL_DIR}/include PARENT_SCOPE)
-    set(OPENSSL_LIB libssl libcrypto PARENT_SCOPE)
+    set(OPENSSL_INCLUDE ${INSTALL_DIR}/include)
+    set(OPENSSL_LIB libssl libcrypto)
   else()
-    set(OPENSSL_LIB -lssl -lcrypto PARENT_SCOPE)
+    set(OPENSSL_LIB -lssl -lcrypto)
   endif()
+    set(OPENSSL_INCLUDE ${OPENSSL_INCLUDE} PARENT_SCOPE)
+    set(OPENSSL_LIB ${OPENSSL_LIB} PARENT_SCOPE)
 endif()
 
 # box2d
@@ -271,6 +274,31 @@ if(LFL_SQLITE)
     set(SQLITE_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/sqlite-amalgamation PARENT_SCOPE)
     set(SQLITE_LIB sqlite3 PARENT_SCOPE)
   endif()
+endif()
+
+# sqlcipher
+if(LFL_SQLCIPHER)
+  set(CONFIG_ENV ${CONFIGURE_ENV})
+  list_append_kv(CONFIG_ENV CFLAGS "-DSQLITE_HAS_CODEC -DSQLITE_ENABLE_FTS3")
+  set(CONFIG_OPTS ${CONFIGURE_OPTIONS} --enable-load-extension --enable-tempstore=yes --disable-tcl
+      --disable-readline --disable-editline)
+  if(LFL_IOS OR LFL_OSX)
+    set(CONFIG_OPTS ${CONFIG_OPTS} --with-crypto-lib=commoncrypto)
+  else()
+    list_append_kv(CONFIG_ENV CFLAGS "-I${OPENSSL_INCLUDE}")
+    list_append_kv(CONFIG_ENV LIBS "${OPENSSL_CRYPTO_LIB}")
+  endif()
+
+  ExternalProject_Add(sqlcipher LOG_CONFIGURE ON LOG_BUILD ON
+                      PREFIX ${CMAKE_CURRENT_BINARY_DIR}/sqlcipher
+                      SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/sqlcipher
+                      CONFIGURE_COMMAND ${CMAKE_COMMAND} -E env ${CONFIG_ENV}
+                      <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> ${CONFIG_OPTS})
+  add_library(libsqlcipher IMPORTED SHARED GLOBAL)
+  add_dependencies(libsqlcipher sqlcipher)
+  set_property(TARGET libsqlcipher PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/sqlcipher/lib/libsqlcipher.a)
+  set(SQLCIPHER_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/sqlcipher/include PARENT_SCOPE)
+  set(SQLCIPHER_LIB libsqlcipher PARENT_SCOPE)
 endif()
 
 # assimp

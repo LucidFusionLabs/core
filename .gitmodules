@@ -96,3 +96,6 @@
 [submodule "imports/sqlite-amalgamation"]
 	path = imports/sqlite-amalgamation
 	url = https://github.com/azadkuh/sqlite-amalgamation
+[submodule "imports/sqlcipher"]
+	path = imports/sqlcipher
+	url = https://github.com/LucidFusionLabs/sqlcipher

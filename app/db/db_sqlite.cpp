@@ -16,7 +16,12 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#ifdef LFL_SQLCIPHER
+#include "sqlcipher/sqlite3.h"
+#else
 #include "sqlite3.h"
+#endif
+
 #include "core/app/db/sqlite.h"
 
 namespace LFL {

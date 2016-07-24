@@ -191,6 +191,30 @@ else()
   endif()
 endif()
 
+# utility macros
+macro(list_find_match _list _regex _out)
+  set(${_out} -1)
+  set(_ind 0)
+  foreach(_current ${_list})
+    if(_current MATCHES ${_regex})
+      set(${_out} ${_ind})
+      break()
+    endif()
+    MATH(EXPR _ind "${_ind}+1")
+  endforeach()
+endmacro()
+
+macro(list_append_kv _list _key _val)
+  list_find_match("${${_list}}" ^${_key}= ind)
+  if (ind EQUAL -1)
+    list(APPEND ${_list} "${_key}=${_val}")
+  else()
+    list(GET ${_list} ${ind} elm)
+    list(REMOVE_AT ${_list} ${ind})
+    list(APPEND ${_list} "${elm} ${_val}")
+  endif()
+endmacro()
+
 # imports
 add_subdirectory(${LFL_SOURCE_DIR}/core/imports)
 

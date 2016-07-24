@@ -25,7 +25,7 @@
 
 @interface IOSAlert : NSObject<UIAlertViewDelegate>
   @property (nonatomic, retain) UIAlertView *alert;
-  @property (nonatomic)         bool         add_text;
+  @property (nonatomic)         bool         add_text, done;
   @property (nonatomic)         std::string  style, cancel_cmd, confirm_cmd;
 @end
 
@@ -55,6 +55,7 @@
     } else {
       ShellRun(buttonIndex ? _confirm_cmd.c_str() : _cancel_cmd.c_str());
     }
+    _done = true;
   }
 @end
 
@@ -429,8 +430,18 @@ SystemAlertWidget::SystemAlertWidget(const StringPairVec &items) : impl([[IOSAle
 UIAlertView *GetUIAlertView(SystemToolbarWidget *w) { return FromVoid<IOSAlert*>(w->impl).alert; }
 void SystemAlertWidget::Show(const string &arg) {
   auto alert = FromVoid<IOSAlert*>(impl);
+  if (alert.add_text) [alert.alert textFieldAtIndex:0].text = MakeNSString(arg);
   [alert.alert show];
-  if (alert.add_text) [alert.alert textFieldAtIndex:0].text = [NSString stringWithUTF8String: arg.c_str()];
+}
+
+string SystemAlertWidget::RunModal(const string &arg) {
+  auto alert = FromVoid<IOSAlert*>(impl);
+  if (alert.add_text) [alert.alert textFieldAtIndex:0].text = MakeNSString(arg);
+  alert.done = false;
+  [alert.alert show];
+  NSRunLoop *rl = [NSRunLoop currentRunLoop];
+  do { [rl runMode:NSRunLoopCommonModes beforeDate:[NSDate distantFuture]]; } while(!alert.done);
+  return GetNSString([alert.alert textFieldAtIndex:0].text);
 }
 
 SystemMenuWidget::~SystemMenuWidget() { if (auto menu = FromVoid<IOSMenu*>(impl)) [menu release]; }

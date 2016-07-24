@@ -38,7 +38,7 @@ set(ENV{CODESIGN_ALLOCATE} "${LFL_IOS_ROOT}/usr/bin/codesign_allocate")
 set(ENV{CFLAGS}   "-arch armv7 -isysroot ${LFL_IOS_SDK} ${IOS_VERSION_MIN}")
 set(ENV{CXXFLAGS} "-arch armv7 -isysroot ${LFL_IOS_SDK} ${IOS_VERSION_MIN}")
 set(ENV{LDFLAGS}  "-arch armv7 -isysroot ${LFL_IOS_SDK} ${IOS_VERSION_MIN}")
-set(ENV{AR} "${LFL_IOS_ROOT}/usr/bin/ar")
+#set(ENV{AR} "${LFL_IOS_ROOT}/usr/bin/ar")
 
 set(CONFIGURE_OPTIONS "--host=arm-apple-darwin")
 set(CONFIGURE_ENV CC=$ENV{CC} CXX=$ENV{CXX} CPP=$ENV{CPP} CXXCPP=$ENV{CXXCPP} AR=$ENV{AR} RANLIB=$ENV{RANLIB}
