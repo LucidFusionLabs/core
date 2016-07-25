@@ -79,6 +79,7 @@ static const char* const* ios_argv = 0;
     NSFileHandle *wait_forever_fh;
     bool restart_wait_forever_fh, want_extra_scale;
     int current_orientation, target_fps;
+    UIBackgroundTaskIdentifier bgTask;
   }
   @synthesize window, controller, view, lview, rview, textField;
 
@@ -120,6 +121,7 @@ static const char* const* ios_argv = 0;
     [self.controller setView:self.view]; 
     self.controller.resumeOnDidBecomeActive = NO;
     // self.controller.wantsFullScreenLayout = YES;
+    _top_controller = self.controller;
 
     [UIApplication sharedApplication].idleTimerDisabled = YES;
     self.window.rootViewController = self.controller;
@@ -165,10 +167,23 @@ static const char* const* ios_argv = 0;
 
   - (void)applicationWillResignActive:(UIApplication*)application {}
   - (void)applicationDidBecomeActive:(UIApplication*)application {}
+  - (void)applicationWillEnterForeground:(UIApplication *)application{}
 
-  - (void)glkView:(GLKView *)v drawInRect:(CGRect)rect {
-    if (!_screen_width || !_screen_height) return;
-    if (LFL::screen->y != _screen_y ||
+  - (void)applicationDidEnterBackground:(UIApplication *)application {
+    bgTask = [application beginBackgroundTaskWithName:@"MyTask" expirationHandler:^{
+      [application endBackgroundTask:bgTask];
+      bgTask = UIBackgroundTaskInvalid;
+    }];
+
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+                     [application endBackgroundTask:bgTask];
+                     bgTask = UIBackgroundTaskInvalid;
+                   });
+  }
+
+- (void)glkView:(GLKView *)v drawInRect:(CGRect)rect {
+  if (!_screen_width || !_screen_height) return;
+  if (LFL::screen->y != _screen_y ||
         LFL::screen->width != _screen_width || LFL::screen->height != _screen_height)
       WindowReshaped(0, _screen_y, _screen_width, _screen_height);
 

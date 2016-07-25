@@ -325,6 +325,12 @@ TEST(StringTest, Split) {
   Split("com.", isdot, &dotv);
   EXPECT_EQ(1, dotv.size());
   EXPECT_EQ("com", dotv[0]);
+
+  vector<string> commav = Split(",,", ',');
+  EXPECT_EQ(3, commav.size());
+  EXPECT_EQ("", commav[0]);
+  EXPECT_EQ("", commav[1]);
+  EXPECT_EQ("", commav[2]);
 }
 
 TEST(StringTest, CHexEscape) {

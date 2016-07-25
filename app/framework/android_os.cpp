@@ -202,6 +202,9 @@ SystemTableWidget::SystemTableWidget(const string &title, const vector<MenuItem>
                                         tuple_get<0>(kvw), tuple_get<1>(kvw), tuple_get<2>(kvw)));
 }
 
+void SystemTableWidget::AddNavigationButton(const MenuItem &item, int align) {}
+void SystemTableWidget::SetEditableSection(int section) {}
+
 void SystemTableWidget::AddToolbar(SystemToolbarWidget *toolbar) {
   static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "addTableToolbar", "(II)V"));
   jni->env->CallVoidMethod(jni->activity, mid, jint(impl.v), jint(toolbar->impl.v));

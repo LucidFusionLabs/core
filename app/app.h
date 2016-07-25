@@ -285,6 +285,13 @@ typedef tuple<string, string, string> MenuItem;
 typedef tuple<string, Box, string> PanelItem;
 typedef vector<MenuItem> MenuItemVec;
 typedef vector<PanelItem> PanelItemVec;
+struct CompiledMenuItem {
+  enum { Normal=0, Dropdown=1 };
+  MenuItem item;
+  int type, ref;
+  bool loaded=0;
+  CompiledMenuItem(const MenuItem &i=MenuItem(), int t=-1, int r=-1) : type(t), ref(r), item(i) {}
+};
 ::std::ostream& operator<<(::std::ostream& os, const point &x);
 ::std::ostream& operator<<(::std::ostream& os, const Box   &x);
 };
@@ -719,8 +726,10 @@ struct SystemMenuWidget {
 struct SystemTableWidget {
   VoidPtr impl;
   virtual ~SystemTableWidget();
-  SystemTableWidget(const string &title, const vector<MenuItem> &items);
+  SystemTableWidget(const string &title, const string &style, const vector<MenuItem> &items);
+  void AddNavigationButton(const MenuItem &item, int align);
   void AddToolbar(SystemToolbarWidget*);
+  void SetEditableSection(int section);
   void Show(bool show_or_hide);
   StringPairVec GetSectionText(int section=0);
 };

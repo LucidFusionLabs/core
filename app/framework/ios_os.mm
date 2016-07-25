@@ -169,30 +169,40 @@
   }
   @property (nonatomic, retain) UIView *header;
   @property (nonatomic, retain) UILabel *header_label;
+  @property (nonatomic, retain) UINavigationController *modal_nav;
   @property (nonatomic, assign) IOSToolbar *toolbar;
+  @property (nonatomic)         std::string style;
+  @property (nonatomic)         int editable_section, selected_section, selected_row;
+  @property (copy)              void (^completed)();
 @end
 
 @implementation IOSTable
   {
     int section_index;
-    std::vector<std::vector<LFL::MenuItem>> data;
+    std::vector<std::vector<LFL::CompiledMenuItem>> data;
+    std::vector<IOSTable*> dropdowns;
   }
 
-  - (void)load: (const std::string&)title items:(const std::vector<LFL::MenuItem>&)item {
+  - (void)load:(const std::string&)title withStyle:(const std::string&)sty items:(const std::vector<LFL::MenuItem>&)item {
+    _style = sty;
     data.emplace_back();
     for (auto i : item) {
-      if (tuple_get<0>(i) == "<separator>") {
+      if (tuple_get<1>(i) == "separator") {
         data.emplace_back();
         section_index++;
       } else {
-        data[section_index].push_back(i);
+        data[section_index].emplace_back(i);
       }
     }
 
-    self.title = [NSString stringWithUTF8String: title.c_str()];
+    self.title = LFL::MakeNSString(title);
     self.tableView.separatorInset = UIEdgeInsetsZero;
     [self.tableView setSeparatorStyle:UITableViewCellSeparatorStyleSingleLine];
     [self.tableView setSeparatorColor:[UIColor blackColor]];
+    if (_style == "modal" || _style == "dropdown") {
+      _modal_nav = [[UINavigationController alloc] initWithRootViewController: self];
+      _modal_nav.modalTransitionStyle = UIModalTransitionStyleCoverVertical;
+    }
   }
 
   - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { return data.size(); }
@@ -201,27 +211,77 @@
     return data[section].size();
   }
 
+  - (void)loadNavigationButton:(const LFL::MenuItem&)item withAlign:(int)align {
+    if (tuple_get<0>(item) == "Edit") {
+      self.navigationItem.rightBarButtonItem = [self editButtonItem];
+    }
+  }
+
+  - (void)loadCellItem:(UITableViewCell*)cell withPath:(NSIndexPath*)path withItem:(LFL::CompiledMenuItem*)item
+                       outK:(const std::string **)ok outT:(const std::string **)ot outV:(const std::string **)ov {
+    bool dropdown;
+    if (!item->loaded) {
+      item->loaded = true;
+      const std::string &kt = tuple_get<0>(item->item), tt = tuple_get<1>(item->item), vt = tuple_get<2>(item->item);
+      if ((dropdown = kt.find(',') != std::string::npos)) {
+        std::vector<std::string> kv=LFL::Split(kt, ','), tv=LFL::Split(tt, ','), vv=LFL::Split(vt, ',');
+        CHECK_GT(kv.size(), 0);
+        CHECK_EQ(kv.size(), tv.size());
+        CHECK_EQ(kv.size(), vv.size());
+        item->type = LFL::CompiledMenuItem::Dropdown;
+        item->ref = dropdowns.size();
+        std::vector<LFL::MenuItem> dropdown_options;
+        for (int i=1, l=kv.size(); i != l; ++i) dropdown_options.emplace_back(kv[i], tv[i], vv[i]);
+        auto dropdown_table = [[IOSTable alloc] initWithStyle: UITableViewStyleGrouped];
+        [dropdown_table load:kv[0] withStyle:"dropdown" items:dropdown_options];
+        dropdown_table.completed = ^{
+          [self.tableView beginUpdates];
+          [self.tableView reloadRowsAtIndexPaths:@[path] withRowAnimation:UITableViewRowAnimationNone];
+          [self.tableView endUpdates];
+        };
+        dropdowns.push_back(dropdown_table);
+      } else item->type = 0;
+    } else dropdown = item->type == LFL::CompiledMenuItem::Dropdown;
+
+    const LFL::CompiledMenuItem *ret;
+    if (dropdown) {
+      CHECK_RANGE(item->ref, 0, dropdowns.size());
+      auto dropdown_table = dropdowns[item->ref];
+      CHECK_EQ(0, dropdown_table.selected_section);
+      CHECK_RANGE(dropdown_table.selected_row, 0, dropdown_table->data[0].size());
+      ret = &dropdown_table->data[0][dropdown_table.selected_row];
+    } else ret = item;
+
+    bool parent_dropdown = _style == "dropdown";
+    *ok = &tuple_get<0>(ret->item);
+    *ot = parent_dropdown ? LFL::Singleton<std::string>::Get() : &tuple_get<1>(ret->item);
+    *ov = parent_dropdown ? LFL::Singleton<std::string>::Get() : &tuple_get<2>(ret->item);
+  }
+
   - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)path {
     static NSString *cellIdentifier = @"cellIdentifier";
     UITableViewCell *cell = [self.tableView dequeueReusableCellWithIdentifier:cellIdentifier];
+    if (cell) { [cell release]; cell = nil; }
     if (cell == nil) {
       CHECK_LT(path.section, data.size());
       CHECK_LT(path.row, data[path.section].size());
       cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:cellIdentifier];
-      const LFL::MenuItem &item = data[path.section][path.row];
-      const std::string &kt = tuple_get<0>(item), tt = tuple_get<1>(item);
-      std::vector<std::string> kv, tv;
-      bool dropdown = kt.find(',') != std::string::npos;
-      if (dropdown) {
-        LFL::Split(kt, LFL::iscomma, &kv);
-        LFL::Split(tt, LFL::iscomma, &tv);
-        CHECK_GT(kv.size(), 0);
-        CHECK_EQ(kv.size(), tv.size());
+      const std::string *k=0, *type=0, *v=0;
+      auto &compiled_item = data[path.section][path.row];
+      [self loadCellItem:cell withPath:path withItem:&compiled_item outK:&k outT:&type outV:&v];
+
+      if (compiled_item.type == LFL::CompiledMenuItem::Dropdown) {
+        UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
+        [button setTitle:@"\U000002C5" forState:UIControlStateNormal];
+        button.frame = CGRectMake(100, 10, 10, 30.0);
+        [button setTitleColor:[UIColor blueColor] forState:UIControlStateNormal];
+        [button addTarget:self action:@selector(dropDownClicked:) forControlEvents:UIControlEventTouchUpInside];
+        [button setTag: compiled_item.ref];
+        [cell.contentView addSubview: button];
       }
-      const std::string &k = dropdown ? kv[0] : kt, &type = dropdown ? tv[0] : tt, &v = tuple_get<2>(item);
 
       bool textinput=0, numinput=0, pwinput=0;
-      if ((textinput = type == "textinput") || (numinput = type == "numinput") || (pwinput = type == "pwinput")) {
+      if ((textinput = *type == "textinput") || (numinput = *type == "numinput") || (pwinput = *type == "pwinput")) {
         UITextField *text_field = [[UITextField alloc] initWithFrame:CGRectMake(110, 10, 385, 30)];
         text_field.autoresizingMask = UIViewAutoresizingFlexibleHeight;
         text_field.adjustsFontSizeToFitWidth = YES;
@@ -235,37 +295,60 @@
         text_field.returnKeyType = UIReturnKeyDone;
         text_field.layer.cornerRadius = 10.0;
         [text_field setBorderStyle: UITextBorderStyleRoundedRect];
-        [text_field setPlaceholder: LFL::MakeNSString(v)];
+        [text_field setPlaceholder: LFL::MakeNSString(*v)];
 
-        cell.textLabel.text = LFL::MakeNSString(k);
+        cell.textLabel.text = LFL::MakeNSString(*k);
         [cell.contentView addSubview: text_field];
         if (path.section == 0 && path.row == 0) [text_field becomeFirstResponder];
         [text_field release];
-      } else if (type == "button") {
-        cell.textLabel.text = LFL::MakeNSString(k);
-        cell.textLabel.textAlignment =  NSTextAlignmentCenter;
+      } else if (*type == "button") {
+        cell.textLabel.text = LFL::MakeNSString(*k);
+        cell.textLabel.textAlignment = NSTextAlignmentCenter;
       } else {
-        cell.textLabel.text = LFL::MakeNSString(k);
+        cell.textLabel.text = LFL::MakeNSString(*k);
       }
     }
     return cell;
   }
 
+  - (UITableViewCellEditingStyle)tableView:(UITableView *)tableView editingStyleForRowAtIndexPath:(NSIndexPath *)path {
+    return path.section == _editable_section ? UITableViewCellEditingStyleDelete : UITableViewCellEditingStyleNone;
+  }
+
   - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)path {
     CHECK_LT(path.section, data.size());
     CHECK_LT(path.row, data[path.section].size());
-    const LFL::MenuItem &item = data[path.section][path.row];
-    const std::string &k = tuple_get<1>(item);
-    if (k == "command" || k == "button") ShellRun(tuple_get<2>(item).c_str());
+    _selected_row = path.row;
+    _selected_section = path.section;
+    const auto &compiled_item = data[path.section][path.row];
+    const std::string &t = tuple_get<1>(compiled_item.item);
+    if (t == "command" || t == "button") ShellRun(tuple_get<2>(compiled_item.item).c_str());
+    if (_modal_nav) {
+      [self show: false];
+      if (_completed) _completed();
+    }
   }
 
   - (void)show:(bool)show_or_hide {
-    if (show_or_hide) [[LFUIApplication sharedAppDelegate].view addSubview: self.tableView];
-    else [self.tableView removeFromSuperview];
+    auto uiapp = [LFUIApplication sharedAppDelegate];
+    if (show_or_hide) {
+      if (_modal_nav) [uiapp.top_controller presentModalViewController:self.modal_nav animated:YES];
+      else            [uiapp.view addSubview: self.tableView];
+    } else {
+      if (_modal_nav) [uiapp.top_controller dismissViewControllerAnimated:YES completion:nil];
+      else            [self.tableView removeFromSuperview];
+    }
   }
 
   - (void)viewWillAppear:   (BOOL)animated { if (_toolbar) [_toolbar show: true];  }
   - (void)viewWillDisappear:(BOOL)animated { if (_toolbar) [_toolbar show: false]; }
+
+  - (void)dropDownClicked:(UIButton *)sender {
+    int dropdown_ind = sender.tag;
+    CHECK_LT(dropdown_ind, dropdowns.size());
+    auto dropdown_table = dropdowns[dropdown_ind];
+    [dropdown_table show:true];
+  }
 
   - (LFL::StringPairVec)dumpDataForSection: (int)ind {
     LFL::StringPairVec ret;
@@ -273,25 +356,17 @@
     for (int i=0, l=data[ind].size(); i != l; i++) {
       NSIndexPath *path = [NSIndexPath indexPathForRow: i inSection: ind];
       UITableViewCell *cell = [self.tableView cellForRowAtIndexPath: path];
-      const LFL::MenuItem &item = data[path.section][path.row];
-      const std::string &kt = tuple_get<0>(item), tt = tuple_get<1>(item);
-      std::vector<std::string> kv, tv;
-      bool dropdown = kt.find(',') != std::string::npos;
-      if (dropdown) {
-        LFL::Split(kt, LFL::iscomma, &kv);
-        LFL::Split(tt, LFL::iscomma, &tv);
-        CHECK_GT(kv.size(), 0);
-        CHECK_EQ(kv.size(), tv.size());
-      }
-      int subind = 0;
-      const std::string &k = dropdown ? kv[subind] : kt, &type = dropdown ? tv[subind] : tt;
+      const std::string *k=0, *type=0, *v=0;
+      auto &compiled_item = data[path.section][path.row];
+      [self loadCellItem:cell withPath:path withItem:&compiled_item outK:&k outT:&type outV:&v];
+
       std::string val;
-      if ((type == "textinput") || (type == "numinput") || (type == "pwinput")) {
+      if ((*type == "textinput") || (*type == "numinput") || (*type == "pwinput")) {
         UITextField *text_field = [[cell.contentView subviews] lastObject];
         val = LFL::GetNSString(text_field.text);
-        if (val.empty()) val = tuple_get<2>(item);
+        if (val.empty()) val = *v;
       }
-      ret.emplace_back(k, val);
+      ret.emplace_back(*k, val);
     }
     return ret;
   }
@@ -455,24 +530,29 @@ void SystemToolbarWidget::Show(bool show_or_hide) { [FromVoid<IOSToolbar*>(impl)
 void SystemToolbarWidget::ToggleButton(const string &n) { [FromVoid<IOSToolbar*>(impl) toggleButtonNamed: n]; }
 
 SystemTableWidget::~SystemTableWidget() { if (auto table = FromVoid<IOSTable*>(impl)) [table release]; }
-SystemTableWidget::SystemTableWidget(const string &title, const vector<MenuItem>&items) {
+SystemTableWidget::SystemTableWidget(const string &title, const string &style, const vector<MenuItem>&items) {
   auto table = [[IOSTable alloc] initWithStyle: UITableViewStyleGrouped];
-  [table load:title items:items];
+  [table load:title withStyle:style items:items];
   impl = table;
 }
+
+void SystemTableWidget::AddNavigationButton(const MenuItem &item, int align) { return [FromVoid<IOSTable*>(impl) loadNavigationButton:item withAlign:align]; }
 void SystemTableWidget::AddToolbar(SystemToolbarWidget *t) { [FromVoid<IOSTable*>(impl) setToolbar: FromVoid<IOSToolbar*>(t->impl)]; }
+void SystemTableWidget::SetEditableSection(int section) { FromVoid<IOSTable*>(impl).editable_section = section; }
 void SystemTableWidget::Show(bool show_or_hide) { [FromVoid<IOSTable*>(impl) show:show_or_hide]; }
-StringPairVec SystemTableWidget::GetSectionText(int section) { return [FromVoid<IOSTable*>(impl) dumpDataForSection: section]; }
+StringPairVec SystemTableWidget::GetSectionText(int section) { return [FromVoid<IOSTable*>(impl) dumpDataForSection:section]; }
 
 SystemNavigationWidget::~SystemNavigationWidget() { if (auto nav = FromVoid<IOSNavigation*>(impl)) [nav release]; }
 SystemNavigationWidget::SystemNavigationWidget(SystemTableWidget *r) : impl([[IOSNavigation alloc] init: FromVoid<IOSTable*>(r->impl)]) {}
 void SystemNavigationWidget::Show(bool show_or_hide) {
   auto nav = FromVoid<IOSNavigation*>(impl);
+  LFUIApplication *uiapp = [LFUIApplication sharedAppDelegate];
   if (show_or_hide) {
-    [[LFUIApplication sharedAppDelegate].controller presentViewController: nav.controller
-      animated:YES completion:nil];
+    uiapp.top_controller = nav.controller;
+    [uiapp.controller presentViewController: nav.controller animated:YES completion:nil];
   } else {
-    [[LFUIApplication sharedAppDelegate].controller dismissViewControllerAnimated:YES completion:nil];
+    uiapp.top_controller = uiapp.controller;
+    [uiapp.controller dismissViewControllerAnimated:YES completion:nil];
   }
 }
 

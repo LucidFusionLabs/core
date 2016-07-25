@@ -35,6 +35,7 @@
   @property (nonatomic, retain) UIView *lview, *rview;
   @property (nonatomic, retain) MyTextField *textField;
   @property (nonatomic, retain) UINavigationBar *title_bar;
+  @property (nonatomic, assign) UIViewController *top_controller;
   @property BOOL resign_textfield_on_return, frame_on_keyboard_input, frame_on_mouse_input, downscale, title;
   @property int screen_y, screen_width, screen_height;
   + (LFUIApplication *) sharedAppDelegate;

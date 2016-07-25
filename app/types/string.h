@@ -525,6 +525,7 @@ inline int    Split(const char        *in, int (*ischar)(int), string *left, str
 inline int    Split(const string      &in, int (*ischar)(int), string *left, string *right) { return Split(StringPiece(in),            ischar, left, right); }
 inline string Split(const StringPiece &in, int (*ischar)(int)) { string ret; Split(in, ischar, &ret); return ret; }
 
+vector<string> Split(const string&, char delim);
 void Join(string *out, const vector<string> &in);
 void Join(string *out, const vector<string> &in, int inB, int inE);
 string Join(const vector<const char *> &strs, const string &separator);

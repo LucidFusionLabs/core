@@ -102,7 +102,6 @@ void SQLite::Bind(Statement stmt, int ind, const StringPiece &v) {
 
 void SQLite::Bind(Statement stmt, int ind, const BlobPiece &v) {
   int ret = 0;
-  INFO("bind blob size = ", v.len);
   if (SQLITE_OK != (ret = sqlite3_bind_blob(FromVoid<sqlite3_stmt*>(stmt), ind, v.buf, v.len, 0)))
     ERROR("sqlite3_bind_blob: error=", sqlite3_errstr(ret));
 }
