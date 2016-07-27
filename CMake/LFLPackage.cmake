@@ -79,6 +79,7 @@ elseif(LFL_IOS)
       COMMAND cp -r ${CMAKE_CURRENT_SOURCE_DIR}/assets i${pkgname}.app
       COMMAND cp ${LFL_APP_ASSET_FILES} i${pkgname}.app/assets
       COMMAND cp ${CMAKE_CURRENT_SOURCE_DIR}/${target}-iphone/Images/* i${pkgname}.app
+      COMMAND for d in ${CMAKE_CURRENT_SOURCE_DIR}/drawable-\*\;                do if [ -d $$d ]; then cp -R $$d i${pkgname}.app\; fi\; done
       COMMAND for d in ${CMAKE_CURRENT_SOURCE_DIR}/${target}-iphone/\*.lproj\;  do if [ -d $$d ]; then cp -R $$d i${pkgname}.app\; fi\; done
       COMMAND for d in ${CMAKE_CURRENT_SOURCE_DIR}/${target}-iphone/\*.bundle\; do if [ -d $$d ]; then cp -R $$d i${pkgname}.app\; fi\; done
       COMMAND for f in ${CMAKE_CURRENT_SOURCE_DIR}/${target}-iphone/Resources/\*\; do o=`basename $$f | sed s/xib$$/nib/`\; ${LFL_APPLE_DEVELOPER}/usr/bin/ibtool --warnings --errors --notices --compile ${CMAKE_CURRENT_BINARY_DIR}/i${pkgname}.app/$$o $$f\; done

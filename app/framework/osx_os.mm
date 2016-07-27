@@ -153,7 +153,7 @@ namespace LFL {
 static void AddNSMenuItems(NSMenu *menu, const vector<MenuItem>&items) {
   NSMenuItem *item;
   for (auto &i : items) { 
-    const string &k=tuple_get<0>(i), &n=tuple_get<1>(i), &v=tuple_get<2>(i);
+    const string &k=i.shortcut, &n=i.name, &v=i.cmd;
     if (n == "<separator>") { [menu addItem:[NSMenuItem separatorItem]]; continue; }
 
     NSString *key = nil;
@@ -224,8 +224,8 @@ SystemPanelWidget::SystemPanelWidget(const Box &b, const string &title, const ve
   OSXPanel *panel = [[OSXPanel alloc] initWithBox: b];
   [[panel window] setTitle: [NSString stringWithUTF8String: title.c_str()]];
   for (auto &i : items) {
-    const Box &b = tuple_get<1>(i);
-    const string &t = tuple_get<0>(i), &cmd = tuple_get<2>(i);
+    const Box &b = i.box;
+    const string &t = i.type, &cmd = i.cmd;
     if (t == "textbox") {
       NSTextField *textfield = [[NSTextField alloc] initWithFrame:NSMakeRect(b.x, b.y, b.w, b.h)];
       [panel addTextField: textfield withCommand: cmd];
@@ -284,7 +284,7 @@ void Application::ShowSystemContextMenu(const vector<MenuItem>&items) {
   NSMenuItem *item;
   NSMenu *menu = [[NSMenu alloc] init];
   for (auto &i : items) {
-    const char *k = tuple_get<0>(i).c_str(), *n = tuple_get<1>(i).c_str(), *v = tuple_get<2>(i).c_str();
+    const char *k = i.shortcut.c_str(), *n = i.name.c_str(), *v = i.cmd.c_str();
     if (!strcmp(n, "<separator>")) { [menu addItem:[NSMenuItem separatorItem]]; continue; }
     item = [menu addItemWithTitle: [NSString stringWithUTF8String: n]
                  action:           (v[0] ? @selector(shellRun:) : nil)

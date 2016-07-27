@@ -22,5 +22,6 @@ string GetNSDocumentDirectory();
 
 inline string GetNSString(NSString *x) { return [x UTF8String]; }
 inline NSString *MakeNSString(const string &x) { return [NSString stringWithUTF8String: x.c_str()]; }
+NSArray *MakeNSStringArray(const vector<string>&);
 
 }; // namespace LFL

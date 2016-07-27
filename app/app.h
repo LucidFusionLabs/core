@@ -281,17 +281,6 @@ struct Module {
 #include "core/app/math.h"
 
 namespace LFL {
-typedef tuple<string, string, string> MenuItem;
-typedef tuple<string, Box, string> PanelItem;
-typedef vector<MenuItem> MenuItemVec;
-typedef vector<PanelItem> PanelItemVec;
-struct CompiledMenuItem {
-  enum { Normal=0, Dropdown=1 };
-  MenuItem item;
-  int type, ref;
-  bool loaded=0;
-  CompiledMenuItem(const MenuItem &i=MenuItem(), int t=-1, int r=-1) : type(t), ref(r), item(i) {}
-};
 ::std::ostream& operator<<(::std::ostream& os, const point &x);
 ::std::ostream& operator<<(::std::ostream& os, const Box   &x);
 };
@@ -303,6 +292,32 @@ struct CompiledMenuItem {
 #include "core/app/types/types.h"
 
 namespace LFL {
+struct MenuItem  { string shortcut, name, cmd; };
+struct PanelItem { string type; Box box; string cmd; };
+struct TableItem {
+  typedef unordered_map<string, vector<Triple<int, int, string>>> Depends;
+  string key, type, val;
+  int left_icon, right_icon;
+  string right_icon_cmd;
+  Depends depends;
+  TableItem(string K=string(), string T=string(), string V=string(), int LI=0, int RI=0, string RC=string(), Depends D=Depends())
+    : key(move(K)), type(move(T)), val(move(V)), left_icon(LI), right_icon(RI), right_icon_cmd(move(RC)), depends(move(D)) {}
+};
+struct CompiledTableItem {
+  enum { Normal=0, Dropdown=1 };
+  TableItem item;
+  int type, ref;
+  bool loaded=0;
+  CompiledTableItem(const TableItem &i=TableItem(), int t=-1, int r=-1) : type(t), ref(r), item(i) {}
+};
+struct CompiledTable {
+  string header;
+  vector<CompiledTableItem> item;
+};
+typedef vector<MenuItem>  MenuItemVec;
+typedef vector<PanelItem> PanelItemVec;
+typedef vector<TableItem> TableItemVec;
+
 struct Flag {
   const char *name, *desc, *file;
   int line;
@@ -637,6 +652,7 @@ struct Application : public ::LFApp {
   void ShowSystemContextMenu(const vector<MenuItem> &items);
   void ShowSystemFontChooser(const FontDesc &cur_font, const string &choose_cmd);
   void ShowSystemFileChooser(bool files, bool dirs, bool multi, const string &choose_cmd);
+  int LoadSystemImage(const string &fn);
   bool OpenSystemAppPreferences();
 
   void OpenTouchKeyboard();
@@ -726,8 +742,8 @@ struct SystemMenuWidget {
 struct SystemTableWidget {
   VoidPtr impl;
   virtual ~SystemTableWidget();
-  SystemTableWidget(const string &title, const string &style, const vector<MenuItem> &items);
-  void AddNavigationButton(const MenuItem &item, int align);
+  SystemTableWidget(const string &title, const string &style, const vector<TableItem> &items);
+  void AddNavigationButton(const TableItem &item, int align);
   void AddToolbar(SystemToolbarWidget*);
   void SetEditableSection(int section);
   void Show(bool show_or_hide);
