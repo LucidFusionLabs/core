@@ -283,11 +283,8 @@ struct Module {
 namespace LFL {
 ::std::ostream& operator<<(::std::ostream& os, const point &x);
 ::std::ostream& operator<<(::std::ostream& os, const Box   &x);
-};
+}; // namespace LFL
 
-#ifdef LFL_ANDROID
-#include "core/app/bindings/jni.h"
-#endif
 #include "core/app/file.h"
 #include "core/app/types/types.h"
 
@@ -330,7 +327,13 @@ struct Flag {
   virtual bool IsBool() const = 0;
   virtual void Update(const char *text) = 0;
 };
+}; // namespace LFL
 
+#ifdef LFL_ANDROID
+#include "core/app/bindings/jni.h"
+#endif
+
+namespace LFL {
 struct FlagMap {
   typedef map<string, Flag*> AllFlags;
   const char *optarg=0;

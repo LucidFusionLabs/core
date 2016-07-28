@@ -46,6 +46,7 @@ struct SSHClientConnection : public Connection::Handler {
   BigNum K;
   Crypto::DiffieHellman dh;
   Crypto::EllipticCurveDiffieHellman ecdh;
+  Crypto::X25519DiffieHellman x25519dh;
   Crypto::DigestAlgo kex_hash;
   Crypto::Cipher encrypt, decrypt;
   Crypto::CipherAlgo cipher_algo_c2s, cipher_algo_s2c;
@@ -144,7 +145,12 @@ struct SSHClientConnection : public Connection::Handler {
                " }");
           SSHTrace(c->Name(), ": block_size=", encrypt_block_size, ",", decrypt_block_size, " mac_len=", MAC_len_c, ",", MAC_len_s);
 
-          if (SSH::KEX::EllipticCurveDiffieHellman(kex_method)) {
+          if (SSH::KEX::X25519DiffieHellman(kex_method)) {
+            kex_hash = Crypto::DigestAlgos::SHA256();
+            x25519dh.GeneratePair(rand_eng);
+            if (!WriteClearOrEncrypted(c, SSH::MSG_KEX_ECDH_INIT(x25519dh.pubkey))) return ERRORv(-1, c->Name(), ": write");
+
+          } else if (SSH::KEX::EllipticCurveDiffieHellman(kex_method)) {
             switch (kex_method) {
               case SSH::KEX::ECDH_SHA2_NISTP256: curve_id=Crypto::EllipticCurve::NISTP256(); kex_hash=Crypto::DigestAlgos::SHA256(); break;
               case SSH::KEX::ECDH_SHA2_NISTP384: curve_id=Crypto::EllipticCurve::NISTP384(); kex_hash=Crypto::DigestAlgos::SHA384(); break;
@@ -175,10 +181,21 @@ struct SSHClientConnection : public Connection::Handler {
         case SSH::MSG_KEX_DH_GEX_REPLY::ID: {
           if (state != FIRST_KEXREPLY && state != KEXREPLY) return ERRORv(-1, c->Name(), ": unexpected state ", state);
           if (guessed_s && !guessed_right_s && !(guessed_s=0)) { INFO(c->Name(), ": server guessed wrong, ignoring packet"); break; }
-          if (packet_id == SSH::MSG_KEXDH_REPLY::ID && SSH::KEX::EllipticCurveDiffieHellman(kex_method)) {
+          
+          if (packet_id == SSH::MSG_KEXDH_REPLY::ID && SSH::KEX::X25519DiffieHellman(kex_method)) {
             SSH::MSG_KEX_ECDH_REPLY msg; // MSG_KEX_ECDH_REPLY and MSG_KEXDH_REPLY share ID 31
             if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_KEX_ECDH_REPLY");
-            SSHTrace(c->Name(), ": MSG_KEX_ECDH_REPLY");
+            SSHTrace(c->Name(), ": MSG_KEX_ECDH_REPLY for X25519DH");
+
+            x25519dh.remotepubkey = msg.q_s.str();
+            if (!x25519dh.ComputeSecret(&K)) return ERRORv(-1, c->Name(), ": x25519dh");
+            if ((v = ComputeExchangeHashAndVerifyHostKey(c, msg.k_s, msg.h_sig)) != 1) return ERRORv(-1, c->Name(), ": verify hostkey failed: ", v);
+            // fall forward
+
+          } else if (packet_id == SSH::MSG_KEXDH_REPLY::ID && SSH::KEX::EllipticCurveDiffieHellman(kex_method)) {
+            SSH::MSG_KEX_ECDH_REPLY msg; // MSG_KEX_ECDH_REPLY and MSG_KEXDH_REPLY share ID 31
+            if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_KEX_ECDH_REPLY");
+            SSHTrace(c->Name(), ": MSG_KEX_ECDH_REPLY for ECDH");
 
             ecdh.s_text = msg.q_s.str();
             ECPointSetData(ecdh.g, ecdh.s, ecdh.s_text);
@@ -382,7 +399,7 @@ struct SSHClientConnection : public Connection::Handler {
   }
 
   int ComputeExchangeHashAndVerifyHostKey(Connection *c, const StringPiece &k_s, const StringPiece &h_sig) {
-    H_text = SSH::ComputeExchangeHash(kex_method, kex_hash, V_C, V_S, KEXINIT_C, KEXINIT_S, k_s, K, &dh, &ecdh);
+    H_text = SSH::ComputeExchangeHash(kex_method, kex_hash, V_C, V_S, KEXINIT_C, KEXINIT_S, k_s, K, &dh, &ecdh, &x25519dh);
     if (state == FIRST_KEXREPLY) session_id = H_text;
     SSHTrace(c->Name(), ": H = \"", CHexEscape(H_text), "\"");
     return SSH::VerifyHostKey(H_text, hostkey_type, k_s, h_sig);
@@ -573,13 +590,22 @@ int SSH::VerifyHostKey(const string &H_text, int hostkey_type, const StringPiece
     FreeECPair(ecdsa_keypair);
     ECDSASigFree(ecdsa_sig);
     return verified;
+  } else if (hostkey_type == SSH::Key::ED25519) {
+    SSH::ED25519Key key_msg;
+    SSH::ED25519Signature sig_msg;
+    Serializable::ConstStream ed25519key_stream(key.data(), key.size());
+    Serializable::ConstStream ed25519sig_stream(sig.data(), sig.size());
+    if (key_msg.In(&ed25519key_stream)) return -10;
+    if (sig_msg.In(&ed25519sig_stream)) return -11;
+    return ED25519Verify(H_text, sig_msg.sig, key_msg.key);
 
-  } else return -10;
+  } else return -12;
 }
 
 string SSH::ComputeExchangeHash(int kex_method, Crypto::DigestAlgo algo, const string &V_C, const string &V_S,
                                 const string &KI_C, const string &KI_S, const StringPiece &k_s, BigNum K,
-                                Crypto::DiffieHellman *dh, Crypto::EllipticCurveDiffieHellman *ecdh) {
+                                Crypto::DiffieHellman *dh, Crypto::EllipticCurveDiffieHellman *ecdh,
+                                Crypto::X25519DiffieHellman *x25519dh) {
   string ret;
   unsigned char kex_c_padding = 0, kex_s_padding = 0;
   int kex_c_packet_len = 4 + SSH::BinaryPacketLength(KI_C.data(), &kex_c_padding, NULL);
@@ -597,7 +623,10 @@ string SSH::ComputeExchangeHash(int kex_method, Crypto::DigestAlgo algo, const s
     UpdateDigest(H, dh->p);
     UpdateDigest(H, dh->g);
   }
-  if (KEX::EllipticCurveDiffieHellman(kex_method)) {
+  if (KEX::X25519DiffieHellman(kex_method)) {
+    UpdateDigest(H, x25519dh->pubkey);
+    UpdateDigest(H, x25519dh->remotepubkey);
+  } else if (KEX::EllipticCurveDiffieHellman(kex_method)) {
     UpdateDigest(H, ecdh->c_text);
     UpdateDigest(H, ecdh->s_text);
   } else {
@@ -670,10 +699,10 @@ int SSH::KEX   ::Id(const string &n) { static unordered_map<string, int> m; ONCE
 int SSH::Cipher::Id(const string &n) { static unordered_map<string, int> m; ONCE({ for (int i=1; i<=End; ++i) m[Name(i)] = i; }); return FindOrDefault(m, n, 0); }
 int SSH::MAC   ::Id(const string &n) { static unordered_map<string, int> m; ONCE({ for (int i=1; i<=End; ++i) m[Name(i)] = i; }); return FindOrDefault(m, n, 0); }
 
-bool SSH::Key   ::Supported(int) { return true; }
-bool SSH::KEX   ::Supported(int) { return true; }
-bool SSH::Cipher::Supported(int) { return true; }
-bool SSH::MAC   ::Supported(int) { return true; }
+bool SSH::Key   ::Supported(int x) { return true; }
+bool SSH::KEX   ::Supported(int x) { return true; }
+bool SSH::Cipher::Supported(int x) { return true; }
+bool SSH::MAC   ::Supported(int x) { return true; }
 
 const char *SSH::Key::Name(int id) {
   switch(id) {
@@ -682,12 +711,14 @@ const char *SSH::Key::Name(int id) {
     case ECDSA_SHA2_NISTP256: return "ecdsa-sha2-nistp256";
     case ECDSA_SHA2_NISTP384: return "ecdsa-sha2-nistp384";
     case ECDSA_SHA2_NISTP521: return "ecdsa-sha2-nistp521";
+    case ED25519:             return "ssh-ed25519";
     default:                  return "";
   }
 };
 
 const char *SSH::KEX::Name(int id) {
   switch(id) {
+    case ECDH_SHA2_X25519:   return "curve25519-sha256@libssh.org";
     case ECDH_SHA2_NISTP256: return "ecdh-sha2-nistp256";
     case ECDH_SHA2_NISTP384: return "ecdh-sha2-nistp384";
     case ECDH_SHA2_NISTP521: return "ecdh-sha2-nistp521";
@@ -995,6 +1026,30 @@ void SSH::ECDSASignature::Out(Serializable::Stream *o) const {
   WriteBigNum(r, &blobo);
   WriteBigNum(s, &blobo);
   o->BString(blob);
+}
+
+int SSH::ED25519Key::In(const Serializable::Stream *i) {
+  i->ReadString(&format_id);
+  i->ReadString(&key);
+  if (format_id.str() != "ssh-ed25519") { i->error = true; return -1; }
+  return i->Result();
+}
+
+void SSH::ED25519Key::Out(Serializable::Stream *o) const {
+  o->BString(format_id);
+  o->BString(key);
+}
+
+int SSH::ED25519Signature::In(const Serializable::Stream *i) {
+  i->ReadString(&format_id);
+  i->ReadString(&sig);
+  if (format_id.str() != "ssh-ed25519") { i->error = true; return -1; }
+  return i->Result();
+}
+
+void SSH::ED25519Signature::Out(Serializable::Stream *o) const {
+  o->BString(format_id);
+  o->BString(sig);
 }
 
 }; // namespace LFL

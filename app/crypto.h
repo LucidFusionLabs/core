@@ -75,9 +75,11 @@ void ECDSASigFree(ECDSASig);
 int RSAVerify(const StringPiece &digest, string *out, RSAKey rsa_key);
 int DSAVerify(const StringPiece &digest, DSASig dsa_sig, DSAKey dsa_key);
 int ECDSAVerify(const StringPiece &digest, ECDSASig dsa_sig, ECPair ecdsa_keypair);
+int ED25519Verify(const StringPiece &digest, const StringPiece &sig, const StringPiece &ed25519_key);
 int RSASign(const StringPiece &digest, string *out, RSAKey rsa_key);
 DSASig DSASign(const StringPiece &digest, DSAKey dsa_key);
 ECDSASig ECDSASign(const StringPiece &digest, ECPair ecdsa_keypair);
+string ED25519Sign(const StringPiece &digest, const StringPiece &ed25519_key);
 
 struct Crypto {
   struct Cipher     : public VoidPtr      { using VoidPtr::VoidPtr; };
@@ -143,6 +145,12 @@ struct Crypto {
     virtual ~EllipticCurveDiffieHellman() { FreeECPair(pair); FreeECPoint(s); }
     bool GeneratePair(ECDef curve, BigNumContext ctx);
     bool ComputeSecret(BigNum *K, BigNumContext ctx);
+  };
+
+  struct X25519DiffieHellman {
+    string pubkey, privkey, remotepubkey;
+    void GeneratePair(std::mt19937&);
+    bool ComputeSecret(BigNum *K);
   };
 
   static string MD5(const string &in);

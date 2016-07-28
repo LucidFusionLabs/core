@@ -33,7 +33,7 @@ namespace LFL {
 ECPoint NewECPoint(ECGroup g) { return EC_POINT_new(FromVoid<EC_GROUP*>(g)); }
 void FreeECPoint(ECPoint p) { if (p) EC_POINT_free(FromVoid<EC_POINT*>(p)); }
 void FreeECPair(ECPair p) { if (p) EC_KEY_free(FromVoid<EC_KEY*>(p)); }
-ECDef GetECGroupID(ECGroup g) { return Void(EC_GROUP_get_curve_name(FromVoid<EC_GROUP*>(g))); }
+ECDef GetECGroupID(ECGroup g) { return Void(intptr_t(EC_GROUP_get_curve_name(FromVoid<EC_GROUP*>(g)))); }
 ECGroup GetECPairGroup (ECPair p) { return const_cast<EC_GROUP*>(EC_KEY_get0_group(FromVoid<EC_KEY*>(p))); }
 ECPoint GetECPairPubKey(ECPair p) { return const_cast<EC_POINT*>(EC_KEY_get0_public_key(FromVoid<EC_KEY*>(p))); }
 bool SetECPairPubKey(ECPair p, ECPoint k) { return EC_KEY_set_public_key(FromVoid<EC_KEY*>(p), FromVoid<EC_POINT*>(k)); }

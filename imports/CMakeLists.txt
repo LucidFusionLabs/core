@@ -255,6 +255,13 @@ if(LFL_OPENSSL)
     set(OPENSSL_LIB ${OPENSSL_LIB} PARENT_SCOPE)
 endif()
 
+# ref10_extract
+if(LFL_REF10EXTRACT)
+  add_subdirectory(ref10_extract)
+  set(REF10EXTRACT_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/ref10_extract PARENT_SCOPE)
+  set(REF10EXTRACT_LIB libcurve25519 libed25519 PARENT_SCOPE)
+endif()
+
 # box2d
 if(LFL_BOX2D)
   option(BOX2D_BUILD_EXAMPLES OFF)

@@ -56,7 +56,7 @@ struct SSH {
   static void UpdateDigest(Crypto::Digest d, BigNum n);
   static string ComputeExchangeHash(int kex_method, Crypto::DigestAlgo algo, const string &V_C, const string &V_S,
                                     const string &KI_C, const string &KI_S, const StringPiece &k_s, BigNum K,
-                                    Crypto::DiffieHellman*, Crypto::EllipticCurveDiffieHellman*);
+                                    Crypto::DiffieHellman*, Crypto::EllipticCurveDiffieHellman*, Crypto::X25519DiffieHellman*);
   static int VerifyHostKey(const string &H_text, int hostkey_type, const StringPiece &key, const StringPiece &sig);
   static string DeriveKey(Crypto::DigestAlgo algo, const string &session_id, const string &H_text, BigNum K, char ID, int bytes);
   static string DeriveChallenge(Crypto::DigestAlgo algo, const StringPiece &session_id, const StringPiece &user_name,
@@ -64,7 +64,7 @@ struct SSH {
   static string MAC(Crypto::MACAlgo algo, int MAC_len, const StringPiece &m, int seq, const string &k, int prefix=0);
 
   struct Key {
-    enum { ECDSA_SHA2_NISTP256=1, ECDSA_SHA2_NISTP384=2, ECDSA_SHA2_NISTP521=3, RSA=4, DSS=5, End=6 };
+    enum { ED25519=1, ECDSA_SHA2_NISTP256=2, ECDSA_SHA2_NISTP384=3, ECDSA_SHA2_NISTP521=4, RSA=5, DSS=6, End=6 };
     static int Id(const string &n);
     static const char *Name(int id);
     static bool Supported(int);
@@ -74,12 +74,14 @@ struct SSH {
   };
 
   struct KEX {
-    enum { ECDH_SHA2_NISTP256=1, ECDH_SHA2_NISTP384=2, ECDH_SHA2_NISTP521=3, DHGEX_SHA256=4, DHGEX_SHA1=5, DH14_SHA1=6, DH1_SHA1=7, End=7 };
+    enum { ECDH_SHA2_X25519=1, ECDH_SHA2_NISTP256=2, ECDH_SHA2_NISTP384=3, ECDH_SHA2_NISTP521=4,
+      DHGEX_SHA256=5, DHGEX_SHA1=6, DH14_SHA1=7, DH1_SHA1=8, End=8 };
     static int Id(const string &n);
     static const char *Name(int id);
     static bool Supported(int);
     static string PreferenceCSV(int start_after=0);
     static bool PreferenceIntersect(const StringPiece &pref_csv, int *out, int start_after=0);
+    static bool X25519DiffieHellman(int id) { return id==ECDH_SHA2_X25519; }
     static bool EllipticCurveDiffieHellman(int id) { return id==ECDH_SHA2_NISTP256 || id==ECDH_SHA2_NISTP384 || id==ECDH_SHA2_NISTP521; }
     static bool DiffieHellmanGroupExchange(int id) { return id==DHGEX_SHA256 || id==DHGEX_SHA1; }
     static bool DiffieHellman(int id) { return id==DHGEX_SHA256 || id==DHGEX_SHA1 || id==DH14_SHA1 || id==DH1_SHA1; }
@@ -494,6 +496,26 @@ struct SSH {
 
     int HeaderSize() const { return 4*4; }
     int Size() const { return HeaderSize() + format_id.size() + BigNumSize(r) + BigNumSize(s); }
+    void Out(Serializable::Stream *o) const;
+    int In(const Serializable::Stream *i);
+  };
+
+  struct ED25519Key : public LFL::Serializable {
+    StringPiece format_id, key;
+    ED25519Key(const StringPiece &k=StringPiece()) : Serializable(0), format_id("ssh-ed25519"), key(k) {}
+
+    int HeaderSize() const { return 4*2 + 11; }
+    int Size() const { return HeaderSize() + key.size(); }
+    void Out(Serializable::Stream *o) const;
+    int In(const Serializable::Stream *i);
+  };
+
+  struct ED25519Signature : public LFL::Serializable {
+    StringPiece format_id, sig;
+    ED25519Signature(const StringPiece &s=StringPiece()) : Serializable(0), format_id("ssh-ed25519"), sig(s) {}
+
+    int HeaderSize() const { return 4*2 + 11; }
+    int Size() const { return HeaderSize() + sig.size(); }
     void Out(Serializable::Stream *o) const;
     int In(const Serializable::Stream *i);
   };

@@ -98,9 +98,9 @@ tuple<jobjectArray, jobjectArray, jobjectArray> JNI::ToJObjectArray(const MenuIt
   jobjectArray v = env->NewObjectArray(items.size(), string_class, NULL);
   jobjectArray w = env->NewObjectArray(items.size(), string_class, NULL);
   for (int i=0, l=items.size(); i != l; ++i) {
-    env->SetObjectArrayElement(k, i, ToJString(tuple_get<0>(items[i])));
-    env->SetObjectArrayElement(v, i, ToJString(tuple_get<1>(items[i])));
-    env->SetObjectArrayElement(w, i, ToJString(tuple_get<2>(items[i])));
+    env->SetObjectArrayElement(k, i, ToJString(items[i].shortcut));
+    env->SetObjectArrayElement(v, i, ToJString(items[i].name));
+    env->SetObjectArrayElement(w, i, ToJString(items[i].cmd));
   }
   return make_tuple(k, v, w);
 }
@@ -193,16 +193,18 @@ void SystemMenuWidget::Show() {
 
 int GetTableWidgetID(SystemTableWidget *w) { return int(w->impl); }
 SystemTableWidget::~SystemTableWidget() {}
-SystemTableWidget::SystemTableWidget(const string &title, const vector<MenuItem> &items) {
+SystemTableWidget::SystemTableWidget(const string &title, const string &style, const vector<TableItem> &items) {
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->activity_class,
                            "addTable", "(Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;)I"));
+#if 0
   auto kvw = jni->ToJObjectArray(items);
   impl.v = Void(jni->env->CallIntMethod(jni->activity, mid, jni->ToJString(title),
                                         tuple_get<0>(kvw), tuple_get<1>(kvw), tuple_get<2>(kvw)));
+#endif
 }
 
-void SystemTableWidget::AddNavigationButton(const MenuItem &item, int align) {}
+void SystemTableWidget::AddNavigationButton(const TableItem &item, int align) {}
 void SystemTableWidget::SetEditableSection(int section) {}
 
 void SystemTableWidget::AddToolbar(SystemToolbarWidget *toolbar) {
