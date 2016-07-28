@@ -121,6 +121,8 @@ struct ScopedReentryGuard {
 
 struct DestructorCallbacks {
   vector<Callback> cb;
+  DestructorCallbacks() {}
+  DestructorCallbacks(Callback c) { cb.emplace_back(move(c)); }
   ~DestructorCallbacks() { for (auto &f : cb) f(); }
 }; 
 

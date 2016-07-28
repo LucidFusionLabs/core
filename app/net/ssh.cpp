@@ -148,7 +148,7 @@ struct SSHClientConnection : public Connection::Handler {
           if (SSH::KEX::X25519DiffieHellman(kex_method)) {
             kex_hash = Crypto::DigestAlgos::SHA256();
             x25519dh.GeneratePair(rand_eng);
-            if (!WriteClearOrEncrypted(c, SSH::MSG_KEX_ECDH_INIT(x25519dh.pubkey))) return ERRORv(-1, c->Name(), ": write");
+            if (!WriteClearOrEncrypted(c, SSH::MSG_KEX_ECDH_INIT(x25519dh.mykey.pubkey))) return ERRORv(-1, c->Name(), ": write");
 
           } else if (SSH::KEX::EllipticCurveDiffieHellman(kex_method)) {
             switch (kex_method) {
@@ -243,7 +243,15 @@ struct SSHClientConnection : public Connection::Handler {
           SSHTrace(c->Name(), ": MSG_SERVICE_ACCEPT");
 
           if (!identity) { /**/ }
-          else if (identity->ec) {
+          else if (identity->ed25519.privkey.size()) {
+            string pubkey = SSH::Ed25519Key(identity->ed25519.pubkey).ToString();
+            string challenge = SSH::DeriveChallengeText(session_id, user, "ssh-connection", "publickey", "ssh-ed25519", pubkey);
+            string sig = SSH::Ed25519Signature(Ed25519Sign(challenge, identity->ed25519.privkey)).ToString();
+            if (!WriteCipher(c, SSH::MSG_USERAUTH_REQUEST(user, "ssh-connection", "publickey", "ssh-ed25519", pubkey, sig)))
+              return ERRORv(-1, c->Name(), ": write");
+            break;
+
+          } else if (identity->ec) {
             ECGroup group = GetECPairGroup(identity->ec);
             ECDef curve_id = GetECGroupID(group);
             string algo_name, curve_name;
@@ -263,6 +271,7 @@ struct SSHClientConnection : public Connection::Handler {
             if (!WriteCipher(c, SSH::MSG_USERAUTH_REQUEST(user, "ssh-connection", "publickey", algo_name, pubkey, sig)))
               return ERRORv(-1, c->Name(), ": write");
             break;
+
           } else if (identity->rsa) {
             string sig, pubkey = SSH::RSAKey(GetRSAKeyE(identity->rsa), GetRSAKeyN(identity->rsa)).ToString();
             string challenge = SSH::DeriveChallenge(Crypto::DigestAlgos::SHA1(), session_id, user, "ssh-connection", "publickey", "ssh-rsa", pubkey);
@@ -271,6 +280,7 @@ struct SSHClientConnection : public Connection::Handler {
                                                           SSH::RSASignature(sig).ToString())))
               return ERRORv(-1, c->Name(), ": write");
             break;
+
           } else if (identity->dsa) {
             string pubkey = SSH::DSSKey(GetDSAKeyP(identity->dsa), GetDSAKeyQ(identity->dsa),
                                         GetDSAKeyG(identity->dsa), GetDSAKeyK(identity->dsa)).ToString();
@@ -591,13 +601,13 @@ int SSH::VerifyHostKey(const string &H_text, int hostkey_type, const StringPiece
     ECDSASigFree(ecdsa_sig);
     return verified;
   } else if (hostkey_type == SSH::Key::ED25519) {
-    SSH::ED25519Key key_msg;
-    SSH::ED25519Signature sig_msg;
+    SSH::Ed25519Key key_msg;
+    SSH::Ed25519Signature sig_msg;
     Serializable::ConstStream ed25519key_stream(key.data(), key.size());
     Serializable::ConstStream ed25519sig_stream(sig.data(), sig.size());
     if (key_msg.In(&ed25519key_stream)) return -10;
     if (sig_msg.In(&ed25519sig_stream)) return -11;
-    return ED25519Verify(H_text, sig_msg.sig, key_msg.key);
+    return Ed25519Verify(H_text, sig_msg.sig, key_msg.key);
 
   } else return -12;
 }
@@ -624,7 +634,7 @@ string SSH::ComputeExchangeHash(int kex_method, Crypto::DigestAlgo algo, const s
     UpdateDigest(H, dh->g);
   }
   if (KEX::X25519DiffieHellman(kex_method)) {
-    UpdateDigest(H, x25519dh->pubkey);
+    UpdateDigest(H, x25519dh->mykey.pubkey);
     UpdateDigest(H, x25519dh->remotepubkey);
   } else if (KEX::EllipticCurveDiffieHellman(kex_method)) {
     UpdateDigest(H, ecdh->c_text);
@@ -652,6 +662,22 @@ string SSH::DeriveKey(Crypto::DigestAlgo algo, const string &session_id, const s
   }
   ret.resize(bytes);
   return ret;
+}
+
+string SSH::DeriveChallengeText(const StringPiece &session_id, const StringPiece &user_name, const StringPiece &service_name,
+                                const StringPiece &method_name, const StringPiece &algo_name, const StringPiece &secret) {
+  string out(2 + 4*6 + session_id.size() + user_name.size() + service_name.size() + method_name.size() +
+             algo_name.size() + secret.size(), 0);
+  Serializable::MutableStream o(&out[0], out.size());
+  o.BString(session_id);
+  o.Write8(static_cast<unsigned char>(MSG_USERAUTH_REQUEST::ID));
+  o.BString(user_name);
+  o.BString(service_name);
+  o.BString(method_name);
+  o.Write8(static_cast<unsigned char>(1));
+  o.BString(algo_name);
+  o.BString(secret);
+  return out;
 }
 
 string SSH::DeriveChallenge(Crypto::DigestAlgo algo, const StringPiece &session_id, const StringPiece &user_name,
@@ -1028,26 +1054,26 @@ void SSH::ECDSASignature::Out(Serializable::Stream *o) const {
   o->BString(blob);
 }
 
-int SSH::ED25519Key::In(const Serializable::Stream *i) {
+int SSH::Ed25519Key::In(const Serializable::Stream *i) {
   i->ReadString(&format_id);
   i->ReadString(&key);
   if (format_id.str() != "ssh-ed25519") { i->error = true; return -1; }
   return i->Result();
 }
 
-void SSH::ED25519Key::Out(Serializable::Stream *o) const {
+void SSH::Ed25519Key::Out(Serializable::Stream *o) const {
   o->BString(format_id);
   o->BString(key);
 }
 
-int SSH::ED25519Signature::In(const Serializable::Stream *i) {
+int SSH::Ed25519Signature::In(const Serializable::Stream *i) {
   i->ReadString(&format_id);
   i->ReadString(&sig);
   if (format_id.str() != "ssh-ed25519") { i->error = true; return -1; }
   return i->Result();
 }
 
-void SSH::ED25519Signature::Out(Serializable::Stream *o) const {
+void SSH::Ed25519Signature::Out(Serializable::Stream *o) const {
   o->BString(format_id);
   o->BString(sig);
 }

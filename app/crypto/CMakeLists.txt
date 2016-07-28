@@ -22,4 +22,5 @@ endif()
 if(LFL_REF10EXTRACT)
   lfl_add_target(app_ref10_25519 STATIC_LIBRARY SOURCES ref10_25519.cpp
                  INCLUDE_DIRECTORIES ${REF10EXTRACT_INCLUDE} LINK_LIBRARIES ${REF10EXTRACT_LIB})
+  lfl_add_target(app_bcrypt_pbkdf STATIC_LIBRARY SOURCES bcrypt_pbkdf.cpp)
 endif()

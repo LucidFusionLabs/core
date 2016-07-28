@@ -22,6 +22,7 @@
 namespace LFL {
 Crypto::CipherAlgo Crypto::CipherAlgos::AES128_CTR()   { FATAL("not implemented"); }
 Crypto::CipherAlgo Crypto::CipherAlgos::AES128_CBC()   { FATAL("not implemented"); }
+Crypto::CipherAlgo Crypto::CipherAlgos::AES256_CBC()   { FATAL("not implemented"); }
 Crypto::CipherAlgo Crypto::CipherAlgos::TripDES_CBC()  { FATAL("not implemented"); }
 Crypto::CipherAlgo Crypto::CipherAlgos::Blowfish_CBC() { FATAL("not implemented"); }
 Crypto::CipherAlgo Crypto::CipherAlgos::RC4()          { FATAL("not implemented"); }

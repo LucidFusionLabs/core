@@ -30,6 +30,7 @@ Crypto::CipherAlgo Crypto::CipherAlgos::AES128_CTR()   { return 0; }
 Crypto::CipherAlgo Crypto::CipherAlgos::AES128_CTR()   { return CipherAlgo(EVP_aes_128_ctr()); }
 #endif
 Crypto::CipherAlgo Crypto::CipherAlgos::AES128_CBC()   { return CipherAlgo(EVP_aes_128_cbc()); }
+Crypto::CipherAlgo Crypto::CipherAlgos::AES256_CBC()   { return CipherAlgo(EVP_aes_256_cbc()); }
 Crypto::CipherAlgo Crypto::CipherAlgos::TripDES_CBC()  { return CipherAlgo(EVP_des_ede3_cbc()); }
 Crypto::CipherAlgo Crypto::CipherAlgos::Blowfish_CBC() { return CipherAlgo(EVP_bf_cbc()); }
 Crypto::CipherAlgo Crypto::CipherAlgos::RC4()          { return CipherAlgo(EVP_rc4()); }

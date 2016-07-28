@@ -22,7 +22,7 @@
 #include <CommonCrypto/CommonHMAC.h>
 
 namespace LFL {
-struct CCCipherAlgo { enum { AES128_CTR=1, AES128_CBC=2, TripDES_CBC=3, Blowfish_CBC=4, RC4=5 }; };
+struct CCCipherAlgo { enum { AES128_CTR=1, AES128_CBC=2, AES256_CBC=3, TripDES_CBC=4, Blowfish_CBC=5, RC4=6 }; };
 struct CCDigestAlgo { enum { MD5=1, SHA1=2, SHA256=3, SHA384=4, SHA512=5 }; };
 
 struct CCCipher { size_t algo=0; CCAlgorithm ccalgo=0; CCCryptorRef ctx=0; };
@@ -32,6 +32,7 @@ struct CCMAC { CCHmacAlgorithm algo; CCHmacContext ctx; };
 string Crypto::Blowfish(const string &passphrase, const string &in, bool encrypt_or_decrypt) { FATAL("not implemented"); }
 Crypto::CipherAlgo Crypto::CipherAlgos::AES128_CTR()   { return Void(CCCipherAlgo::AES128_CTR); }
 Crypto::CipherAlgo Crypto::CipherAlgos::AES128_CBC()   { return Void(CCCipherAlgo::AES128_CBC); }
+Crypto::CipherAlgo Crypto::CipherAlgos::AES256_CBC()   { return Void(CCCipherAlgo::AES256_CBC); }
 Crypto::CipherAlgo Crypto::CipherAlgos::TripDES_CBC()  { return Void(CCCipherAlgo::TripDES_CBC); }
 Crypto::CipherAlgo Crypto::CipherAlgos::Blowfish_CBC() { return Void(CCCipherAlgo::Blowfish_CBC); }
 Crypto::CipherAlgo Crypto::CipherAlgos::RC4()          { return Void(CCCipherAlgo::RC4); }
@@ -49,6 +50,7 @@ const char *Crypto::CipherAlgos::Name(CipherAlgo v) {
   switch (size_t(v.v)) {
     case CCCipherAlgo::AES128_CTR:   return "aes128-ctr";
     case CCCipherAlgo::AES128_CBC:   return "aes128-cbc";
+    case CCCipherAlgo::AES256_CBC:   return "aes256-cbc";
     case CCCipherAlgo::TripDES_CBC:  return "3des-cbc";
     case CCCipherAlgo::Blowfish_CBC: return "blowfish-cbc";
     case CCCipherAlgo::RC4:          return "rc4";
@@ -60,6 +62,7 @@ int Crypto::CipherAlgos::KeySize(CipherAlgo v) {
   switch (size_t(v.v)) {
     case CCCipherAlgo::AES128_CTR:   return kCCKeySizeAES128;
     case CCCipherAlgo::AES128_CBC:   return kCCKeySizeAES128;
+    case CCCipherAlgo::AES256_CBC:   return kCCKeySizeAES256;
     case CCCipherAlgo::TripDES_CBC:  return kCCKeySize3DES;
     case CCCipherAlgo::Blowfish_CBC: return 16;
     case CCCipherAlgo::RC4:          return 16;
@@ -125,11 +128,12 @@ int Crypto::CipherOpen(Cipher x, CipherAlgo algo, bool dir, const StringPiece &k
   bool ctr = false;
   auto c = FromVoid<CCCipher*>(x);
   switch((c->algo = size_t(algo.v))) {
-    case CCCipherAlgo::AES128_CTR:   c->ccalgo = kCCAlgorithmAES128; ctr = true; break;
-    case CCCipherAlgo::AES128_CBC:   c->ccalgo = kCCAlgorithmAES128;             break;
-    case CCCipherAlgo::TripDES_CBC:  c->ccalgo = kCCAlgorithm3DES;               break;
-    case CCCipherAlgo::Blowfish_CBC: c->ccalgo = kCCAlgorithmBlowfish;           break;
-    case CCCipherAlgo::RC4:          c->ccalgo = kCCAlgorithmRC4;                break;
+    case CCCipherAlgo::AES128_CTR:   c->ccalgo = kCCAlgorithmAES; ctr = true; break;
+    case CCCipherAlgo::AES128_CBC:   c->ccalgo = kCCAlgorithmAES;             break;
+    case CCCipherAlgo::AES256_CBC:   c->ccalgo = kCCAlgorithmAES;             break;
+    case CCCipherAlgo::TripDES_CBC:  c->ccalgo = kCCAlgorithm3DES;            break;
+    case CCCipherAlgo::Blowfish_CBC: c->ccalgo = kCCAlgorithmBlowfish;        break;
+    case CCCipherAlgo::RC4:          c->ccalgo = kCCAlgorithmRC4;             break;
     default:                         return -1;
   }
   int mode = (size_t(algo.v) == CCCipherAlgo::RC4) ? kCCModeRC4 : (ctr ? kCCModeCTR : kCCModeCBC);

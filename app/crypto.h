@@ -50,6 +50,8 @@ int ECPointDataSize(ECGroup, ECPoint, BigNumContext);
 void ECPointGetData(ECGroup, ECPoint, char *out, int len, BigNumContext);
 void ECPointSetData(ECGroup, ECPoint out, const StringPiece &data);
 
+struct Ed25519Pair { string pubkey, privkey; };
+
 struct RSAKey   : public VoidPtr { using VoidPtr::VoidPtr; };
 struct DSAKey   : public VoidPtr { using VoidPtr::VoidPtr; };
 struct DSASig   : public VoidPtr { using VoidPtr::VoidPtr; };
@@ -75,11 +77,11 @@ void ECDSASigFree(ECDSASig);
 int RSAVerify(const StringPiece &digest, string *out, RSAKey rsa_key);
 int DSAVerify(const StringPiece &digest, DSASig dsa_sig, DSAKey dsa_key);
 int ECDSAVerify(const StringPiece &digest, ECDSASig dsa_sig, ECPair ecdsa_keypair);
-int ED25519Verify(const StringPiece &digest, const StringPiece &sig, const StringPiece &ed25519_key);
+int Ed25519Verify(const StringPiece &msg, const StringPiece &sig, const StringPiece &ed25519_key);
 int RSASign(const StringPiece &digest, string *out, RSAKey rsa_key);
 DSASig DSASign(const StringPiece &digest, DSAKey dsa_key);
 ECDSASig ECDSASign(const StringPiece &digest, ECPair ecdsa_keypair);
-string ED25519Sign(const StringPiece &digest, const StringPiece &ed25519_key);
+string Ed25519Sign(const StringPiece &msg, const StringPiece &ed25519_key);
 
 struct Crypto {
   struct Cipher     : public VoidPtr      { using VoidPtr::VoidPtr; };
@@ -92,6 +94,7 @@ struct Crypto {
   struct CipherAlgos {
     static CipherAlgo AES128_CTR();
     static CipherAlgo AES128_CBC();
+    static CipherAlgo AES256_CBC();
     static CipherAlgo TripDES_CBC();
     static CipherAlgo Blowfish_CBC();
     static CipherAlgo RC4();
@@ -148,7 +151,8 @@ struct Crypto {
   };
 
   struct X25519DiffieHellman {
-    string pubkey, privkey, remotepubkey;
+    Ed25519Pair mykey;
+    string remotepubkey;
     void GeneratePair(std::mt19937&);
     bool ComputeSecret(BigNum *K);
   };
@@ -176,6 +180,9 @@ struct Crypto {
 
   static bool ParsePEM(char *key, RSAKey *rsa_out, DSAKey *dsa_out, ECPair *ec_out,
                        function<string(string)> passphrase_cb = function<string(string)>());
+  static bool ParsePEM(char *key, RSAKey *rsa_out, DSAKey *dsa_out, ECPair *ec_out, Ed25519Pair *pair_out,
+                       function<string(string)> passphrase_cb = function<string(string)>());
+  static string BCryptPBKDF(const StringPiece &pw, const StringPiece &salt, int size, int rounds);
   static string GetLastErrorText();
 };
 

@@ -102,3 +102,6 @@
 [submodule "imports/ref10_extract"]
 	path = imports/ref10_extract
 	url = https://github.com/LucidFusionLabs/ref10_extract
+[submodule "imports/bcrypt_pbkdf"]
+	path = imports/bcrypt_pbkdf
+	url = https://github.com/LucidFusionLabs/bcrypt_pbkdf

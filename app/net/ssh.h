@@ -22,9 +22,10 @@ namespace LFL {
 
 struct SSHClient {
   struct Identity {
-    RSAKey rsa;
-    DSAKey dsa;
-    ECPair ec;
+    RSAKey      rsa;
+    DSAKey      dsa;
+    ECPair      ec;
+    Ed25519Pair ed25519;
     virtual ~Identity() {
       if (rsa) RSAKeyFree(rsa);
       if (dsa) DSAKeyFree(dsa);
@@ -61,6 +62,8 @@ struct SSH {
   static string DeriveKey(Crypto::DigestAlgo algo, const string &session_id, const string &H_text, BigNum K, char ID, int bytes);
   static string DeriveChallenge(Crypto::DigestAlgo algo, const StringPiece &session_id, const StringPiece &user_name,
                                 const StringPiece &service_name, const StringPiece &method_name, const StringPiece &algo_name, const StringPiece &secret);
+  static string DeriveChallengeText(const StringPiece &session_id, const StringPiece &user_name, const StringPiece &service_name,
+                                    const StringPiece &method_name, const StringPiece &algo_name, const StringPiece &secret);
   static string MAC(Crypto::MACAlgo algo, int MAC_len, const StringPiece &m, int seq, const string &k, int prefix=0);
 
   struct Key {
@@ -500,9 +503,9 @@ struct SSH {
     int In(const Serializable::Stream *i);
   };
 
-  struct ED25519Key : public LFL::Serializable {
+  struct Ed25519Key : public LFL::Serializable {
     StringPiece format_id, key;
-    ED25519Key(const StringPiece &k=StringPiece()) : Serializable(0), format_id("ssh-ed25519"), key(k) {}
+    Ed25519Key(const StringPiece &k=StringPiece()) : Serializable(0), format_id("ssh-ed25519"), key(k) {}
 
     int HeaderSize() const { return 4*2 + 11; }
     int Size() const { return HeaderSize() + key.size(); }
@@ -510,9 +513,9 @@ struct SSH {
     int In(const Serializable::Stream *i);
   };
 
-  struct ED25519Signature : public LFL::Serializable {
+  struct Ed25519Signature : public LFL::Serializable {
     StringPiece format_id, sig;
-    ED25519Signature(const StringPiece &s=StringPiece()) : Serializable(0), format_id("ssh-ed25519"), sig(s) {}
+    Ed25519Signature(const StringPiece &s=StringPiece()) : Serializable(0), format_id("ssh-ed25519"), sig(s) {}
 
     int HeaderSize() const { return 4*2 + 11; }
     int Size() const { return HeaderSize() + sig.size(); }

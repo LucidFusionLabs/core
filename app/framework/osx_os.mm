@@ -45,7 +45,12 @@
       _input = [[NSTextField alloc] initWithFrame:NSMakeRect(0, 0, 200, 24)];
       _input.delegate = self;
       [_alert setAccessoryView: _input];
+    } else if ((_add_text = _style == "pwinput")) {
+      _input = [[NSSecureTextField alloc] initWithFrame:NSMakeRect(0, 0, 200, 24)];
+      _input.delegate = self;
+      [_alert setAccessoryView: _input];
     }
+
     return self;
   }
 
