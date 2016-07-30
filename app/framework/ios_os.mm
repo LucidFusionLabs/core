@@ -201,11 +201,11 @@ static std::vector<UIImage*> app_images;
     std::vector<LFL::CompiledTable> data;
     std::vector<IOSTable*> dropdowns;
   }
-
+  
   - (void)load:(const std::string&)title withStyle:(const std::string&)sty items:(const std::vector<LFL::TableItem>&)item {
     _style = sty;
     data.emplace_back();
-    for (auto i : item) {
+    for (auto &i : item) {
       if (i.type == "separator") {
         data.push_back({i.key, std::vector<LFL::CompiledTableItem>()});
         section_index++;
@@ -222,6 +222,23 @@ static std::vector<UIImage*> app_images;
       _modal_nav = [[UINavigationController alloc] initWithRootViewController: self];
       _modal_nav.modalTransitionStyle = UIModalTransitionStyleCoverVertical;
     }
+  }
+
+  - (void)replaceSection:(int)section items:(const std::vector<LFL::TableItem>&)item {
+    if (section == data.size()) data.emplace_back();
+    CHECK_LT(section, data.size());
+    data[section] = LFL::CompiledTable();
+    for (auto &i : item) data[section].item.emplace_back(i);
+    [self.tableView beginUpdates];
+    [self.tableView reloadSections:[NSIndexSet indexSetWithIndex: section]
+      withRowAnimation:UITableViewRowAnimationNone];
+    [self.tableView endUpdates];
+  }
+
+  - (void)setSectionValues:(int)section items:(const LFL::StringVec&)item {
+    if (section == data.size()) data.emplace_back();
+    CHECK_LT(section, data.size());
+    CHECK_EQ(item.size(), data[section].item.size());
   }
 
   - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { return data.size(); }
@@ -286,7 +303,7 @@ static std::vector<UIImage*> app_images;
   }
 
   - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)path {
-    int second_col = 110, frame_width = tableView.frame.size.width;
+    int first_col = 20, second_col = 110, frame_width = tableView.frame.size.width;
     static NSString *cellIdentifier = @"cellIdentifier";
     UITableViewCell *cell = [self.tableView dequeueReusableCellWithIdentifier:cellIdentifier];
     if (cell) { [cell release]; cell = nil; }
@@ -308,15 +325,20 @@ static std::vector<UIImage*> app_images;
         [cell.contentView addSubview: button];
       }
 
+      if (int icon = compiled_item.item.left_icon) {
+        CHECK_LE(icon, app_images.size());
+        cell.imageView.image = app_images[icon - 1]; 
+      }
+
       if (int icon = compiled_item.item.right_icon) {
         CHECK_LE(icon, app_images.size());
         UIImage *image = app_images[icon - 1]; 
         IOSButton *button = [IOSButton buttonWithType:UIButtonTypeCustom];
+        button.frame = CGRectMake(0, 0, image.size.width, image.size.height);
         [button setImage:image forState:UIControlStateNormal];
-        button.frame = CGRectMake(frame_width - 20, 10, 15, 30.0);
         button.cmd = compiled_item.item.right_icon_cmd;
         [button addTarget:self action:@selector(rightIconClicked:) forControlEvents:UIControlEventTouchUpInside];
-        [cell.contentView addSubview: button];
+        cell.accessoryView = button;
       }
 
       bool textinput=0, numinput=0, pwinput=0;
@@ -372,6 +394,14 @@ static std::vector<UIImage*> app_images;
       } else if (*type == "button") {
         cell.textLabel.text = LFL::MakeNSString(*k);
         cell.textLabel.textAlignment = NSTextAlignmentCenter;
+
+      } else if (*type == "toggle") {
+        UISwitch *onoff = [[UISwitch alloc] initWithFrame: CGRectMake(frame_width - 80, 0, 80, 45.0)]; 
+        [onoff addTarget: self action: @selector(switchFlipped:) forControlEvents: UIControlEventValueChanged];
+        cell.textLabel.text = LFL::MakeNSString(*k);
+        [cell.contentView addSubview: onoff];
+        [onoff release];
+
       } else {
         cell.textLabel.text = LFL::MakeNSString(*k);
       }
@@ -434,6 +464,10 @@ static std::vector<UIImage*> app_images;
 
   - (IBAction)rightNavButtonClicked:(IOSBarButtonItem*)sender {
     if (!sender.cmd.empty()) ShellRun(sender.cmd.c_str());
+  }
+
+  - (IBAction) switchFlipped: (UISwitch*) onoff {
+    INFO("switch now ", onoff.on ? "On" : "Off");
   }
 
   - (LFL::StringPairVec)dumpDataForSection: (int)ind {
@@ -603,8 +637,10 @@ string SystemAlertWidget::RunModal(const string &arg) {
   alert.done = false;
   [alert.alert show];
   NSRunLoop *rl = [NSRunLoop currentRunLoop];
-  do { [rl runMode:NSRunLoopCommonModes beforeDate:[NSDate distantFuture]]; } while(!alert.done);
-  return GetNSString([alert.alert textFieldAtIndex:0].text);
+  // do { [rl runMode:NSRunLoopCommonModes beforeDate:[NSDate distantFuture]]; }
+  do { [rl runMode:NSRunLoopCommonModes beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.3]]; }
+  while(!alert.done);
+  return alert.add_text ? GetNSString([alert.alert textFieldAtIndex:0].text) : "";
 }
 
 SystemMenuWidget::~SystemMenuWidget() { if (auto menu = FromVoid<IOSMenu*>(impl)) [menu release]; }
@@ -627,15 +663,22 @@ SystemTableWidget::SystemTableWidget(const string &title, const string &style, c
 void SystemTableWidget::AddNavigationButton(const TableItem &item, int align) { return [FromVoid<IOSTable*>(impl) loadNavigationButton:item withAlign:align]; }
 void SystemTableWidget::AddToolbar(SystemToolbarWidget *t) { [FromVoid<IOSTable*>(impl) setToolbar: FromVoid<IOSToolbar*>(t->impl)]; }
 void SystemTableWidget::SetEditableSection(int section) { FromVoid<IOSTable*>(impl).editable_section = section; }
-void SystemTableWidget::Show(bool show_or_hide) { [FromVoid<IOSTable*>(impl) show:show_or_hide]; }
 StringPairVec SystemTableWidget::GetSectionText(int section) { return [FromVoid<IOSTable*>(impl) dumpDataForSection:section]; }
+void SystemTableWidget::ReplaceSection(const vector<TableItem> &item, int section) { [FromVoid<IOSTable*>(impl) replaceSection:section items:item]; }
+void SystemTableWidget::SetSectionValues(const StringVec &item, int section) { [FromVoid<IOSTable*>(impl) setSectionValues:section items:item]; }
+
+void SystemTableWidget::Show(bool show_or_hide) {
+  if (show_or_hide && show_cb) show_cb(this);
+  [FromVoid<IOSTable*>(impl) show:show_or_hide];
+}
 
 SystemNavigationWidget::~SystemNavigationWidget() { if (auto nav = FromVoid<IOSNavigation*>(impl)) [nav release]; }
-SystemNavigationWidget::SystemNavigationWidget(SystemTableWidget *r) : impl([[IOSNavigation alloc] init: FromVoid<IOSTable*>(r->impl)]) {}
+SystemNavigationWidget::SystemNavigationWidget(SystemTableWidget *r) : impl([[IOSNavigation alloc] init: FromVoid<IOSTable*>(r->impl)]), root(r) {}
 void SystemNavigationWidget::Show(bool show_or_hide) {
   auto nav = FromVoid<IOSNavigation*>(impl);
   LFUIApplication *uiapp = [LFUIApplication sharedAppDelegate];
   if (show_or_hide) {
+    if (root->show_cb) root->show_cb(root);
     uiapp.top_controller = nav.controller;
     [uiapp.controller presentViewController: nav.controller animated:YES completion:nil];
   } else {
@@ -645,7 +688,13 @@ void SystemNavigationWidget::Show(bool show_or_hide) {
 }
 
 void SystemNavigationWidget::PushTable(SystemTableWidget *t) {
+  if (t->show_cb) t->show_cb(t);
   [FromVoid<IOSNavigation*>(impl).controller pushViewController: FromVoid<IOSTable*>(t->impl) animated: YES];
+}
+
+void SystemNavigationWidget::PopTable(int n) {
+  for (int i = 0; i != n; ++i)
+    [FromVoid<IOSNavigation*>(impl).controller popViewControllerAnimated: (i == n - 1)];
 }
 
 void Application::ShowSystemFontChooser(const FontDesc &cur_font, const string &choose_cmd) {
@@ -669,17 +718,17 @@ bool Application::OpenSystemAppPreferences() {
   return true;
 }
 
-void Application::SavePassword(const string &h, const string &u, const string &pw_in) {
-  NSString *k = [[NSString stringWithFormat:@"%s://%s@%s", name.c_str(), u.c_str(), h.c_str()] retain];
-  NSMutableString *pw = [[NSMutableString stringWithUTF8String: pw_in.c_str()] retain];
-  UIAlertController *alertController = [UIAlertController alertControllerWithTitle:@"LTerminal Keychain"
-    message:[NSString stringWithFormat:@"Save password for %s@%s?", u.c_str(), h.c_str()] preferredStyle:UIAlertControllerStyleAlert];
+void Application::SaveKeychain(const string &keyname, const string &val_in) {
+  NSString *k = [[NSString stringWithFormat:@"%s://%s", name.c_str(), keyname.c_str()] retain];
+  NSMutableString *val = [[NSMutableString stringWithUTF8String: val_in.c_str()] retain];
+  UIAlertController *alertController = [UIAlertController alertControllerWithTitle: [NSString stringWithFormat: @"%s Keychain", name.c_str()]
+    message:[NSString stringWithFormat:@"Save password for %s?", keyname.c_str()] preferredStyle:UIAlertControllerStyleAlert];
   UIAlertAction *actionNo  = [UIAlertAction actionWithTitle:@"No"  style:UIAlertActionStyleDefault handler: nil];
   UIAlertAction *actionYes = [UIAlertAction actionWithTitle:@"Yes" style:UIAlertActionStyleDefault
     handler:^(UIAlertAction *){
-      [IOSKeychain save:k data:pw];
-      [pw replaceCharactersInRange:NSMakeRange(0, [pw length]) withString:[NSString stringWithFormat:@"%*s", [pw length], ""]];
-      [pw release];
+      [IOSKeychain save:k data: val];
+      [val replaceCharactersInRange:NSMakeRange(0, [val length]) withString:[NSString stringWithFormat:@"%*s", [val length], ""]];
+      [val release];
       [k release];
     }];
   [alertController addAction:actionYes];
@@ -687,12 +736,12 @@ void Application::SavePassword(const string &h, const string &u, const string &p
   [[LFUIApplication sharedAppDelegate].controller presentViewController:alertController animated:YES completion:nil];
 }
 
-bool Application::LoadPassword(const string &h, const string &u, string *pw_out) {
-  NSString *k  = [NSString stringWithFormat:@"%s://%s@%s", name.c_str(), u.c_str(), h.c_str()];
-  NSString *pw = [IOSKeychain load: k];
-  if (pw) pw_out->assign([pw UTF8String]);
-  else    pw_out->clear();
-  return  pw_out->size();
+bool Application::LoadKeychain(const string &keyname, string *val_out) {
+  NSString *k = [NSString stringWithFormat:@"%s://%s", name.c_str(), keyname.c_str()];
+  NSString *val = [IOSKeychain load: k];
+  if (val) val_out->assign(GetNSString(val));
+  else     val_out->clear();
+  return   val_out->size();
 }
 
 void Application::ShowAds() {}

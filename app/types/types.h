@@ -224,6 +224,14 @@ template <class X> typename X::mapped_type Remove(X *m, const typename X::key_ty
   return ret;
 }
 
+template <class X> typename X::mapped_type RemoveOrNull(X *m, const typename X::key_type &k) {
+  auto it = m->find(k);
+  if (it == m->end()) return nullptr;
+  auto ret = move(it->second);
+  m->erase(it);
+  return ret;
+}
+
 template <class I, class T> I LesserBound(I first, I last, const T& v, bool strict=false) {
   I i = lower_bound(first, last, v);
   if (i == last || i == first) return last;

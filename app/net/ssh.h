@@ -34,14 +34,12 @@ struct SSHClient {
   };
 
   typedef function<void(Connection*, const StringPiece&)> ResponseCB;
-  typedef function<bool(const string&, const string&,       string*)> LoadPasswordCB;
-  typedef function<void(const string&, const string&, const string&)> SavePasswordCB;
-  static Connection *Open(const string &hostport, const ResponseCB &cb,
+  typedef function<bool(shared_ptr<Identity>*)> LoadIdentityCB;
+  typedef function<bool(string*)> LoadPasswordCB;
+  static Connection *Open(const string &hostport, const string &user, const ResponseCB &cb,
                           Callback *detach=0, Callback *success=0);
 
-  static void SetUser(Connection *c, const string &user);
-  static void SetIdentity(Connection *c, shared_ptr<Identity>);
-  static void SetPasswordCB(Connection *c, const LoadPasswordCB&, const SavePasswordCB&);
+  static void SetCredentialCB(Connection *c, LoadIdentityCB, LoadPasswordCB);
   static int SetTerminalWindowSize(Connection *c, int w, int h);
   static int WriteChannelData(Connection *c, const StringPiece &b);
 };

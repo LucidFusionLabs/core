@@ -31,8 +31,8 @@ struct SSHClientConnection : public Connection::Handler {
   enum { INIT=0, FIRST_KEXINIT=1, FIRST_KEXREPLY=2, FIRST_NEWKEYS=3, KEXINIT=4, KEXREPLY=5, NEWKEYS=6 };
 
   SSHClient::ResponseCB cb;
+  SSHClient::LoadIdentityCB load_identity_cb;
   SSHClient::LoadPasswordCB load_password_cb;
-  SSHClient::SavePasswordCB save_password_cb;
   Callback success_cb;
   shared_ptr<SSHClient::Identity> identity;
   string V_C, V_S, KEXINIT_C, KEXINIT_S, H_text, session_id, integrity_c2s, integrity_s2c, decrypt_buf, host, user, pw;
@@ -55,7 +55,7 @@ struct SSHClientConnection : public Connection::Handler {
   int kex_method=0, hostkey_type=0, mac_prefix_c2s=0, mac_prefix_s2c=0, window_c=0, window_s=0;
   int initial_window_size=1048576, max_packet_size=32768, term_width=80, term_height=25;
 
-  SSHClientConnection(const SSHClient::ResponseCB &CB, const string &H, const Callback &s) : cb(CB), success_cb(s), V_C("SSH-2.0-LFL_1.0"), host(H), rand_eng(std::random_device{}()),
+  SSHClientConnection(const SSHClient::ResponseCB &CB, const string &H, const string &U, const Callback &s) : cb(CB), success_cb(s), V_C("SSH-2.0-LFL_1.0"), host(H), user(U), rand_eng(std::random_device{}()),
     pty_channel(1,-1), ctx(NewBigNumContext()), K(NewBigNum()), encrypt(Crypto::CipherInit()), decrypt(Crypto::CipherInit()) {}
   virtual ~SSHClientConnection() { ClearPassword(); FreeBigNumContext(ctx); FreeBigNum(K); Crypto::CipherFree(encrypt); Crypto::CipherFree(decrypt); }
 
@@ -241,6 +241,7 @@ struct SSHClientConnection : public Connection::Handler {
 
         case SSH::MSG_SERVICE_ACCEPT::ID: {
           SSHTrace(c->Name(), ": MSG_SERVICE_ACCEPT");
+          if (load_identity_cb) load_identity_cb(&identity);
 
           if (!identity) { /**/ }
           else if (identity->ed25519.privkey.size()) {
@@ -312,7 +313,6 @@ struct SSHClientConnection : public Connection::Handler {
           SSHTrace(c->Name(), ": MSG_USERAUTH_SUCCESS");
           window_s = initial_window_size;
           if (success_cb) success_cb();
-          if (!loaded_pw) { if (save_password_cb) save_password_cb(host, user, pw); ClearPassword(); }
           if (!WriteCipher(c, SSH::MSG_CHANNEL_OPEN("session", pty_channel.first, initial_window_size, max_packet_size)))
             return ERRORv(-1, c->Name(), ": write");
         } break;
@@ -477,13 +477,15 @@ struct SSHClientConnection : public Connection::Handler {
     return success;
   }
 
+  void ClearPassword() { pw.assign(pw.size(), ' '); pw.clear(); }
   void LoadPassword(Connection *c) {
-    if ((loaded_pw = load_password_cb && load_password_cb(host, user, &pw))) WritePassword(c);
+    if ((loaded_pw = load_password_cb && load_password_cb(&pw))) WritePassword(c);
     if (loaded_pw) ClearPassword();
   }
 
-  void ClearPassword() { pw.assign(pw.size(), ' '); pw.clear(); }
-  void SetPasswordCB(const SSHClient::LoadPasswordCB &L, const SSHClient::SavePasswordCB &S) { load_password_cb=L; save_password_cb=S; }
+  void SetCredentialCB(SSHClient::LoadIdentityCB LI,
+                       SSHClient::LoadPasswordCB LP) { load_identity_cb=move(LI); load_password_cb=move(LP); }
+
   int SetTerminalWindowSize(Connection *c, int w, int h) {
     term_width = w;
     term_height = h;
@@ -495,18 +497,16 @@ struct SSHClientConnection : public Connection::Handler {
   }
 };
 
-Connection *SSHClient::Open(const string &hostport, const SSHClient::ResponseCB &cb, Callback *detach, Callback *success) { 
+Connection *SSHClient::Open(const string &hostport, const string &user, const SSHClient::ResponseCB &cb, Callback *detach, Callback *success) { 
   Connection *c = app->net->tcp_client->Connect(hostport, 22, detach);
   if (!c) return 0;
-  c->handler = make_unique<SSHClientConnection>(cb, hostport, success ? *success : Callback());
+  c->handler = make_unique<SSHClientConnection>(cb, hostport, user, success ? *success : Callback());
   return c;
 }
 
-int  SSHClient::WriteChannelData     (Connection *c, const StringPiece &b)                     { return dynamic_cast<SSHClientConnection*>(c->handler.get())->WriteChannelData(c, b); }
-int  SSHClient::SetTerminalWindowSize(Connection *c, int w, int h)                             { return dynamic_cast<SSHClientConnection*>(c->handler.get())->SetTerminalWindowSize(c, w, h); }
-void SSHClient::SetUser              (Connection *c, const string &user)                       { dynamic_cast<SSHClientConnection*>(c->handler.get())->user = user; }
-void SSHClient::SetIdentity          (Connection *c, shared_ptr<Identity> identity)            { dynamic_cast<SSHClientConnection*>(c->handler.get())->identity = identity; }
-void SSHClient::SetPasswordCB(Connection *c, const LoadPasswordCB &L, const SavePasswordCB &S) { dynamic_cast<SSHClientConnection*>(c->handler.get())->SetPasswordCB(L, S); }
+int  SSHClient::WriteChannelData     (Connection *c, const StringPiece &b)                 { return dynamic_cast<SSHClientConnection*>(c->handler.get())->WriteChannelData(c, b); }
+int  SSHClient::SetTerminalWindowSize(Connection *c, int w, int h)                         { return dynamic_cast<SSHClientConnection*>(c->handler.get())->SetTerminalWindowSize(c, w, h); }
+void SSHClient::SetCredentialCB      (Connection *c, LoadIdentityCB LI, LoadPasswordCB LP) { dynamic_cast<SSHClientConnection*>(c->handler.get())->SetCredentialCB(LI, LP); }
 
 int SSH::BinaryPacketLength(const char *b, unsigned char *padding, unsigned char *id) {
   if (padding) *padding = *MakeUnsigned(b + 4);

@@ -233,6 +233,9 @@ StringPairVec SystemTableWidget::GetSectionText(int section) {
   return ret;
 }
 
+void SystemTableWidget::SetSectionValues(const StringVec&, int section) {}
+void SystemTableWidget::ReplaceSection(const vector<TableItem> &item, int section) {}
+
 int GetNavigationWidgetID(SystemNavigationWidget *w) { return int(w->impl); }
 SystemNavigationWidget::~SystemNavigationWidget() {}
 SystemNavigationWidget::SystemNavigationWidget(SystemTableWidget *r) {
@@ -252,6 +255,8 @@ void SystemNavigationWidget::PushTable(SystemTableWidget *t) {
     (jni->env->GetMethodID(jni->activity_class, "pushNavigationTable", "(II)V"));
     jni->env->CallVoidMethod(jni->activity, mid, jint(impl.v), jint(t->impl.v));
 }
+
+void SystemNavigationWidget::PopTable(int n) {}
 
 void Application::ShowSystemFontChooser(const FontDesc &cur_font, const string &choose_cmd) {}
 void Application::ShowSystemFileChooser(bool files, bool dirs, bool multi, const string &choose_cmd) {}
@@ -274,8 +279,8 @@ bool Application::OpenSystemAppPreferences() {
   return jni->env->CallBooleanMethod(jni->activity, mid);
 }
 
-void Application::SavePassword(const string &h, const string &u, const string &pw) {}
-bool Application::LoadPassword(const string &h, const string &u, string *pw) { return false; }
+void Application::SaveKeychain(const string &k, const string &v) {}
+bool Application::LoadKeychain(const string &k, string *v) { return false; }
 
 void Application::ShowAds() {
   static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "showAds", "()V"));

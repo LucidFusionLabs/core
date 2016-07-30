@@ -25,7 +25,7 @@ extern "C" {
 #define SHA2_CTX LFL::Crypto::Digest
 #define SHA512Init(ctx) (*(ctx) = LFL::Crypto::DigestOpen(LFL::Crypto::DigestAlgos::SHA512()))
 #define SHA512Update(ctx, b, s) LFL::Crypto::DigestUpdate(*(ctx), LFL::StringPiece(LFL::MakeSigned(b), s))
-#define SHA512Final(out, ctx) { std::string v=LFL::Crypto::DigestFinish(*(ctx)); memcpy(out, v.data(), v.size()); }
+#define SHA512Final(out, ctx) { std::string v=LFL::Crypto::DigestFinish(*(ctx)); memcpy(out, v.data(), v.size()); v.assign(v.size(), 0); }
 
 #include "core/imports/bcrypt_pbkdf/blf.h"
 #include "core/imports/bcrypt_pbkdf/blowfish.c"

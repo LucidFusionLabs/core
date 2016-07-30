@@ -299,6 +299,7 @@ struct TableItem {
   Depends depends;
   TableItem(string K=string(), string T=string(), string V=string(), int LI=0, int RI=0, string RC=string(), Depends D=Depends())
     : key(move(K)), type(move(T)), val(move(V)), left_icon(LI), right_icon(RI), right_icon_cmd(move(RC)), depends(move(D)) {}
+  void CheckAssign(const string &k, string v) { CHECK_EQ(k, key); val=move(v); }
 };
 struct CompiledTableItem {
   enum { Normal=0, Dropdown=1 };
@@ -671,8 +672,8 @@ struct Application : public ::LFApp {
   void SetTitleBar(bool on);
   void SetKeepScreenOn(bool on);
 
-  bool LoadPassword(const string &host, const string &user,       string *pw_out);
-  void SavePassword(const string &host, const string &user, const string &pw);
+  bool LoadKeychain(const string &key,       string *val);
+  void SaveKeychain(const string &key, const string &val);
 
   void ShowAds();
   void HideAds();
@@ -743,22 +744,28 @@ struct SystemMenuWidget {
 };
 
 struct SystemTableWidget {
+  typedef function<void(SystemTableWidget*)> CB;
   VoidPtr impl;
+  CB show_cb; 
   virtual ~SystemTableWidget();
   SystemTableWidget(const string &title, const string &style, const vector<TableItem> &items);
   void AddNavigationButton(const TableItem &item, int align);
   void AddToolbar(SystemToolbarWidget*);
-  void SetEditableSection(int section);
   void Show(bool show_or_hide);
+  void SetEditableSection(int section=0);
+  void SetSectionValues(const StringVec&, int section=0);
+  void ReplaceSection(const vector<TableItem> &item, int section=0);
   StringPairVec GetSectionText(int section=0);
 };
 
 struct SystemNavigationWidget {
   VoidPtr impl;
+  SystemTableWidget *root;
   virtual ~SystemNavigationWidget();
   SystemNavigationWidget(SystemTableWidget *root);
-  void PushTable(SystemTableWidget*);
   void Show(bool show_or_hide);
+  void PushTable(SystemTableWidget*);
+  void PopTable(int num=1);
 };
 
 unique_ptr<Module> CreateFrameworkModule();

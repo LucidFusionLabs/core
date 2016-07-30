@@ -135,7 +135,9 @@ int SQLiteIdValueStore::Insert(const BlobPiece &val) {
   SQLite::Statement stmt = SQLite::Prepare(*db, StrCat("INSERT INTO ", table_name, " (data) VALUES (?);"));
   SQLite::ExecPrepared(stmt, val);
   SQLite::Finalize(stmt);
-  return sqlite3_last_insert_rowid(FromVoid<sqlite3*>(*db));
+  int ret = sqlite3_last_insert_rowid(FromVoid<sqlite3*>(*db));
+  data[ret] = val.str();
+  return ret;
 }
 
 bool SQLiteIdValueStore::Update(int id, const BlobPiece &val) {

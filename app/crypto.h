@@ -178,6 +178,8 @@ struct Crypto {
   static void MACUpdate(MAC, const StringPiece &in);
   static int  MACFinish(MAC, char *out, int outlen);
 
+  static string ParsePEMHeader(const char *key,
+                               const char **start, const char **end, const char **headers_end);
   static bool ParsePEM(char *key, RSAKey *rsa_out, DSAKey *dsa_out, ECPair *ec_out,
                        function<string(string)> passphrase_cb = function<string(string)>());
   static bool ParsePEM(char *key, RSAKey *rsa_out, DSAKey *dsa_out, ECPair *ec_out, Ed25519Pair *pair_out,

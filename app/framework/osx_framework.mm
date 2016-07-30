@@ -31,7 +31,7 @@
     NSWindow *window;
     NSOpenGLContext  *context;
     NSOpenGLPixelFormat *pixel_format;
-    NSFileHandle *wait_forever_fh;
+    std::unordered_map<int, NSFileHandle*> wait_forever_fh;
 
     NSTimer *runloop_timer, *trigger_timer;
     NSTimeInterval trigger_timer_start;
@@ -47,7 +47,6 @@
   - (void)dealloc {
     if (trigger_timer) [self clearTriggerTimer];
     if (runloop_timer) ERRORf("%s", "runloop_timer remaining");
-    if (wait_forever_fh) [self delFrameWaitSocket: [wait_forever_fh fileDescriptor]];
     CVDisplayLinkRelease(displayLink);
     [pixel_format release];
     [context release];
@@ -200,25 +199,24 @@
   }
 
   - (void)setFrameWaitSocket: (int)fd {
-    if (wait_forever_fh) FATALf("wait_forever_fh already set: %p", wait_forever_fh);
-    wait_forever_fh = [[NSFileHandle alloc] initWithFileDescriptor:fd];
+    NSFileHandle *fh = [[NSFileHandle alloc] initWithFileDescriptor:fd];
     [[NSNotificationCenter defaultCenter] addObserver:self
-      selector:@selector(fileDataAvailable:) name:NSFileHandleDataAvailableNotification object:wait_forever_fh];
-    [wait_forever_fh waitForDataInBackgroundAndNotify];
+      selector:@selector(fileDataAvailable:) name:NSFileHandleDataAvailableNotification object:fh];
+    [fh waitForDataInBackgroundAndNotify];
+    wait_forever_fh[fd] = fh;
   }
 
   - (void)delFrameWaitSocket: (int)fd {
-    if (!wait_forever_fh) return ERRORf("del missing wait_forever_fh fd=%d", fd);
-    if ([wait_forever_fh fileDescriptor] != fd) FATALf("del mismatching wait_forever_fh %o", wait_forever_fh);
+    NSFileHandle *fh = LFL::RemoveOrNull(&wait_forever_fh, fd);
+    if (!fh) return ERRORf("del missing wait_forever_fh fd=%d", fd);
     [[NSNotificationCenter defaultCenter] removeObserver:self
-      name:NSFileHandleDataAvailableNotification object:wait_forever_fh];
-    // [wait_forever_fh closeFile];
-    wait_forever_fh = nil;
+      name:NSFileHandleDataAvailableNotification object:fh];
+    // [fh closeFile];
+    fh = nil;
   }
 
   - (void)fileDataAvailable: (NSNotification *)notification { 
     NSFileHandle *fh = static_cast<NSFileHandle*>([notification object]);
-    if (fh != wait_forever_fh) return;
     SetNativeWindow(screen);
     // [self setNeedsDisplay:YES]; 
     [self getFrameForTime:nil];

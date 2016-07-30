@@ -60,25 +60,31 @@ int Ed25519Verify(const StringPiece &msg, const StringPiece &sig, const StringPi
                                                        MakeUnsigned(ed25519_key.data()));
 }
 
-bool Crypto::ParsePEM(char *key, RSAKey *rsa_out, DSAKey *dsa_out, ECPair *ec_out, Ed25519Pair *ed25519_out,
-                      function<string(string)> passphrase_cb) {
+string Crypto::ParsePEMHeader(const char *key, const char **start, const char **end, const char **headers_end) {
   static string begin_text="-----BEGIN ", end_text="-----END ", term_text="-----";
   const char *begin_beg, *begin_end, *end_beg, *end_end;
-  string cipher, cbcinit, b64text;
-  if (!(begin_beg = strstr(key,                           begin_text.c_str()))) return ERRORv(0, begin_text, " not found");
-  if (!(begin_end = strstr(begin_beg + begin_text.size(), term_text .c_str()))) return ERRORv(0, term_text,  " not found");
-  if (!(end_beg   = strstr(begin_end + term_text .size(), end_text  .c_str()))) return ERRORv(0, end_text,   " not found");
-  if (!(end_end   = strstr(end_beg   + end_text  .size(), term_text .c_str()))) return ERRORv(0, term_text,  " not found");
+  if (!(begin_beg = strstr(key,                           begin_text.c_str()))) return ERRORv("", begin_text, " not found");
+  if (!(begin_end = strstr(begin_beg + begin_text.size(), term_text .c_str()))) return ERRORv("", term_text,  " not found");
+  if (!(end_beg   = strstr(begin_end + term_text .size(), end_text  .c_str()))) return ERRORv("", end_text,   " not found");
+  if (!(end_end   = strstr(end_beg   + end_text  .size(), term_text .c_str()))) return ERRORv("", term_text,  " not found");
 
   string type(begin_beg + begin_text.size(), begin_end - begin_beg - begin_text.size());
-  if (type.size() != end_end - end_beg - end_text.size())            return ERRORv(0, "begin/end length disagreement");
-  if (strncmp(type.c_str(), end_beg + end_text.size(), type.size())) return ERRORv(0, "begin/end text disagreement");
+  if (type.size() != end_end - end_beg - end_text.size())            return ERRORv("", "begin/end length disagreement");
+  if (strncmp(type.c_str(), end_beg + end_text.size(), type.size())) return ERRORv("", "begin/end text disagreement");
 
-  const char *start = IncrementNewline(begin_end + term_text.size()), *end = end_beg;
-  StringPiece encapsulated(start, end - start), headers_sep("\n\n", 2), privatekey;
-  const char *headers_end = FindString(encapsulated, headers_sep);
-  if (!headers_end) headers_end = FindString(encapsulated, (headers_sep = StringPiece("\r\n\r\n", 4)));
+  *end = end_beg;
+  *start = IncrementNewline(begin_end + term_text.size());
+  StringPiece encapsulated(*start, *end - *start), headers_sep("\n\n", 2);
+  *headers_end = FindString(encapsulated, headers_sep);
+  if (!*headers_end) *headers_end = FindString(encapsulated, (headers_sep = StringPiece("\r\n\r\n", 4)));
+  return type;
+}
 
+bool Crypto::ParsePEM(char *key, RSAKey *rsa_out, DSAKey *dsa_out, ECPair *ec_out, Ed25519Pair *ed25519_out,
+                      function<string(string)> passphrase_cb) {
+  const char *start=0, *end=0, *headers_end=0;
+  string type = ParsePEMHeader(key, &start, &end, &headers_end), cipher, cbcinit, b64text;
+  StringPiece encapsulated(start, end - start), privatekey;
   if (headers_end || type != "OPENSSH PRIVATE KEY")
     return ParsePEM(key, rsa_out, dsa_out, ec_out, move(passphrase_cb));
 

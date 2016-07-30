@@ -76,8 +76,9 @@ static const char* const* ios_argv = 0;
   {
     CGFloat scale;
     CGRect keyboard_frame;
-    NSFileHandle *wait_forever_fh;
-    bool restart_wait_forever_fh, want_extra_scale;
+    std::unordered_map<int, NSFileHandle*> wait_forever_fh;
+    std::vector<NSFileHandle*> restart_wait_forever_fh;
+    bool want_extra_scale;
     int current_orientation, target_fps;
     UIBackgroundTaskIdentifier bgTask;
   }
@@ -189,8 +190,8 @@ static const char* const* ios_argv = 0;
 
     LFAppFrame(true); 
 
-    if (wait_forever_fh && restart_wait_forever_fh && !(restart_wait_forever_fh=0))
-        [wait_forever_fh waitForDataInBackgroundAndNotify];
+    for (auto fh : restart_wait_forever_fh) [fh waitForDataInBackgroundAndNotify];
+    restart_wait_forever_fh.clear();
   }
 
   - (void)updateTargetFPS: (int)fps {
@@ -359,26 +360,25 @@ static const char* const* ios_argv = 0;
   }
 
   - (void)setFrameWaitSocket: (int)fd {
-    if (wait_forever_fh) FATALf("wait_forever_fh already set: %p", wait_forever_fh);
-    wait_forever_fh = [[NSFileHandle alloc] initWithFileDescriptor:fd];
+    NSFileHandle *fh = [[NSFileHandle alloc] initWithFileDescriptor:fd];
     [[NSNotificationCenter defaultCenter] addObserver:self
-      selector:@selector(fileDataAvailable:) name:NSFileHandleDataAvailableNotification object:wait_forever_fh];
-    [wait_forever_fh waitForDataInBackgroundAndNotify];
+      selector:@selector(fileDataAvailable:) name:NSFileHandleDataAvailableNotification object:fh];
+    [fh waitForDataInBackgroundAndNotify];
+    wait_forever_fh[fd] = fh;
   }
 
   - (void)delFrameWaitSocket: (int)fd {
-    if (!wait_forever_fh || [wait_forever_fh fileDescriptor] != fd) FATALf("del mismatching wait_forever_fh %o", wait_forever_fh);
-    [[NSNotificationCenter defaultCenter] removeObserver:self name:NSFileHandleDataAvailableNotification object:wait_forever_fh];
-    // [wait_forever_fh closeFile];
-    [wait_forever_fh release];
-    wait_forever_fh = nil;
-    restart_wait_forever_fh = false;
+    NSFileHandle *fh = LFL::Remove(&wait_forever_fh, fd);
+    LFL::VectorEraseByValue(&restart_wait_forever_fh, fh);
+    [[NSNotificationCenter defaultCenter] removeObserver:self name:NSFileHandleDataAvailableNotification object:fh];
+    // [fh closeFile];
+    [fh release];
+    fh = nil;
   }
 
   - (void)fileDataAvailable: (NSNotification *)notification {
     NSFileHandle *fh = (NSFileHandle*) [notification object];
-    if (fh != wait_forever_fh) return;
-    restart_wait_forever_fh = true;
+    restart_wait_forever_fh.push_back(fh);
     [self.view setNeedsDisplay];
   }
 @end
