@@ -254,13 +254,10 @@ struct SSHClientConnection : public Connection::Handler {
 
           } else if (identity->ec) {
             ECGroup group = GetECPairGroup(identity->ec);
-            ECDef curve_id = GetECGroupID(group);
             string algo_name, curve_name;
             Crypto::DigestAlgo hash_id;
-            if      (curve_id == Crypto::EllipticCurve::NISTP256()) { algo_name="ecdsa-sha2-nistp256"; curve_name="nistp256"; hash_id=Crypto::DigestAlgos::SHA256(); }
-            else if (curve_id == Crypto::EllipticCurve::NISTP384()) { algo_name="ecdsa-sha2-nistp384"; curve_name="nistp384"; hash_id=Crypto::DigestAlgos::SHA384(); }
-            else if (curve_id == Crypto::EllipticCurve::NISTP521()) { algo_name="ecdsa-sha2-nistp521"; curve_name="nistp521"; hash_id=Crypto::DigestAlgos::SHA512(); }
-            else { ERROR("unknown curve_id ", curve_id.v); break; }
+            if (!GetECName(GetECGroupID(group), &algo_name, &curve_name, &hash_id))
+            { ERROR("unknown curve_id ", GetECGroupID(group).v); break; }
 
             string pubkey = SSH::ECDSAKey(algo_name, curve_name,
                                           ECPointGetData(group, GetECPairPubKey(identity->ec), ctx)).ToString();

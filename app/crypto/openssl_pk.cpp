@@ -18,6 +18,7 @@
 
 #include "core/app/app.h"
 #include "core/app/crypto.h"
+#include "core/app/net/ssh.h"
 #include "openssl/evp.h"
 #include "openssl/bn.h"
 #include "openssl/dh.h"
@@ -30,6 +31,10 @@
 #include "openssl/err.h"
 
 namespace LFL {
+static void OpenSSLEnsureAllAlgorithmsAdded() {
+  ONCE({ OpenSSL_add_all_algorithms(); });
+}
+
 static string CompleteBIO(BIO *bio) {
    size_t bio_len = BIO_pending(bio);
    string ret(bio_len, 0);
@@ -48,6 +53,12 @@ bool SetECPairPubKey(ECPair p, ECPoint k) { return EC_KEY_set_public_key(FromVoi
 int ECPointDataSize(ECGroup g, ECPoint p, BigNumContext x) { return EC_POINT_point2oct(FromVoid<EC_GROUP*>(g), FromVoid<EC_POINT*>(p), POINT_CONVERSION_UNCOMPRESSED, 0, 0, FromVoid<BN_CTX*>(x)); }
 void ECPointGetData(ECGroup g, ECPoint p, char *out, int len, BigNumContext x) { EC_POINT_point2oct(FromVoid<EC_GROUP*>(g), FromVoid<EC_POINT*>(p), POINT_CONVERSION_UNCOMPRESSED, MakeUnsigned(out), len, FromVoid<BN_CTX*>(x)); }
 void ECPointSetData(ECGroup g, ECPoint v, const StringPiece &data) { EC_POINT_oct2point(FromVoid<EC_GROUP*>(g), FromVoid<EC_POINT*>(v), MakeUnsigned(data.buf), data.len, 0); }
+bool GetECName(ECDef curve_id, string *algo_name, string *curve_name, Crypto::DigestAlgo *hash_id) {
+  if      (curve_id == Crypto::EllipticCurve::NISTP256()) { if (algo_name) *algo_name="ecdsa-sha2-nistp256"; if (curve_name) *curve_name="nistp256"; if (hash_id) *hash_id=Crypto::DigestAlgos::SHA256(); return true; }
+  else if (curve_id == Crypto::EllipticCurve::NISTP384()) { if (algo_name) *algo_name="ecdsa-sha2-nistp384"; if (curve_name) *curve_name="nistp384"; if (hash_id) *hash_id=Crypto::DigestAlgos::SHA384(); return true; }
+  else if (curve_id == Crypto::EllipticCurve::NISTP521()) { if (algo_name) *algo_name="ecdsa-sha2-nistp521"; if (curve_name) *curve_name="nistp521"; if (hash_id) *hash_id=Crypto::DigestAlgos::SHA512(); return true; }
+  else return false;
+}
 
 RSAKey NewRSAPubKey() { RSA *v=RSA_new(); v->e=FromVoid<BIGNUM*>(NewBigNum()); v->n=FromVoid<BIGNUM*>(NewBigNum()); return RSAKey{v}; }
 DSAKey NewDSAPubKey() { DSA *v=DSA_new(); v->p=FromVoid<BIGNUM*>(NewBigNum()); v->q=FromVoid<BIGNUM*>(NewBigNum()); v->g=FromVoid<BIGNUM*>(NewBigNum()); v->pub_key=FromVoid<BIGNUM*>(NewBigNum()); return DSAKey{v}; }
@@ -117,19 +128,46 @@ ECDSASig ECDSASign(const StringPiece &digest, ECPair ecdsa_keypair) {
   return ECDSA_do_sign(MakeUnsigned(digest.data()), digest.size(), FromVoid<EC_KEY*>(ecdsa_keypair));
 }
 
-string RSAPublicKeyPEM(RSAKey key) {
+string RSAOpenSSHPublicKey(RSAKey key, const string &comment) {
+  string proto = SSH::RSAKey(GetRSAKeyE(key), GetRSAKeyN(key)).ToString();
+  string encoded = Singleton<Base64>::Get()->Encode(proto.data(), proto.size());
+  return StrCat("ssh-rsa ", encoded, comment.size() ? " " : "", comment, "\n");
+}
+
+string DSAOpenSSHPublicKey(DSAKey key, const string &comment) {
+  string proto = SSH::DSSKey(GetDSAKeyP(key), GetDSAKeyQ(key), GetDSAKeyG(key), GetDSAKeyK(key)).ToString();
+  string encoded = Singleton<Base64>::Get()->Encode(proto.data(), proto.size());
+  return StrCat("ssh-dss ", encoded, comment.size() ? " " : "", comment, "\n");
+}
+
+string ECDSAOpenSSHPublicKey(ECPair key, const string &comment) {
+  ECGroup group = GetECPairGroup(key);
+  string algo_name, curve_name;
+  if (!GetECName(GetECGroupID(group), &algo_name, &curve_name, nullptr))
+    return ERRORv("", "unknown curve_id ", GetECGroupID(group).v);
+
+  BigNumContext ctx = NewBigNumContext();
+  string proto = SSH::ECDSAKey(algo_name, curve_name,
+                               ECPointGetData(group, GetECPairPubKey(key), ctx)).ToString();
+  FreeBigNumContext(ctx);
+
+  string encoded = Singleton<Base64>::Get()->Encode(proto.data(), proto.size());
+  return StrCat(algo_name, " ", encoded, comment.size() ? " " : "", comment, "\n");
+}
+
+string RSAPEMPublicKey(RSAKey key) {
   BIO *pem = BIO_new(BIO_s_mem());
   PEM_write_bio_RSAPublicKey(pem, FromVoid<RSA*>(key));
   return CompleteBIO(pem);
 }
 
-string DSAPublicKeyPEM(DSAKey key) {
+string DSAPEMPublicKey(DSAKey key) {
   BIO *pem = BIO_new(BIO_s_mem());
   PEM_write_bio_DSA_PUBKEY(pem, FromVoid<DSA*>(key));
   return CompleteBIO(pem);
 }
 
-string ECDSAPublicKeyPEM(ECPair key) {
+string ECDSAPEMPublicKey(ECPair key) {
   BIO *pem = BIO_new(BIO_s_mem());
   EVP_PKEY *pkey = EVP_PKEY_new();
   if (!EVP_PKEY_assign_EC_KEY(pkey, FromVoid<EC_KEY*>(key))) return ERRORv("", "error assigning openssl pkey");
@@ -138,26 +176,28 @@ string ECDSAPublicKeyPEM(ECPair key) {
   return CompleteBIO(pem);
 }
 
-string RSAPrivateKeyPEM(RSAKey key, string pw, Crypto::CipherAlgo enc) {
+string RSAPEMPrivateKey(RSAKey key, string pw) {
   BIO *pem = BIO_new(BIO_s_mem());
-  PEM_write_bio_RSAPrivateKey(pem, FromVoid<RSA*>(key), FromVoid<const EVP_CIPHER*>(enc),
-                              enc ? MakeUnsigned(&pw[0]) : nullptr, pw.size(), NULL, NULL);
+  PEM_write_bio_RSAPrivateKey(pem, FromVoid<RSA*>(key), pw.size() ? EVP_aes_256_cbc() : nullptr,
+                              pw.size() ? MakeUnsigned(&pw[0]) : nullptr, pw.size(), NULL, NULL);
   return CompleteBIO(pem);
 }
 
-string DSAPrivateKeyPEM(DSAKey key, string pw, Crypto::CipherAlgo enc) {
+string DSAPEMPrivateKey(DSAKey key, string pw) {
   BIO *pem = BIO_new(BIO_s_mem());
-  PEM_write_bio_DSAPrivateKey(pem, FromVoid<DSA*>(key), FromVoid<const EVP_CIPHER*>(enc),
-                              enc ? MakeUnsigned(&pw[0]) : nullptr, pw.size(), NULL, NULL);
+  PEM_write_bio_DSAPrivateKey(pem, FromVoid<DSA*>(key), pw.size() ? EVP_aes_256_cbc() : nullptr,
+                              pw.size() ? MakeUnsigned(&pw[0]) : nullptr, pw.size(), NULL, NULL);
   return CompleteBIO(pem);
 }
 
-string ECDSAPrivateKeyPEM(ECPair key, string pw, Crypto::CipherAlgo enc) {
+string ECDSAPEMPrivateKey(ECPair key, string pw) {
+  OpenSSLEnsureAllAlgorithmsAdded();
   BIO *pem = BIO_new(BIO_s_mem());
   EVP_PKEY *pkey = EVP_PKEY_new();
-  if (!EVP_PKEY_assign_EC_KEY(pkey, FromVoid<EC_KEY*>(key))) return ERRORv("", "error assigning openssl pkey");
-  PEM_write_bio_PrivateKey(pem, pkey, FromVoid<const EVP_CIPHER*>(enc),
-                           enc ? MakeUnsigned(&pw[0]) : nullptr, pw.size(), NULL, NULL);
+  if (!EVP_PKEY_set1_EC_KEY(pkey, FromVoid<EC_KEY*>(key))) return ERRORv("", "error assigning openssl pkey");
+  if (!PEM_write_bio_PrivateKey(pem, pkey, pw.size() ? EVP_des_ede3_cbc() : nullptr,
+                                pw.size() ? MakeUnsigned(&pw[0]) : nullptr, pw.size(), NULL, NULL))
+    return ERRORv("", "PEM_write_bio_PrivateKey failed: ", Crypto::GetLastErrorText());
   EVP_PKEY_free(pkey);
   return CompleteBIO(pem);
 }
@@ -168,12 +208,15 @@ ECDef Crypto::EllipticCurve::NISTP521() { return Void(NID_secp521r1); };
 
 ECPair Crypto::EllipticCurve::NewPair(ECDef id, bool generate) {
   EC_KEY *pair = EC_KEY_new_by_curve_name(int(intptr_t(id.v)));
-  if (generate && pair && EC_KEY_generate_key(pair) != 1) { EC_KEY_free(pair); return NULL; }
+  if (generate && pair) {
+    EC_KEY_set_asn1_flag(pair, OPENSSL_EC_NAMED_CURVE);
+    if (EC_KEY_generate_key(pair) != 1) { EC_KEY_free(pair); return NULL; }
+  }
   return ECPair(pair);
 }
 
 bool Crypto::ParsePEM(char *key, RSAKey *rsa_out, DSAKey *dsa_out, ECPair *ec_out, function<string(string)> passphrase_cb) {
-  ONCE({ OpenSSL_add_all_algorithms(); });
+  OpenSSLEnsureAllAlgorithmsAdded();
   BIO *bio = BIO_new_mem_buf(key, strlen(key));
   EVP_PKEY *pk = PEM_read_bio_PrivateKey(bio, nullptr, [](char *buf, int size, int rwflag, void *u) {
     string pw = (*reinterpret_cast<decltype(passphrase_cb)*>(u))("");

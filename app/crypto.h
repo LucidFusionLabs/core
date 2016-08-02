@@ -182,8 +182,8 @@ struct Crypto {
   static void MACUpdate(MAC, const StringPiece &in);
   static int  MACFinish(MAC, char *out, int outlen);
 
-  static bool GenerateKey(const string &algo, int bits, const string &pw, Crypto::CipherAlgo,
-                          const string &comment, string *pubkeyout, string *privkeyout);
+  static bool GenerateKey(const string &algo, int bits, const string &pw, const string &comment,
+                          string *pubkeyout, string *privkeyout);
   static string ParsePEMHeader(const char *key,
                                const char **start, const char **end, const char **headers_end);
   static bool ParsePEM(char *key, RSAKey *rsa_out, DSAKey *dsa_out, ECPair *ec_out,
@@ -194,15 +194,18 @@ struct Crypto {
   static string GetLastErrorText();
 };
 
-string RSAPublicKeyPEM(RSAKey key);
-string DSAPublicKeyPEM(DSAKey key);
-string ECDSAPublicKeyPEM(ECPair key);
-string Ed25519PublicKeyPEM(const Ed25519Pair &key, const string &comment);
-string RSAPrivateKeyPEM(RSAKey key, string pw, Crypto::CipherAlgo enc);
-string DSAPrivateKeyPEM(DSAKey key, string pw, Crypto::CipherAlgo enc);
-string ECDSAPrivateKeyPEM(ECPair key, string pw, Crypto::CipherAlgo enc);
-string Ed25519PrivateKeyPEM(const Ed25519Pair &key, const string &pw, Crypto::CipherAlgo enc,
-                            const string &comment, int checkint);
+bool GetECName(ECDef, string *algo_name, string *curve_name, Crypto::DigestAlgo *hash_id);
+string RSAPEMPublicKey(RSAKey key);
+string DSAPEMPublicKey(DSAKey key);
+string ECDSAPEMPublicKey(ECPair key);
+string RSAOpenSSHPublicKey(RSAKey key, const string &comment);
+string DSAOpenSSHPublicKey(DSAKey key, const string &comment);
+string ECDSAOpenSSHPublicKey(ECPair key, const string &comment);
+string Ed25519OpenSSHPublicKey(const Ed25519Pair &key, const string &comment);
+string RSAPEMPrivateKey(RSAKey key, string pw);
+string DSAPEMPrivateKey(DSAKey key, string pw);
+string ECDSAPEMPrivateKey(ECPair key, string pw);
+string Ed25519PEMPrivateKey(const Ed25519Pair &key, const string &pw, const string &comment, int checkint);
 
 }; // namespace LFL
 #endif // LFL_CORE_APP_CRYPTO_H__

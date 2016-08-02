@@ -62,14 +62,14 @@ int Ed25519Verify(const StringPiece &msg, const StringPiece &sig, const StringPi
                                                        MakeUnsigned(ed25519_key.data()));
 }
 
-string Ed25519PublicKeyPEM(const Ed25519Pair &key, const string &comment) {
-  string proto = OpenSSHEd25519PublicKey(key.pubkey).ToString();
+string Ed25519OpenSSHPublicKey(const Ed25519Pair &key, const string &comment) {
+  string proto = SSH::Ed25519Key(key.pubkey).ToString();
   string encoded = Singleton<Base64>::Get()->Encode(proto.data(), proto.size());
   return StrCat("ssh-ed25519 ", encoded, comment.size() ? " " : "", comment, "\n");
 }
 
 string OpenSSHKeyCrypt(Crypto::CipherAlgo cipher_algo, bool direction, const string &pw,
-                    int rounds, const StringPiece &salt, const StringPiece &in) {
+                       int rounds, const StringPiece &salt, const StringPiece &in) {
   Crypto::Cipher cipher = Crypto::CipherInit();
   int cipher_keysize = Crypto::CipherAlgos::KeySize(cipher_algo);
   int cipher_blocksize = Crypto::CipherGetBlockSize(cipher);
@@ -82,8 +82,7 @@ string OpenSSHKeyCrypt(Crypto::CipherAlgo cipher_algo, bool direction, const str
   return ret;
 }
 
-string Ed25519PrivateKeyPEM(const Ed25519Pair &key, const string &pw, Crypto::CipherAlgo enc,
-                            const string &comment, int checkint) {
+string Ed25519PEMPrivateKey(const Ed25519Pair &key, const string &pw, const string &comment, int checkint) {
   OpenSSHEd25519PrivateKey ed25519priv(key.pubkey, key.privkey, comment);
   OpenSSHPrivateKeyHeader opensshprivkey;
   opensshprivkey.checkint1 = opensshprivkey.checkint2 = checkint;
@@ -91,12 +90,20 @@ string Ed25519PrivateKeyPEM(const Ed25519Pair &key, const string &pw, Crypto::Ci
   int cipher_block_size = 32, padded_privkey_len = NextMultipleOfN(privkey.size(), cipher_block_size);
   for (int i=0, l=padded_privkey_len-privkey.size(); i != l; ++i) privkey.append(1, i+1);
 
+  int rounds = 16;
   std::mt19937 rand_eng;
-  OpenSSHKey opensshkey("none", "none", "", privkey);
-  opensshkey.publickey.emplace_back(OpenSSHEd25519PublicKey(key.pubkey).ToString());
-  string proto = !enc ? opensshkey.ToString() :
-    OpenSSHKeyCrypt(Crypto::CipherAlgos::AES256_CBC(), true, pw, 16, 
-                    RandBytes(16, rand_eng), opensshkey.ToString());
+  string cipher="none", kdfname="none", kdfopts;
+  if (pw.size()) {
+    cipher = "aes256-cbc";
+    kdfname = "bcrypt";
+    string salt = RandBytes(16, rand_eng);
+    privkey = OpenSSHKeyCrypt(Crypto::CipherAlgos::AES256_CBC(), true, pw, rounds, salt, privkey);
+    kdfopts = OpenSSHBCryptKDFOptions(salt, rounds).ToString();
+  }
+  
+  OpenSSHKey opensshkey(cipher, kdfname, kdfopts, privkey);
+  opensshkey.publickey.emplace_back(SSH::Ed25519Key(key.pubkey).ToString());
+  string proto = opensshkey.ToString();
   string encoded = Singleton<Base64>::Get()->Encode(proto.data(), proto.size());
 
   string type = "OPENSSH PRIVATE KEY", ret = StrCat("-----BEGIN ", type, "-----\n");

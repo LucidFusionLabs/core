@@ -36,28 +36,28 @@ string Crypto::ComputeDigest(DigestAlgo algo, const string &in) {
   return DigestFinish(d);
 }
 
-bool Crypto::GenerateKey(const string &algo, int bits, const string &pw, Crypto::CipherAlgo enc,
-                         const string &comment, string *pubkeyout, string *privkeyout) {
+bool Crypto::GenerateKey(const string &algo, int bits, const string &pw, const string &comment,
+                         string *pubkeyout, string *privkeyout) {
   if (algo == "RSA") {
     RSAKey key = NewRSAPubKey();
     if (1 != RSAGeneratePair(key, bits)) { RSAKeyFree(key); return ERRORv(false, "gen rsa key"); }
-    if (pubkeyout)  *pubkeyout  = RSAPublicKeyPEM (key);
-    if (privkeyout) *privkeyout = RSAPrivateKeyPEM(key, pw, enc);
+    if (pubkeyout)  *pubkeyout  = RSAOpenSSHPublicKey(key, comment);
+    if (privkeyout) *privkeyout = RSAPEMPrivateKey(key, pw);
     RSAKeyFree(key);
   } else if (algo == "Ed25519") {
     std::mt19937 rand_eng;
     Ed25519Pair key;
     if (1 != Ed25519GeneratePair(&key, rand_eng)) return ERRORv(false, "gen ed25519 key");
-    if (pubkeyout)  *pubkeyout  = Ed25519PublicKeyPEM (key, comment);
-    if (privkeyout) *privkeyout = Ed25519PrivateKeyPEM(key, pw, enc, comment, Rand<int>());
+    if (pubkeyout)  *pubkeyout  = Ed25519OpenSSHPublicKey(key, comment);
+    if (privkeyout) *privkeyout = Ed25519PEMPrivateKey(key, pw, comment, Rand<int>());
   } else if (algo == "ECDSA") {
     ECPair key;
     if      (bits == 256) key = Crypto::EllipticCurve::NewPair(Crypto::EllipticCurve::NISTP256(), true);
     else if (bits == 384) key = Crypto::EllipticCurve::NewPair(Crypto::EllipticCurve::NISTP384(), true);
     else if (bits == 521) key = Crypto::EllipticCurve::NewPair(Crypto::EllipticCurve::NISTP521(), true);
     else return ERRORv(false, "ecdsa bits ", bits);
-    if (pubkeyout)  *pubkeyout  = ECDSAPublicKeyPEM (key);
-    if (privkeyout) *privkeyout = ECDSAPrivateKeyPEM(key, pw, enc);
+    if (pubkeyout)  *pubkeyout  = ECDSAOpenSSHPublicKey(key, comment);
+    if (privkeyout) *privkeyout = ECDSAPEMPrivateKey(key, pw);
     FreeECPair(key);
   } else return ERRORv(false, "unknown algo ", algo);
   return true;
