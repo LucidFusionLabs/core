@@ -208,6 +208,18 @@ MakeValueTuple(X *m, const typename X::key_type &k1, const typename X::key_type 
     (&(*m)[k1], &(*m)[k2], &(*m)[k3]);
 }
 
+template <typename X> bool GetPairValues(const vector<pair<X,X>> &in, vector<X*> out, bool check=1, bool checknull=0) {
+  if (in.size() != out.size()) return false;
+  auto ii = in.begin(), ie = in.end();
+  auto oi = out.begin();
+  for (/**/; ii != ie; ++ii, ++oi) {
+    auto &ov = **oi;
+    if (check && (checknull || ov != X()) && ov != ii->first) return false;
+    ov = move(ii->second);
+  }
+  return true;
+}
+
 template <class K> struct Erasable { virtual bool Erase(const K&) const = 0; };
 
 template <class K, class V> struct ErasableUnorderedMap : public Erasable<K> {

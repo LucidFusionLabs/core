@@ -193,7 +193,7 @@ void SystemMenuWidget::Show() {
 
 int GetTableWidgetID(SystemTableWidget *w) { return int(w->impl); }
 SystemTableWidget::~SystemTableWidget() {}
-SystemTableWidget::SystemTableWidget(const string &title, const string &style, const vector<TableItem> &items) {
+SystemTableWidget::SystemTableWidget(const string &title, const string &style, const vector<TableItem> &items, int second_col) {
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->activity_class,
                            "addTable", "(Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;)I"));

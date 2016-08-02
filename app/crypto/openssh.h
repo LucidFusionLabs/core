@@ -20,12 +20,14 @@ namespace LFL {
 struct OpenSSHKey : public Serializable {
   StringPiece magic, ciphername, kdfname, kdfoptions, privatekey;
   vector<StringPiece> publickey;
-  OpenSSHKey() : Serializable(0) {}
+  OpenSSHKey(const StringPiece &CN=StringPiece(), const StringPiece &KN=StringPiece(),
+             const StringPiece &KO=StringPiece(), const StringPiece &PK=StringPiece()) :
+    Serializable(0), magic("openssh-key-v1"), ciphername(CN), kdfname(KN), kdfoptions(KO), privatekey(PK) {}
 
   int HeaderSize() const { return 5*4 + 15; }
   int Size() const {
-    int ret = HeaderSize() + publickey.size() * 4;
-    for (auto &k : publickey) ret += k.size();
+    int ret = HeaderSize() + ciphername.size() + kdfname.size() + kdfoptions.size() + privatekey.size();
+    for (auto &k : publickey) ret += 4 + k.size();
     return ret;
   }
 
@@ -43,21 +45,83 @@ struct OpenSSHKey : public Serializable {
     return 0;
   }
 
-  void Out(Serializable::Stream *o) const {}
+  void Out(Serializable::Stream *o) const {
+    o->NTString(magic);
+    o->BString(ciphername);
+    o->BString(kdfname);
+    o->BString(kdfoptions);
+    o->Htonl(int(publickey.size()));
+    for (auto &k : publickey) o->BString(k);
+    o->BString(privatekey);
+  }
 };
 
 struct OpenSSHPrivateKeyHeader : public Serializable {
   int checkint1=0, checkint2=0;
-  OpenSSHPrivateKeyHeader(int n) : Serializable(0) {}
+  OpenSSHPrivateKeyHeader() : Serializable(0) {}
 
   int HeaderSize() const { return 2*4; }
   int Size() const { return HeaderSize(); }
-  void Out(Serializable::Stream *o) const { o->Htonl(checkint1); o->Htonl(checkint2); }
+
   int In(const Serializable::Stream *i) {
     i->Ntohl(&checkint1);
     i->Ntohl(&checkint2);
     if (checkint1 != checkint2) { i->error = true; return -1; }
     return 0;
+  }
+
+  void Out(Serializable::Stream *o) const {
+    o->Htonl(checkint1);
+    o->Htonl(checkint2);
+  }
+};
+
+struct OpenSSHEd25519PublicKey : public Serializable {
+  StringPiece keytype, pubkey;
+  OpenSSHEd25519PublicKey(const StringPiece &K=StringPiece()) :
+    Serializable(0), keytype("ssh-ed25519"), pubkey(K) {}
+
+  int HeaderSize() const { return 2*4; }
+  int Size() const { return HeaderSize() + keytype.size() + pubkey.size(); }
+
+  int In(const Serializable::Stream *i) {
+    i->ReadString(&keytype);
+    if (keytype.str() != "ssh-ed25519") { i->error = true; return -1; }
+    i->ReadString(&pubkey);
+    if (pubkey.size() != 32) { i->error = true; return -1; }
+    return 0;
+  }
+
+  void Out(Serializable::Stream *o) const {
+    o->BString(keytype);
+    o->BString(pubkey);
+  }
+};
+
+struct OpenSSHEd25519PrivateKey : public Serializable {
+  StringPiece keytype, pubkey, privkey, comment;
+  OpenSSHEd25519PrivateKey(const StringPiece &kpub=StringPiece(), const StringPiece &kpri=StringPiece(), const StringPiece &C=StringPiece()) :
+    Serializable(0), keytype("ssh-ed25519"), pubkey(kpub), privkey(kpri), comment(C) {}
+
+  int HeaderSize() const { return 4*4; }
+  int Size() const { return HeaderSize()+keytype.size()+pubkey.size()+privkey.size()+comment.size(); }
+
+  int In(const Serializable::Stream *i) {
+    i->ReadString(&keytype);
+    if (keytype.str() != "ssh-ed25519") { i->error = true; return -1; }
+    i->ReadString(&pubkey);
+    if (pubkey.size() != 32) { i->error = true; return -1; }
+    i->ReadString(&privkey);
+    if (privkey.size() != 64) { i->error = true; return -1; }
+    i->ReadString(&comment);
+    return 0;
+  }
+
+  void Out(Serializable::Stream *o) const {
+    o->BString(keytype);
+    o->BString(pubkey);
+    o->BString(privkey);
+    o->BString(comment);
   }
 };
 

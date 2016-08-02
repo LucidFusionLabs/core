@@ -306,7 +306,6 @@ typedef StringWordIterT<char16_t> StringWord16Iter;
 template <class X> struct StringLineIterT : public StringIterT<X> {
   struct Flag { enum { BlankLines=1, Raw=2 }; };
   StringPieceT<X> in;
-  basic_string<X> buf;
   int cur_len=0, cur_offset=0, next_offset=0;
   bool first=0, blanks=0, chomp=1;
   StringLineIterT() : cur_offset(-1) {}
@@ -322,6 +321,33 @@ template <class X> struct StringLineIterT : public StringIterT<X> {
 };
 typedef StringLineIterT<char>     StringLineIter;
 typedef StringLineIterT<char16_t> StringLine16Iter;
+
+template <int ChunkSize, class X> struct StringChunkIterT : public StringIterT<X> {
+  struct Flag { enum { BlankLines=1, Raw=2 }; };
+  StringPieceT<X> in;
+  int cur_len=0, cur_offset=0, next_offset=0;
+  bool first=0;
+  StringChunkIterT() : cur_offset(-1) {}
+  StringChunkIterT(const StringPieceT<X> &B, int F=0) : in(B), first(1) {}
+  bool Done() const { return cur_offset < 0; }
+  const X *Begin() const { return in.buf; }
+  const X *Current() const { return in.buf + cur_offset; }
+  int CurrentOffset() const { return cur_offset; }
+  int CurrentLength() const { return cur_len; }
+  int TotalLength() const { return in.len; }
+  const X *Next() {
+    first = false;
+    for (cur_offset = next_offset; cur_offset >= 0; cur_offset = next_offset) {
+      int remaining = in.Remaining(cur_offset);
+      bool last = remaining > 0 && remaining <= ChunkSize;
+      const X *chunk = in.buf + cur_offset, *next = last ? nullptr : chunk + ChunkSize;
+      cur_len = last ? remaining : ChunkSize;
+      next_offset = next ? next - in.buf : -1;
+      return chunk;
+    }
+    return 0;
+  }
+};
 
 struct IterWordIter : public StringIter {
   StringIter *iter;

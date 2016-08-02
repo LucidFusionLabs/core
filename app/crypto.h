@@ -74,6 +74,10 @@ void RSAKeyFree(RSAKey);
 void DSAKeyFree(DSAKey);
 void DSASigFree(DSASig);
 void ECDSASigFree(ECDSASig);
+int RSAGeneratePair(RSAKey key, int bits, BigNum);
+int RSAGeneratePair(RSAKey key, int bits);
+int DSAGeneratePair(DSAKey key, int bits);
+int Ed25519GeneratePair(Ed25519Pair *key, std::mt19937&);
 int RSAVerify(const StringPiece &digest, string *out, RSAKey rsa_key);
 int DSAVerify(const StringPiece &digest, DSASig dsa_sig, DSAKey dsa_key);
 int ECDSAVerify(const StringPiece &digest, ECDSASig dsa_sig, ECPair ecdsa_keypair);
@@ -151,8 +155,7 @@ struct Crypto {
   };
 
   struct X25519DiffieHellman {
-    Ed25519Pair mykey;
-    string remotepubkey;
+    string myprivkey, mypubkey, remotepubkey;
     void GeneratePair(std::mt19937&);
     bool ComputeSecret(BigNum *K);
   };
@@ -160,6 +163,7 @@ struct Crypto {
   static string MD5(const string &in);
   static string SHA1(const string &in);
   static string SHA256(const string &in);
+  static string SHA512(const string &in);
   static string Blowfish(const string &passphrase, const string &in, bool encrypt_or_decrypt);
   static string ComputeDigest(DigestAlgo algo, const string &in);
 
@@ -178,6 +182,8 @@ struct Crypto {
   static void MACUpdate(MAC, const StringPiece &in);
   static int  MACFinish(MAC, char *out, int outlen);
 
+  static bool GenerateKey(const string &algo, int bits, const string &pw, Crypto::CipherAlgo,
+                          const string &comment, string *pubkeyout, string *privkeyout);
   static string ParsePEMHeader(const char *key,
                                const char **start, const char **end, const char **headers_end);
   static bool ParsePEM(char *key, RSAKey *rsa_out, DSAKey *dsa_out, ECPair *ec_out,
@@ -187,6 +193,16 @@ struct Crypto {
   static string BCryptPBKDF(const StringPiece &pw, const StringPiece &salt, int size, int rounds);
   static string GetLastErrorText();
 };
+
+string RSAPublicKeyPEM(RSAKey key);
+string DSAPublicKeyPEM(DSAKey key);
+string ECDSAPublicKeyPEM(ECPair key);
+string Ed25519PublicKeyPEM(const Ed25519Pair &key, const string &comment);
+string RSAPrivateKeyPEM(RSAKey key, string pw, Crypto::CipherAlgo enc);
+string DSAPrivateKeyPEM(DSAKey key, string pw, Crypto::CipherAlgo enc);
+string ECDSAPrivateKeyPEM(ECPair key, string pw, Crypto::CipherAlgo enc);
+string Ed25519PrivateKeyPEM(const Ed25519Pair &key, const string &pw, Crypto::CipherAlgo enc,
+                            const string &comment, int checkint);
 
 }; // namespace LFL
 #endif // LFL_CORE_APP_CRYPTO_H__

@@ -116,6 +116,27 @@ TEST(IterTest, LineIter) {
   { StringWordIter w(line.Current(), line.CurrentLength()); float x[3]; w.ScanN(x, 3); EXPECT_NEAR(4, x[0], e); EXPECT_NEAR(5, x[1], e); EXPECT_NEAR(6, x[2], e); }
 }
 
+TEST(IterTest, ChunkIter) {
+  {
+    string contents = "abcdefg", appended;
+    StringChunkIterT<70, char> iter(contents);
+    for(iter.Next(); !iter.Done(); iter.Next()) appended.append(iter.Current(), iter.CurrentLength());
+    EXPECT_EQ(contents, appended);
+  }
+  {
+    string contents(70, 'x'), appended;
+    StringChunkIterT<70, char> iter(contents);
+    for(iter.Next(); !iter.Done(); iter.Next()) appended.append(iter.Current(), iter.CurrentLength());
+    EXPECT_EQ(contents, appended);
+  }
+  {
+    string contents = LocalFile::FileContents("../../../core/app/app.cpp"), appended;
+    StringChunkIterT<70, char> iter(contents);
+    for(iter.Next(); !iter.Done(); iter.Next()) appended.append(iter.Current(), iter.CurrentLength());
+    EXPECT_EQ(contents, appended);
+  }
+}
+
 TEST(StringTest, StringAppendf) {
 #define ToUTF16(x) String::ToUTF16(x)
 #define ToUTF8(x) String::ToUTF8(x)

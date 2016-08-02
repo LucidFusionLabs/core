@@ -30,6 +30,14 @@
 #include "openssl/err.h"
 
 namespace LFL {
+static string CompleteBIO(BIO *bio) {
+   size_t bio_len = BIO_pending(bio);
+   string ret(bio_len, 0);
+   BIO_read(bio, &ret[0], bio_len);
+   BIO_free(bio);
+   return ret;
+}
+
 ECPoint NewECPoint(ECGroup g) { return EC_POINT_new(FromVoid<EC_GROUP*>(g)); }
 void FreeECPoint(ECPoint p) { if (p) EC_POINT_free(FromVoid<EC_POINT*>(p)); }
 void FreeECPair(ECPair p) { if (p) EC_KEY_free(FromVoid<EC_KEY*>(p)); }
@@ -59,6 +67,23 @@ void RSAKeyFree(RSAKey k) { RSA_free(FromVoid<RSA*>(k)); }
 void DSAKeyFree(DSAKey k) { DSA_free(FromVoid<DSA*>(k)); }
 void DSASigFree(DSASig s) { DSA_SIG_free(FromVoid<DSA_SIG*>(s)); }
 void ECDSASigFree(ECDSASig s) { ECDSA_SIG_free(FromVoid<ECDSA_SIG*>(s)); }
+
+int RSAGeneratePair(RSAKey rsa_key, int bits) {
+  BigNum e = NewBigNum();
+  BigNumSetValue(e, RSA_F4);
+  int ret = RSAGeneratePair(rsa_key, bits, FromVoid<BIGNUM*>(e));
+  FreeBigNum(e);
+  return ret;
+}
+
+int RSAGeneratePair(RSAKey key, int bits, BigNum e) {
+  return RSA_generate_key_ex(FromVoid<RSA*>(key), bits, FromVoid<BIGNUM*>(e), NULL);
+}
+
+int DSAGeneratePair(DSAKey key, int bits) {
+  DSA_generate_parameters_ex(FromVoid<DSA*>(key), 2048, NULL, 0, NULL, NULL, NULL);
+  return DSA_generate_key(FromVoid<DSA*>(key));
+}
 
 int RSAVerify(const StringPiece &digest, string *out, RSAKey rsa_key) {
   return RSA_verify(NID_sha1, MakeUnsigned(digest.data()), digest.size(),
@@ -90,6 +115,51 @@ DSASig DSASign(const StringPiece &digest, DSAKey dsa_key) {
 
 ECDSASig ECDSASign(const StringPiece &digest, ECPair ecdsa_keypair) {
   return ECDSA_do_sign(MakeUnsigned(digest.data()), digest.size(), FromVoid<EC_KEY*>(ecdsa_keypair));
+}
+
+string RSAPublicKeyPEM(RSAKey key) {
+  BIO *pem = BIO_new(BIO_s_mem());
+  PEM_write_bio_RSAPublicKey(pem, FromVoid<RSA*>(key));
+  return CompleteBIO(pem);
+}
+
+string DSAPublicKeyPEM(DSAKey key) {
+  BIO *pem = BIO_new(BIO_s_mem());
+  PEM_write_bio_DSA_PUBKEY(pem, FromVoid<DSA*>(key));
+  return CompleteBIO(pem);
+}
+
+string ECDSAPublicKeyPEM(ECPair key) {
+  BIO *pem = BIO_new(BIO_s_mem());
+  EVP_PKEY *pkey = EVP_PKEY_new();
+  if (!EVP_PKEY_assign_EC_KEY(pkey, FromVoid<EC_KEY*>(key))) return ERRORv("", "error assigning openssl pkey");
+  PEM_write_bio_PUBKEY(pem, pkey);
+  EVP_PKEY_free(pkey);
+  return CompleteBIO(pem);
+}
+
+string RSAPrivateKeyPEM(RSAKey key, string pw, Crypto::CipherAlgo enc) {
+  BIO *pem = BIO_new(BIO_s_mem());
+  PEM_write_bio_RSAPrivateKey(pem, FromVoid<RSA*>(key), FromVoid<const EVP_CIPHER*>(enc),
+                              enc ? MakeUnsigned(&pw[0]) : nullptr, pw.size(), NULL, NULL);
+  return CompleteBIO(pem);
+}
+
+string DSAPrivateKeyPEM(DSAKey key, string pw, Crypto::CipherAlgo enc) {
+  BIO *pem = BIO_new(BIO_s_mem());
+  PEM_write_bio_DSAPrivateKey(pem, FromVoid<DSA*>(key), FromVoid<const EVP_CIPHER*>(enc),
+                              enc ? MakeUnsigned(&pw[0]) : nullptr, pw.size(), NULL, NULL);
+  return CompleteBIO(pem);
+}
+
+string ECDSAPrivateKeyPEM(ECPair key, string pw, Crypto::CipherAlgo enc) {
+  BIO *pem = BIO_new(BIO_s_mem());
+  EVP_PKEY *pkey = EVP_PKEY_new();
+  if (!EVP_PKEY_assign_EC_KEY(pkey, FromVoid<EC_KEY*>(key))) return ERRORv("", "error assigning openssl pkey");
+  PEM_write_bio_PrivateKey(pem, pkey, FromVoid<const EVP_CIPHER*>(enc),
+                           enc ? MakeUnsigned(&pw[0]) : nullptr, pw.size(), NULL, NULL);
+  EVP_PKEY_free(pkey);
+  return CompleteBIO(pem);
 }
 
 ECDef Crypto::EllipticCurve::NISTP256() { return Void(NID_X9_62_prime256v1); };

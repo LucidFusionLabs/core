@@ -19,9 +19,16 @@
 #include "core/app/crypto.h"
 
 namespace LFL {
+string ECPointGetData(ECGroup g, ECPoint p, BigNumContext ctx) {
+  string ret(ECPointDataSize(g, p, ctx), 0);
+  ECPointGetData(g, p, &ret[0], ret.size(), ctx);
+  return ret;
+}
+
 string Crypto::MD5   (const string &in) { return ComputeDigest(DigestAlgos::MD5   (), in); }
 string Crypto::SHA1  (const string &in) { return ComputeDigest(DigestAlgos::SHA1  (), in); }
 string Crypto::SHA256(const string &in) { return ComputeDigest(DigestAlgos::SHA256(), in); }
+string Crypto::SHA512(const string &in) { return ComputeDigest(DigestAlgos::SHA512(), in); }
 
 string Crypto::ComputeDigest(DigestAlgo algo, const string &in) {
   Digest d = DigestOpen(algo);
@@ -29,10 +36,31 @@ string Crypto::ComputeDigest(DigestAlgo algo, const string &in) {
   return DigestFinish(d);
 }
 
-string ECPointGetData(ECGroup g, ECPoint p, BigNumContext ctx) {
-  string ret(ECPointDataSize(g, p, ctx), 0);
-  ECPointGetData(g, p, &ret[0], ret.size(), ctx);
-  return ret;
+bool Crypto::GenerateKey(const string &algo, int bits, const string &pw, Crypto::CipherAlgo enc,
+                         const string &comment, string *pubkeyout, string *privkeyout) {
+  if (algo == "RSA") {
+    RSAKey key = NewRSAPubKey();
+    if (1 != RSAGeneratePair(key, bits)) { RSAKeyFree(key); return ERRORv(false, "gen rsa key"); }
+    if (pubkeyout)  *pubkeyout  = RSAPublicKeyPEM (key);
+    if (privkeyout) *privkeyout = RSAPrivateKeyPEM(key, pw, enc);
+    RSAKeyFree(key);
+  } else if (algo == "Ed25519") {
+    std::mt19937 rand_eng;
+    Ed25519Pair key;
+    if (1 != Ed25519GeneratePair(&key, rand_eng)) return ERRORv(false, "gen ed25519 key");
+    if (pubkeyout)  *pubkeyout  = Ed25519PublicKeyPEM (key, comment);
+    if (privkeyout) *privkeyout = Ed25519PrivateKeyPEM(key, pw, enc, comment, Rand<int>());
+  } else if (algo == "ECDSA") {
+    ECPair key;
+    if      (bits == 256) key = Crypto::EllipticCurve::NewPair(Crypto::EllipticCurve::NISTP256(), true);
+    else if (bits == 384) key = Crypto::EllipticCurve::NewPair(Crypto::EllipticCurve::NISTP384(), true);
+    else if (bits == 521) key = Crypto::EllipticCurve::NewPair(Crypto::EllipticCurve::NISTP521(), true);
+    else return ERRORv(false, "ecdsa bits ", bits);
+    if (pubkeyout)  *pubkeyout  = ECDSAPublicKeyPEM (key);
+    if (privkeyout) *privkeyout = ECDSAPrivateKeyPEM(key, pw, enc);
+    FreeECPair(key);
+  } else return ERRORv(false, "unknown algo ", algo);
+  return true;
 }
 
 }; // namespace LFL

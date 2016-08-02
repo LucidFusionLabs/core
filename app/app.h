@@ -748,7 +748,7 @@ struct SystemTableWidget {
   VoidPtr impl;
   CB show_cb; 
   virtual ~SystemTableWidget();
-  SystemTableWidget(const string &title, const string &style, const vector<TableItem> &items);
+  SystemTableWidget(const string &title, const string &style, const vector<TableItem> &items, int second_col=0);
   void AddNavigationButton(const TableItem &item, int align);
   void AddToolbar(SystemToolbarWidget*);
   void Show(bool show_or_hide);
@@ -756,6 +756,7 @@ struct SystemTableWidget {
   void SetSectionValues(const StringVec&, int section=0);
   void ReplaceSection(const vector<TableItem> &item, int section=0);
   StringPairVec GetSectionText(int section=0);
+  bool GetSectionText(int section_ind, vector<string*> out, bool check=1) { return GetPairValues(GetSectionText(section_ind), move(out), check); }
 };
 
 struct SystemNavigationWidget {

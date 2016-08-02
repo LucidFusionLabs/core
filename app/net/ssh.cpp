@@ -148,7 +148,7 @@ struct SSHClientConnection : public Connection::Handler {
           if (SSH::KEX::X25519DiffieHellman(kex_method)) {
             kex_hash = Crypto::DigestAlgos::SHA256();
             x25519dh.GeneratePair(rand_eng);
-            if (!WriteClearOrEncrypted(c, SSH::MSG_KEX_ECDH_INIT(x25519dh.mykey.pubkey))) return ERRORv(-1, c->Name(), ": write");
+            if (!WriteClearOrEncrypted(c, SSH::MSG_KEX_ECDH_INIT(x25519dh.mypubkey))) return ERRORv(-1, c->Name(), ": write");
 
           } else if (SSH::KEX::EllipticCurveDiffieHellman(kex_method)) {
             switch (kex_method) {
@@ -634,7 +634,7 @@ string SSH::ComputeExchangeHash(int kex_method, Crypto::DigestAlgo algo, const s
     UpdateDigest(H, dh->g);
   }
   if (KEX::X25519DiffieHellman(kex_method)) {
-    UpdateDigest(H, x25519dh->mykey.pubkey);
+    UpdateDigest(H, x25519dh->mypubkey);
     UpdateDigest(H, x25519dh->remotepubkey);
   } else if (KEX::EllipticCurveDiffieHellman(kex_method)) {
     UpdateDigest(H, ecdh->c_text);

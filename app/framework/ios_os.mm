@@ -191,7 +191,7 @@ static std::vector<UIImage*> app_images;
   @property (nonatomic, retain) UINavigationController *modal_nav;
   @property (nonatomic, assign) IOSToolbar *toolbar;
   @property (nonatomic)         std::string style;
-  @property (nonatomic)         int editable_section, selected_section, selected_row;
+  @property (nonatomic)         int editable_section, selected_section, selected_row, second_col;
   @property (copy)              void (^completed)();
 @end
 
@@ -239,6 +239,12 @@ static std::vector<UIImage*> app_images;
     if (section == data.size()) data.emplace_back();
     CHECK_LT(section, data.size());
     CHECK_EQ(item.size(), data[section].item.size());
+    for (int i=0, l=data[section].item.size(); i != l; ++i)
+      data[section].item[i].item.val = item[i];
+    [self.tableView beginUpdates];
+    [self.tableView reloadSections:[NSIndexSet indexSetWithIndex: section]
+      withRowAnimation:UITableViewRowAnimationNone];
+    [self.tableView endUpdates];
   }
 
   - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { return data.size(); }
@@ -303,7 +309,6 @@ static std::vector<UIImage*> app_images;
   }
 
   - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)path {
-    int first_col = 20, second_col = 110, frame_width = tableView.frame.size.width;
     static NSString *cellIdentifier = @"cellIdentifier";
     UITableViewCell *cell = [self.tableView dequeueReusableCellWithIdentifier:cellIdentifier];
     if (cell) { [cell release]; cell = nil; }
@@ -318,7 +323,7 @@ static std::vector<UIImage*> app_images;
       if (compiled_item.type == LFL::CompiledTableItem::Dropdown) {
         UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
         [button setTitle:@"\U000002C5" forState:UIControlStateNormal];
-        button.frame = CGRectMake(second_col - 10, 10, 10, 30.0);
+        button.frame = CGRectMake(_second_col - 10, 10, 10, 30.0);
         [button setTitleColor:[UIColor blueColor] forState:UIControlStateNormal];
         [button addTarget:self action:@selector(dropDownClicked:) forControlEvents:UIControlEventTouchUpInside];
         [button setTag: compiled_item.ref];
@@ -343,26 +348,30 @@ static std::vector<UIImage*> app_images;
 
       bool textinput=0, numinput=0, pwinput=0;
       if ((textinput = *type == "textinput") || (numinput = *type == "numinput") || (pwinput = *type == "pwinput")) {
-        UITextField *text_field = [[UITextField alloc] initWithFrame:
-          CGRectMake(second_col, 10, frame_width - second_col - 30, 30)];
-        text_field.autoresizingMask = UIViewAutoresizingFlexibleHeight;
-        text_field.adjustsFontSizeToFitWidth = YES;
-        text_field.autoresizesSubviews = YES;
-        text_field.autocorrectionType = UITextAutocorrectionTypeNo;
-        text_field.autocapitalizationType = UITextAutocapitalizationTypeNone;
-        text_field.clearButtonMode = UITextFieldViewModeNever;
-        if      (pwinput)  text_field.secureTextEntry = YES;
-        else if (numinput) text_field.keyboardType = UIKeyboardTypeNumberPad;
-        else               text_field.keyboardType = UIKeyboardTypeDefault;
-        text_field.returnKeyType = UIReturnKeyDone;
-        // text_field.layer.cornerRadius = 10.0;
-        // [text_field setBorderStyle: UITextBorderStyleRoundedRect];
-        [text_field setPlaceholder: LFL::MakeNSString(*v)];
-
+        UITextField *textfield;
+        if (_second_col) textfield = [[UITextField alloc] initWithFrame: CGRectMake(_second_col, 10, tableView.frame.size.width - _second_col - 30, 30)];
+        else             textfield = [[UITextField alloc] initWithFrame: CGRectMake(0, 0, 150, 30)];
+        textfield.autoresizingMask = UIViewAutoresizingFlexibleHeight;
+        textfield.adjustsFontSizeToFitWidth = YES;
+        textfield.autoresizesSubviews = YES;
+        textfield.autocorrectionType = UITextAutocorrectionTypeNo;
+        textfield.autocapitalizationType = UITextAutocapitalizationTypeNone;
+        textfield.clearButtonMode = UITextFieldViewModeNever;
+        if      (pwinput)  textfield.secureTextEntry = YES;
+        else if (numinput) textfield.keyboardType = UIKeyboardTypeNumberPad;
+        else               textfield.keyboardType = UIKeyboardTypeDefault;
+        textfield.returnKeyType = UIReturnKeyDone;
+        // textfield.layer.cornerRadius = 10.0;
+        // [textfield setBorderStyle: UITextBorderStyleRoundedRect];
+        [textfield setPlaceholder: LFL::MakeNSString(*v)];
         cell.textLabel.text = LFL::MakeNSString(*k);
-        [cell.contentView addSubview: text_field];
-        if (path.section == 0 && path.row == 0) [text_field becomeFirstResponder];
-        [text_field release];
+        if (_second_col) [cell.contentView addSubview: textfield];
+        else {
+          textfield.textAlignment = NSTextAlignmentRight;
+          cell.accessoryView = textfield;
+        }
+        if (path.section == 0 && path.row == 0) [textfield becomeFirstResponder];
+        [textfield release];
 
       } else if (*type == "select") {
         NSArray *itemArray = LFL::MakeNSStringArray(LFL::Split(*v, ','));
@@ -396,10 +405,10 @@ static std::vector<UIImage*> app_images;
         cell.textLabel.textAlignment = NSTextAlignmentCenter;
 
       } else if (*type == "toggle") {
-        UISwitch *onoff = [[UISwitch alloc] initWithFrame: CGRectMake(frame_width - 80, 0, 80, 45.0)]; 
+        UISwitch *onoff = [[UISwitch alloc] init];
         [onoff addTarget: self action: @selector(switchFlipped:) forControlEvents: UIControlEventValueChanged];
         cell.textLabel.text = LFL::MakeNSString(*k);
-        [cell.contentView addSubview: onoff];
+        cell.accessoryView = onoff;
         [onoff release];
 
       } else {
@@ -482,11 +491,12 @@ static std::vector<UIImage*> app_images;
 
       std::string val;
       if ((*type == "textinput") || (*type == "numinput") || (*type == "pwinput")) {
-        UITextField *text_field = [[cell.contentView subviews] lastObject];
-        val = LFL::GetNSString(text_field.text);
+        UITextField *textfield = _second_col ? [[cell.contentView subviews] lastObject] : cell.accessoryView;
+        val = LFL::GetNSString(textfield.text);
         if (val.empty()) val = *v;
       } else if (*type == "select") {
         UISegmentedControl *segmented_control = [[cell.contentView subviews] lastObject];
+        val = (LFL::GetNSString([segmented_control titleForSegmentAtIndex: segmented_control.selectedSegmentIndex]));
       }
       ret.emplace_back(*k, val);
     }
@@ -654,8 +664,9 @@ void SystemToolbarWidget::Show(bool show_or_hide) { [FromVoid<IOSToolbar*>(impl)
 void SystemToolbarWidget::ToggleButton(const string &n) { [FromVoid<IOSToolbar*>(impl) toggleButtonNamed: n]; }
 
 SystemTableWidget::~SystemTableWidget() { if (auto table = FromVoid<IOSTable*>(impl)) [table release]; }
-SystemTableWidget::SystemTableWidget(const string &title, const string &style, const vector<TableItem>&items) {
+SystemTableWidget::SystemTableWidget(const string &title, const string &style, const vector<TableItem>&items, int second_col) {
   auto table = [[IOSTable alloc] initWithStyle: UITableViewStyleGrouped];
+  if (second_col) table.second_col = second_col;
   [table load:title withStyle:style items:items];
   impl = table;
 }
