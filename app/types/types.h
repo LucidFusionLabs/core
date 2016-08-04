@@ -189,6 +189,13 @@ template <typename X> typename X::mapped_type FindOrDie(const char *file, int li
 }
 #define FindOrDie(m, k) FindOrDie(__FILE__, __LINE__, m, k)
 
+template <typename X> const typename X::mapped_type& FindRefOrDie(const char *file, int line, const X &m, const typename X::key_type &k) {
+  typename X::const_iterator iter = m.find(k);
+  if (iter == m.end()) Log(LFApp::Log::Fatal, file, line, StrCat("FindRefOrDie(", k, ")"));
+  return iter->second;
+}
+#define FindRefOrDie(m, k) FindRefOrDie(__FILE__, __LINE__, m, k)
+
 template <typename X> bool FindAndDispatch(const X &m, const typename X::key_type &k) {
   auto it = m.find(k);
   if (it != m.end()) { it->second(); return true; }

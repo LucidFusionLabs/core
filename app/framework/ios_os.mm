@@ -229,22 +229,46 @@ static std::vector<UIImage*> app_images;
     CHECK_LT(section, data.size());
     data[section] = LFL::CompiledTable();
     for (auto &i : item) data[section].item.emplace_back(i);
-    [self.tableView beginUpdates];
     [self.tableView reloadSections:[NSIndexSet indexSetWithIndex: section]
       withRowAnimation:UITableViewRowAnimationNone];
-    [self.tableView endUpdates];
+  }
+
+  - (void)setSectionDropdown:(int)section row:(int)r index:(int)ind {
+    if (section == data.size()) data.emplace_back();
+    CHECK_LT(section, data.size());
+    CHECK_LT(r, data[section].item.size());
+    NSIndexPath *path = [NSIndexPath indexPathForRow:r inSection:section];
+    UITableViewCell *cell = [self.tableView cellForRowAtIndexPath: path];
+    const std::string *k=0, *type=0, *v=0;
+    auto &compiled_item = data[path.section].item[path.row];
+    [self loadCellItem:cell withPath:path withItem:&compiled_item outK:&k outT:&type outV:&v];
+    if (compiled_item.type == LFL::CompiledTableItem::Dropdown) {
+      CHECK_RANGE(compiled_item.ref, 0, dropdowns.size());
+      auto dropdown_table = dropdowns[compiled_item.ref];
+      CHECK_EQ(0, dropdown_table.selected_section);
+      CHECK_LT(ind, dropdown_table->data[0].item.size());
+      dropdown_table.selected_row = ind;
+      [self.tableView reloadRowsAtIndexPaths:@[path] withRowAnimation:UITableViewRowAnimationNone];
+    } 
   }
 
   - (void)setSectionValues:(int)section items:(const LFL::StringVec&)item {
     if (section == data.size()) data.emplace_back();
     CHECK_LT(section, data.size());
     CHECK_EQ(item.size(), data[section].item.size());
-    for (int i=0, l=data[section].item.size(); i != l; ++i)
-      data[section].item[i].item.val = item[i];
-    [self.tableView beginUpdates];
+    for (int i=0, l=data[section].item.size(); i != l; ++i) {
+      auto &ci = data[section].item[i];
+      ci.item.val = item[i];
+      if (ci.loaded && ci.type == LFL::CompiledTableItem::Dropdown) {
+        std::vector<std::string> vv=LFL::Split(item[i], ',');
+        CHECK_RANGE(ci.ref, 0, dropdowns.size());
+        auto dropdown_table = dropdowns[ci.ref];
+        CHECK_EQ(dropdown_table->data[0].item.size(), vv.size()-1);
+        for (int j=1; j != vv.size(); ++j) dropdown_table->data[0].item[j].item.val = vv[j];
+      }
+    }
     [self.tableView reloadSections:[NSIndexSet indexSetWithIndex: section]
       withRowAnimation:UITableViewRowAnimationNone];
-    [self.tableView endUpdates];
   }
 
   - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { return data.size(); }
@@ -363,7 +387,9 @@ static std::vector<UIImage*> app_images;
         textfield.returnKeyType = UIReturnKeyDone;
         // textfield.layer.cornerRadius = 10.0;
         // [textfield setBorderStyle: UITextBorderStyleRoundedRect];
-        [textfield setPlaceholder: LFL::MakeNSString(*v)];
+
+        if (pwinput) [textfield setText:        LFL::MakeNSString(*v)];
+        else         [textfield setPlaceholder: LFL::MakeNSString(*v)];
         cell.textLabel.text = LFL::MakeNSString(*k);
         if (_second_col) [cell.contentView addSubview: textfield];
         else {
@@ -410,6 +436,13 @@ static std::vector<UIImage*> app_images;
         cell.textLabel.text = LFL::MakeNSString(*k);
         cell.accessoryView = onoff;
         [onoff release];
+
+      } else if (*type == "label") {
+        UILabel *label = [[UILabel alloc] init];
+        label.text = LFL::MakeNSString(*v);
+        cell.textLabel.text = LFL::MakeNSString(*k);
+        cell.accessoryView = label;
+        [label release];
 
       } else {
         cell.textLabel.text = LFL::MakeNSString(*k);
@@ -489,6 +522,15 @@ static std::vector<UIImage*> app_images;
       auto &compiled_item = data[path.section].item[path.row];
       [self loadCellItem:cell withPath:path withItem:&compiled_item outK:&k outT:&type outV:&v];
 
+      if (compiled_item.type == LFL::CompiledTableItem::Dropdown) {
+        CHECK_RANGE(compiled_item.ref, 0, dropdowns.size());
+        auto dropdown_table = dropdowns[compiled_item.ref];
+        CHECK_EQ(0, dropdown_table.selected_section);
+        CHECK_LT(dropdown_table.selected_row, dropdown_table->data[0].item.size());
+        ret.emplace_back(LFL::GetNSString(dropdown_table.title),
+                         dropdown_table->data[0].item[dropdown_table.selected_row].item.key);
+      }
+
       std::string val;
       if ((*type == "textinput") || (*type == "numinput") || (*type == "pwinput")) {
         UITextField *textfield = _second_col ? [[cell.contentView subviews] lastObject] : cell.accessoryView;
@@ -496,7 +538,10 @@ static std::vector<UIImage*> app_images;
         if (val.empty()) val = *v;
       } else if (*type == "select") {
         UISegmentedControl *segmented_control = [[cell.contentView subviews] lastObject];
-        val = (LFL::GetNSString([segmented_control titleForSegmentAtIndex: segmented_control.selectedSegmentIndex]));
+        val = LFL::GetNSString([segmented_control titleForSegmentAtIndex: segmented_control.selectedSegmentIndex]);
+      } else if (*type == "label") {
+        UILabel *label = (UILabel*)cell.accessoryView;
+        val = LFL::GetNSString(label.text);
       }
       ret.emplace_back(*k, val);
     }
@@ -675,8 +720,11 @@ void SystemTableWidget::AddNavigationButton(const TableItem &item, int align) { 
 void SystemTableWidget::AddToolbar(SystemToolbarWidget *t) { [FromVoid<IOSTable*>(impl) setToolbar: FromVoid<IOSToolbar*>(t->impl)]; }
 void SystemTableWidget::SetEditableSection(int section) { FromVoid<IOSTable*>(impl).editable_section = section; }
 StringPairVec SystemTableWidget::GetSectionText(int section) { return [FromVoid<IOSTable*>(impl) dumpDataForSection:section]; }
+void SystemTableWidget::BeginUpdates() { [FromVoid<IOSTable*>(impl).tableView beginUpdates]; }
+void SystemTableWidget::EndUpdates() { [FromVoid<IOSTable*>(impl).tableView endUpdates]; }
 void SystemTableWidget::ReplaceSection(const vector<TableItem> &item, int section) { [FromVoid<IOSTable*>(impl) replaceSection:section items:item]; }
 void SystemTableWidget::SetSectionValues(const StringVec &item, int section) { [FromVoid<IOSTable*>(impl) setSectionValues:section items:item]; }
+void SystemTableWidget::SetSectionDropdownValue(int section, int row, int val) { [FromVoid<IOSTable*>(impl) setSectionDropdown:section row:row index:val]; }
 
 void SystemTableWidget::Show(bool show_or_hide) {
   if (show_or_hide && show_cb) show_cb(this);

@@ -138,6 +138,7 @@ const bool ANDROID = false;
 
 Application *app = nullptr;
 Window *screen = nullptr;
+const char *not_implemented = "not implemented";
 
 DEFINE_int(loglevel, DEBUG ? 7 : 0, "Log level: [Fatal=-1, Error=0, Info=3, Debug=7]");
 DEFINE_string(logfile, "", "Log file name");

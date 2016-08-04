@@ -215,13 +215,17 @@ macro(list_append_kv _list _key _val)
   endif()
 endmacro()
 
+# proto vars
+if(LFL_PROTOBUF)
+  set(PROTOBUF_INCLUDE_DIR ${LFL_SOURCE_DIR}/core/imports/protobuf/src)
+  set(PROTOBUF_PROTOC_EXECUTABLE ${LFL_OS_CORE_BINARY_DIR}/imports/protobuf/protoc)
+endif()
+
 # imports
 add_subdirectory(${LFL_SOURCE_DIR}/core/imports)
 
 # proto macros
 if(LFL_PROTOBUF)
-  set(PROTOBUF_INCLUDE_DIR ${LFL_SOURCE_DIR}/core/imports/protobuf/src)
-  set(PROTOBUF_PROTOC_EXECUTABLE ${LFL_OS_CORE_BINARY_DIR}/imports/protobuf/protoc)
   include(FindProtoBuf)
 else()
   macro(PROTOBUF_GENERATE_CPP _s _h _f)

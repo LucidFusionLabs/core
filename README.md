@@ -97,7 +97,7 @@ See [new_app_template/README.txt](new_app_template/README.txt) to quick start yo
 
 ### Build OSX
 
-* http://www.cmake.org/files/v3.2/cmake-3.2.3-Darwin-universal.dmg
+* https://cmake.org/files/v3.3/cmake-3.3.0-Darwin-universal.dmg
 * Minimum of XCode 6 required, nasm & yasm (from macports or brew)
 
         cd lfl

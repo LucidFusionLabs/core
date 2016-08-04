@@ -105,3 +105,6 @@
 [submodule "imports/bcrypt_pbkdf"]
 	path = imports/bcrypt_pbkdf
 	url = https://github.com/LucidFusionLabs/bcrypt_pbkdf
+[submodule "imports/mosh"]
+	path = imports/mosh
+	url = https://github.com/mobile-shell/mosh

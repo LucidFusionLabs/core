@@ -238,6 +238,7 @@ void Log(int level, const char *file, int line, const string &m);
 namespace LFL {
 extern Window *screen;
 extern Application *app;
+extern const char *not_implemented;
 extern const bool DEBUG, MOBILE, IOS, ANDROID;
 
 struct Allocator {
@@ -752,9 +753,12 @@ struct SystemTableWidget {
   void AddNavigationButton(const TableItem &item, int align);
   void AddToolbar(SystemToolbarWidget*);
   void Show(bool show_or_hide);
+  void BeginUpdates();
+  void EndUpdates();
   void SetEditableSection(int section=0);
   void SetSectionValues(const StringVec&, int section=0);
   void ReplaceSection(const vector<TableItem> &item, int section=0);
+  void SetSectionDropdownValue(int section, int row, int val);
   StringPairVec GetSectionText(int section=0);
   bool GetSectionText(int section_ind, vector<string*> out, bool check=1) { return GetPairValues(GetSectionText(section_ind), move(out), check); }
 };

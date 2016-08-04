@@ -195,7 +195,7 @@ string ECDSAPEMPrivateKey(ECPair key, string pw) {
   BIO *pem = BIO_new(BIO_s_mem());
   EVP_PKEY *pkey = EVP_PKEY_new();
   if (!EVP_PKEY_set1_EC_KEY(pkey, FromVoid<EC_KEY*>(key))) return ERRORv("", "error assigning openssl pkey");
-  if (!PEM_write_bio_PrivateKey(pem, pkey, pw.size() ? EVP_des_ede3_cbc() : nullptr,
+  if (!PEM_write_bio_PrivateKey(pem, pkey, pw.size() ? EVP_aes_256_cbc() : nullptr,
                                 pw.size() ? MakeUnsigned(&pw[0]) : nullptr, pw.size(), NULL, NULL))
     return ERRORv("", "PEM_write_bio_PrivateKey failed: ", Crypto::GetLastErrorText());
   EVP_PKEY_free(pkey);
