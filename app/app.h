@@ -305,7 +305,7 @@ struct TableItem {
 struct CompiledTableItem {
   enum { Normal=0, Dropdown=1 };
   TableItem item;
-  int type, ref;
+  int type, ref, tag=0;
   bool loaded=0;
   CompiledTableItem(const TableItem &i=TableItem(), int t=-1, int r=-1) : type(t), ref(r), item(i) {}
 };
@@ -750,17 +750,24 @@ struct SystemTableWidget {
   CB show_cb; 
   virtual ~SystemTableWidget();
   SystemTableWidget(const string &title, const string &style, const vector<TableItem> &items, int second_col=0);
+
   void AddNavigationButton(const TableItem &item, int align);
   void AddToolbar(SystemToolbarWidget*);
   void Show(bool show_or_hide);
-  void BeginUpdates();
-  void EndUpdates();
-  void SetEditableSection(int section=0);
-  void SetSectionValues(const StringVec&, int section=0);
-  void ReplaceSection(const vector<TableItem> &item, int section=0);
-  void SetSectionDropdownValue(int section, int row, int val);
+
+  string GetKey(int section, int row);
+  int GetTag(int section, int row);
+  void SetTag(int section, int row, int val);
+  void SetValue(int section, int row, const string &val);
   StringPairVec GetSectionText(int section=0);
   bool GetSectionText(int section_ind, vector<string*> out, bool check=1) { return GetPairValues(GetSectionText(section_ind), move(out), check); }
+  void SetEditableSection(int section=0);
+
+  void BeginUpdates();
+  void EndUpdates();
+  void SetDropdown(int section, int row, int val);
+  void SetSectionValues(const StringVec&, int section=0);
+  void ReplaceSection(const vector<TableItem> &item, int section=0);
 };
 
 struct SystemNavigationWidget {
@@ -768,6 +775,8 @@ struct SystemNavigationWidget {
   SystemTableWidget *root;
   virtual ~SystemNavigationWidget();
   SystemNavigationWidget(SystemTableWidget *root);
+
+  SystemTableWidget *Back();
   void Show(bool show_or_hide);
   void PushTable(SystemTableWidget*);
   void PopTable(int num=1);

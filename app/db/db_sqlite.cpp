@@ -141,10 +141,19 @@ int SQLiteIdValueStore::Insert(const BlobPiece &val) {
 }
 
 bool SQLiteIdValueStore::Update(int id, const BlobPiece &val) {
-  SQLite::Statement stmt = SQLite::Prepare(*db, StrCat("UPDATE  ", table_name, " SET data = ? WHERE id = ?;"));
+  SQLite::Statement stmt = SQLite::Prepare(*db, StrCat("UPDATE ", table_name, " SET data = ? WHERE id = ?;"));
   SQLite::ExecPrepared(stmt, val, id);
   SQLite::Finalize(stmt);
-  return 0;
+  data[id] = val.str();
+  return true;
+}
+
+bool SQLiteIdValueStore::Erase(int id) {
+  SQLite::Statement stmt = SQLite::Prepare(*db, StrCat("DELETE FROM ", table_name, " WHERE id = ?;"));
+  SQLite::ExecPrepared(stmt, id);
+  SQLite::Finalize(stmt);
+  data.erase(id);
+  return true;
 }
 
 }; // namespace LFL

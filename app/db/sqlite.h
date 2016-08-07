@@ -63,6 +63,7 @@ namespace LFL {
     void Open(SQLite::Database *, const string &tn);
     int Insert(const BlobPiece &val);
     bool Update(int, const BlobPiece &val);
+    bool Erase(int);
   };
 }; // namespace LFL
 #endif // LFL_CORE_APP_DB_SQLITE_H__
