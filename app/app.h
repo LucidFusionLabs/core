@@ -294,19 +294,19 @@ struct MenuItem  { string shortcut, name, cmd; };
 struct PanelItem { string type; Box box; string cmd; };
 struct TableItem {
   typedef unordered_map<string, vector<Triple<int, int, string>>> Depends;
-  string key, type, val;
-  int left_icon, right_icon;
+  string key, type, val, right_text;
+  int tag, left_icon, right_icon;
   string right_icon_cmd;
   Depends depends;
-  TableItem(string K=string(), string T=string(), string V=string(), int LI=0, int RI=0, string RC=string(), Depends D=Depends())
-    : key(move(K)), type(move(T)), val(move(V)), left_icon(LI), right_icon(RI), right_icon_cmd(move(RC)), depends(move(D)) {}
+  TableItem(string K=string(), string T=string(), string V=string(), string RT=string(), int TG=0, int LI=0, int RI=0, string RC=string(), Depends D=Depends())
+    : key(move(K)), type(move(T)), val(move(V)), right_text(move(RT)), tag(TG), left_icon(LI), right_icon(RI), right_icon_cmd(move(RC)), depends(move(D)) {}
   void CheckAssign(const string &k, string v) { CHECK_EQ(k, key); val=move(v); }
 };
 struct CompiledTableItem {
   enum { Normal=0, Dropdown=1 };
   TableItem item;
-  int type, ref, tag=0;
-  bool loaded=0;
+  int type, ref;
+  bool loaded=0, gui_loaded=0, control=0;
   CompiledTableItem(const TableItem &i=TableItem(), int t=-1, int r=-1) : type(t), ref(r), item(i) {}
 };
 struct CompiledTable {
@@ -759,9 +759,10 @@ struct SystemTableWidget {
   int GetTag(int section, int row);
   void SetTag(int section, int row, int val);
   void SetValue(int section, int row, const string &val);
+  void SelectRow(int section, int row);
   StringPairVec GetSectionText(int section=0);
   bool GetSectionText(int section_ind, vector<string*> out, bool check=1) { return GetPairValues(GetSectionText(section_ind), move(out), check); }
-  void SetEditableSection(int section=0);
+  void SetEditableSection(const string &cmd, int section=0);
 
   void BeginUpdates();
   void EndUpdates();

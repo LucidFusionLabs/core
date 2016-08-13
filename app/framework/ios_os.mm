@@ -43,6 +43,14 @@ static std::vector<UIImage*> app_images;
 @implementation IOSSegmentedControl
 @end
 
+@interface IOSTextField : UITextField
+  @property (nonatomic) bool modified;
+  - (void)textFieldDidChange:(IOSTextField*)sender;
+@end
+@implementation IOSTextField
+  - (void)textFieldDidChange:(IOSTextField*)sender { _modified = true; }
+@end
+
 @interface IOSAlert : NSObject<UIAlertViewDelegate>
   @property (nonatomic, retain) UIAlertView *alert;
   @property (nonatomic)         bool         add_text, done;
@@ -188,7 +196,7 @@ static std::vector<UIImage*> app_images;
   @property (nonatomic, retain) UINavigationController *modal_nav;
   @property (nonatomic, assign) IOSToolbar *toolbar;
   @property (nonatomic, assign) LFL::SystemTableWidget *lfl_self;
-  @property (nonatomic)         std::string style;
+  @property (nonatomic)         std::string style, delete_row_cmd;
   @property (nonatomic)         int editable_section, selected_section, selected_row, second_col;
   @property (copy)              void (^completed)();
 @end
@@ -232,20 +240,29 @@ static std::vector<UIImage*> app_images;
       withRowAnimation:UITableViewRowAnimationNone];
   }
 
-  - (std::string)getKey:(int)section row:(int)r { return data[section].item[r].item.key; }
-  - (int)getTag:(int)section row:(int)r { return data[section].item[r].tag; }
-
-  - (void)setTag:(int)section row:(int)r val:(int)v {
+  - (void)checkExists:(int)section row:(int)r {
     if (section == data.size()) data.emplace_back();
     CHECK_LT(section, data.size());
     CHECK_LT(r, data[section].item.size());
-    data[section].item[r].tag = v;
+  }
+
+  - (std::string)getKey:(int)section row:(int)r {
+    [self checkExists:section row:r];
+    return data[section].item[r].item.key;
+  }
+
+  - (int)getTag:(int)section row:(int)r {
+    [self checkExists:section row:r];
+    return data[section].item[r].item.tag;
+  }
+
+  - (void)setTag:(int)section row:(int)r val:(int)v {
+    [self checkExists:section row:r];
+    data[section].item[r].item.tag = v;
   }
 
   - (void)setValue:(int)section row:(int)r val:(const std::string&)v {
-    if (section == data.size()) data.emplace_back();
-    CHECK_LT(section, data.size());
-    CHECK_LT(r, data[section].item.size());
+    [self checkExists:section row:r];
     auto &ci = data[section].item[r];
     ci.item.val = v;
     if (ci.loaded && ci.type == LFL::CompiledTableItem::Dropdown) {
@@ -258,9 +275,7 @@ static std::vector<UIImage*> app_images;
   }
 
   - (void)setDropdown:(int)section row:(int)r index:(int)ind {
-    if (section == data.size()) data.emplace_back();
-    CHECK_LT(section, data.size());
-    CHECK_LT(r, data[section].item.size());
+    [self checkExists:section row:r];
     NSIndexPath *path = [NSIndexPath indexPathForRow:r inSection:section];
     UITableViewCell *cell = [self.tableView cellForRowAtIndexPath: path];
     const std::string *k=0, *type=0, *v=0;
@@ -291,6 +306,11 @@ static std::vector<UIImage*> app_images;
     return data[section].item.size();
   }
 
+  - (CGRect)getCellFrame {
+    if (_second_col) return CGRectMake(_second_col, 10, self.tableView.frame.size.width - _second_col - 30, 30);
+    else             return CGRectMake(0, 0, 150, 30);
+  }
+
   - (void)loadNavigationButton:(const LFL::TableItem&)item withAlign:(int)align {
     if (item.key == "Edit") {
       self.navigationItem.rightBarButtonItem = [self editButtonItem];
@@ -318,6 +338,7 @@ static std::vector<UIImage*> app_images;
         CHECK_EQ(kv.size(), vv.size());
         item->type = LFL::CompiledTableItem::Dropdown;
         item->ref = dropdowns.size();
+        item->control = vv[0] != "nocontrol";
         std::vector<LFL::TableItem> dropdown_options;
         for (int i=1, l=kv.size(); i != l; ++i) dropdown_options.push_back({kv[i], tv[i], vv[i]});
         auto dropdown_table = [[IOSTable alloc] initWithStyle: UITableViewStyleGrouped];
@@ -357,8 +378,9 @@ static std::vector<UIImage*> app_images;
       const std::string *k=0, *type=0, *v=0;
       auto &compiled_item = data[path.section].item[path.row];
       [self loadCellItem:cell withPath:path withItem:&compiled_item outK:&k outT:&type outV:&v];
+      compiled_item.gui_loaded = true;
 
-      if (compiled_item.type == LFL::CompiledTableItem::Dropdown) {
+      if (compiled_item.type == LFL::CompiledTableItem::Dropdown && compiled_item.control) {
         UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
         [button setTitle:@"\U000002C5" forState:UIControlStateNormal];
         button.frame = CGRectMake(_second_col - 10, 10, 10, 30.0);
@@ -375,9 +397,7 @@ static std::vector<UIImage*> app_images;
 
       bool textinput=0, numinput=0, pwinput=0;
       if ((textinput = *type == "textinput") || (numinput = *type == "numinput") || (pwinput = *type == "pwinput")) {
-        UITextField *textfield;
-        if (_second_col) textfield = [[UITextField alloc] initWithFrame: CGRectMake(_second_col, 10, tableView.frame.size.width - _second_col - 30, 30)];
-        else             textfield = [[UITextField alloc] initWithFrame: CGRectMake(0, 0, 150, 30)];
+        IOSTextField *textfield = [[IOSTextField alloc] initWithFrame: [self getCellFrame]];
         textfield.autoresizingMask = UIViewAutoresizingFlexibleHeight;
         textfield.adjustsFontSizeToFitWidth = YES;
         textfield.autoresizesSubviews = YES;
@@ -390,16 +410,19 @@ static std::vector<UIImage*> app_images;
         textfield.returnKeyType = UIReturnKeyDone;
         // textfield.layer.cornerRadius = 10.0;
         // [textfield setBorderStyle: UITextBorderStyleRoundedRect];
+        [textfield addTarget:textfield action:@selector(textFieldDidChange:) 
+          forControlEvents:UIControlEventEditingChanged];
 
-        if (pwinput) [textfield setText:        LFL::MakeNSString(*v)];
-        else         [textfield setPlaceholder: LFL::MakeNSString(*v)];
+        if (v->size() && ((*v)[0] == 1 || (*v)[0] == 2)) [textfield setPlaceholder: LFL::MakeNSString(v->substr(1))];
+        else if (v->size())                              [textfield setText:        LFL::MakeNSString(*v)];
+
         cell.textLabel.text = LFL::MakeNSString(*k);
         if (_second_col) [cell.contentView addSubview: textfield];
         else {
           textfield.textAlignment = NSTextAlignmentRight;
           cell.accessoryView = textfield;
         }
-        if (path.section == 0 && path.row == 0) [textfield becomeFirstResponder];
+        if (path.section == _selected_section && path.row == _selected_row) [textfield becomeFirstResponder];
         [textfield release];
 
       } else if (*type == "select") {
@@ -441,10 +464,11 @@ static std::vector<UIImage*> app_images;
         [onoff release];
 
       } else if (*type == "label") {
-        UILabel *label = [[UILabel alloc] init];
+        UILabel *label = [[UILabel alloc] initWithFrame: [self getCellFrame]];
         label.text = LFL::MakeNSString(*v);
         cell.textLabel.text = LFL::MakeNSString(*k);
-        cell.accessoryView = label;
+        if (_second_col) [cell.contentView addSubview: label];
+        else             cell.accessoryView = label;
         [label release];
 
       } else {
@@ -455,15 +479,34 @@ static std::vector<UIImage*> app_images;
         CHECK_LE(icon, app_images.size());
         UIImage *image = app_images[icon - 1]; 
         IOSButton *button = [IOSButton buttonWithType:UIButtonTypeCustom];
-        button.frame = CGRectMake(0, 0, image.size.width, image.size.height);
+        button.frame = CGRectMake(0, 0, 40, 40);
         [button setImage:image forState:UIControlStateNormal];
         button.cmd = compiled_item.item.right_icon_cmd;
         [button addTarget:self action:@selector(rightIconClicked:) forControlEvents:UIControlEventTouchUpInside];
         if (cell.accessoryView) [cell.accessoryView addSubview: button];
         else cell.accessoryView = button;
+      } else if (compiled_item.item.right_text.size()) {
+        UILabel *label = [[UILabel alloc] init];
+        label.textColor = self.view.tintColor;
+        label.text = LFL::MakeNSString(compiled_item.item.right_text);
+        [label sizeToFit];
+        if (cell.accessoryView) [cell.accessoryView addSubview: label];
+        else cell.accessoryView = label;
+        [label release];
       }
     }
     return cell;
+  }
+
+  - (void)tableView:(UITableView *)tableView commitEditingStyle:(UITableViewCellEditingStyle)editingStyle forRowAtIndexPath:(NSIndexPath *)path {
+    [self checkExists:path.section row:path.row];
+    if (editingStyle == UITableViewCellEditingStyleDelete) {
+      ShellRun(LFL::StrCat(_delete_row_cmd, " ", path.row, " ", data[path.section].item[path.row].item.tag).c_str());
+      data[path.section].item.erase(data[path.section].item.begin() + path.row);
+      [tableView beginUpdates];
+      [tableView deleteRowsAtIndexPaths:@[path] withRowAnimation:UITableViewRowAnimationNone];
+      [tableView endUpdates];
+    }
   }
 
   - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
@@ -476,8 +519,7 @@ static std::vector<UIImage*> app_images;
   }
 
   - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)path {
-    CHECK_LT(path.section, data.size());
-    CHECK_LT(path.row, data[path.section].item.size());
+    [self checkExists:path.section row:path.row];
     _selected_row = path.row;
     _selected_section = path.section;
     const auto &compiled_item = data[path.section].item[path.row];
@@ -547,15 +589,17 @@ static std::vector<UIImage*> app_images;
       }
 
       std::string val;
-      if ((*type == "textinput") || (*type == "numinput") || (*type == "pwinput")) {
-        UITextField *textfield = _second_col ? [[cell.contentView subviews] lastObject] : cell.accessoryView;
+      if (!compiled_item.gui_loaded) {}
+      else if ((*type == "textinput") || (*type == "numinput") || (*type == "pwinput")) {
+        IOSTextField *textfield = _second_col ? [[cell.contentView subviews] lastObject] : cell.accessoryView;
         val = LFL::GetNSString(textfield.text);
-        if (val.empty()) val = *v;
+        if (val.empty() && !textfield.modified && v->size() && (*v)[0] != 1)
+          val = (*v)[0] == 2 ? v->substr(1) : *v;
       } else if (*type == "select") {
         UISegmentedControl *segmented_control = [[cell.contentView subviews] lastObject];
         val = LFL::GetNSString([segmented_control titleForSegmentAtIndex: segmented_control.selectedSegmentIndex]);
       } else if (*type == "label") {
-        UILabel *label = (UILabel*)cell.accessoryView;
+        UILabel *label = _second_col ? [[cell.contentView subviews] lastObject] : cell.accessoryView;
         val = LFL::GetNSString(label.text);
       }
       ret.emplace_back(*k, val);
@@ -743,7 +787,15 @@ int SystemTableWidget::GetTag(int section, int row) { return [FromVoid<IOSTable*
 void SystemTableWidget::SetTag(int section, int row, int val) { [FromVoid<IOSTable*>(impl) setTag:section row:row val:val]; }
 void SystemTableWidget::SetValue(int section, int row, const string &val) { [FromVoid<IOSTable*>(impl) setValue:section row:row val:val]; }
 StringPairVec SystemTableWidget::GetSectionText(int section) { return [FromVoid<IOSTable*>(impl) dumpDataForSection:section]; }
-void SystemTableWidget::SetEditableSection(int section) { FromVoid<IOSTable*>(impl).editable_section = section; }
+void SystemTableWidget::SetEditableSection(const string &cmd, int section) {
+  FromVoid<IOSTable*>(impl).delete_row_cmd = cmd;
+  FromVoid<IOSTable*>(impl).editable_section = section;
+}
+
+void SystemTableWidget::SelectRow(int section, int row) {
+  FromVoid<IOSTable*>(impl).selected_section = section;
+  FromVoid<IOSTable*>(impl).selected_row = row;
+} 
 
 void SystemTableWidget::BeginUpdates() { [FromVoid<IOSTable*>(impl).tableView beginUpdates]; }
 void SystemTableWidget::EndUpdates() { [FromVoid<IOSTable*>(impl).tableView endUpdates]; }
