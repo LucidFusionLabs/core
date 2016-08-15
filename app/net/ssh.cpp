@@ -35,11 +35,12 @@ struct SSHClientConnection : public Connection::Handler {
   SSHClient::LoadPasswordCB load_password_cb;
   Callback success_cb;
   shared_ptr<SSHClient::Identity> identity;
-  string V_C, V_S, KEXINIT_C, KEXINIT_S, H_text, session_id, integrity_c2s, integrity_s2c, decrypt_buf, host, user, pw;
-  int state=0, packet_len=0, packet_MAC_len=0, MAC_len_c=0, MAC_len_s=0, encrypt_block_size=0, decrypt_block_size=0;
+  string V_C, V_S, KEXINIT_C, KEXINIT_S, H_text, session_id, integrity_c2s, integrity_s2c, decrypt_buf, host, user, pw, termvar;
+  int state=0, packet_len=0, packet_MAC_len=0, MAC_len_c=0, MAC_len_s=0, encrypt_block_size=0, decrypt_block_size=0, server_version=0;
   unsigned sequence_number_c2s=0, sequence_number_s2c=0, password_prompts=0, userauth_fail=0;
   bool guessed_c=0, guessed_s=0, guessed_right_c=0, guessed_right_s=0, loaded_pw=0;
   unsigned char padding=0, packet_id=0;
+  Serializable::ConstStream packet_s;
   pair<int, int> pty_channel;
   std::mt19937 rand_eng;
   BigNumContext ctx;
@@ -52,11 +53,15 @@ struct SSHClientConnection : public Connection::Handler {
   Crypto::CipherAlgo cipher_algo_c2s, cipher_algo_s2c;
   Crypto::MACAlgo mac_algo_c2s, mac_algo_s2c;
   ECDef curve_id;
+  int dont_compress, compress_id_c2s, compress_id_s2c;
   int kex_method=0, hostkey_type=0, mac_prefix_c2s=0, mac_prefix_s2c=0, window_c=0, window_s=0;
   int initial_window_size=1048576, max_packet_size=32768, term_width=80, term_height=25;
+  unique_ptr<ZLibReader> zreader;
+  unique_ptr<ZLibWriter> zwriter;
 
-  SSHClientConnection(const SSHClient::ResponseCB &CB, const string &H, const string &U, const Callback &s) : cb(CB), success_cb(s), V_C("SSH-2.0-LFL_1.0"), host(H), user(U), rand_eng(std::random_device{}()),
-    pty_channel(1,-1), ctx(NewBigNumContext()), K(NewBigNum()), encrypt(Crypto::CipherInit()), decrypt(Crypto::CipherInit()) {}
+  SSHClientConnection(const SSHClient::ResponseCB &CB, const string &H, const string &U, const string &T, bool compress, const Callback &s) :
+    cb(CB), success_cb(s), V_C("SSH-2.0-LFL_1.0"), host(H), user(U), termvar(T), rand_eng(std::random_device{}()),
+    pty_channel(1,-1), ctx(NewBigNumContext()), K(NewBigNum()), encrypt(Crypto::CipherInit()), decrypt(Crypto::CipherInit()), dont_compress(compress ? 0 : SSH::Compression::None-1) {}
   virtual ~SSHClientConnection() { ClearPassword(); FreeBigNumContext(ctx); FreeBigNum(K); Crypto::CipherFree(encrypt); Crypto::CipherFree(decrypt); }
 
   void Close(Connection *c) { cb(c, StringPiece()); }
@@ -75,11 +80,12 @@ struct SSHClientConnection : public Connection::Handler {
       for (string line = lines.NextString(); !lines.Done(); line = lines.NextString()) {
         SSHTrace(c->Name(), ": SSH_INIT: ", line);
         processed = lines.next_offset;
-        if (PrefixMatch(line, "SSH-")) { V_S=line; state++; break; }
+        if (PrefixMatch(line, "SSH-")) { V_S=line; server_version=atoi(line.data()+4); state++; break; }
       }
       c->ReadFlush(processed);
       if (state == INIT) return 0;
     }
+
     for (;;) {
       bool encrypted = state > FIRST_NEWKEYS;
       if (!packet_len) {
@@ -87,16 +93,13 @@ struct SSHClientConnection : public Connection::Handler {
         if (c->rb.size() < SSH::BinaryPacketHeaderSize || (encrypted && c->rb.size() < decrypt_block_size)) return 0;
         if (encrypted) decrypt_buf = ReadCipher(c, StringPiece(c->rb.begin(), decrypt_block_size));
         const char *packet_text = encrypted ? decrypt_buf.data() : c->rb.begin();
-        packet_len = 4 + SSH::BinaryPacketLength(packet_text, &padding, &packet_id) + packet_MAC_len;
+        packet_len = 4 + SSH::BinaryPacketLength(packet_text, &padding) + packet_MAC_len;
       }
       if (c->rb.size() < packet_len) return 0;
       if (encrypted) decrypt_buf +=
         ReadCipher(c, StringPiece(c->rb.begin() + decrypt_block_size, packet_len - decrypt_block_size - packet_MAC_len));
 
       sequence_number_s2c++;
-      const char *packet_text = encrypted ? decrypt_buf.data() : c->rb.begin();
-      Serializable::ConstStream s(packet_text + SSH::BinaryPacketHeaderSize,
-                                  packet_len  - SSH::BinaryPacketHeaderSize - packet_MAC_len);
       if (encrypted && packet_MAC_len) {
         string mac = SSH::MAC(mac_algo_s2c, MAC_len_s, StringPiece(decrypt_buf.data(), packet_len - packet_MAC_len),
                               sequence_number_s2c-1, integrity_s2c, mac_prefix_s2c);
@@ -104,35 +107,56 @@ struct SSHClientConnection : public Connection::Handler {
           return ERRORv(-1, c->Name(), ": verify MAC failed");
       }
 
+      const char *packet_text = encrypted ? decrypt_buf.data() : c->rb.begin();
+      if (zreader) {
+        zreader->out.clear();
+        if (!zreader->Add(StringPiece(packet_text + SSH::BinaryPacketHeaderSize,
+                                      packet_len  - SSH::BinaryPacketHeaderSize - packet_MAC_len - padding),
+                          true)) ERRORv(-1, c->Name(), ": decompress failed");
+        packet_s = Serializable::ConstStream((packet_text = zreader->out.data()), zreader->out.size());
+      } else packet_s = Serializable::ConstStream(packet_text + SSH::BinaryPacketHeaderSize,
+                                                  packet_len  - SSH::BinaryPacketHeaderSize - packet_MAC_len - padding);
+
       int v;
+      packet_s.Read8(&packet_id);
+      if (packet_s.error) return ERRORv(-1, c->Name(), ": read packet_id");
+
       switch (packet_id) {
         case SSH::MSG_DISCONNECT::ID: {
           SSH::MSG_DISCONNECT msg;
-          if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_DISCONNECT");
+          if (msg.In(&packet_s)) return ERRORv(-1, c->Name(), ": read MSG_DISCONNECT");
           SSHTrace(c->Name(), ": MSG_DISCONNECT ", msg.reason_code, " ", msg.description.str());
+        } break;
+
+        case SSH::MSG_IGNORE::ID: {
+          SSH::MSG_IGNORE msg;
+          if (msg.In(&packet_s)) return ERRORv(-1, c->Name(), ": read MSG_IGNORE");
+          SSHTrace(c->Name(), ": MSG_IGNORE");
         } break;
 
         case SSH::MSG_DEBUG::ID: {
           SSH::MSG_DEBUG msg;
-          if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_DEBUG");
+          if (msg.In(&packet_s)) return ERRORv(-1, c->Name(), ": read MSG_DEBUG");
           SSHTrace(c->Name(), ": MSG_DEBUG ", msg.message.str());
         } break;
 
         case SSH::MSG_KEXINIT::ID: {
           state = state == FIRST_KEXINIT ? FIRST_KEXREPLY : KEXREPLY;
           SSH::MSG_KEXINIT msg;
-          if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_KEXINIT");
+          if (msg.In(&packet_s)) return ERRORv(-1, c->Name(), ": read MSG_KEXINIT");
           SSHTrace(c->Name(), ": MSG_KEXINIT ", msg.DebugString());
 
           int cipher_id_c2s=0, cipher_id_s2c=0, mac_id_c2s=0, mac_id_s2c=0;
           guessed_s = msg.first_kex_packet_follows;
           KEXINIT_S.assign(packet_text, packet_len - packet_MAC_len);
-          if (!SSH::KEX   ::PreferenceIntersect(msg.kex_algorithms,                         &kex_method))    return ERRORv(-1, c->Name(), ": negotiate kex");
-          if (!SSH::Key   ::PreferenceIntersect(msg.server_host_key_algorithms,             &hostkey_type))  return ERRORv(-1, c->Name(), ": negotiate hostkey");
-          if (!SSH::Cipher::PreferenceIntersect(msg.encryption_algorithms_client_to_server, &cipher_id_c2s)) return ERRORv(-1, c->Name(), ": negotiate c2s cipher");
-          if (!SSH::Cipher::PreferenceIntersect(msg.encryption_algorithms_server_to_client, &cipher_id_s2c)) return ERRORv(-1, c->Name(), ": negotiate s2c cipher");
-          if (!SSH::MAC   ::PreferenceIntersect(msg.mac_algorithms_client_to_server,        &mac_id_c2s))    return ERRORv(-1, c->Name(), ": negotiate c2s mac");
-          if (!SSH::MAC   ::PreferenceIntersect(msg.mac_algorithms_server_to_client,        &mac_id_s2c))    return ERRORv(-1, c->Name(), ": negotiate s2c mac");
+          if (!SSH::KEX        ::PreferenceIntersect(msg.kex_algorithms,                          &kex_method))                     return ERRORv(-1, c->Name(), ": negotiate kex");
+          if (!SSH::Key        ::PreferenceIntersect(msg.server_host_key_algorithms,              &hostkey_type))                   return ERRORv(-1, c->Name(), ": negotiate hostkey");
+          if (!SSH::Cipher     ::PreferenceIntersect(msg.encryption_algorithms_client_to_server,  &cipher_id_c2s))                  return ERRORv(-1, c->Name(), ": negotiate c2s cipher");
+          if (!SSH::Cipher     ::PreferenceIntersect(msg.encryption_algorithms_server_to_client,  &cipher_id_s2c))                  return ERRORv(-1, c->Name(), ": negotiate s2c cipher");
+          if (!SSH::MAC        ::PreferenceIntersect(msg.mac_algorithms_client_to_server,         &mac_id_c2s))                     return ERRORv(-1, c->Name(), ": negotiate c2s mac");
+          if (!SSH::MAC        ::PreferenceIntersect(msg.mac_algorithms_server_to_client,         &mac_id_s2c))                     return ERRORv(-1, c->Name(), ": negotiate s2c mac");
+          if (!SSH::Compression::PreferenceIntersect(msg.compression_algorithms_client_to_server, &compress_id_c2s, dont_compress)) return ERRORv(-1, c->Name(), ": negotiate c2s compression");
+          if (!SSH::Compression::PreferenceIntersect(msg.compression_algorithms_server_to_client, &compress_id_s2c, dont_compress)) return ERRORv(-1, c->Name(), ": negotiate s2c compression");
           guessed_right_s = kex_method == SSH::KEX::Id(Split(msg.kex_algorithms, iscomma)) && hostkey_type == SSH::Key::Id(Split(msg.server_host_key_algorithms, iscomma));
           guessed_right_c = kex_method == 1                                                && hostkey_type == 1;
           cipher_algo_c2s = SSH::Cipher::Algo(cipher_id_c2s, &encrypt_block_size);
@@ -142,6 +166,7 @@ struct SSHClientConnection : public Connection::Handler {
           INFO(c->Name(), ": ssh negotiated { kex=", SSH::KEX::Name(kex_method), ", hostkey=", SSH::Key::Name(hostkey_type),
                cipher_algo_c2s == cipher_algo_s2c ? StrCat(", cipher=", Crypto::CipherAlgos::Name(cipher_algo_c2s)) : StrCat(", cipher_c2s=", Crypto::CipherAlgos::Name(cipher_algo_c2s), ", cipher_s2c=", Crypto::CipherAlgos::Name(cipher_algo_s2c)),
                mac_id_c2s      == mac_id_s2c      ? StrCat(", mac=",               SSH::MAC::Name(mac_id_c2s))      : StrCat(", mac_c2s=",               SSH::MAC::Name(mac_id_c2s),      ", mac_s2c=",               SSH::MAC::Name(mac_id_s2c)),
+               compress_id_c2s == compress_id_s2c ? StrCat(", compress=",  SSH::Compression::Name(compress_id_c2s)) : StrCat(", compress_c2s=",  SSH::Compression::Name(compress_id_c2s), ", compress_s2c=",  SSH::Compression::Name(compress_id_s2c)),
                " }");
           SSHTrace(c->Name(), ": block_size=", encrypt_block_size, ",", decrypt_block_size, " mac_len=", MAC_len_c, ",", MAC_len_s);
 
@@ -184,7 +209,7 @@ struct SSHClientConnection : public Connection::Handler {
           
           if (packet_id == SSH::MSG_KEXDH_REPLY::ID && SSH::KEX::X25519DiffieHellman(kex_method)) {
             SSH::MSG_KEX_ECDH_REPLY msg; // MSG_KEX_ECDH_REPLY and MSG_KEXDH_REPLY share ID 31
-            if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_KEX_ECDH_REPLY");
+            if (msg.In(&packet_s)) return ERRORv(-1, c->Name(), ": read MSG_KEX_ECDH_REPLY");
             SSHTrace(c->Name(), ": MSG_KEX_ECDH_REPLY for X25519DH");
 
             x25519dh.remotepubkey = msg.q_s.str();
@@ -194,7 +219,7 @@ struct SSHClientConnection : public Connection::Handler {
 
           } else if (packet_id == SSH::MSG_KEXDH_REPLY::ID && SSH::KEX::EllipticCurveDiffieHellman(kex_method)) {
             SSH::MSG_KEX_ECDH_REPLY msg; // MSG_KEX_ECDH_REPLY and MSG_KEXDH_REPLY share ID 31
-            if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_KEX_ECDH_REPLY");
+            if (msg.In(&packet_s)) return ERRORv(-1, c->Name(), ": read MSG_KEX_ECDH_REPLY");
             SSHTrace(c->Name(), ": MSG_KEX_ECDH_REPLY for ECDH");
 
             ecdh.s_text = msg.q_s.str();
@@ -205,7 +230,7 @@ struct SSHClientConnection : public Connection::Handler {
 
           } else if (packet_id == SSH::MSG_KEXDH_REPLY::ID && SSH::KEX::DiffieHellmanGroupExchange(kex_method)) {
             SSH::MSG_KEX_DH_GEX_GROUP msg(dh.p, dh.g); // MSG_KEX_DH_GEX_GROUP and MSG_KEXDH_REPLY share ID 31
-            if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_KEX_DH_GEX_GROUP");
+            if (msg.In(&packet_s)) return ERRORv(-1, c->Name(), ": read MSG_KEX_DH_GEX_GROUP");
             SSHTrace(c->Name(), ": MSG_KEX_DH_GEX_GROUP");
 
             if (!dh.GeneratePair(256, ctx)) return ERRORv(-1, c->Name(), ": generate dh_gex key");
@@ -214,7 +239,7 @@ struct SSHClientConnection : public Connection::Handler {
 
           } else {
             SSH::MSG_KEXDH_REPLY msg(dh.f);
-            if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_KEXDH_REPLY");
+            if (msg.In(&packet_s)) return ERRORv(-1, c->Name(), ": read MSG_KEXDH_REPLY");
             SSHTrace(c->Name(), ": MSG_KEXDH_REPLY");
             if (!dh.ComputeSecret(&K, ctx)) return ERRORv(-1, c->Name(), ": dh");
             if ((v = ComputeExchangeHashAndVerifyHostKey(c, msg.k_s, msg.h_sig)) != 1) return ERRORv(-1, c->Name(), ": verify hostkey failed: ", v);
@@ -298,7 +323,7 @@ struct SSHClientConnection : public Connection::Handler {
 
         case SSH::MSG_USERAUTH_FAILURE::ID: {
           SSH::MSG_USERAUTH_FAILURE msg;
-          if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_USERAUTH_FAILURE");
+          if (msg.In(&packet_s)) return ERRORv(-1, c->Name(), ": read MSG_USERAUTH_FAILURE");
           SSHTrace(c->Name(), ": MSG_USERAUTH_FAILURE: auth_left='", msg.auth_left.str(), "'");
 
           if (!loaded_pw) ClearPassword();
@@ -309,6 +334,8 @@ struct SSHClientConnection : public Connection::Handler {
         case SSH::MSG_USERAUTH_SUCCESS::ID: {
           SSHTrace(c->Name(), ": MSG_USERAUTH_SUCCESS");
           window_s = initial_window_size;
+          if (compress_id_c2s == SSH::Compression::OpenSSHZLib) zreader = make_unique<ZLibReader>(4096);
+          if (compress_id_s2c == SSH::Compression::OpenSSHZLib) zwriter = make_unique<ZLibWriter>(4096);
           if (success_cb) success_cb();
           if (!WriteCipher(c, SSH::MSG_CHANNEL_OPEN("session", pty_channel.first, initial_window_size, max_packet_size)))
             return ERRORv(-1, c->Name(), ": write");
@@ -316,7 +343,7 @@ struct SSHClientConnection : public Connection::Handler {
 
         case SSH::MSG_USERAUTH_INFO_REQUEST::ID: {
           SSH::MSG_USERAUTH_INFO_REQUEST msg;
-          if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_USERAUTH_INFO_REQUEST");
+          if (msg.In(&packet_s)) return ERRORv(-1, c->Name(), ": read MSG_USERAUTH_INFO_REQUEST");
           SSHTrace(c->Name(), ": MSG_USERAUTH_INFO_REQUEST prompts=", msg.prompt.size());
           if (!msg.instruction.empty()) { SSHTrace(c->Name(), ": instruction: ", msg.instruction.str()); cb(c, msg.instruction); }
           for (auto &i : msg.prompt)    { SSHTrace(c->Name(), ": prompt: ",      i.text.str());          cb(c, i.text); }
@@ -325,30 +352,36 @@ struct SSHClientConnection : public Connection::Handler {
           else if (!WriteCipher(c, SSH::MSG_USERAUTH_INFO_RESPONSE())) return ERRORv(-1, c->Name(), ": write");
         } break;
 
+        case SSH::MSG_GLOBAL_REQUEST::ID: {
+          SSH::MSG_GLOBAL_REQUEST msg;
+          if (msg.In(&packet_s)) return ERRORv(-1, c->Name(), ": read MSG_GLOBAL_REQUEST");
+          SSHTrace(c->Name(), ": MSG_GLOBAL_REQUEST request=", msg.request.str());
+        } break;
+
         case SSH::MSG_CHANNEL_OPEN_CONFIRMATION::ID: {
           SSH::MSG_CHANNEL_OPEN_CONFIRMATION msg;
-          if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_CHANNEL_OPEN_CONFIRMATION");
+          if (msg.In(&packet_s)) return ERRORv(-1, c->Name(), ": read MSG_CHANNEL_OPEN_CONFIRMATION");
           SSHTrace(c->Name(), ": MSG_CHANNEL_OPEN_CONFIRMATION");
           pty_channel.second = msg.sender_channel;
           window_c = msg.initial_win_size;
 
           if (!WriteCipher(c, SSH::MSG_CHANNEL_REQUEST
                            (pty_channel.second, "pty-req", point(term_width, term_height),
-                            point(term_width*8, term_height*12), "screen", "", true))) return ERRORv(-1, c->Name(), ": write");
+                            point(term_width*8, term_height*12), termvar, "", true))) return ERRORv(-1, c->Name(), ": write");
 
           if (!WriteCipher(c, SSH::MSG_CHANNEL_REQUEST(pty_channel.second, "shell", "", true))) return ERRORv(-1, c->Name(), ": write");
         } break;
 
         case SSH::MSG_CHANNEL_WINDOW_ADJUST::ID: {
           SSH::MSG_CHANNEL_WINDOW_ADJUST msg;
-          if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_CHANNEL_WINDOW_ADJUST");
+          if (msg.In(&packet_s)) return ERRORv(-1, c->Name(), ": read MSG_CHANNEL_WINDOW_ADJUST");
           SSHTrace(c->Name(), ": MSG_CHANNEL_WINDOW_ADJUST add ", msg.bytes_to_add, " to channel ", msg.recipient_channel);
           window_c += msg.bytes_to_add;
         } break;
 
         case SSH::MSG_CHANNEL_DATA::ID: {
           SSH::MSG_CHANNEL_DATA msg;
-          if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_CHANNEL_DATA");
+          if (msg.In(&packet_s)) return ERRORv(-1, c->Name(), ": read MSG_CHANNEL_DATA");
           SSHTrace(c->Name(), ": MSG_CHANNEL_DATA: channel ", msg.recipient_channel, ": ", msg.data.size(), " bytes");
 
           window_s -= (packet_len - packet_MAC_len - 4);
@@ -363,18 +396,18 @@ struct SSHClientConnection : public Connection::Handler {
 
         case SSH::MSG_CHANNEL_EOF::ID: {
           SSH::MSG_CHANNEL_EOF msg;
-          if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_CHANNEL_EOF");
+          if (msg.In(&packet_s)) return ERRORv(-1, c->Name(), ": read MSG_CHANNEL_EOF");
         } break;
 
         case SSH::MSG_CHANNEL_CLOSE::ID: {
           SSH::MSG_CHANNEL_CLOSE msg;
-          if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_CHANNEL_CLOSE");
+          if (msg.In(&packet_s)) return ERRORv(-1, c->Name(), ": read MSG_CHANNEL_CLOSE");
           if (!WriteCipher(c, SSH::MSG_CHANNEL_CLOSE(msg.recipient_channel))) return ERRORv(-1, c->Name(), ": write");
         } break;
 
         case SSH::MSG_CHANNEL_REQUEST::ID: {
           SSH::MSG_CHANNEL_REQUEST msg;
-          if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_CHANNEL_REQUEST");
+          if (msg.In(&packet_s)) return ERRORv(-1, c->Name(), ": read MSG_CHANNEL_REQUEST");
         } break;
 
         case SSH::MSG_CHANNEL_SUCCESS::ID: {
@@ -396,12 +429,12 @@ struct SSHClientConnection : public Connection::Handler {
   }
 
   bool WriteKeyExchangeInit(Connection *c, bool guess) {
-    string cipher_pref = SSH::Cipher::PreferenceCSV(), mac_pref = SSH::MAC::PreferenceCSV();
+    string cipher_pref = SSH::Cipher::PreferenceCSV(), mac_pref = SSH::MAC::PreferenceCSV(), compress_pref = SSH::Compression::PreferenceCSV(dont_compress);
     KEXINIT_C = SSH::MSG_KEXINIT(RandBytes(16, rand_eng), SSH::KEX::PreferenceCSV(), SSH::Key::PreferenceCSV(),
-                                 cipher_pref, cipher_pref, mac_pref, mac_pref, "none", "none",
-                                 "", "", guess).ToString(rand_eng, 8, &sequence_number_c2s);
+                                 cipher_pref, cipher_pref, mac_pref, mac_pref, compress_pref, compress_pref,
+                                 "", "", guess).ToString(nullptr, rand_eng, 8, &sequence_number_c2s);
     SSHTrace(c->Name(), " wrote KEXINIT_C { kex=", SSH::KEX::PreferenceCSV(), " key=", SSH::Key::PreferenceCSV(),
-             " cipher=", cipher_pref, " mac=", mac_pref, " }");
+             " cipher=", cipher_pref, " mac=", mac_pref, " compress=", compress_pref, " }");
     return c->WriteFlush(KEXINIT_C) == KEXINIT_C.size();
   }
 
@@ -438,13 +471,13 @@ struct SSHClientConnection : public Connection::Handler {
   }
 
   bool WriteCipher(Connection *c, const SSH::Serializable &m) {
-    string text = m.ToString(rand_eng, encrypt_block_size, &sequence_number_c2s);
+    string text = m.ToString(zwriter.get(), rand_eng, encrypt_block_size, &sequence_number_c2s);
     return WriteCipher(c, text);
   }
 
   bool WriteClearOrEncrypted(Connection *c, const SSH::Serializable &m) {
     if (state > FIRST_NEWKEYS) return WriteCipher(c, m);
-    string text = m.ToString(rand_eng, encrypt_block_size, &sequence_number_c2s);
+    string text = m.ToString(nullptr, rand_eng, encrypt_block_size, &sequence_number_c2s);
     return c->WriteFlush(text) == text.size();
   }
 
@@ -494,10 +527,11 @@ struct SSHClientConnection : public Connection::Handler {
   }
 };
 
-Connection *SSHClient::Open(const string &hostport, const string &user, const SSHClient::ResponseCB &cb, Callback *detach, Callback *success) { 
+Connection *SSHClient::Open(const string &hostport, const string &user, const string &term, bool compress,
+                            const SSHClient::ResponseCB &cb, Callback *detach, Callback *success) { 
   Connection *c = app->net->tcp_client->Connect(hostport, 22, detach);
   if (!c) return 0;
-  c->handler = make_unique<SSHClientConnection>(cb, hostport, user, success ? *success : Callback());
+  c->handler = make_unique<SSHClientConnection>(cb, hostport, user, term, compress, success ? *success : Callback());
   return c;
 }
 
@@ -505,9 +539,8 @@ int  SSHClient::WriteChannelData     (Connection *c, const StringPiece &b)      
 int  SSHClient::SetTerminalWindowSize(Connection *c, int w, int h)                         { return dynamic_cast<SSHClientConnection*>(c->handler.get())->SetTerminalWindowSize(c, w, h); }
 void SSHClient::SetCredentialCB      (Connection *c, LoadIdentityCB LI, LoadPasswordCB LP) { dynamic_cast<SSHClientConnection*>(c->handler.get())->SetCredentialCB(LI, LP); }
 
-int SSH::BinaryPacketLength(const char *b, unsigned char *padding, unsigned char *id) {
+int SSH::BinaryPacketLength(const char *b, unsigned char *padding) {
   if (padding) *padding = *MakeUnsigned(b + 4);
-  if (id)      *id      = *MakeUnsigned(b + 5);
   return ntohl(*reinterpret_cast<const int*>(b));
 }
 
@@ -615,8 +648,8 @@ string SSH::ComputeExchangeHash(int kex_method, Crypto::DigestAlgo algo, const s
                                 Crypto::X25519DiffieHellman *x25519dh) {
   string ret;
   unsigned char kex_c_padding = 0, kex_s_padding = 0;
-  int kex_c_packet_len = 4 + SSH::BinaryPacketLength(KI_C.data(), &kex_c_padding, NULL);
-  int kex_s_packet_len = 4 + SSH::BinaryPacketLength(KI_S.data(), &kex_s_padding, NULL);
+  int kex_c_packet_len = 4 + SSH::BinaryPacketLength(KI_C.data(), &kex_c_padding);
+  int kex_s_packet_len = 4 + SSH::BinaryPacketLength(KI_S.data(), &kex_s_padding);
   Crypto::Digest H = Crypto::DigestOpen(algo);
   UpdateDigest(H, V_C);
   UpdateDigest(H, V_S);
@@ -707,25 +740,29 @@ string SSH::MAC(Crypto::MACAlgo algo, int MAC_len, const StringPiece &m, int seq
   return prefix ? ret.substr(0, prefix) : ret;
 }
 
-bool SSH::Key   ::PreferenceIntersect(const StringPiece &v, int *out, int po) { return (*out = Id(FirstMatchCSV(v, PreferenceCSV(po)))); }
-bool SSH::KEX   ::PreferenceIntersect(const StringPiece &v, int *out, int po) { return (*out = Id(FirstMatchCSV(v, PreferenceCSV(po)))); }
-bool SSH::MAC   ::PreferenceIntersect(const StringPiece &v, int *out, int po) { return (*out = Id(FirstMatchCSV(v, PreferenceCSV(po)))); }
-bool SSH::Cipher::PreferenceIntersect(const StringPiece &v, int *out, int po) { return (*out = Id(FirstMatchCSV(v, PreferenceCSV(po)))); }
+bool SSH::Key        ::PreferenceIntersect(const StringPiece &v, int *out, int po) { return (*out = Id(FirstMatchCSV(v, PreferenceCSV(po)))); }
+bool SSH::KEX        ::PreferenceIntersect(const StringPiece &v, int *out, int po) { return (*out = Id(FirstMatchCSV(v, PreferenceCSV(po)))); }
+bool SSH::MAC        ::PreferenceIntersect(const StringPiece &v, int *out, int po) { return (*out = Id(FirstMatchCSV(v, PreferenceCSV(po)))); }
+bool SSH::Cipher     ::PreferenceIntersect(const StringPiece &v, int *out, int po) { return (*out = Id(FirstMatchCSV(v, PreferenceCSV(po)))); }
+bool SSH::Compression::PreferenceIntersect(const StringPiece &v, int *out, int po) { return (*out = Id(FirstMatchCSV(v, PreferenceCSV(po)))); }
 
-string SSH::Key   ::PreferenceCSV(int o) { static string v; ONCE({ for (int i=1+o; i<=End; ++i) if (Supported(i)) StrAppendCSV(&v, Name(i)); }); return v; }
-string SSH::KEX   ::PreferenceCSV(int o) { static string v; ONCE({ for (int i=1+o; i<=End; ++i) if (Supported(i)) StrAppendCSV(&v, Name(i)); }); return v; }
-string SSH::Cipher::PreferenceCSV(int o) { static string v; ONCE({ for (int i=1+o; i<=End; ++i) if (Supported(i)) StrAppendCSV(&v, Name(i)); }); return v; }
-string SSH::MAC   ::PreferenceCSV(int o) { static string v; ONCE({ for (int i=1+o; i<=End; ++i) if (Supported(i)) StrAppendCSV(&v, Name(i)); }); return v; }
+string SSH::Key        ::PreferenceCSV(int o) { static string v; ONCE({ for (int i=1+o; i<=End; ++i) if (Supported(i)) StrAppendCSV(&v, Name(i)); }); return v; }
+string SSH::KEX        ::PreferenceCSV(int o) { static string v; ONCE({ for (int i=1+o; i<=End; ++i) if (Supported(i)) StrAppendCSV(&v, Name(i)); }); return v; }
+string SSH::Cipher     ::PreferenceCSV(int o) { static string v; ONCE({ for (int i=1+o; i<=End; ++i) if (Supported(i)) StrAppendCSV(&v, Name(i)); }); return v; }
+string SSH::MAC        ::PreferenceCSV(int o) { static string v; ONCE({ for (int i=1+o; i<=End; ++i) if (Supported(i)) StrAppendCSV(&v, Name(i)); }); return v; }
+string SSH::Compression::PreferenceCSV(int o) { static string v; ONCE({ for (int i=1+o; i<=End; ++i) if (Supported(i)) StrAppendCSV(&v, Name(i)); }); return v; }
 
-int SSH::Key   ::Id(const string &n) { static unordered_map<string, int> m; ONCE({ for (int i=1; i<=End; ++i) m[Name(i)] = i; }); return FindOrDefault(m, n, 0); }
-int SSH::KEX   ::Id(const string &n) { static unordered_map<string, int> m; ONCE({ for (int i=1; i<=End; ++i) m[Name(i)] = i; }); return FindOrDefault(m, n, 0); }
-int SSH::Cipher::Id(const string &n) { static unordered_map<string, int> m; ONCE({ for (int i=1; i<=End; ++i) m[Name(i)] = i; }); return FindOrDefault(m, n, 0); }
-int SSH::MAC   ::Id(const string &n) { static unordered_map<string, int> m; ONCE({ for (int i=1; i<=End; ++i) m[Name(i)] = i; }); return FindOrDefault(m, n, 0); }
+int SSH::Key        ::Id(const string &n) { static unordered_map<string, int> m; ONCE({ for (int i=1; i<=End; ++i) m[Name(i)] = i; }); return FindOrDefault(m, n, 0); }
+int SSH::KEX        ::Id(const string &n) { static unordered_map<string, int> m; ONCE({ for (int i=1; i<=End; ++i) m[Name(i)] = i; }); return FindOrDefault(m, n, 0); }
+int SSH::Cipher     ::Id(const string &n) { static unordered_map<string, int> m; ONCE({ for (int i=1; i<=End; ++i) m[Name(i)] = i; }); return FindOrDefault(m, n, 0); }
+int SSH::MAC        ::Id(const string &n) { static unordered_map<string, int> m; ONCE({ for (int i=1; i<=End; ++i) m[Name(i)] = i; }); return FindOrDefault(m, n, 0); }
+int SSH::Compression::Id(const string &n) { static unordered_map<string, int> m; ONCE({ for (int i=1; i<=End; ++i) m[Name(i)] = i; }); return FindOrDefault(m, n, 0); }
 
-bool SSH::Key   ::Supported(int x) { return true; }
-bool SSH::KEX   ::Supported(int x) { return true; }
-bool SSH::Cipher::Supported(int x) { return true; }
-bool SSH::MAC   ::Supported(int x) { return true; }
+bool SSH::Key        ::Supported(int x) { return true; }
+bool SSH::KEX        ::Supported(int x) { return true; }
+bool SSH::Cipher     ::Supported(int x) { return true; }
+bool SSH::MAC        ::Supported(int x) { return true; }
+bool SSH::Compression::Supported(int x) { return true; }
 
 const char *SSH::Key::Name(int id) {
   switch(id) {
@@ -778,6 +815,14 @@ const char *SSH::MAC::Name(int id) {
   }
 };
 
+const char *SSH::Compression::Name(int id) {
+  switch(id) {
+    case OpenSSHZLib: return "zlib@openssh.com";
+    case None:        return "none";
+    default:          return "";
+  }
+};
+
 Crypto::CipherAlgo SSH::Cipher::Algo(int id, int *blocksize) {
   switch(id) {
     case AES128_CTR:   if (blocksize) *blocksize = 16;    return Crypto::CipherAlgos::AES128_CTR();
@@ -803,26 +848,37 @@ Crypto::MACAlgo SSH::MAC::Algo(int id, int *prefix_bytes) {
   }
 };
 
-string SSH::Serializable::ToString(std::mt19937 &g, int block_size, unsigned *sequence_number) const {
+string SSH::Serializable::ToString(ZLibWriter *zwriter, std::mt19937 &g, int block_size, unsigned *sequence_number) const {
   if (sequence_number) (*sequence_number)++;
   string ret;
-  ToString(&ret, g, block_size);
+  CHECK(ToString(&ret, zwriter, g, block_size));
   return ret;
 }
 
-void SSH::Serializable::ToString(string *out, std::mt19937 &g, int block_size) const {
-  out->resize(NextMultipleOfN(4 + SSH::BinaryPacketHeaderSize + Size(), max(8, block_size)));
-  return ToString(&(*out)[0], out->size(), g);
+bool SSH::Serializable::ToString(string *out, ZLibWriter *zwriter, std::mt19937 &g, int block_size) const {
+  if (zwriter) {
+    string buf(Size() + 1, 0);
+    MutableStream os(&buf[0], buf.size());
+    unsigned char type = Id;
+    os.Write8(type);
+    Out(&os);
+    zwriter->out.clear();
+    if (!zwriter->Add(buf, true)) return ERRORv(false, "compress failed");
+  }
+  out->resize(NextMultipleOfN(4 + SSH::BinaryPacketHeaderSize +
+                              (zwriter ? zwriter->out.size() : Size() + 1), max(8, block_size)));
+  return ToString(&(*out)[0], out->size(), zwriter ? StringPiece(zwriter->out) : StringPiece(), g);
 }
 
-void SSH::Serializable::ToString(char *buf, int len, std::mt19937 &g) const {
-  unsigned char type = Id, padding = len - SSH::BinaryPacketHeaderSize - Size();
+bool SSH::Serializable::ToString(char *buf, int len, const StringPiece &payload, std::mt19937 &g) const {
+  unsigned char padding = len - SSH::BinaryPacketHeaderSize - (payload.len != 0 ? payload.len : 1 + Size());
   MutableStream os(buf, len);
   os.Htonl(len - 4);
   os.Write8(padding);
-  os.Write8(type);
-  Out(&os);
-  memcpy(buf + len - padding, RandBytes(padding, g).data(), padding);
+  if (payload.len) os.String(payload);
+  else { unsigned char type = Id; os.Write8(type); Out(&os); }
+  os.String(RandBytes(padding, g));
+  return !os.error;
 }
 
 int SSH::MSG_KEXINIT::Size() const {

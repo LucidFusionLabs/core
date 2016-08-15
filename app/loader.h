@@ -102,6 +102,26 @@ struct WavWriter {
   int Flush();
 };
 
+struct ZLibReader {
+  string out;
+  int blocksize;
+  VoidPtr stream;
+  ~ZLibReader();
+  ZLibReader(int blocksize=32768);
+  bool Add(const StringPiece &in, bool partial_flush=0, bool final=0, int max_out=0);
+  static string Decompress(const StringPiece&);
+};
+
+struct ZLibWriter {
+  string out;
+  int blocksize;
+  VoidPtr stream;
+  ~ZLibWriter();
+  ZLibWriter(int blocksize=32768);
+  bool Add(const StringPiece &in, bool partial_flush=0, bool final=0, int max_out=0);
+  static string Compress(const StringPiece&);
+};
+
 struct OGGReader {
   static void  Close(void *h);
   static void *OpenBuffer(const char *buf, size_t len, int *sr_out, int *chans_out, int *total_out);

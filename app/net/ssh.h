@@ -36,8 +36,8 @@ struct SSHClient {
   typedef function<void(Connection*, const StringPiece&)> ResponseCB;
   typedef function<bool(shared_ptr<Identity>*)> LoadIdentityCB;
   typedef function<bool(string*)> LoadPasswordCB;
-  static Connection *Open(const string &hostport, const string &user, const ResponseCB &cb,
-                          Callback *detach=0, Callback *success=0);
+  static Connection *Open(const string &hostport, const string &user, const string &term, bool compress,
+                          const ResponseCB &cb, Callback *detach=0, Callback *success=0);
 
   static void SetCredentialCB(Connection *c, LoadIdentityCB, LoadPasswordCB);
   static int SetTerminalWindowSize(Connection *c, int w, int h);
@@ -45,8 +45,8 @@ struct SSHClient {
 };
 
 struct SSH {
-  static const int BinaryPacketHeaderSize = 6;
-  static int BinaryPacketLength(const char *b, unsigned char *padding, unsigned char *id);
+  static const int BinaryPacketHeaderSize = 5;
+  static int BinaryPacketLength(const char *b, unsigned char *padding);
   static int BigNumSize(const BigNum n);
   static BigNum ReadBigNum(BigNum n, const Serializable::Stream *i);
   static void WriteBigNum(const BigNum n, Serializable::Stream *o);
@@ -108,11 +108,20 @@ struct SSH {
     static bool PreferenceIntersect(const StringPiece &pref_csv, int *out, int start_after=0);
   };
 
+  struct Compression {
+    enum { OpenSSHZLib=1, None=2, End=2 };
+    static int Id(const string &n);
+    static const char *Name(int id);
+    static bool Supported(int);
+    static string PreferenceCSV(int start_after=0);
+    static bool PreferenceIntersect(const StringPiece &pref_csv, int *out, int start_after=0);
+  };
+
   struct Serializable : public LFL::Serializable {
     Serializable(int type) : LFL::Serializable(type) {}
-    string ToString(std::mt19937&, int block_size, unsigned *sequence_number) const;
-    void ToString(string *out, std::mt19937&, int block_size) const;
-    void ToString(char *buf, int len, std::mt19937&) const;
+    string ToString(ZLibWriter*, std::mt19937&, int block_size, unsigned *sequence_number) const;
+    bool ToString(string *out, ZLibWriter*, std::mt19937&, int block_size) const;
+    bool ToString(char *buf, int len, const StringPiece &payload, std::mt19937&) const;
   };
 
   struct MSG_DISCONNECT : public Serializable {
@@ -124,6 +133,17 @@ struct SSH {
     int HeaderSize() const { return 4 + 2*4; }
     int Size() const { return HeaderSize() + description.size() + language.size(); }
     int In(const Serializable::Stream *i) { i->Ntohl(&reason_code); i->ReadString(&description); i->ReadString(&language); return i->Result(); }
+    void Out(Serializable::Stream *o) const {}
+  };
+
+  struct MSG_IGNORE : public Serializable {
+    static const int ID = 2;
+    StringPiece data;
+    MSG_IGNORE() : Serializable(ID) {}
+
+    int HeaderSize() const { return 4; }
+    int Size() const { return HeaderSize() + data.size(); }
+    int In(const Serializable::Stream *i) { i->ReadString(&data); return i->Result(); }
     void Out(Serializable::Stream *o) const {}
   };
 
@@ -330,6 +350,31 @@ struct SSH {
     int In(const Serializable::Stream *i) { return i->Result(); }
   };
 
+  struct MSG_GLOBAL_REQUEST : public Serializable {
+    static const int ID = 80;
+    StringPiece request;
+    unsigned char want_reply=0;
+    MSG_GLOBAL_REQUEST() : Serializable(ID) {}
+
+    int HeaderSize() const { return 4 + 1; }
+    int Size() const { return HeaderSize() + request.size(); }
+    void Out(Serializable::Stream *o) const {}
+    int In(const Serializable::Stream *i) { i->ReadString(&request); i->Read8(&want_reply); return i->Result(); }
+  };
+
+  struct MSG_GLOBAL_REQUEST_TCPIP : public Serializable {
+    static const int ID = 80;
+    StringPiece request, addr;
+    unsigned char want_reply=0;
+    int port;
+    MSG_GLOBAL_REQUEST_TCPIP(const StringPiece &A, int P) : Serializable(ID), request("tcpip-forward"), addr(A), port(P){}
+
+    int HeaderSize() const { return 4*3 + 1; }
+    int Size() const { return HeaderSize() + request.size() + addr.size(); }
+    void Out(Serializable::Stream *o) const { o->BString(request); o->Write8(want_reply); o->BString(addr); o->Htonl(port); }
+    int In(const Serializable::Stream *i) { i->ReadString(&request); i->Read8(&want_reply); i->ReadString(&addr); i->Ntohl(&port); return i->Result(); }
+  };
+
   struct MSG_CHANNEL_OPEN : public Serializable {
     static const int ID = 90;
     StringPiece channel_type;
@@ -339,6 +384,19 @@ struct SSH {
     int HeaderSize() const { return 4*4; }
     int Size() const { return HeaderSize() + channel_type.size(); }
     void Out(Serializable::Stream *o) const { o->BString(channel_type); o->Htonl(sender_channel); o->Htonl(initial_win_size); o->Htonl(maximum_packet_size); }
+    int In(const Serializable::Stream *i) { return i->Result(); }
+  };
+
+  struct MSG_CHANNEL_OPEN_TCPIP : public Serializable {
+    static const int ID = 90;
+    StringPiece channel_type, src_host, dst_host;
+    int sender_channel, initial_win_size, maximum_packet_size, src_port, dst_port;
+    MSG_CHANNEL_OPEN_TCPIP(const StringPiece &CT, int SC, int IWS, int MPS, const StringPiece &DH, int DP, const StringPiece &SH, int SP) :
+      Serializable(ID), channel_type(CT), src_host(SH), dst_host(DH), sender_channel(SC), initial_win_size(IWS), maximum_packet_size(MPS), src_port(SP), dst_port(DP) {}
+
+    int HeaderSize() const { return 8*4; }
+    int Size() const { return HeaderSize() + channel_type.size() + src_host.size() + dst_host.size(); }
+    void Out(Serializable::Stream *o) const { o->BString(channel_type); o->Htonl(sender_channel); o->Htonl(initial_win_size); o->Htonl(maximum_packet_size); o->BString(dst_host); o->Htonl(dst_port); o->BString(src_host); o->Htonl(src_port); }
     int In(const Serializable::Stream *i) { return i->Result(); }
   };
 

@@ -756,7 +756,7 @@ struct Serializable {
     size_t size;
     mutable int offset=0;
     mutable bool error=0;
-    Stream(char *B, size_t S) : buf(B), size(S) {}
+    Stream(char *B=0, size_t S=0) : buf(B), size(S) {}
 
     int Len() const { return size; }
     int Pos() const { return offset; };
@@ -821,7 +821,7 @@ struct Serializable {
   };
 
   struct ConstStream : public Stream {
-    ConstStream(const char *B, int S) : Stream(const_cast<char*>(B), S) {}
+    ConstStream(const char *B=0, int S=0) : Stream(const_cast<char*>(B), S) {}
   };
 
   struct MutableStream : public Stream {

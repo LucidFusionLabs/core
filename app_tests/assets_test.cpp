@@ -19,8 +19,15 @@
 #include "gtest/gtest.h"
 
 namespace LFL {
+TEST(LoaderTest, ZLib) {
+  string contents = LocalFile::FileContents("../../../core/www/lfl/assets/img/lbrowser256.png");
+  string compressed = ZLibWriter::Compress(contents);
+  string decompressed = ZLibReader::Decompress(compressed);
+  EXPECT_EQ(contents, decompressed);
+}
+
 #ifdef LFL_PNG
-TEST(ImageFormatTest, PNG) {
+TEST(LoaderTest, PNG) {
   Texture tex(256, 256), tex_in;
   tex.RenewBuffer();
   for (int i=0; i<tex.height; i++)

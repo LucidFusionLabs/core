@@ -18,8 +18,91 @@
 
 #include "core/app/gui.h"
 #include "core/app/ipc.h"
+#include <zlib.h>
 
 namespace LFL {
+ZLibReader::ZLibReader(int bs) : blocksize(bs) {
+  z_stream *zs = new z_stream;
+  memzerop(zs);
+  if (inflateInit(zs) != Z_OK) { delete zs; ERROR("inflateInit"); return; }
+  stream = zs;
+}
+
+ZLibReader::~ZLibReader() {
+  if (!stream) return;
+  z_stream *zs = FromVoid<z_stream*>(stream);
+  inflateEnd(zs);
+  delete zs;
+}
+
+bool ZLibReader::Add(const StringPiece &in, bool partial_flush, bool final, int max_out) {
+  if (!stream) return false;
+  z_stream *zs = FromVoid<z_stream*>(stream);
+  zs->next_in = reinterpret_cast<Bytef*>(const_cast<char*>(&in[0]));
+  zs->avail_in = in.size();
+  bool success;
+  int status, len;
+  do {
+    out.resize(out.size() + blocksize);
+    zs->next_out = reinterpret_cast<Bytef*>(&out[0] + out.size() - blocksize);
+    zs->avail_out = blocksize;
+    status = inflate(zs, partial_flush ? Z_PARTIAL_FLUSH : 0);
+    len = blocksize - zs->avail_out;
+    if (len < blocksize) out.resize(out.size() - blocksize + len);
+    if (max_out && out.size() > max_out) return false;
+    success = status == Z_OK || (status == Z_BUF_ERROR && len);
+  } while(success && len == blocksize);
+  bool ret = final ? (status == Z_STREAM_END) : success;
+  if (!ret) ERROR("inflate ", status);
+  return ret;
+}
+
+string ZLibReader::Decompress(const StringPiece &in) {
+  ZLibReader zreader;
+  return zreader.Add(in, false, true) ? zreader.out : "";
+}
+
+ZLibWriter::ZLibWriter(int bs) : blocksize(bs) {
+  z_stream *zs = new z_stream;
+  memzerop(zs);
+  if (deflateInit(zs, Z_BEST_COMPRESSION) != Z_OK) { delete zs; ERROR("deflateInit"); return; }
+  stream = zs;
+}
+
+ZLibWriter::~ZLibWriter() {
+  if (!stream) return;
+  z_stream *zs = FromVoid<z_stream*>(stream);
+  deflateEnd(zs);
+  delete zs;
+}
+
+bool ZLibWriter::Add(const StringPiece &in, bool partial_flush, bool final, int max_out) {
+  if (!stream) return false;
+  z_stream *zs = FromVoid<z_stream*>(stream);
+  zs->next_in = reinterpret_cast<Bytef*>(const_cast<char*>(&in[0]));
+  zs->avail_in = in.size();
+  bool success;
+  int status, len;
+  do {
+    out.resize(out.size() + blocksize);
+    zs->next_out = reinterpret_cast<Bytef*>(&out[0] + out.size() - blocksize);
+    zs->avail_out = blocksize;
+    status = deflate(zs, partial_flush ? Z_PARTIAL_FLUSH : Z_FINISH);
+    len = blocksize - zs->avail_out;
+    if (len < blocksize) out.resize(out.size() - blocksize + len);
+    if (max_out && out.size() > max_out) return false;
+    success = status == Z_OK || (status == Z_BUF_ERROR && len);
+  } while(success && len == blocksize);
+  bool ret = final ? (status == Z_STREAM_END) : success;
+  if (!ret) ERROR("deflate ", status);
+  return ret;
+}
+
+string ZLibWriter::Compress(const StringPiece &in) {
+  ZLibWriter zwriter;
+  return zwriter.Add(in, false, true) ? zwriter.out : "";
+}
+
 int PngWriter::Write(const string &fn, const Texture &tex) {
   LocalFile lf(fn, "w");
   if (!lf.Opened()) return ERRORv(-1, "open: ", fn);
