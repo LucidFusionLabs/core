@@ -29,6 +29,11 @@
 namespace LFL {
 struct SSHClientConnection : public Connection::Handler {
   enum { INIT=0, FIRST_KEXINIT=1, FIRST_KEXREPLY=2, FIRST_NEWKEYS=3, KEXINIT=4, KEXREPLY=5, NEWKEYS=6 };
+  struct Channel {
+    int local_id, remote_id, window_c=0, window_s=0;
+    string buf;
+    Channel(int L=0, int R=0) : local_id(L), remote_id(R) {}
+  };
 
   SSHClient::ResponseCB cb;
   SSHClient::LoadIdentityCB load_identity_cb;
@@ -38,11 +43,12 @@ struct SSHClientConnection : public Connection::Handler {
   string V_C, V_S, KEXINIT_C, KEXINIT_S, H_text, session_id, integrity_c2s, integrity_s2c, decrypt_buf, host, user, pw, termvar;
   int state=0, packet_len=0, packet_MAC_len=0, MAC_len_c=0, MAC_len_s=0, encrypt_block_size=0, decrypt_block_size=0, server_version=0;
   unsigned sequence_number_c2s=0, sequence_number_s2c=0, password_prompts=0, userauth_fail=0;
-  bool guessed_c=0, guessed_s=0, guessed_right_c=0, guessed_right_s=0, loaded_pw=0;
+  bool guessed_c=0, guessed_s=0, guessed_right_c=0, guessed_right_s=0, loaded_pw=0, agent_forwarding;
   unsigned char padding=0, packet_id=0;
   Serializable::ConstStream packet_s;
-  pair<int, int> pty_channel;
   std::mt19937 rand_eng;
+  unordered_map<int, Channel> channels;
+  Channel *session_channel=0, *agent_channel=0;
   BigNumContext ctx;
   BigNum K;
   Crypto::DiffieHellman dh;
@@ -53,15 +59,15 @@ struct SSHClientConnection : public Connection::Handler {
   Crypto::CipherAlgo cipher_algo_c2s, cipher_algo_s2c;
   Crypto::MACAlgo mac_algo_c2s, mac_algo_s2c;
   ECDef curve_id;
-  int dont_compress, compress_id_c2s, compress_id_s2c;
-  int kex_method=0, hostkey_type=0, mac_prefix_c2s=0, mac_prefix_s2c=0, window_c=0, window_s=0;
+  int next_channel_id=1, dont_compress, compress_id_c2s, compress_id_s2c;
+  int kex_method=0, hostkey_type=0, mac_prefix_c2s=0, mac_prefix_s2c=0;
   int initial_window_size=1048576, max_packet_size=32768, term_width=80, term_height=25;
   unique_ptr<ZLibReader> zreader;
   unique_ptr<ZLibWriter> zwriter;
 
-  SSHClientConnection(const SSHClient::ResponseCB &CB, const string &H, const string &U, const string &T, bool compress, const Callback &s) :
-    cb(CB), success_cb(s), V_C("SSH-2.0-LFL_1.0"), host(H), user(U), termvar(T), rand_eng(std::random_device{}()),
-    pty_channel(1,-1), ctx(NewBigNumContext()), K(NewBigNum()), encrypt(Crypto::CipherInit()), decrypt(Crypto::CipherInit()), dont_compress(compress ? 0 : SSH::Compression::None-1) {}
+  SSHClientConnection(const SSHClient::ResponseCB &CB, const string &H, const string &U, const string &T, bool compress, bool agent_fwd, const Callback &s) :
+    cb(CB), success_cb(s), V_C("SSH-2.0-LFL_1.0"), host(H), user(U), termvar(T), agent_forwarding(agent_fwd), rand_eng(std::random_device{}()),
+    ctx(NewBigNumContext()), K(NewBigNum()), encrypt(Crypto::CipherInit()), decrypt(Crypto::CipherInit()), dont_compress(compress ? 0 : SSH::Compression::None-1) {}
   virtual ~SSHClientConnection() { ClearPassword(); FreeBigNumContext(ctx); FreeBigNum(K); Crypto::CipherFree(encrypt); Crypto::CipherFree(decrypt); }
 
   void Close(Connection *c) { cb(c, StringPiece()); }
@@ -86,6 +92,7 @@ struct SSHClientConnection : public Connection::Handler {
       if (state == INIT) return 0;
     }
 
+    Channel *chan;
     for (;;) {
       bool encrypted = state > FIRST_NEWKEYS;
       if (!packet_len) {
@@ -333,11 +340,13 @@ struct SSHClientConnection : public Connection::Handler {
 
         case SSH::MSG_USERAUTH_SUCCESS::ID: {
           SSHTrace(c->Name(), ": MSG_USERAUTH_SUCCESS");
-          window_s = initial_window_size;
+          session_channel = &channels[next_channel_id];
+          session_channel->local_id = next_channel_id++;
+          session_channel->window_s = initial_window_size;
           if (compress_id_c2s == SSH::Compression::OpenSSHZLib) zreader = make_unique<ZLibReader>(4096);
           if (compress_id_s2c == SSH::Compression::OpenSSHZLib) zwriter = make_unique<ZLibWriter>(4096);
           if (success_cb) success_cb();
-          if (!WriteCipher(c, SSH::MSG_CHANNEL_OPEN("session", pty_channel.first, initial_window_size, max_packet_size)))
+          if (!WriteCipher(c, SSH::MSG_CHANNEL_OPEN("session", session_channel->local_id, initial_window_size, max_packet_size)))
             return ERRORv(-1, c->Name(), ": write");
         } break;
 
@@ -358,40 +367,144 @@ struct SSHClientConnection : public Connection::Handler {
           SSHTrace(c->Name(), ": MSG_GLOBAL_REQUEST request=", msg.request.str());
         } break;
 
+        case SSH::MSG_CHANNEL_OPEN::ID: {
+          SSH::MSG_CHANNEL_OPEN msg;
+          if (msg.In(&packet_s)) return ERRORv(-1, c->Name(), ": read MSG_CHANNEL_OPEN");
+          SSHTrace(c->Name(), ": MSG_CHANNEL_OPEN type=", msg.channel_type.str());
+          if (msg.channel_type.str() == "auth-agent@openssh.com" && agent_forwarding) {
+            if (agent_channel) return ERRORv(-1, c->Name(), ": agent channel already open");
+            agent_channel = &channels[next_channel_id];
+            agent_channel->local_id = next_channel_id++;
+            agent_channel->remote_id = msg.sender_channel;
+            agent_channel->window_c = msg.initial_win_size;
+            agent_channel->window_s = initial_window_size;
+            if (!WriteCipher(c, SSH::MSG_CHANNEL_OPEN_CONFIRMATION(agent_channel->remote_id, agent_channel->local_id, agent_channel->window_s, max_packet_size))) return ERRORv(-1, c->Name(), ": write");
+          } else {
+            ERROR("unknown channel open", msg.channel_type.str());
+            if (!WriteCipher(c, SSH::MSG_CHANNEL_OPEN_FAILURE(agent_channel->remote_id, 0, "", ""))) return ERRORv(-1, c->Name(), ": write");
+          }
+        } break;
+
         case SSH::MSG_CHANNEL_OPEN_CONFIRMATION::ID: {
           SSH::MSG_CHANNEL_OPEN_CONFIRMATION msg;
           if (msg.In(&packet_s)) return ERRORv(-1, c->Name(), ": read MSG_CHANNEL_OPEN_CONFIRMATION");
-          SSHTrace(c->Name(), ": MSG_CHANNEL_OPEN_CONFIRMATION");
-          pty_channel.second = msg.sender_channel;
-          window_c = msg.initial_win_size;
+          SSHTrace(c->Name(), ": MSG_CHANNEL_OPEN_CONFIRMATION local_id=", msg.recipient_channel, " remote_id=", msg.sender_channel);
+          if (!(chan = FindPtrOrNull(channels, msg.recipient_channel)) || chan->remote_id) return ERRORv(-1, c->Name(), ": open invalid channel");
+          chan->remote_id = msg.sender_channel;
+          chan->window_c = msg.initial_win_size;
 
-          if (!WriteCipher(c, SSH::MSG_CHANNEL_REQUEST
-                           (pty_channel.second, "pty-req", point(term_width, term_height),
-                            point(term_width*8, term_height*12), termvar, "", true))) return ERRORv(-1, c->Name(), ": write");
+          if (chan == session_channel) {
+            if (agent_forwarding) {
+              if (!WriteCipher(c, SSH::MSG_CHANNEL_REQUEST(chan->remote_id, "auth-agent-req@openssh.com", "", true))) return ERRORv(-1, c->Name(), ": write");
+            }
 
-          if (!WriteCipher(c, SSH::MSG_CHANNEL_REQUEST(pty_channel.second, "shell", "", true))) return ERRORv(-1, c->Name(), ": write");
+            if (!WriteCipher(c, SSH::MSG_CHANNEL_REQUEST
+                             (chan->remote_id, "pty-req", point(term_width, term_height),
+                              point(term_width*8, term_height*12), termvar, "", true))) return ERRORv(-1, c->Name(), ": write");
+
+            if (!WriteCipher(c, SSH::MSG_CHANNEL_REQUEST(chan->remote_id, "shell", "", true))) return ERRORv(-1, c->Name(), ": write");
+          }
         } break;
 
         case SSH::MSG_CHANNEL_WINDOW_ADJUST::ID: {
           SSH::MSG_CHANNEL_WINDOW_ADJUST msg;
           if (msg.In(&packet_s)) return ERRORv(-1, c->Name(), ": read MSG_CHANNEL_WINDOW_ADJUST");
           SSHTrace(c->Name(), ": MSG_CHANNEL_WINDOW_ADJUST add ", msg.bytes_to_add, " to channel ", msg.recipient_channel);
-          window_c += msg.bytes_to_add;
+          if (!(chan = FindPtrOrNull(channels, msg.recipient_channel))) return ERRORv(-1, c->Name(), ": window adjust invalid channel");
+          chan->window_c += msg.bytes_to_add;
         } break;
 
         case SSH::MSG_CHANNEL_DATA::ID: {
           SSH::MSG_CHANNEL_DATA msg;
           if (msg.In(&packet_s)) return ERRORv(-1, c->Name(), ": read MSG_CHANNEL_DATA");
           SSHTrace(c->Name(), ": MSG_CHANNEL_DATA: channel ", msg.recipient_channel, ": ", msg.data.size(), " bytes");
+          if (!(chan = FindPtrOrNull(channels, msg.recipient_channel))) return ERRORv(-1, c->Name(), ": data for invalid channel");
 
-          window_s -= (packet_len - packet_MAC_len - 4);
-          if (window_s < initial_window_size / 2) {
-            if (!WriteClearOrEncrypted(c, SSH::MSG_CHANNEL_WINDOW_ADJUST(pty_channel.second, initial_window_size)))
+          chan->window_s -= (packet_len - packet_MAC_len - 4);
+          if (chan->window_s < initial_window_size / 2) {
+            if (!WriteClearOrEncrypted(c, SSH::MSG_CHANNEL_WINDOW_ADJUST(chan->remote_id, initial_window_size)))
               return ERRORv(-1, c->Name(), ": write");
-            window_s += initial_window_size;
+            chan->window_s += initial_window_size;
           }
 
-          cb(c, msg.data);
+          if (chan == session_channel) cb(c, msg.data);
+          else if (chan == agent_channel) {
+            chan->buf.append(msg.data.buf, msg.data.len);
+            while(chan->buf.size() > 4) {
+              int agent_packet_len;
+              Serializable::ConstStream agent_stream(chan->buf.data(), chan->buf.size());
+              agent_stream.Ntohl(&agent_packet_len);
+              if (agent_stream.Remaining() < agent_packet_len) break;
+              unsigned char agent_packet_id;
+              agent_stream.Read8(&agent_packet_id);
+              switch(agent_packet_id) {
+                case SSH::AGENTC_REQUEST_IDENTITIES::ID: {
+                  SSHTrace(c->Name(), ": agent channel: AGENTC_REQUEST_IDENTITIES");
+                  SSH::AGENT_IDENTITIES_ANSWER reply;
+                  if (identity) {
+                    if (identity->ed25519.privkey.size()) {
+                      reply.keys.emplace_back(SSH::Ed25519Key(identity->ed25519.pubkey).ToString(), "");
+                    }
+                    if (identity->ec) {
+                      ECGroup group = GetECPairGroup(identity->ec);
+                      string algo_name, curve_name;
+                      Crypto::DigestAlgo hash_id;
+                      if (GetECName(GetECGroupID(group), &algo_name, &curve_name, &hash_id))
+                        reply.keys.emplace_back(SSH::ECDSAKey(algo_name, curve_name,
+                                                              ECPointGetData(group, GetECPairPubKey(identity->ec), ctx)).ToString(), "");
+                    }
+                    if (identity->rsa) {
+                      reply.keys.emplace_back(SSH::RSAKey(GetRSAKeyE(identity->rsa), GetRSAKeyN(identity->rsa)).ToString(), "");
+                    }
+                    if (identity->dsa) {
+                      reply.keys.emplace_back(SSH::DSSKey(GetDSAKeyP(identity->dsa), GetDSAKeyQ(identity->dsa),
+                                                          GetDSAKeyG(identity->dsa), GetDSAKeyK(identity->dsa)).ToString(), "");
+                    }
+                  }
+                  if (!WriteToChannel(c, chan, reply.ToString())) return -1;
+                } break;
+
+                case SSH::AGENTC_SIGN_REQUEST::ID: {
+                  SSH::AGENTC_SIGN_REQUEST agent_msg;
+                  if (agent_msg.In(&agent_stream)) return ERRORv(-1, c->Name(), ": read AGENTC_SIGN_REQUEST");
+                  Serializable::ConstStream key_stream(agent_msg.key.data(), agent_msg.key.size());
+                  string key_type, sig;
+                  key_stream.ReadString(&key_type);
+
+                  if (key_type == SSH::Key::Name(SSH::Key::ED25519)) {
+                    sig = SSH::Ed25519Signature(Ed25519Sign(agent_msg.data, identity->ed25519.privkey)).ToString();
+                  } else if (key_type == SSH::Key::Name(SSH::Key::ECDSA_SHA2_NISTP256) ||
+                             key_type == SSH::Key::Name(SSH::Key::ECDSA_SHA2_NISTP384) ||
+                             key_type == SSH::Key::Name(SSH::Key::ECDSA_SHA2_NISTP521)) {
+                    ECDSASig ecdsa_sig = ECDSASign(agent_msg.data, identity->ec);
+                    if (ecdsa_sig) {
+                      sig = SSH::ECDSASignature(key_type, GetECDSASigR(ecdsa_sig), GetECDSASigS(ecdsa_sig)).ToString();
+                      ECDSASigFree(ecdsa_sig);
+                    }
+                  } else if (key_type == SSH::Key::Name(SSH::Key::RSA)) {
+                    if (RSASign(agent_msg.data, &sig, identity->rsa) == 1) sig = SSH::RSASignature(sig).ToString();
+                  } else if (key_type == SSH::Key::Name(SSH::Key::DSS)) {
+                    DSASig dsa_sig = DSASign(agent_msg.data, identity->dsa);
+                    if (dsa_sig) {
+                      sig = SSH::DSSSignature(GetDSASigR(dsa_sig), GetDSASigS(dsa_sig)).ToString();
+                      DSASigFree(dsa_sig);
+                    }
+                  }
+
+                  if (sig.size()) {
+                    if (!WriteToChannel(c, chan, SSH::AGENT_SIGN_RESPONSE(sig).ToString())) return -1;
+                  } else {
+                    if (!WriteToChannel(c, chan, SSH::AGENT_FAILURE().ToString())) return -1;
+                  }
+                } break;
+
+                default: {
+                  ERROR(c->Name(), " unknown agent packet number ", int(agent_packet_id), " len ", agent_packet_len);
+                } break;
+              };
+              chan->buf.erase(0, agent_packet_len + 4);
+            }
+          }
         } break;
 
         case SSH::MSG_CHANNEL_EOF::ID: {
@@ -483,14 +596,19 @@ struct SSHClientConnection : public Connection::Handler {
 
   int WriteChannelData(Connection *c, const StringPiece &b) {
     if (!password_prompts) {
-      if (!WriteCipher(c, SSH::MSG_CHANNEL_DATA(pty_channel.second, b))) return ERRORv(-1, c->Name(), ": write");
-      window_c -= (b.size() - 4);
+      if (!WriteToChannel(c, session_channel, b)) return -1;
     } else {
       bool cr = b.len && b.back() == '\r';
       pw.append(b.data(), b.size() - cr);
       if (cr && !WritePassword(c)) return ERRORv(-1, c->Name(), ": write");
     }
     return b.size();
+  }
+
+  bool WriteToChannel(Connection *c, Channel *chan, const StringPiece &b) {
+    if (!WriteCipher(c, SSH::MSG_CHANNEL_DATA(chan->remote_id, b))) return ERRORv(false, c->Name(), ": write");
+    chan->window_c -= (b.size() - 4);
+    return true;
   }
 
   bool WritePassword(Connection *c) {
@@ -519,19 +637,19 @@ struct SSHClientConnection : public Connection::Handler {
   int SetTerminalWindowSize(Connection *c, int w, int h) {
     term_width = w;
     term_height = h;
-    if (!c || c->state != Connection::Connected || state <= FIRST_NEWKEYS || pty_channel.second < 0) return 0;
-    if (!WriteCipher(c, SSH::MSG_CHANNEL_REQUEST(pty_channel.second, "window-change", point(term_width, term_height),
+    if (!c || c->state != Connection::Connected || state <= FIRST_NEWKEYS) return 0;
+    if (!WriteCipher(c, SSH::MSG_CHANNEL_REQUEST(session_channel->remote_id, "window-change", point(term_width, term_height),
                                                  point(term_width*8, term_height*12),
                                                  "", "", false))) return ERRORv(-1, c->Name(), ": write");
     return 0;
   }
 };
 
-Connection *SSHClient::Open(const string &hostport, const string &user, const string &term, bool compress,
+Connection *SSHClient::Open(const string &hostport, const string &user, const string &term, bool compress, bool agent_fwd,
                             const SSHClient::ResponseCB &cb, Callback *detach, Callback *success) { 
   Connection *c = app->net->tcp_client->Connect(hostport, 22, detach);
   if (!c) return 0;
-  c->handler = make_unique<SSHClientConnection>(cb, hostport, user, term, compress, success ? *success : Callback());
+  c->handler = make_unique<SSHClientConnection>(cb, hostport, user, term, compress, agent_fwd, success ? *success : Callback());
   return c;
 }
 
@@ -1129,6 +1247,26 @@ int SSH::Ed25519Signature::In(const Serializable::Stream *i) {
 void SSH::Ed25519Signature::Out(Serializable::Stream *o) const {
   o->BString(format_id);
   o->BString(sig);
+}
+
+string SSH::AgentSerializable::ToString() const { string ret; ToString(&ret); return ret; }
+
+void SSH::AgentSerializable::ToString(string *out) const {
+  out->resize(5 + Size());
+  return ToString(&(*out)[0], out->size());
+}
+
+void SSH::AgentSerializable::ToString(char *buf, int len) const {
+  unsigned char type = Id;
+  MutableStream os(buf, len);
+  os.Htonl(len - 4);
+  os.Write8(type);
+  Out(&os);
+}
+
+void SSH::AGENT_IDENTITIES_ANSWER::Out(Serializable::Stream *o) const {
+  o->Htonl(int(keys.size()));
+  for (auto &i : keys) { o->BString(i.blob); o->BString(i.comment); }
 }
 
 }; // namespace LFL

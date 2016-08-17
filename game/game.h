@@ -38,7 +38,7 @@ struct Game {
 
   struct ReliableNetwork {
     virtual void Heartbeat(Connection *c) {}
-    virtual void WriteWithRetry(Connection *c, Serializable *req, unsigned short seq) = 0;
+    virtual void WriteWithRetry(Connection *c, SerializableProto *req, unsigned short seq) = 0;
   };
 
   struct Network {
@@ -49,50 +49,50 @@ struct Game {
 
     struct BroadcastVisitor : public Visitor {
       Game::Network *net;
-      Serializable *msg;
+      SerializableProto *msg;
       int sent;
-      BroadcastVisitor(Game::Network *n, Serializable *m) : net(n), msg(m), sent(0) {}
+      BroadcastVisitor(Game::Network *n, SerializableProto *m) : net(n), msg(m), sent(0) {}
       virtual void Visit(Connection *c, Game::ConnectionData *cd);
     };
 
     struct BroadcastWithRetryVisitor : public Visitor {
       Game::Network *net;
-      Serializable *msg;
+      SerializableProto *msg;
       Connection *skip;
       int sent;
-      BroadcastWithRetryVisitor(Game::Network *n, Serializable *m, Connection *Skip=0) : net(n), msg(m), skip(Skip), sent(0) {}
+      BroadcastWithRetryVisitor(Game::Network *n, SerializableProto *m, Connection *Skip=0) : net(n), msg(m), skip(Skip), sent(0) {}
       virtual void Visit(Connection *c, Game::ConnectionData *cd);
     };
 
     Network() {}
     virtual int Write(Connection *c, int method, const char *data, int len) = 0;
-    virtual void WriteWithRetry(ReliableNetwork*, Connection*, Serializable*, unsigned short seq) = 0;
+    virtual void WriteWithRetry(ReliableNetwork*, Connection*, SerializableProto*, unsigned short seq) = 0;
 
-    int Write(Connection *c, int method, unsigned short seq, Serializable *msg);
-    int Broadcast(Service *svc, Serializable *msg);
-    int BroadcastWithRetry(Service *svc, Serializable *msg, Connection *skip);
+    int Write(Connection *c, int method, unsigned short seq, SerializableProto *msg);
+    int Broadcast(Service *svc, SerializableProto *msg);
+    int BroadcastWithRetry(Service *svc, SerializableProto *msg, Connection *skip);
   };
 
 #ifdef LFL_ANDROID
   struct GoogleMultiplayerNetwork : public Network {
     virtual int Write(Connection *c, int method, const char *data, int len);
-    virtual void WriteWithRetry(ReliableNetwork *n, Connection *c, Serializable *req, unsigned short seq);
+    virtual void WriteWithRetry(ReliableNetwork *n, Connection *c, SerializableProto *req, unsigned short seq);
   };
 #endif
 
   struct InProcessNetwork : public Network {
     virtual int Write(Connection *c, int method, const char *data, int len);
-    virtual void WriteWithRetry(ReliableNetwork *n, Connection *c, Serializable *req, unsigned short seq);
+    virtual void WriteWithRetry(ReliableNetwork *n, Connection *c, SerializableProto *req, unsigned short seq);
   };
 
   struct TCPNetwork : public Network {
     virtual int Write(Connection *c, int method, const char *buf, int len) { return c->WriteFlush(buf, len); }
-    virtual void WriteWithRetry(ReliableNetwork *reliable, Connection *c, Serializable *req, unsigned short seq);
+    virtual void WriteWithRetry(ReliableNetwork *reliable, Connection *c, SerializableProto *req, unsigned short seq);
   };
 
   struct UDPNetwork : public Network {
     virtual int Write(Connection *c, int method, const char *buf, int len);
-    virtual void WriteWithRetry(ReliableNetwork *reliable, Connection *c, Serializable *req, unsigned short seq);
+    virtual void WriteWithRetry(ReliableNetwork *reliable, Connection *c, SerializableProto *req, unsigned short seq);
   };
 
   struct ReliableUDPNetwork : public ReliableNetwork {
@@ -106,7 +106,7 @@ struct Game {
 
     void Clear() { retry.clear(); }
     void Acknowledged(unsigned short id) { retry.erase(id); }
-    void WriteWithRetry(Connection *c, Serializable *req, unsigned short seq);
+    void WriteWithRetry(Connection *c, SerializableProto *req, unsigned short seq);
     void Heartbeat(Connection *c);
   };
 
@@ -322,11 +322,11 @@ struct GameServer : public Connection::Handler {
     return in.offset;
   }
 
-  void Write(Connection *c, int method, unsigned short seq, Serializable *msg) {
+  void Write(Connection *c, int method, unsigned short seq, SerializableProto *msg) {
     static_cast<Game::Network*>(c->svc->game_network)->Write(c, method, seq, msg);
   }
 
-  void WriteWithRetry(Connection *c, Game::ConnectionData *cd, Serializable *msg) {
+  void WriteWithRetry(Connection *c, Game::ConnectionData *cd, SerializableProto *msg) {
     static_cast<Game::Network*>(c->svc->game_network)->WriteWithRetry(&cd->retry, c, msg, cd->seq++);
   }
 
@@ -335,7 +335,7 @@ struct GameServer : public Connection::Handler {
     WriteWithRetry(c, cd, &print);
   }
 
-  int BroadcastWithRetry(Serializable *msg, Connection *skip=0) {
+  int BroadcastWithRetry(SerializableProto *msg, Connection *skip=0) {
     int ret = 0;
     for (int i=0; i<svc.size(); ++i) ret += static_cast<Game::Network*>(svc[i]->game_network)->BroadcastWithRetry(svc[i], msg, skip);
     return ret;

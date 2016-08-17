@@ -56,21 +56,21 @@ struct MultiProcessBuffer {
   virtual void Close();
   virtual bool Open();
   bool Create(int s) { len=s; return Open(); }
-  bool Create(const Serializable &s) { bool ret; if ((ret = Create(Size(s)))) s.ToString(buf, len, 0); return ret; }
-  bool Copy(const Serializable &s) { bool ret; if ((ret = (len >= Size(s)))) s.ToString(buf, len, 0); return ret; }
-  static int Size(const Serializable &s) { return Serializable::Header::size + s.Size(); }
+  bool Create(const SerializableProto &s) { bool ret; if ((ret = Create(Size(s)))) s.ToString(buf, len, 0); return ret; }
+  bool Copy(const SerializableProto &s) { bool ret; if ((ret = (len >= Size(s)))) s.ToString(buf, len, 0); return ret; }
+  static int Size(const SerializableProto &s) { return SerializableProto::Header::size + s.Size(); }
 };
 
 struct MultiProcessResource {
-  static bool Read(const MultiProcessBuffer &mpb, int type, Serializable *out);
+  static bool Read(const MultiProcessBuffer &mpb, int type, SerializableProto *out);
 };
 
-struct MultiProcessFileResource : public Serializable {
+struct MultiProcessFileResource : public SerializableProto {
   static const int Type = 1<<11 | 1;
   StringPiece buf, name, type;
-  MultiProcessFileResource() : Serializable(Type) {}
+  MultiProcessFileResource() : SerializableProto(Type) {}
   MultiProcessFileResource(const string &b, const string &n, const string &t) :
-    Serializable(Type), buf(b), name(n), type(t) {}
+    SerializableProto(Type), buf(b), name(n), type(t) {}
 
   int HeaderSize() const { return sizeof(int) * 3; }
   int Size() const { return HeaderSize() + 3 + buf.size() + name.size() + type.size(); }
@@ -86,13 +86,13 @@ struct MultiProcessFileResource : public Serializable {
   }
 };
 
-struct MultiProcessTextureResource : public Serializable {
+struct MultiProcessTextureResource : public SerializableProto {
   static const int Type = 1<<11 | 2;
   int width=0, height=0, pf=0, linesize=0;
   StringPiece buf;
-  MultiProcessTextureResource() : Serializable(Type) {}
+  MultiProcessTextureResource() : SerializableProto(Type) {}
   MultiProcessTextureResource(const LFL::Texture &t) :
-    Serializable(Type), width(t.width), height(t.height), pf(t.pf), linesize(t.LineSize()),
+    SerializableProto(Type), width(t.width), height(t.height), pf(t.pf), linesize(t.LineSize()),
     buf(MakeSigned(t.buf), t.BufferSize()) {}
 
   int HeaderSize() const { return sizeof(int) * 4; }
@@ -110,7 +110,7 @@ struct MultiProcessTextureResource : public Serializable {
   }
 };
 
-struct MultiProcessPaintResource : public Serializable {
+struct MultiProcessPaintResource : public SerializableProto {
   static const int Type = 1<<11 | 3;
   struct Iterator {
     int offset=0, type=0;
@@ -141,7 +141,7 @@ struct MultiProcessPaintResource : public Serializable {
 
   StringBuffer data;
   mutable Drawable::Attr attr;
-  MultiProcessPaintResource() : Serializable(Type) {}
+  MultiProcessPaintResource() : SerializableProto(Type) {}
   void Out(Serializable::Stream *o) const { o->BString(data.buf); }
   int In(const Serializable::Stream *i) { i->ReadString(&data.buf); return i->Result(); }
   int Size() const { return HeaderSize() + data.buf.size(); }
@@ -173,13 +173,13 @@ struct MultiProcessPaintResourceBuilder : public MultiProcessPaintResource {
   { data.Add(x.data.begin(), x.data.size()); count += x.count; dirty=1; }
 };
 
-struct MultiProcessLayerTree : public Serializable {
+struct MultiProcessLayerTree : public SerializableProto {
   static const int Type = 1<<11 | 4;
   ArrayPiece<LayersInterface::Node>  node_data;
   ArrayPiece<LayersInterface::Child> child_data;
-  MultiProcessLayerTree() : Serializable(Type) {}
+  MultiProcessLayerTree() : SerializableProto(Type) {}
   MultiProcessLayerTree(const vector<LayersInterface::Node> &n, const vector<LayersInterface::Child> &c) :
-    Serializable(Type), node_data(&n[0], n.size()), child_data(&c[0], c.size()) {}
+    SerializableProto(Type), node_data(&n[0], n.size()), child_data(&c[0], c.size()) {}
 
   void Out(Serializable::Stream *o) const { o->AString(node_data); o->AString(child_data); }
   int In(const Serializable::Stream *i)

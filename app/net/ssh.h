@@ -36,7 +36,7 @@ struct SSHClient {
   typedef function<void(Connection*, const StringPiece&)> ResponseCB;
   typedef function<bool(shared_ptr<Identity>*)> LoadIdentityCB;
   typedef function<bool(string*)> LoadPasswordCB;
-  static Connection *Open(const string &hostport, const string &user, const string &term, bool compress,
+  static Connection *Open(const string &hostport, const string &user, const string &term, bool compress, bool agent_fwd,
                           const ResponseCB &cb, Callback *detach=0, Callback *success=0);
 
   static void SetCredentialCB(Connection *c, LoadIdentityCB, LoadPasswordCB);
@@ -378,13 +378,14 @@ struct SSH {
   struct MSG_CHANNEL_OPEN : public Serializable {
     static const int ID = 90;
     StringPiece channel_type;
-    int sender_channel, initial_win_size, maximum_packet_size;
+    int sender_channel=0, initial_win_size=0, maximum_packet_size=0;
+    MSG_CHANNEL_OPEN() : Serializable(ID) {}
     MSG_CHANNEL_OPEN(const StringPiece &CT, int SC, int IWS, int MPS) : Serializable(ID), channel_type(CT), sender_channel(SC), initial_win_size(IWS), maximum_packet_size(MPS) {}
 
     int HeaderSize() const { return 4*4; }
     int Size() const { return HeaderSize() + channel_type.size(); }
     void Out(Serializable::Stream *o) const { o->BString(channel_type); o->Htonl(sender_channel); o->Htonl(initial_win_size); o->Htonl(maximum_packet_size); }
-    int In(const Serializable::Stream *i) { return i->Result(); }
+    int In(const Serializable::Stream *i) { i->ReadString(&channel_type); i->Ntohl(&sender_channel); i->Ntohl(&initial_win_size); i->Ntohl(&maximum_packet_size); return i->Result(); }
   };
 
   struct MSG_CHANNEL_OPEN_TCPIP : public Serializable {
@@ -404,11 +405,25 @@ struct SSH {
     static const int ID = 91;
     int recipient_channel, sender_channel, initial_win_size, maximum_packet_size;
     MSG_CHANNEL_OPEN_CONFIRMATION() : Serializable(ID) {}
+    MSG_CHANNEL_OPEN_CONFIRMATION(int RC, int SC, int IWS, int MPS) : Serializable(ID), recipient_channel(RC), sender_channel(SC), initial_win_size(IWS), maximum_packet_size(MPS) {}
 
     int HeaderSize() const { return 4*4; }
     int Size() const { return HeaderSize(); }
-    void Out(Serializable::Stream *o) const {}
+    void Out(Serializable::Stream *o) const { o->Htonl(recipient_channel); o->Htonl(sender_channel); o->Htonl(initial_win_size); o->Htonl(maximum_packet_size); }
     int In(const Serializable::Stream *i) { i->Ntohl(&recipient_channel); i->Ntohl(&sender_channel); i->Ntohl(&initial_win_size); i->Ntohl(&maximum_packet_size); return i->Result(); }
+  };
+
+  struct MSG_CHANNEL_OPEN_FAILURE : public Serializable {
+    static const int ID = 91;
+    int recipient_channel=0, reason=0;
+    StringPiece description, language;
+    MSG_CHANNEL_OPEN_FAILURE() : Serializable(ID) {}
+    MSG_CHANNEL_OPEN_FAILURE(int RC, int R, const StringPiece &D, const StringPiece &L) : Serializable(ID), recipient_channel(RC), reason(R), description(D), language(L) {}
+
+    int HeaderSize() const { return 4*4; }
+    int Size() const { return HeaderSize() + description.size() + language.size(); }
+    void Out(Serializable::Stream *o) const { o->Htonl(recipient_channel); o->Htonl(reason); o->BString(description); o->BString(language); }
+    int In(const Serializable::Stream *i) { i->Ntohl(&recipient_channel); i->Ntohl(&reason); i->ReadString(&description); i->ReadString(&language); return i->Result(); }
   };
 
   struct MSG_CHANNEL_WINDOW_ADJUST : public Serializable {
@@ -577,6 +592,63 @@ struct SSH {
     int Size() const { return HeaderSize() + sig.size(); }
     void Out(Serializable::Stream *o) const;
     int In(const Serializable::Stream *i);
+  };
+  
+  struct AgentSerializable : public LFL::Serializable {
+    AgentSerializable(int type) : LFL::Serializable(type) {}
+    string ToString() const;
+    void ToString(string *out) const;
+    void ToString(char *buf, int len) const;
+  };
+
+  struct AGENT_FAILURE : public AgentSerializable {
+    static const int ID = 5;
+    AGENT_FAILURE() : AgentSerializable(ID) {}
+
+    int HeaderSize() const { return 0; }
+    int Size() const { return HeaderSize(); }
+    int In(const Serializable::Stream *i) { return i->Result(); }
+    void Out(Serializable::Stream *o) const {}
+  };
+
+  struct AGENTC_REQUEST_IDENTITIES { static const int ID = 11; };
+
+  struct AGENT_IDENTITIES_ANSWER : public AgentSerializable {
+    static const int ID = 12;
+    struct PublicKey {
+      string blob, comment;
+      PublicKey(string B, string C) : blob(move(B)), comment(move(C)) {}
+    };
+    vector<PublicKey> keys;
+    AGENT_IDENTITIES_ANSWER() : AgentSerializable(ID) {}
+
+    int HeaderSize() const { return 4; }
+    int Size() const { int l=0; for (auto &i : keys) l += 8+i.blob.size()+i.comment.size(); return l+HeaderSize(); }
+    int In(const Serializable::Stream *i) { return i->Result(); }
+    void Out(Serializable::Stream *o) const;
+  };
+
+  struct AGENTC_SIGN_REQUEST : public AgentSerializable {
+    static const int ID = 13;
+    StringPiece key, data;
+    int flags;
+    AGENTC_SIGN_REQUEST() : AgentSerializable(ID) {}
+
+    int HeaderSize() const { return 4*3; }
+    int Size() const { return HeaderSize() + key.size() + data.size(); }
+    int In(const Serializable::Stream *i) { i->ReadString(&key); i->ReadString(&data); i->Ntohl(&flags); return i->Result(); }
+    void Out(Serializable::Stream *o) const {}
+  };
+
+  struct AGENT_SIGN_RESPONSE : public AgentSerializable {
+    static const int ID = 14;
+    StringPiece sig;
+    AGENT_SIGN_RESPONSE(const StringPiece &S) : AgentSerializable(ID), sig(S) {}
+
+    int HeaderSize() const { return 4; }
+    int Size() const { return HeaderSize() + sig.size(); }
+    int In(const Serializable::Stream *i) { i->ReadString(&sig); return i->Result(); }
+    void Out(Serializable::Stream *o) const { o->BString(sig); }
   };
 };
 

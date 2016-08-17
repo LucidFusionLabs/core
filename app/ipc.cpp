@@ -316,10 +316,10 @@ bool MultiProcessBuffer::Open() {
 
 #endif /* LFL_WINDOWS */
 
-bool MultiProcessResource::Read(const MultiProcessBuffer &mpb, int type, Serializable *out) {
+bool MultiProcessResource::Read(const MultiProcessBuffer &mpb, int type, SerializableProto *out) {
   CHECK(mpb.buf);
   Serializable::ConstStream in(mpb.buf, mpb.len);
-  Serializable::Header hdr;
+  SerializableProto::Header hdr;
   hdr.In(&in);
   CHECK_EQ(type, hdr.id);
   return out->Read(&in) == 0;

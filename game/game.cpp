@@ -58,19 +58,19 @@ void Game::Network::BroadcastWithRetryVisitor::Visit(Connection *c, Game::Connec
   sent++;
 }
 
-int Game::Network::Write(Connection *c, int method, unsigned short seq, Serializable *msg) {
+int Game::Network::Write(Connection *c, int method, unsigned short seq, SerializableProto *msg) {
   string buf;
   msg->ToString(&buf, seq);
   return Write(c, method, buf.data(), buf.size());
 }
 
-int Game::Network::Broadcast(Service *svc, Serializable *msg) {
+int Game::Network::Broadcast(Service *svc, SerializableProto *msg) {
   BroadcastVisitor visitor(this, msg);
   Visitor::VisitClients(svc, &visitor);
   return visitor.sent;
 }
 
-int Game::Network::BroadcastWithRetry(Service *svc, Serializable *msg, Connection *skip) {
+int Game::Network::BroadcastWithRetry(Service *svc, SerializableProto *msg, Connection *skip) {
   BroadcastWithRetryVisitor visitor(this, msg, skip);
   Visitor::VisitClients(svc, &visitor);
   return visitor.sent;
@@ -93,7 +93,7 @@ int Game::GoogleMultiplayerNetwork::Write(Connection *c, int method, const char 
   return 0;
 }
 
-void Game::GoogleMultiplayerNetwork::WriteWithRetry(ReliableNetwork *n, Connection *c, Serializable *req, unsigned short seq) {
+void Game::GoogleMultiplayerNetwork::WriteWithRetry(ReliableNetwork *n, Connection *c, SerializableProto *req, unsigned short seq) {
   if (c->endpoint_name.empty()) return ERROR(c->Name(), " blank send");
   string v;
   req->ToString(&v, seq);
@@ -118,13 +118,13 @@ int Game::InProcessNetwork::Write(Connection *c, int method, const char *data, i
   return 0;
 }
 
-void Game::InProcessNetwork::WriteWithRetry(ReliableNetwork *n, Connection *c, Serializable *req, unsigned short seq) {
+void Game::InProcessNetwork::WriteWithRetry(ReliableNetwork *n, Connection *c, SerializableProto *req, unsigned short seq) {
   string v;
   req->ToString(&v, seq);
   Write(c, 0, v.data(), v.size());
 }
 
-void Game::TCPNetwork::WriteWithRetry(ReliableNetwork *reliable, Connection *c, Serializable *req, unsigned short seq) {
+void Game::TCPNetwork::WriteWithRetry(ReliableNetwork *reliable, Connection *c, SerializableProto *req, unsigned short seq) {
   string v;
   req->ToString(&v, seq);
   Write(c, 0, v.data(), v.size());
@@ -134,11 +134,11 @@ int Game::UDPNetwork::Write(Connection *c, int method, const char *buf, int len)
   return method == UDPClient::Sendto ? c->SendTo(buf, len) : c->WriteFlush(buf, len);
 }
 
-void Game::UDPNetwork::WriteWithRetry(ReliableNetwork *reliable, Connection *c, Serializable *req, unsigned short seq) {
+void Game::UDPNetwork::WriteWithRetry(ReliableNetwork *reliable, Connection *c, SerializableProto *req, unsigned short seq) {
   return reliable->WriteWithRetry(c, req, seq);
 }
 
-void Game::ReliableUDPNetwork::WriteWithRetry(Connection *c, Serializable *req, unsigned short seq) {
+void Game::ReliableUDPNetwork::WriteWithRetry(Connection *c, SerializableProto *req, unsigned short seq) {
   pair<Time, string> &msg = retry[seq];
   req->ToString(&msg.second, seq);
 

@@ -834,14 +834,6 @@ struct Serializable {
     }
   };
 
-  struct Header {
-    static const int size = 4;
-    unsigned short id, seq;
-
-    void Out(Stream *o) const;
-    void In(const Stream *i);
-  };
-
   int Id;
   Serializable(int ID) : Id(ID) {}
   virtual ~Serializable() {}
@@ -852,17 +844,34 @@ struct Serializable {
   virtual void Out(Stream *o) const = 0;
 
   virtual string ToString() const;
-  virtual string ToString(unsigned short seq) const;
   virtual void ToString(string *out) const;
-  virtual void ToString(string *out, unsigned short seq) const;
   virtual void ToString(char *buf, int len) const;
+
+  virtual bool HdrCheck(int content_len) { return content_len >= HeaderSize(); }
+  virtual bool    Check(int content_len) { return content_len >=       Size(); }
+
+  bool HdrCheckStream(const Stream *is) { return HdrCheck(is->Len()); }
+  bool    CheckStream(const Stream *is) { return    Check(is->Len()); }
+  int            Read(const Stream *is) { if (!HdrCheckStream(is)) return -1; return In(is); }
+};
+
+struct SerializableProto : public Serializable {
+  struct Header {
+    static const int size = 4;
+    unsigned short id, seq;
+
+    void Out(Serializable::Stream *o) const;
+    void In(const Serializable::Stream *i);
+  };
+
+  using Serializable::Serializable;
+
+  virtual string ToString(unsigned short seq) const;
+  virtual void ToString(string *out, unsigned short seq) const;
   virtual void ToString(char *buf, int len, unsigned short seq) const;
 
-  bool HdrCheck(int content_len) { return content_len >= Header::size + HeaderSize(); }
-  bool    Check(int content_len) { return content_len >= Header::size +       Size(); }
-  bool HdrCheck(const Stream *is) { return HdrCheck(is->Len()); }
-  bool    Check(const Stream *is) { return    Check(is->Len()); }
-  int      Read(const Stream *is) { if (!HdrCheck(is)) return -1; return In(is); }
+  virtual bool HdrCheck(int content_len) { return content_len >= Header::size + HeaderSize(); }
+  virtual bool    Check(int content_len) { return content_len >= Header::size +       Size(); }
 };
 
 typedef pair<unique_ptr<uint8_t, function<void(uint8_t*)>>, size_t> FlatBufferPiece;

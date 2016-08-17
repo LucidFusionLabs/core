@@ -21,7 +21,7 @@
 namespace LFL {
 
 struct GameProtocol {
-  struct Header : public Serializable::Header {};
+  struct Header : public SerializableProto::Header {};
 
   struct Position {
     static const int size = 12, scale = 1000;
@@ -79,9 +79,9 @@ struct GameProtocol {
     void In(const Serializable::Stream *i)  { i->Ntohs(&fmt); i->Ntohs(&id1); i->Ntohs(&id2); i->Ntohs(&time); }
   };
 
-  struct ChallengeRequest : public Serializable {
+  struct ChallengeRequest : public SerializableProto {
     static const int ID = 1;
-    ChallengeRequest() : Serializable(ID) {}
+    ChallengeRequest() : SerializableProto(ID) {}
 
     int HeaderSize() const { return 0; }
     int Size() const { return HeaderSize(); }
@@ -89,10 +89,10 @@ struct GameProtocol {
     int   In(const Serializable::Stream *i) { return i->Result(); }
   };
 
-  struct ChallengeResponse : public Serializable {
+  struct ChallengeResponse : public SerializableProto {
     static const int ID = 2;
     int32_t token;
-    ChallengeResponse() : Serializable(ID) {}
+    ChallengeResponse() : SerializableProto(ID) {}
 
     int HeaderSize() const { return 4; }
     int Size() const { return HeaderSize(); }
@@ -100,11 +100,11 @@ struct GameProtocol {
     int   In(const Serializable::Stream *i) { i->Ntohl(&token); return i->Result(); }
   };
 
-  struct JoinRequest : public Serializable {
+  struct JoinRequest : public SerializableProto {
     static const int ID = 3;
     int32_t token;
     string PlayerName;
-    JoinRequest() : Serializable(ID) {}
+    JoinRequest() : SerializableProto(ID) {}
 
     int HeaderSize() const { return 8; }
     int Size() const { return HeaderSize() + PlayerName.size(); }
@@ -112,10 +112,10 @@ struct GameProtocol {
     int   In(const Serializable::Stream *i) { i->Ntohl(&token); i->ReadString(&PlayerName); return i->Result(); }
   };
 
-  struct JoinResponse : public Serializable {
+  struct JoinResponse : public SerializableProto {
     static const int ID = 4;
     string rcon;
-    JoinResponse() : Serializable(ID) {}
+    JoinResponse() : SerializableProto(ID) {}
 
     int HeaderSize() const { return 4; }
     int Size() const { return HeaderSize() + rcon.size(); }
@@ -123,12 +123,12 @@ struct GameProtocol {
     int   In(const Serializable::Stream *i) { i->ReadString(&rcon); return i->Result(); }
   };
 
-  struct WorldUpdate : public Serializable {
+  struct WorldUpdate : public SerializableProto {
     static const int ID = 5;
     uint16_t id;
     vector<Entity> entity;
     vector<Collision> collision;
-    WorldUpdate() : Serializable(ID) {}
+    WorldUpdate() : SerializableProto(ID) {}
 
     int HeaderSize() const { return 6; }
     int Size() const { return HeaderSize() + entity.size() * Entity::size + collision.size() * Collision::size; }
@@ -143,7 +143,7 @@ struct GameProtocol {
     int In(const Serializable::Stream *in) {
       unsigned short entities, collisions;
       in->Ntohs(&id); in->Ntohs(&entities); in->Ntohs(&collisions);
-      if (!Check(in)) return -1;
+      if (!CheckStream(in)) return -1;
 
       entity.resize(entities); collision.resize(collisions);
       for (int i=0; i<entities;   i++) entity[i]   .In(in);
@@ -152,12 +152,12 @@ struct GameProtocol {
     }
   };
 
-  struct PlayerUpdate : public Serializable {
+  struct PlayerUpdate : public SerializableProto {
     static const int ID = 6;
     uint16_t id_WorldUpdate, time_since_WorldUpdate;
     uint32_t buttons;
     Orientation ort;
-    PlayerUpdate() : Serializable(ID) {}
+    PlayerUpdate() : SerializableProto(ID) {}
 
     int HeaderSize() const { return 8 + Orientation::size; }
     int Size() const { return HeaderSize(); }
@@ -165,10 +165,10 @@ struct GameProtocol {
     int   In(const Serializable::Stream *i) { i->Ntohs(&id_WorldUpdate); i->Ntohs(&time_since_WorldUpdate); i->Ntohl(&buttons); ort.In(i); return i->Result(); }
   };
 
-  struct RconRequest : public Serializable {
+  struct RconRequest : public SerializableProto {
     static const int ID = 7;
     string Text;
-    RconRequest(const string &t=string()) : Serializable(ID), Text(t) {}
+    RconRequest(const string &t=string()) : SerializableProto(ID), Text(t) {}
 
     int HeaderSize() const { return 4; }
     int Size() const { return HeaderSize() + Text.size(); }
@@ -176,9 +176,9 @@ struct GameProtocol {
     int   In(const Serializable::Stream *i) { i->ReadString(&Text); return i->Result(); }
   };
 
-  struct RconResponse : public Serializable {
+  struct RconResponse : public SerializableProto {
     static const int ID = 8;
-    RconResponse() : Serializable(ID) {}
+    RconResponse() : SerializableProto(ID) {}
 
     int HeaderSize() const { return 0; }
     int Size() const { return HeaderSize(); }

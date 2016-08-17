@@ -177,6 +177,11 @@ template <typename X> typename X::mapped_type FindOrNull(const X &m, const typen
   return (iter != m.end()) ? iter->second : 0;
 }
 
+template <typename X> typename X::mapped_type *FindPtrOrNull(X &m, const typename X::key_type &k) {
+  typename X::iterator iter = m.find(k);
+  return (iter != m.end()) ? &iter->second : nullptr;
+}
+
 template <typename X> typename X::mapped_type FindOrDefault(const X &m, const typename X::key_type &k, const typename X::mapped_type &v) {
   typename X::const_iterator iter = m.find(k);
   return (iter != m.end()) ? iter->second : v;
