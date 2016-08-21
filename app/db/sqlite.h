@@ -59,8 +59,10 @@ namespace LFL {
     SQLite::Database *db;
     string table_name;
     unordered_map<int, string> data;
+    SQLiteIdValueStore() : db(0) {}
+    SQLiteIdValueStore(SQLite::Database *db, const string &tn) { Open(db, tn); }
 
-    void Open(SQLite::Database *, const string &tn);
+    void Open(SQLite::Database *db, const string &tn);
     int Insert(const BlobPiece &val);
     bool Update(int, const BlobPiece &val);
     bool Erase(int);

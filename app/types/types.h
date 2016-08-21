@@ -292,9 +292,9 @@ template <class X>       X *VectorBack(      vector<X> &x) { return x.size() ? &
 template <class X> const X *VectorBack(const vector<X> &x) { return x.size() ? &x.back() : nullptr; }
 template <class X> X *VectorEnsureElement(vector<X> &x, int n) { EnsureSize(x, n+1); return &x[n]; }
 template <class X> X *VectorCheckElement(vector<X> &x, int n) { CHECK_RANGE(n, 0, x.size()); return &x[n]; }
-template <typename X, class Y> void VectorAppend(vector<X> &out, const Y& begin, const Y& end) {
-  out.insert(out.end(), begin, end);
-}
+template <typename X> void VectorAppend(vector<X> &out, const vector<X> &v) { out.insert(out.end(), v.begin(), v.end()); }
+template <typename X, class Y> void VectorAppend(vector<X> &out, const Y& begin, const Y& end) { out.insert(out.end(), begin, end); }
+template<typename T, typename... A> void VectorCat(vector<T> &v1, const A&... vr) { int unpack[] { (VectorAppend(v1, vr), 0)... }; (void(unpack)); }
 
 template <class X> void VectorErase(X* v, int ind) {
   CHECK_RANGE(ind, 0, v->size());

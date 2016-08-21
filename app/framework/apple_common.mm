@@ -3,6 +3,16 @@
 #include "core/app/app.h"
 #include "core/app/framework/apple_common.h"
 
+@implementation ObjcCallback { LFL::Callback cb; }
+  - (id)initWithCB:(LFL::Callback)v { self = [super init]; cb = move(v); return self; }
+  - (void)run { if (cb) cb(); }
+@end
+
+@implementation ObjcStringCallback { LFL::StringCB cb; }
+  - (id)initWithStringCB:(LFL::StringCB)v { self = [super init]; cb = move(v); return self; }
+  - (void)run:(const LFL::string&)a { if (cb) cb(a); }
+@end
+
 namespace LFL {
 void NSLogString(const string &text) { NSLog(@"%@", MakeNSString(text)); }
 

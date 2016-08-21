@@ -20,8 +20,8 @@
 #include <commdlg.h>
 
 namespace LFL {
-SystemMenuWidget::~SystemMenuWidget() {}
-SystemMenuWidget::SystemMenuWidget(const string &title_text, const vector<MenuItem>&items) {
+SystemMenuView::~SystemMenuView() {}
+SystemMenuView::SystemMenuView(const string &title_text, const vector<MenuItem>&items) {
   WinWindow *win = GetTyped<WinWindow*>(screen->impl);
   if (!win->menu) { win->menu = CreateMenu(); win->context_menu = CreatePopupMenu(); }
   HMENU hAddMenu = CreatePopupMenu();
@@ -35,7 +35,7 @@ SystemMenuWidget::SystemMenuWidget(const string &title_text, const vector<MenuIt
   if (win->menubar) SetMenu(GetTyped<HWND>(screen->id), win->menu);
 }
 
-unique_ptr<SystemMenuWidget> SystemMenuWidget::CreateEditMenu(const vector<MenuItem>&items) { return nullptr; }
+unique_ptr<SystemMenuView> SystemMenuView::CreateEditMenu(const vector<MenuItem>&items) { return nullptr; }
 
 void Application::ShowSystemFontChooser(const FontDesc &cur_font, const string &choose_cmd) {
   LOGFONT lf;

@@ -17,8 +17,8 @@
  */
 
 namespace LFL {
-void Application::ShowSystemFontChooser(const FontDesc &cur_font, const string &choose_cmd) {}
-void Application::ShowSystemFileChooser(bool files, bool dirs, bool multi, const string &choose_cmd) {}
+void Application::ShowSystemFontChooser(const FontDesc &cur_font, const StringVecCB&) {}
+void Application::ShowSystemFileChooser(bool files, bool dirs, bool multi, const StringVecCB&) {}
 void Application::ShowSystemContextMenu(const vector<MenuItem>&items) {}
 void Application::OpenSystemBrowser(const string &url_text) {}
 void Application::ShowAds() {}

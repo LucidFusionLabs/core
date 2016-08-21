@@ -186,9 +186,9 @@ struct Crypto {
                           string *pubkeyout, string *privkeyout);
   static string ParsePEMHeader(const char *key,
                                const char **start, const char **end, const char **headers_end);
-  static bool ParsePEM(char *key, RSAKey *rsa_out, DSAKey *dsa_out, ECPair *ec_out,
+  static bool ParsePEM(const char *key, RSAKey *rsa_out, DSAKey *dsa_out, ECPair *ec_out,
                        function<string(string)> passphrase_cb = function<string(string)>());
-  static bool ParsePEM(char *key, RSAKey *rsa_out, DSAKey *dsa_out, ECPair *ec_out, Ed25519Pair *pair_out,
+  static bool ParsePEM(const char *key, RSAKey *rsa_out, DSAKey *dsa_out, ECPair *ec_out, Ed25519Pair *pair_out,
                        function<string(string)> passphrase_cb = function<string(string)>());
   static string BCryptPBKDF(const StringPiece &pw, const StringPiece &salt, int size, int rounds);
   static string GetLastErrorText();

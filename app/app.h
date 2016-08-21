@@ -224,10 +224,15 @@ template <class X> struct V2;
 typedef V2<float> v2;
 typedef V2<int> point;
 typedef lock_guard<mutex> ScopedMutex;
-typedef function<void()> Callback;
-typedef function<void(const string&)> StringCB;
 typedef vector<string> StringVec;
 typedef vector<pair<string, string>> StringPairVec;
+typedef function<void()> Callback;
+typedef function<void(int)> IntCB;
+typedef function<void(int, int)> IntIntCB;
+typedef function<void(const string&)> StringCB;
+typedef function<void(int, const string&)> IntStringCB;
+typedef function<void(const string&, const string&)> StringStringCB;
+typedef function<void(const StringVec&)> StringVecCB; 
 void Log(int level, const char *file, int line, const string &m);
 }; // namespace LFL
 
@@ -290,33 +295,6 @@ namespace LFL {
 #include "core/app/types/types.h"
 
 namespace LFL {
-struct MenuItem  { string shortcut, name, cmd; };
-struct PanelItem { string type; Box box; string cmd; };
-struct TableItem {
-  typedef unordered_map<string, vector<Triple<int, int, string>>> Depends;
-  string key, type, val, right_text;
-  int tag, left_icon, right_icon;
-  string right_icon_cmd;
-  Depends depends;
-  TableItem(string K=string(), string T=string(), string V=string(), string RT=string(), int TG=0, int LI=0, int RI=0, string RC=string(), Depends D=Depends())
-    : key(move(K)), type(move(T)), val(move(V)), right_text(move(RT)), tag(TG), left_icon(LI), right_icon(RI), right_icon_cmd(move(RC)), depends(move(D)) {}
-  void CheckAssign(const string &k, string v) { CHECK_EQ(k, key); val=move(v); }
-};
-struct CompiledTableItem {
-  enum { Normal=0, Dropdown=1 };
-  TableItem item;
-  int type, ref;
-  bool loaded=0, gui_loaded=0, control=0;
-  CompiledTableItem(const TableItem &i=TableItem(), int t=-1, int r=-1) : type(t), ref(r), item(i) {}
-};
-struct CompiledTable {
-  string header;
-  vector<CompiledTableItem> item;
-};
-typedef vector<MenuItem>  MenuItemVec;
-typedef vector<PanelItem> PanelItemVec;
-typedef vector<TableItem> TableItemVec;
-
 struct Flag {
   const char *name, *desc, *file;
   int line;
@@ -329,13 +307,7 @@ struct Flag {
   virtual bool IsBool() const = 0;
   virtual void Update(const char *text) = 0;
 };
-}; // namespace LFL
 
-#ifdef LFL_ANDROID
-#include "core/app/bindings/jni.h"
-#endif
-
-namespace LFL {
 struct FlagMap {
   typedef map<string, Flag*> AllFlags;
   const char *optarg=0;
@@ -425,8 +397,43 @@ struct PerformanceTimers {
   void AccumulateTo(int timer_id) { timers[cur_timer_id].time += cur_timer.GetTime(true); cur_timer_id = timer_id; }
   string DebugString() const { string v; for (auto &t : timers) StrAppend(&v, t.name, " ", t.time.count() / 1000.0, "\n"); return v; }
 };
+
+struct MenuItem { string shortcut, name; Callback cb; };
+struct AlertItem { string first, second; StringCB cb; };
+struct PanelItem { string type; Box box; StringCB cb; };
+struct TableItem {
+  typedef unordered_map<string, vector<Triple<int, int, string>>> Depends;
+  string key, type, val, right_text;
+  int tag, left_icon, right_icon;
+  Callback cb, right_icon_cb;
+  Depends depends;
+  TableItem(string K=string(), string T=string(), string V=string(), string RT=string(), int TG=0, int LI=0, int RI=0, Callback CB=Callback(), Callback RC=Callback(), Depends D=Depends())
+    : key(move(K)), type(move(T)), val(move(V)), right_text(move(RT)), tag(TG), left_icon(LI), right_icon(RI), cb(CB), right_icon_cb(move(RC)), depends(move(D)) {}
+  void CheckAssign(const string &k, Callback c) { CHECK_EQ(k, key); cb=move(c); }
+};
+
+struct CompiledTableItem {
+  enum { Normal=0, Dropdown=1 };
+  TableItem item;
+  int type, ref;
+  bool loaded=0, gui_loaded=0, control=0;
+  CompiledTableItem(const TableItem &i=TableItem(), int t=-1, int r=-1) : type(t), ref(r), item(i) {}
+};
+
+struct CompiledTable {
+  string header;
+  vector<CompiledTableItem> item;
+};
+
+typedef vector<MenuItem>  MenuItemVec;
+typedef vector<AlertItem> AlertItemVec;
+typedef vector<PanelItem> PanelItemVec;
+typedef vector<TableItem> TableItemVec;
 }; // namespace LFL
 
+#ifdef LFL_ANDROID
+#include "core/app/bindings/jni.h"
+#endif
 #include "core/app/audio.h"
 #include "core/app/video.h"
 #include "core/app/font.h"
@@ -654,9 +661,9 @@ struct Application : public ::LFApp {
   void SetClipboardText(const string &s);
   void OpenSystemBrowser(const string &url);
   string GetSystemDeviceName();
-  void ShowSystemContextMenu(const vector<MenuItem> &items);
-  void ShowSystemFontChooser(const FontDesc &cur_font, const string &choose_cmd);
-  void ShowSystemFileChooser(bool files, bool dirs, bool multi, const string &choose_cmd);
+  void ShowSystemContextMenu(const MenuItemVec &items);
+  void ShowSystemFontChooser(const FontDesc &cur_font, const StringVecCB&);
+  void ShowSystemFileChooser(bool files, bool dirs, bool multi, const StringVecCB&);
   int LoadSystemImage(const string &fn);
   bool OpenSystemAppPreferences();
 
@@ -710,49 +717,47 @@ struct Application : public ::LFApp {
   static void WriteDebugLine(const char *message, const char *file, int line);
 };
 
-struct SystemAlertWidget {
+struct SystemAlertView {
   VoidPtr impl;
-  virtual ~SystemAlertWidget();
-  SystemAlertWidget(const StringPairVec &items);
+  virtual ~SystemAlertView();
+  SystemAlertView(AlertItemVec items);
   void Show(const string &arg);
   string RunModal(const string &arg);
 };
 
-struct SystemPanelWidget {
+struct SystemPanelView {
   VoidPtr impl;
-  virtual ~SystemPanelWidget();
-  SystemPanelWidget(const Box&, const string &title, const vector<PanelItem>&);
+  virtual ~SystemPanelView();
+  SystemPanelView(const Box&, const string &title, PanelItemVec);
   void Show();
   void SetTitle(const string &title);
 };
 
-struct SystemToolbarWidget {
+struct SystemToolbarView {
   VoidPtr impl;
-  /// item values with prefix "toggle" stay depressed
-  virtual ~SystemToolbarWidget();
-  SystemToolbarWidget(const StringPairVec &items);
+  virtual ~SystemToolbarView();
+  SystemToolbarView(MenuItemVec items);
   void Show(bool show_or_hide);
   void ToggleButton(const string &n);
 };
 
-struct SystemMenuWidget {
+struct SystemMenuView {
   VoidPtr impl;
-  virtual ~SystemMenuWidget();
-  SystemMenuWidget(VoidPtr i) : impl(i) {}
-  SystemMenuWidget(const string &title, const vector<MenuItem> &items);
-  static unique_ptr<SystemMenuWidget> CreateEditMenu(const vector<MenuItem>&items);
+  virtual ~SystemMenuView();
+  SystemMenuView(VoidPtr i) : impl(i) {}
+  SystemMenuView(const string &title, MenuItemVec items);
+  static unique_ptr<SystemMenuView> CreateEditMenu(MenuItemVec items);
   void Show();
 };
 
-struct SystemTableWidget {
-  typedef function<void(SystemTableWidget*)> CB;
+struct SystemTableView {
   VoidPtr impl;
-  CB show_cb; 
-  virtual ~SystemTableWidget();
-  SystemTableWidget(const string &title, const string &style, const vector<TableItem> &items, int second_col=0);
+  Callback show_cb; 
+  virtual ~SystemTableView();
+  SystemTableView(const string &title, const string &style, TableItemVec items, int second_col=0);
 
   void AddNavigationButton(const TableItem &item, int align);
-  void AddToolbar(SystemToolbarWidget*);
+  void AddToolbar(SystemToolbarView*);
   void Show(bool show_or_hide);
 
   string GetKey(int section, int row);
@@ -762,24 +767,24 @@ struct SystemTableWidget {
   void SelectRow(int section, int row);
   StringPairVec GetSectionText(int section=0);
   bool GetSectionText(int section_ind, vector<string*> out, bool check=1) { return GetPairValues(GetSectionText(section_ind), move(out), check); }
-  void SetEditableSection(const string &cmd, int section=0);
+  void SetEditableSection(IntIntCB cb=IntIntCB(), int section=0);
 
   void BeginUpdates();
   void EndUpdates();
   void SetDropdown(int section, int row, int val);
   void SetSectionValues(const StringVec&, int section=0);
-  void ReplaceSection(const vector<TableItem> &item, int section=0);
+  void ReplaceSection(TableItemVec item, int section=0);
 };
 
-struct SystemNavigationWidget {
+struct SystemNavigationView {
   VoidPtr impl;
-  SystemTableWidget *root;
-  virtual ~SystemNavigationWidget();
-  SystemNavigationWidget(SystemTableWidget *root);
+  SystemTableView *root;
+  virtual ~SystemNavigationView();
+  SystemNavigationView(SystemTableView *root);
 
-  SystemTableWidget *Back();
+  SystemTableView *Back();
   void Show(bool show_or_hide);
-  void PushTable(SystemTableWidget*);
+  void PushTable(SystemTableView*);
   void PopTable(int num=1);
 };
 

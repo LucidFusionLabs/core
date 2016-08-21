@@ -26,13 +26,13 @@
 static std::vector<UIImage*> app_images;
 
 @interface IOSButton : UIButton 
-  @property (nonatomic) std::string cmd;
+  @property (nonatomic, assign) LFL::Callback cb;
 @end
 @implementation IOSButton
 @end
 
 @interface IOSBarButtonItem : UIBarButtonItem
-  @property (nonatomic) std::string cmd;
+  @property (nonatomic, assign) LFL::Callback cb;
 @end
 @implementation IOSBarButtonItem
 @end
@@ -54,16 +54,17 @@ static std::vector<UIImage*> app_images;
 @interface IOSAlert : NSObject<UIAlertViewDelegate>
   @property (nonatomic, retain) UIAlertView *alert;
   @property (nonatomic)         bool         add_text, done;
-  @property (nonatomic)         std::string  style, cancel_cmd, confirm_cmd;
+  @property (nonatomic)         std::string  style;
+  @property (nonatomic, assign) LFL::StringCB cancel_cb, confirm_cb;
 @end
 
 @implementation IOSAlert
-  - (id)init:(const LFL::StringPairVec&) kv {
+  - (id)init:(const LFL::AlertItemVec&) kv {
     CHECK_EQ(4, kv.size());
     CHECK_EQ("style", kv[0].first);
     _style       = kv[0].second;
-    _cancel_cmd  = kv[2].second;
-    _confirm_cmd = kv[3].second;
+    _cancel_cb   = kv[2].cb;
+    _confirm_cb  = kv[3].cb;
     _alert       = [[UIAlertView alloc]
       initWithTitle:     [NSString stringWithUTF8String: kv[1].first .c_str()]
       message:           [NSString stringWithUTF8String: kv[1].second.c_str()]
@@ -76,13 +77,8 @@ static std::vector<UIImage*> app_images;
   }
 
   - (void)alertView:(UIAlertView *)alertView clickedButtonAtIndex:(NSInteger)buttonIndex {
-    if (_add_text) {
-      ShellRun(buttonIndex ?
-               LFL::StrCat(_confirm_cmd, " ", [[alertView textFieldAtIndex:0].text UTF8String]).c_str() :
-               _cancel_cmd.c_str());
-    } else {
-      ShellRun(buttonIndex ? _confirm_cmd.c_str() : _cancel_cmd.c_str());
-    }
+    if (buttonIndex) _confirm_cb(_add_text ? [[alertView textFieldAtIndex:0].text UTF8String] : "");
+    else             _cancel_cb("");
     _done = true;
   }
 @end
@@ -95,7 +91,7 @@ static std::vector<UIImage*> app_images;
 @end
 
 @implementation IOSMenu
-  - (id)init:(const std::string&)title_text items:(const std::vector<LFL::MenuItem>&)item {
+  - (id)init:(const std::string&)title_text items:(LFL::MenuItemVec)item {
     menu = item;
     NSString *title = [NSString stringWithUTF8String: title_text.c_str()];
     _actions = [[UIActionSheet alloc] initWithTitle:title delegate:self
@@ -106,7 +102,7 @@ static std::vector<UIImage*> app_images;
 
   - (void)actionSheet:(UIActionSheet *)actions clickedButtonAtIndex:(NSInteger)buttonIndex {
     if (buttonIndex < 1 || buttonIndex > menu.size()) { ERRORf("invalid buttonIndex %d size=%d", buttonIndex, menu.size()); return; }
-    ShellRun(menu[buttonIndex-1].cmd.c_str());
+    menu[buttonIndex-1].cb();
   }
 @end
 
@@ -115,21 +111,21 @@ static std::vector<UIImage*> app_images;
     UIToolbar *toolbar;
     int toolbar_height;
     std::unordered_map<std::string, void*> toolbar_titles;
-    std::unordered_map<void*, std::string> toolbar_cmds;
+    std::unordered_map<void*, LFL::Callback> toolbar_cb;
   }
 
-  - (id)init: (const LFL::StringPairVec&) kv {
+  - (id)init: (const LFL::MenuItemVec&) kv {
     NSMutableArray *items = [[NSMutableArray alloc] init];
     UIBarButtonItem *spacer = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil];
     for (int i=0, l=kv.size(); i<l; i++) {
       if (i) [items addObject: spacer];
-      NSString *K = [NSString stringWithUTF8String: kv[i].first.c_str()];
+      NSString *K = [NSString stringWithUTF8String: kv[i].shortcut.c_str()];
       UIBarButtonItem *item =
         [[UIBarButtonItem alloc] initWithTitle:[NSString stringWithFormat:@"%@\U0000FE0E", K]
         style:UIBarButtonItemStylePlain target:self action:@selector(onClick:)];
       [items addObject:item];
-      toolbar_titles[kv[i].first] = item;
-      toolbar_cmds[item] = kv[i].second;
+      toolbar_titles[kv[i].shortcut] = item;
+      toolbar_cb[item] = kv[i].cb;
       [item release];
     }
     toolbar_height = 44;
@@ -159,10 +155,10 @@ static std::vector<UIImage*> app_images;
   }
 
   - (void)onClick:(id)sender {
-    auto it = toolbar_cmds.find(sender);
-    if (it != toolbar_cmds.end()) {
-      ShellRun(it->second.c_str());
-      if (it->second.substr(0,6) == "toggle") [self toggleButton:sender];
+    auto it = toolbar_cb.find(sender);
+    if (it != toolbar_cb.end()) {
+      it->second();
+      // if (it->second.substr(0,6) == "toggle") [self toggleButton:sender];
     }
     [[LFUIApplication sharedAppDelegate].controller resignFirstResponder];
   }
@@ -195,8 +191,9 @@ static std::vector<UIImage*> app_images;
   @property (nonatomic, retain) UILabel *header_label;
   @property (nonatomic, retain) UINavigationController *modal_nav;
   @property (nonatomic, assign) IOSToolbar *toolbar;
-  @property (nonatomic, assign) LFL::SystemTableWidget *lfl_self;
-  @property (nonatomic)         std::string style, delete_row_cmd;
+  @property (nonatomic, assign) LFL::SystemTableView *lfl_self;
+  @property (nonatomic, assign) LFL::IntIntCB delete_row_cb;
+  @property (nonatomic)         std::string style;
   @property (nonatomic)         int editable_section, selected_section, selected_row, second_col;
   @property (copy)              void (^completed)();
 @end
@@ -208,7 +205,7 @@ static std::vector<UIImage*> app_images;
     std::vector<IOSTable*> dropdowns;
   }
   
-  - (void)load:(LFL::SystemTableWidget*)lself withTitle:(const std::string&)title withStyle:(const std::string&)sty items:(const std::vector<LFL::TableItem>&)item {
+  - (void)load:(LFL::SystemTableView*)lself withTitle:(const std::string&)title withStyle:(const std::string&)sty items:(const std::vector<LFL::TableItem>&)item {
     _lfl_self = lself;
     _style = sty;
     data.emplace_back();
@@ -316,7 +313,7 @@ static std::vector<UIImage*> app_images;
       self.navigationItem.rightBarButtonItem = [self editButtonItem];
     } else {
       IOSBarButtonItem *button = [[IOSBarButtonItem alloc] init];
-      button.cmd = item.val;
+      button.cb = item.cb;
       button.title = LFL::MakeNSString(item.key);
       [button setTarget:self];
       [button setAction:@selector(rightNavButtonClicked:)];
@@ -481,7 +478,7 @@ static std::vector<UIImage*> app_images;
         IOSButton *button = [IOSButton buttonWithType:UIButtonTypeCustom];
         button.frame = CGRectMake(0, 0, 40, 40);
         [button setImage:image forState:UIControlStateNormal];
-        button.cmd = compiled_item.item.right_icon_cmd;
+        button.cb = compiled_item.item.right_icon_cb;
         [button addTarget:self action:@selector(rightIconClicked:) forControlEvents:UIControlEventTouchUpInside];
         if (cell.accessoryView) [cell.accessoryView addSubview: button];
         else cell.accessoryView = button;
@@ -501,7 +498,7 @@ static std::vector<UIImage*> app_images;
   - (void)tableView:(UITableView *)tableView commitEditingStyle:(UITableViewCellEditingStyle)editingStyle forRowAtIndexPath:(NSIndexPath *)path {
     [self checkExists:path.section row:path.row];
     if (editingStyle == UITableViewCellEditingStyleDelete) {
-      ShellRun(LFL::StrCat(_delete_row_cmd, " ", path.row, " ", data[path.section].item[path.row].item.tag).c_str());
+      _delete_row_cb(path.row, data[path.section].item[path.row].item.tag);
       data[path.section].item.erase(data[path.section].item.begin() + path.row);
       [tableView beginUpdates];
       [tableView deleteRowsAtIndexPaths:@[path] withRowAnimation:UITableViewRowAnimationNone];
@@ -524,7 +521,7 @@ static std::vector<UIImage*> app_images;
     _selected_section = path.section;
     const auto &compiled_item = data[path.section].item[path.row];
     const std::string &t = compiled_item.item.type;
-    if (t == "command" || t == "button") ShellRun(compiled_item.item.val.c_str());
+    if (t == "command" || t == "button") compiled_item.item.cb();
     if (_modal_nav) {
       [self show: false];
       if (_completed) _completed();
@@ -558,11 +555,11 @@ static std::vector<UIImage*> app_images;
   }
 
   - (void)rightIconClicked:(IOSButton*)sender {
-    if (!sender.cmd.empty()) ShellRun(sender.cmd.c_str());
+    if (sender.cb) sender.cb();
   }
 
   - (IBAction)rightNavButtonClicked:(IOSBarButtonItem*)sender {
-    if (!sender.cmd.empty()) ShellRun(sender.cmd.c_str());
+    if (sender.cb) sender.cb();
   }
 
   - (IBAction) switchFlipped: (UISwitch*) onoff {
@@ -668,7 +665,7 @@ static std::vector<UIImage*> app_images;
 
 @implementation IOSFontPicker
   {
-    std::string font_change_cmd;
+    LFL::StringVecCB font_change_cb;
   }
 
   - (id)init {
@@ -684,8 +681,8 @@ static std::vector<UIImage*> app_images;
     return self;
   }
 
-  - (void)selectFont: (const std::string &)name size:(int)s cmd:(const std::string &)v {
-    font_change_cmd = v;
+  - (void)selectFont: (const std::string &)name size:(int)s cb:(LFL::StringVecCB)v {
+    font_change_cb = move(v);
     if (picked_row.size() != columns.size()) picked_row.resize(columns.size());
     for (auto b = columns[0].begin(), e = columns[0].end(), i = b; i != e; ++i)
       if (*i == name) picked_row[0] = i - b;
@@ -695,8 +692,7 @@ static std::vector<UIImage*> app_images;
   }
 
   - (bool)didSelect {
-    ShellRun(LFL::StrCat(font_change_cmd, " ",
-                         columns[0][picked_row[0]], " ", columns[1][picked_row[1]]).c_str());
+    font_change_cb(LFL::StringVec{columns[0][picked_row[0]], columns[1][picked_row[1]]});
     return true;
   }
 @end
@@ -736,16 +732,16 @@ static std::vector<UIImage*> app_images;
 @end
 
 namespace LFL {
-SystemAlertWidget::~SystemAlertWidget() { if (auto alert = FromVoid<IOSAlert*>(impl)) [alert release]; }
-SystemAlertWidget::SystemAlertWidget(const StringPairVec &items) : impl([[IOSAlert alloc] init: items]) {}
-UIAlertView *GetUIAlertView(SystemToolbarWidget *w) { return FromVoid<IOSAlert*>(w->impl).alert; }
-void SystemAlertWidget::Show(const string &arg) {
+SystemAlertView::~SystemAlertView() { if (auto alert = FromVoid<IOSAlert*>(impl)) [alert release]; }
+SystemAlertView::SystemAlertView(AlertItemVec items) : impl([[IOSAlert alloc] init: move(items)]) {}
+UIAlertView *GetUIAlertView(SystemToolbarView *w) { return FromVoid<IOSAlert*>(w->impl).alert; }
+void SystemAlertView::Show(const string &arg) {
   auto alert = FromVoid<IOSAlert*>(impl);
   if (alert.add_text) [alert.alert textFieldAtIndex:0].text = MakeNSString(arg);
   [alert.alert show];
 }
 
-string SystemAlertWidget::RunModal(const string &arg) {
+string SystemAlertView::RunModal(const string &arg) {
   auto alert = FromVoid<IOSAlert*>(impl);
   if (alert.add_text) [alert.alert textFieldAtIndex:0].text = MakeNSString(arg);
   alert.done = false;
@@ -757,59 +753,59 @@ string SystemAlertWidget::RunModal(const string &arg) {
   return alert.add_text ? GetNSString([alert.alert textFieldAtIndex:0].text) : "";
 }
 
-SystemMenuWidget::~SystemMenuWidget() { if (auto menu = FromVoid<IOSMenu*>(impl)) [menu release]; }
-SystemMenuWidget::SystemMenuWidget(const string &t, const vector<MenuItem> &i) : impl([[IOSMenu alloc] init:t items:i]) {}
-void SystemMenuWidget::Show() { [FromVoid<IOSMenu*>(impl).actions showInView:[UIApplication sharedApplication].keyWindow]; }
-unique_ptr<SystemMenuWidget> SystemMenuWidget::CreateEditMenu(const vector<MenuItem> &items) { return nullptr; }
+SystemMenuView::~SystemMenuView() { if (auto menu = FromVoid<IOSMenu*>(impl)) [menu release]; }
+SystemMenuView::SystemMenuView(const string &t, MenuItemVec i) : impl([[IOSMenu alloc] init:t items:move(i)]) {}
+void SystemMenuView::Show() { [FromVoid<IOSMenu*>(impl).actions showInView:[UIApplication sharedApplication].keyWindow]; }
+unique_ptr<SystemMenuView> SystemMenuView::CreateEditMenu(vector<MenuItem> items) { return nullptr; }
 
-SystemToolbarWidget::~SystemToolbarWidget() { if (auto toolbar = FromVoid<IOSToolbar*>(impl)) [toolbar release]; }
-SystemToolbarWidget::SystemToolbarWidget(const StringPairVec &items) : impl([[IOSToolbar alloc] init: items]) {}
-void SystemToolbarWidget::Show(bool show_or_hide) { [FromVoid<IOSToolbar*>(impl) show:show_or_hide]; }
-void SystemToolbarWidget::ToggleButton(const string &n) { [FromVoid<IOSToolbar*>(impl) toggleButtonNamed: n]; }
+SystemToolbarView::~SystemToolbarView() { if (auto toolbar = FromVoid<IOSToolbar*>(impl)) [toolbar release]; }
+SystemToolbarView::SystemToolbarView(MenuItemVec items) : impl([[IOSToolbar alloc] init: move(items)]) {}
+void SystemToolbarView::Show(bool show_or_hide) { [FromVoid<IOSToolbar*>(impl) show:show_or_hide]; }
+void SystemToolbarView::ToggleButton(const string &n) { [FromVoid<IOSToolbar*>(impl) toggleButtonNamed: n]; }
 
-SystemTableWidget::~SystemTableWidget() { if (auto table = FromVoid<IOSTable*>(impl)) [table release]; }
-SystemTableWidget::SystemTableWidget(const string &title, const string &style, const vector<TableItem>&items, int second_col) {
+SystemTableView::~SystemTableView() { if (auto table = FromVoid<IOSTable*>(impl)) [table release]; }
+SystemTableView::SystemTableView(const string &title, const string &style, TableItemVec items, int second_col) {
   auto table = [[IOSTable alloc] initWithStyle: UITableViewStyleGrouped];
   if (second_col) table.second_col = second_col;
-  [table load:this withTitle:title withStyle:style items:items];
+  [table load:this withTitle:title withStyle:style items:move(items)];
   impl = table;
 }
 
-void SystemTableWidget::AddNavigationButton(const TableItem &item, int align) { return [FromVoid<IOSTable*>(impl) loadNavigationButton:item withAlign:align]; }
-void SystemTableWidget::AddToolbar(SystemToolbarWidget *t) { [FromVoid<IOSTable*>(impl) setToolbar: FromVoid<IOSToolbar*>(t->impl)]; }
-void SystemTableWidget::Show(bool show_or_hide) {
-  if (show_or_hide && show_cb) show_cb(this);
+void SystemTableView::AddNavigationButton(const TableItem &item, int align) { return [FromVoid<IOSTable*>(impl) loadNavigationButton:item withAlign:align]; }
+void SystemTableView::AddToolbar(SystemToolbarView *t) { [FromVoid<IOSTable*>(impl) setToolbar: FromVoid<IOSToolbar*>(t->impl)]; }
+void SystemTableView::Show(bool show_or_hide) {
+  if (show_or_hide && show_cb) show_cb();
   [FromVoid<IOSTable*>(impl) show:show_or_hide];
 }
 
-string SystemTableWidget::GetKey(int section, int row) { return [FromVoid<IOSTable*>(impl) getKey:section row:row]; }
-int SystemTableWidget::GetTag(int section, int row) { return [FromVoid<IOSTable*>(impl) getTag:section row:row]; }
-void SystemTableWidget::SetTag(int section, int row, int val) { [FromVoid<IOSTable*>(impl) setTag:section row:row val:val]; }
-void SystemTableWidget::SetValue(int section, int row, const string &val) { [FromVoid<IOSTable*>(impl) setValue:section row:row val:val]; }
-StringPairVec SystemTableWidget::GetSectionText(int section) { return [FromVoid<IOSTable*>(impl) dumpDataForSection:section]; }
-void SystemTableWidget::SetEditableSection(const string &cmd, int section) {
-  FromVoid<IOSTable*>(impl).delete_row_cmd = cmd;
+string SystemTableView::GetKey(int section, int row) { return [FromVoid<IOSTable*>(impl) getKey:section row:row]; }
+int SystemTableView::GetTag(int section, int row) { return [FromVoid<IOSTable*>(impl) getTag:section row:row]; }
+void SystemTableView::SetTag(int section, int row, int val) { [FromVoid<IOSTable*>(impl) setTag:section row:row val:val]; }
+void SystemTableView::SetValue(int section, int row, const string &val) { [FromVoid<IOSTable*>(impl) setValue:section row:row val:val]; }
+StringPairVec SystemTableView::GetSectionText(int section) { return [FromVoid<IOSTable*>(impl) dumpDataForSection:section]; }
+void SystemTableView::SetEditableSection(LFL::IntIntCB cb, int section) {
+  FromVoid<IOSTable*>(impl).delete_row_cb = move(cb);
   FromVoid<IOSTable*>(impl).editable_section = section;
 }
 
-void SystemTableWidget::SelectRow(int section, int row) {
+void SystemTableView::SelectRow(int section, int row) {
   FromVoid<IOSTable*>(impl).selected_section = section;
   FromVoid<IOSTable*>(impl).selected_row = row;
 } 
 
-void SystemTableWidget::BeginUpdates() { [FromVoid<IOSTable*>(impl).tableView beginUpdates]; }
-void SystemTableWidget::EndUpdates() { [FromVoid<IOSTable*>(impl).tableView endUpdates]; }
-void SystemTableWidget::SetDropdown(int section, int row, int val) { [FromVoid<IOSTable*>(impl) setDropdown:section row:row index:val]; }
-void SystemTableWidget::SetSectionValues(const StringVec &item, int section) { [FromVoid<IOSTable*>(impl) setSectionValues:section items:item]; }
-void SystemTableWidget::ReplaceSection(const vector<TableItem> &item, int section) { [FromVoid<IOSTable*>(impl) replaceSection:section items:item]; }
+void SystemTableView::BeginUpdates() { [FromVoid<IOSTable*>(impl).tableView beginUpdates]; }
+void SystemTableView::EndUpdates() { [FromVoid<IOSTable*>(impl).tableView endUpdates]; }
+void SystemTableView::SetDropdown(int section, int row, int val) { [FromVoid<IOSTable*>(impl) setDropdown:section row:row index:val]; }
+void SystemTableView::SetSectionValues(const StringVec &item, int section) { [FromVoid<IOSTable*>(impl) setSectionValues:section items:item]; }
+void SystemTableView::ReplaceSection(TableItemVec item, int section) { [FromVoid<IOSTable*>(impl) replaceSection:section items:move(item)]; }
 
-SystemNavigationWidget::~SystemNavigationWidget() { if (auto nav = FromVoid<IOSNavigation*>(impl)) [nav release]; }
-SystemNavigationWidget::SystemNavigationWidget(SystemTableWidget *r) : impl([[IOSNavigation alloc] init: FromVoid<IOSTable*>(r->impl)]), root(r) {}
-void SystemNavigationWidget::Show(bool show_or_hide) {
+SystemNavigationView::~SystemNavigationView() { if (auto nav = FromVoid<IOSNavigation*>(impl)) [nav release]; }
+SystemNavigationView::SystemNavigationView(SystemTableView *r) : impl([[IOSNavigation alloc] init: FromVoid<IOSTable*>(r->impl)]), root(r) {}
+void SystemNavigationView::Show(bool show_or_hide) {
   auto nav = FromVoid<IOSNavigation*>(impl);
   LFUIApplication *uiapp = [LFUIApplication sharedAppDelegate];
   if (show_or_hide) {
-    if (root->show_cb) root->show_cb(root);
+    if (root->show_cb) root->show_cb();
     uiapp.top_controller = nav.controller;
     [uiapp.controller presentViewController: nav.controller animated:YES completion:nil];
   } else {
@@ -818,7 +814,7 @@ void SystemNavigationWidget::Show(bool show_or_hide) {
   }
 }
 
-SystemTableWidget *SystemNavigationWidget::Back() {
+SystemTableView *SystemNavigationView::Back() {
   for (UIViewController *c in
        [FromVoid<IOSNavigation*>(impl).controller.viewControllers reverseObjectEnumerator]) {
     if ([c isKindOfClass:[IOSTable class]])
@@ -827,19 +823,19 @@ SystemTableWidget *SystemNavigationWidget::Back() {
   return nullptr;
 }
 
-void SystemNavigationWidget::PushTable(SystemTableWidget *t) {
-  if (t->show_cb) t->show_cb(t);
+void SystemNavigationView::PushTable(SystemTableView *t) {
+  if (t->show_cb) t->show_cb();
   [FromVoid<IOSNavigation*>(impl).controller pushViewController: FromVoid<IOSTable*>(t->impl) animated: YES];
 }
 
-void SystemNavigationWidget::PopTable(int n) {
+void SystemNavigationView::PopTable(int n) {
   for (int i = 0; i != n; ++i)
     [FromVoid<IOSNavigation*>(impl).controller popViewControllerAnimated: (i == n - 1)];
 }
 
-void Application::ShowSystemFontChooser(const FontDesc &cur_font, const string &choose_cmd) {
+void Application::ShowSystemFontChooser(const FontDesc &cur_font, const StringVecCB &cb) {
   static IOSFontPicker *font_chooser = [[IOSFontPicker alloc] init];
-  [font_chooser selectFont:cur_font.name size:cur_font.size cmd:choose_cmd];
+  [font_chooser selectFont:cur_font.name size:cur_font.size cb:cb];
   [[LFUIApplication sharedAppDelegate].view addSubview: font_chooser.picker];
 }
 

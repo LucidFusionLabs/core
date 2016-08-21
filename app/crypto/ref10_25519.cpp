@@ -154,7 +154,7 @@ string Crypto::ParsePEMHeader(const char *key, const char **start, const char **
   return type;
 }
 
-bool Crypto::ParsePEM(char *key, RSAKey *rsa_out, DSAKey *dsa_out, ECPair *ec_out, Ed25519Pair *ed25519_out,
+bool Crypto::ParsePEM(const char *key, RSAKey *rsa_out, DSAKey *dsa_out, ECPair *ec_out, Ed25519Pair *ed25519_out,
                       function<string(string)> passphrase_cb) {
   const char *start=0, *end=0, *headers_end=0;
   string type = ParsePEMHeader(key, &start, &end, &headers_end), cipher, cbcinit, b64text;

@@ -16,6 +16,16 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+@interface ObjcCallback : NSObject {}
+  - (id)initWithCB:(LFL::Callback)cb;
+  - (void)run;
+@end
+
+@interface ObjcStringCallback : NSObject {}
+  - (id)initWithStringCB:(LFL::StringCB)cb;
+  - (void)run:(const LFL::string&)v;
+@end
+
 namespace LFL {
 void NSLogString(const string &text);
 string GetNSDocumentDirectory();

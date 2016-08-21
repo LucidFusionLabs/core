@@ -21,6 +21,7 @@
 #include <AppKit/NSColor.h>
 #include <AppKit/NSColorSpace.h>
 #include "core/app/app.h"
+#include "core/app/framework/apple_common.h"
 #include "core/app/framework/osx_common.h"
 
 @implementation GameView
@@ -223,10 +224,10 @@
     [fh waitForDataInBackgroundAndNotify];
   }
 
-  - (void)fileReadCompleted: (NSNotification *)notification {}
-  - (void)shellRun: (id)sender { ShellRun([[sender representedObject] UTF8String]); }
+  - (void)fileReadCompleted: (NSNotification*)notification {}
+  - (void)callbackRun:(id)sender { [(ObjcCallback*)[sender representedObject] run]; }
   - (void)mouseDown:(NSEvent*)e { [self mouseClick:e down:1]; }
-  - (void)mouseUp  :(NSEvent*)e { [self mouseClick:e down:0]; }
+  - (void)mouseUp:  (NSEvent*)e { [self mouseClick:e down:0]; }
   - (void)mouseClick:(NSEvent*)e down:(bool)d {
     SetNativeWindow(screen);
     NSPoint p = [e locationInWindow];

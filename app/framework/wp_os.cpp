@@ -22,9 +22,9 @@
 namespace LFL {
 static inline String16 GetWinRTString(Platform::String^ str) { return str->Data(); }
 
-SystemMenuWidget::~SystemMenuWidget() {}
-SystemMenuWidget::SystemMenuWidget(const string &title_text, const vector<MenuItem>&items) {}
-unique_ptr<SystemMenuWidget> SystemMenuWidget::CreateEditMenu(const vector<MenuItem>&items) { return nullptr; }
+SystemMenuView::~SystemMenuView() {}
+SystemMenuView::SystemMenuView(const string &title_text, const vector<MenuItem>&items) {}
+unique_ptr<SystemMenuView> SystemMenuView::CreateEditMenu(const vector<MenuItem>&items) { return nullptr; }
 
 void Application::ShowSystemFontChooser(const FontDesc &cur_font, const string &choose_cmd) {
 void Application::OpenSystemBrowser(const string &url_text) {}

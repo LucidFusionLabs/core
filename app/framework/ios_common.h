@@ -50,9 +50,9 @@
 @end
 
 namespace LFL {
-  UIAlertView            *GetUIAlertView(SystemAlertWidget*);
-  UIActionSheet          *GetUIActionSheet(SystemMenuWidget*);
-  UIToolbar              *GetUIToolbar(SystemToolbarWidget*);
-  UITableViewController  *GetUITableViewController(SystemTableWidget*);
-  UINavigationController *GetUINavigationController(SystemNavigationWidget*);
+  UIAlertView            *GetUIAlertView(SystemAlertView*);
+  UIActionSheet          *GetUIActionSheet(SystemMenuView*);
+  UIToolbar              *GetUIToolbar(SystemToolbarView*);
+  UITableViewController  *GetUITableViewController(SystemTableView*);
+  UINavigationController *GetUINavigationController(SystemNavigationView*);
 };

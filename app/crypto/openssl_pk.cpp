@@ -215,9 +215,9 @@ ECPair Crypto::EllipticCurve::NewPair(ECDef id, bool generate) {
   return ECPair(pair);
 }
 
-bool Crypto::ParsePEM(char *key, RSAKey *rsa_out, DSAKey *dsa_out, ECPair *ec_out, function<string(string)> passphrase_cb) {
+bool Crypto::ParsePEM(const char *key, RSAKey *rsa_out, DSAKey *dsa_out, ECPair *ec_out, function<string(string)> passphrase_cb) {
   OpenSSLEnsureAllAlgorithmsAdded();
-  BIO *bio = BIO_new_mem_buf(key, strlen(key));
+  BIO *bio = BIO_new_mem_buf(const_cast<char*>(key), strlen(key));
   EVP_PKEY *pk = PEM_read_bio_PrivateKey(bio, nullptr, [](char *buf, int size, int rwflag, void *u) {
     string pw = (*reinterpret_cast<decltype(passphrase_cb)*>(u))("");
     int len = min<int>(pw.size(), size);
