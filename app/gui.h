@@ -29,9 +29,6 @@ DECLARE_string(console_font);
 DECLARE_int(console_font_flag);
 DECLARE_FLAG(testbox, Box);
 
-struct HAlign { enum { Left  =1, Center=2, Right=3 }; };
-struct VAlign { enum { Bottom=1, Center=2, Top  =3 }; };
-
 struct GUI {
   Window *root;
   Box box;

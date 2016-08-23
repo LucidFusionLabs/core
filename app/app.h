@@ -398,9 +398,13 @@ struct PerformanceTimers {
   string DebugString() const { string v; for (auto &t : timers) StrAppend(&v, t.name, " ", t.time.count() / 1000.0, "\n"); return v; }
 };
 
+struct HAlign { enum { Left  =1, Center=2, Right=3 }; };
+struct VAlign { enum { Bottom=1, Center=2, Top  =3 }; };
+
 struct MenuItem { string shortcut, name; Callback cb; };
 struct AlertItem { string first, second; StringCB cb; };
 struct PanelItem { string type; Box box; StringCB cb; };
+
 struct TableItem {
   typedef unordered_map<string, vector<Triple<int, int, string>>> Depends;
   string key, type, val, right_text;
@@ -778,9 +782,10 @@ struct SystemTableView {
 
 struct SystemNavigationView {
   VoidPtr impl;
-  SystemTableView *root;
+  bool shown=0;
+  SystemTableView *root=0;
   virtual ~SystemNavigationView();
-  SystemNavigationView(SystemTableView *root);
+  SystemNavigationView();
 
   SystemTableView *Back();
   void Show(bool show_or_hide);

@@ -60,6 +60,7 @@ static std::vector<UIImage*> app_images;
 
 @implementation IOSAlert
   - (id)init:(const LFL::AlertItemVec&) kv {
+    self = [super init];
     CHECK_EQ(4, kv.size());
     CHECK_EQ("style", kv[0].first);
     _style       = kv[0].second;
@@ -92,6 +93,7 @@ static std::vector<UIImage*> app_images;
 
 @implementation IOSMenu
   - (id)init:(const std::string&)title_text items:(LFL::MenuItemVec)item {
+    self = [super init];
     menu = item;
     NSString *title = [NSString stringWithUTF8String: title_text.c_str()];
     _actions = [[UIActionSheet alloc] initWithTitle:title delegate:self
@@ -115,6 +117,7 @@ static std::vector<UIImage*> app_images;
   }
 
   - (id)init: (const LFL::MenuItemVec&) kv {
+    self = [super init];
     NSMutableArray *items = [[NSMutableArray alloc] init];
     UIBarButtonItem *spacer = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil];
     for (int i=0, l=kv.size(); i<l; i++) {
@@ -123,6 +126,7 @@ static std::vector<UIImage*> app_images;
       UIBarButtonItem *item =
         [[UIBarButtonItem alloc] initWithTitle:[NSString stringWithFormat:@"%@\U0000FE0E", K]
         style:UIBarButtonItemStylePlain target:self action:@selector(onClick:)];
+      [item setTag:(kv[i].name == "toggle")];
       [items addObject:item];
       toolbar_titles[kv[i].shortcut] = item;
       toolbar_cb[item] = kv[i].cb;
@@ -155,10 +159,12 @@ static std::vector<UIImage*> app_images;
   }
 
   - (void)onClick:(id)sender {
-    auto it = toolbar_cb.find(sender);
+    if (![sender isKindOfClass:[UIBarButtonItem class]]) FATALf("unknown sender: %p", sender);
+    UIBarButtonItem *item = (UIBarButtonItem*)sender;
+    auto it = toolbar_cb.find(item);
     if (it != toolbar_cb.end()) {
       it->second();
-      // if (it->second.substr(0,6) == "toggle") [self toggleButton:sender];
+      if (item.tag) [self toggleButton:item];
     }
     [[LFUIApplication sharedAppDelegate].controller resignFirstResponder];
   }
@@ -316,8 +322,9 @@ static std::vector<UIImage*> app_images;
       button.cb = item.cb;
       button.title = LFL::MakeNSString(item.key);
       [button setTarget:self];
-      [button setAction:@selector(rightNavButtonClicked:)];
-      self.navigationItem.rightBarButtonItem = button;
+      [button setAction:@selector(navButtonClicked:)];
+      if (align == LFL::HAlign::Right) self.navigationItem.rightBarButtonItem = button;
+      else                             self.navigationItem.leftBarButtonItem  = button;
       [button release];
     }
   }
@@ -455,6 +462,7 @@ static std::vector<UIImage*> app_images;
 
       } else if (*type == "toggle") {
         UISwitch *onoff = [[UISwitch alloc] init];
+        onoff.on = *v == "1";
         [onoff addTarget: self action: @selector(switchFlipped:) forControlEvents: UIControlEventValueChanged];
         cell.textLabel.text = LFL::MakeNSString(*k);
         cell.accessoryView = onoff;
@@ -465,7 +473,10 @@ static std::vector<UIImage*> app_images;
         label.text = LFL::MakeNSString(*v);
         cell.textLabel.text = LFL::MakeNSString(*k);
         if (_second_col) [cell.contentView addSubview: label];
-        else             cell.accessoryView = label;
+        else {
+          label.textAlignment = NSTextAlignmentRight;
+          cell.accessoryView = label;
+        }
         [label release];
 
       } else {
@@ -558,13 +569,11 @@ static std::vector<UIImage*> app_images;
     if (sender.cb) sender.cb();
   }
 
-  - (IBAction)rightNavButtonClicked:(IOSBarButtonItem*)sender {
+  - (IBAction)navButtonClicked:(IOSBarButtonItem*)sender {
     if (sender.cb) sender.cb();
   }
 
-  - (IBAction) switchFlipped: (UISwitch*) onoff {
-    INFO("switch now ", onoff.on ? "On" : "Off");
-  }
+  - (IBAction) switchFlipped: (UISwitch*) onoff {}
 
   - (LFL::StringPairVec)dumpDataForSection: (int)ind {
     LFL::StringPairVec ret;
@@ -586,18 +595,21 @@ static std::vector<UIImage*> app_images;
       }
 
       std::string val;
-      if (!compiled_item.gui_loaded) {}
+      if (!compiled_item.gui_loaded) val = *v;
       else if ((*type == "textinput") || (*type == "numinput") || (*type == "pwinput")) {
         IOSTextField *textfield = _second_col ? [[cell.contentView subviews] lastObject] : cell.accessoryView;
         val = LFL::GetNSString(textfield.text);
         if (val.empty() && !textfield.modified && v->size() && (*v)[0] != 1)
           val = (*v)[0] == 2 ? v->substr(1) : *v;
-      } else if (*type == "select") {
-        UISegmentedControl *segmented_control = [[cell.contentView subviews] lastObject];
-        val = LFL::GetNSString([segmented_control titleForSegmentAtIndex: segmented_control.selectedSegmentIndex]);
       } else if (*type == "label") {
         UILabel *label = _second_col ? [[cell.contentView subviews] lastObject] : cell.accessoryView;
         val = LFL::GetNSString(label.text);
+      } else if (*type == "select") {
+        UISegmentedControl *segmented_control = [[cell.contentView subviews] lastObject];
+        val = LFL::GetNSString([segmented_control titleForSegmentAtIndex: segmented_control.selectedSegmentIndex]);
+      } else if (*type == "toggle") {
+        UISwitch *onoff = (UISwitch*)cell.accessoryView;
+        val = onoff.on ? "1" : "";
       }
       ret.emplace_back(*k, val);
     }
@@ -610,8 +622,9 @@ static std::vector<UIImage*> app_images;
 @end
 
 @implementation IOSNavigation
-  - (id)init: (IOSTable*)root_controller {
-    _controller = [[UINavigationController alloc] initWithRootViewController: root_controller];
+  - (id)init {
+    self = [super init];
+    _controller = [[UINavigationController alloc] initWithNavigationBarClass:nil toolbarClass:nil];
     [_controller setToolbarHidden:YES animated:YES];
     return self;
   }
@@ -800,11 +813,11 @@ void SystemTableView::SetSectionValues(const StringVec &item, int section) { [Fr
 void SystemTableView::ReplaceSection(TableItemVec item, int section) { [FromVoid<IOSTable*>(impl) replaceSection:section items:move(item)]; }
 
 SystemNavigationView::~SystemNavigationView() { if (auto nav = FromVoid<IOSNavigation*>(impl)) [nav release]; }
-SystemNavigationView::SystemNavigationView(SystemTableView *r) : impl([[IOSNavigation alloc] init: FromVoid<IOSTable*>(r->impl)]), root(r) {}
+SystemNavigationView::SystemNavigationView() : impl([[IOSNavigation alloc] init]) {}
 void SystemNavigationView::Show(bool show_or_hide) {
   auto nav = FromVoid<IOSNavigation*>(impl);
   LFUIApplication *uiapp = [LFUIApplication sharedAppDelegate];
-  if (show_or_hide) {
+  if ((shown = show_or_hide)) {
     if (root->show_cb) root->show_cb();
     uiapp.top_controller = nav.controller;
     [uiapp.controller presentViewController: nav.controller animated:YES completion:nil];
@@ -824,6 +837,7 @@ SystemTableView *SystemNavigationView::Back() {
 }
 
 void SystemNavigationView::PushTable(SystemTableView *t) {
+  if (!root) root = t;
   if (t->show_cb) t->show_cb();
   [FromVoid<IOSNavigation*>(impl).controller pushViewController: FromVoid<IOSTable*>(t->impl) animated: YES];
 }

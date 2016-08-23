@@ -33,11 +33,15 @@ struct SSHClient {
     }
   };
 
+  struct Params {
+    string hostport, user, termvar, startup_command;
+    bool compress, agent_forwarding, close_on_disconnect;
+  };
+
   typedef function<void(Connection*, const StringPiece&)> ResponseCB;
   typedef function<bool(shared_ptr<Identity>*)> LoadIdentityCB;
   typedef function<bool(string*)> LoadPasswordCB;
-  static Connection *Open(const string &hostport, const string &user, const string &term, bool compress, bool agent_fwd,
-                          const ResponseCB &cb, Callback *detach=0, Callback *success=0);
+  static Connection *Open(Params params, const ResponseCB &cb, Callback *detach=0, Callback *success=0);
 
   static void SetCredentialCB(Connection *c, LoadIdentityCB, LoadPasswordCB);
   static int SetTerminalWindowSize(Connection *c, int w, int h);
