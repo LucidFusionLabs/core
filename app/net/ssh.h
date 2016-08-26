@@ -39,11 +39,12 @@ struct SSHClient {
   };
 
   typedef function<void(Connection*, const StringPiece&)> ResponseCB;
+  typedef function<bool(int, const StringPiece&)> FingerprintCB;
   typedef function<bool(shared_ptr<Identity>*)> LoadIdentityCB;
   typedef function<bool(string*)> LoadPasswordCB;
   static Connection *Open(Params params, const ResponseCB &cb, Callback *detach=0, Callback *success=0);
 
-  static void SetCredentialCB(Connection *c, LoadIdentityCB, LoadPasswordCB);
+  static void SetCredentialCB(Connection *c, FingerprintCB, LoadIdentityCB, LoadPasswordCB);
   static int SetTerminalWindowSize(Connection *c, int w, int h);
   static int WriteChannelData(Connection *c, const StringPiece &b);
 };

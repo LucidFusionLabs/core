@@ -227,8 +227,12 @@ static const char* const* ios_argv = 0;
 
   - (CGRect) getKeyboardFrame { return keyboard_frame; }
   - (bool)isKeyboardFirstResponder { return [self.textField isFirstResponder]; }
-  - (void)showKeyboard { [self.textField becomeFirstResponder]; }
   - (void)hideKeyboard { [self.textField resignFirstResponder]; }
+  - (void)showKeyboard {
+    if ([self.textField isFirstResponder]) [self.textField resignFirstResponder];
+    [self.textField becomeFirstResponder];
+  }
+
   - (void)keyboardWillHide:(NSNotification *)notification {
     keyboard_frame = CGRectMake(0, 0, 0, 0);
     [self.controller updateToolbarFrame];

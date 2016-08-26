@@ -78,8 +78,8 @@ static std::vector<UIImage*> app_images;
   }
 
   - (void)alertView:(UIAlertView *)alertView clickedButtonAtIndex:(NSInteger)buttonIndex {
-    if (buttonIndex) _confirm_cb(_add_text ? [[alertView textFieldAtIndex:0].text UTF8String] : "");
-    else             _cancel_cb("");
+    if (buttonIndex) { if (_confirm_cb) _confirm_cb(_add_text ? [[alertView textFieldAtIndex:0].text UTF8String] : ""); }
+    else             { if (_cancel_cb)  _cancel_cb(""); }
     _done = true;
   }
 @end
@@ -414,7 +414,7 @@ static std::vector<UIImage*> app_images;
         textfield.returnKeyType = UIReturnKeyDone;
         // textfield.layer.cornerRadius = 10.0;
         // [textfield setBorderStyle: UITextBorderStyleRoundedRect];
-        [textfield addTarget:textfield action:@selector(textFieldDidChange:) 
+        [textfield addTarget:self action:@selector(textFieldDidChange:) 
           forControlEvents:UIControlEventEditingChanged];
 
         if (v->size() && ((*v)[0] == 1 || (*v)[0] == 2)) [textfield setPlaceholder: LFL::MakeNSString(v->substr(1))];
@@ -552,8 +552,14 @@ static std::vector<UIImage*> app_images;
 
   - (void)viewWillAppear:   (BOOL)animated { if (_toolbar) [_toolbar show: true];  }
   - (void)viewWillDisappear:(BOOL)animated { if (_toolbar) [_toolbar show: false]; }
+  
+  - (void)textFieldDidChange:(IOSTextField*)sender {
+    _lfl_self->changed = true;
+    [sender textFieldDidChange: sender];
+  }
 
   - (void)dropDownClicked:(UIButton *)sender {
+    _lfl_self->changed = true;
     int dropdown_ind = sender.tag;
     CHECK_RANGE(dropdown_ind, 0, dropdowns.size());
     auto dropdown_table = dropdowns[dropdown_ind];
@@ -561,6 +567,7 @@ static std::vector<UIImage*> app_images;
   }
 
   - (void)segmentedControlClicked:(IOSSegmentedControl *)segmented_control {
+    _lfl_self->changed = true;
     if (segmented_control.changed) segmented_control.changed
       (LFL::GetNSString([segmented_control titleForSegmentAtIndex: segmented_control.selectedSegmentIndex]));
   }
@@ -573,7 +580,13 @@ static std::vector<UIImage*> app_images;
     if (sender.cb) sender.cb();
   }
 
-  - (IBAction) switchFlipped: (UISwitch*) onoff {}
+  - (IBAction) switchFlipped: (UISwitch*) onoff {
+    _lfl_self->changed = true;
+  }
+
+  - (void)willMoveToParentViewController:(UIViewController *)parent {
+    if (parent == nil && _lfl_self && _lfl_self->hide_cb) _lfl_self->hide_cb();
+  }
 
   - (LFL::StringPairVec)dumpDataForSection: (int)ind {
     LFL::StringPairVec ret;
@@ -824,6 +837,8 @@ void SystemNavigationView::Show(bool show_or_hide) {
   } else {
     uiapp.top_controller = uiapp.controller;
     [uiapp.controller dismissViewControllerAnimated:YES completion:nil];
+    if ([uiapp isKeyboardFirstResponder]) [uiapp showKeyboard];
+    else                                  [uiapp hideKeyboard];
   }
 }
 

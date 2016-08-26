@@ -42,6 +42,9 @@
   - (CGFloat)getScale;
   - (CGRect)getFrame;
   - (CGRect)getKeyboardFrame;
+  - (bool)isKeyboardFirstResponder;
+  - (void)hideKeyboard;
+  - (void)showKeyboard;
 @end
 
 @interface IOSToolbar : NSObject

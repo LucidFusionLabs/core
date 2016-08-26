@@ -579,9 +579,13 @@ String16 ReplaceEmpty (const String16 &in, const String16 &replace_with);
 string ReplaceNewlines(const string   &in, const string   &replace_with);
 bool ReplaceString(string *text, const string &needle, const string &replace);
 
-template <class X> string CHexEscape        (const StringPieceT<X> &text);
-template <class X> string CHexEscapeNonAscii(const StringPieceT<X> &text);
+template <class X> string HexEscape         (const StringPieceT<X> &text, const string &delim);
+template <class X> string HexEscapeNonAscii (const StringPieceT<X> &text, const string &delim);
 template <class X> string JSONEscape        (const StringPieceT<X> &text);
+template <class X> string CHexEscape        (const StringPieceT<X> &text) { return HexEscape        (text, "\\x"); }
+template <class X> string CHexEscapeNonAscii(const StringPieceT<X> &text) { return HexEscapeNonAscii(text, "\\x"); }
+inline string HexEscape         (const string &text, const string &d) { return HexEscape        (StringPiece(text), d); }
+inline string HexEscapeNonAscii (const string &text, const string &d) { return HexEscapeNonAscii(StringPiece(text), d); }
 inline string CHexEscape        (const string &text) { return CHexEscape        (StringPiece(text)); }
 inline string CHexEscapeNonAscii(const string &text) { return CHexEscapeNonAscii(StringPiece(text)); }
 inline string JSONEscape        (const string &text) { return JSONEscape        (StringPiece(text)); }
@@ -879,6 +883,8 @@ inline StringPiece MakeStringPiece(const FlatBufferPiece &s) { return StringPiec
 inline BlobPiece   MakeBlobPiece  (const FlatBufferPiece &s) { return BlobPiece  (reinterpret_cast<const char*>(s.first.get()), s.second); }
 #ifdef LFL_FLATBUFFERS
 using flatbuffers::FlatBufferBuilder;
+inline string GetFlatBufferString(const flatbuffers::String *s) { return s ? s->data() : ""; }
+inline string GetFlatBufferString(const flatbuffers::Vector<uint8_t> *s) { return s ? string(reinterpret_cast<const char *>(s->data()), s->size()) : ""; }
 template<typename T> FlatBufferPiece CreateFlatBuffer(const std::function<flatbuffers::Offset<T>(FlatBufferBuilder &fb)> &f)
 { FlatBufferBuilder fb; fb.Finish(f(fb)); size_t s=fb.GetSize(); return make_pair(fb.ReleaseBufferPointer(), s); }
 #define MakeFlatBufferOfType(t, x) CreateFlatBuffer(function<flatbuffers::Offset<t>(FlatBufferBuilder&)>([&](FlatBufferBuilder &fb){ return x; }))

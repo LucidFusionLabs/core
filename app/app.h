@@ -756,7 +756,8 @@ struct SystemMenuView {
 
 struct SystemTableView {
   VoidPtr impl;
-  Callback show_cb; 
+  bool changed=0;
+  Callback hide_cb, show_cb = [=](){ changed=0; }; 
   virtual ~SystemTableView();
   SystemTableView(const string &title, const string &style, TableItemVec items, int second_col=0);
 
