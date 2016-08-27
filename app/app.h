@@ -726,6 +726,7 @@ struct SystemAlertView {
   virtual ~SystemAlertView();
   SystemAlertView(AlertItemVec items);
   void Show(const string &arg);
+  void ShowCB(const string &title, const string &arg, StringCB confirm_cb);
   string RunModal(const string &arg);
 };
 
@@ -769,6 +770,7 @@ struct SystemTableView {
   int GetTag(int section, int row);
   void SetTag(int section, int row, int val);
   void SetValue(int section, int row, const string &val);
+  void SetTitle(const string &title);
   void SelectRow(int section, int row);
   StringPairVec GetSectionText(int section=0);
   bool GetSectionText(int section_ind, vector<string*> out, bool check=1) { return GetPairValues(GetSectionText(section_ind), move(out), check); }
@@ -792,6 +794,7 @@ struct SystemNavigationView {
   void Show(bool show_or_hide);
   void PushTable(SystemTableView*);
   void PopTable(int num=1);
+  void PopAll();
 };
 
 unique_ptr<Module> CreateFrameworkModule();

@@ -138,7 +138,7 @@ struct SSH {
     int HeaderSize() const { return 4 + 2*4; }
     int Size() const { return HeaderSize() + description.size() + language.size(); }
     int In(const Serializable::Stream *i) { i->Ntohl(&reason_code); i->ReadString(&description); i->ReadString(&language); return i->Result(); }
-    void Out(Serializable::Stream *o) const {}
+    void Out(Serializable::Stream *o) const { o->Htonl(reason_code); o->BString(description); o->BString(language); }
   };
 
   struct MSG_IGNORE : public Serializable {
@@ -484,13 +484,14 @@ struct SSH {
     unsigned char want_reply=0;
     MSG_CHANNEL_REQUEST() : Serializable(ID) {}
     MSG_CHANNEL_REQUEST(int RC, const StringPiece &RT, const StringPiece &V, bool WR) : Serializable(ID), recipient_channel(RC), request_type(RT), term(V), want_reply(WR) {}
+    MSG_CHANNEL_REQUEST(int RC, const StringPiece &RT, int ES, bool WR) : Serializable(ID), recipient_channel(RC), request_type(RT), width(ES), want_reply(WR) {}
     MSG_CHANNEL_REQUEST(int RC, const StringPiece &RT, const point &D, const point &PD, const StringPiece &T, const StringPiece &TM, bool WR) : Serializable(ID),
       recipient_channel(RC), width(D.x), height(D.y), pixel_width(PD.x), pixel_height(PD.y), request_type(RT), term(T), term_mode(TM), want_reply(WR) {}
 
     int HeaderSize() const { return 4*2 + 1; }
     int Size() const;
+    int In(const Serializable::Stream *i);
     void Out(Serializable::Stream *o) const;
-    int In(const Serializable::Stream *i) { return i->Result(); }
   };
 
   struct MSG_CHANNEL_SUCCESS : public Serializable {

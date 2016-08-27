@@ -54,6 +54,21 @@ SQLite::Database SQLite::Open(const string &fn) {
   return db;
 }
 
+bool SQLite::UsePassphrase(SQLite::Database db, const string &pw) {
+#ifdef LFL_SQLCIPHER
+  sqlite3_key(FromVoid<sqlite3*>(db), pw.data(), pw.size());
+  return Exec(db, "SELECT count(*) FROM sqlite_master;", RowVisitor());
+#else
+  return false;
+#endif
+}
+
+void SQLite::ChangePassphrase(SQLite::Database db, const string &pw) {
+#ifdef LFL_SQLCIPHER
+  sqlite3_rekey(FromVoid<sqlite3*>(db), pw.data(), pw.size());
+#endif
+}
+
 bool SQLite::Exec(SQLite::Database db, const string &q, const RowVisitor &cb) {
   Statement stmt = Prepare(db, q);
   bool ret = ExecPrepared(stmt, cb);

@@ -628,6 +628,8 @@ struct Base64 {
   int mod_table[3];
   Base64();
 
+  string Decode(const string &in) { return Decode(in.data(), in.size()); }
+  string Encode(const string &in) { return Encode(in.data(), in.size()); }
   string Encode(const char *in,   size_t input_length);
   string Decode(const char *data, size_t input_length);
 };

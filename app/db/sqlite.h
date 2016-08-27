@@ -38,6 +38,8 @@ namespace LFL {
 
     static void Close(Database db);
     static Database Open(const string &fn);
+    static bool UsePassphrase(Database db, const string &pw);
+    static void ChangePassphrase(Database db, const string &pw);
     static bool Exec(Database db, const string&, const RowVisitor &cb);
     static bool Exec(Database db, const string&, const RowTextVisitor &cb = [](int, char**, char**){ return 0; });
 
@@ -63,9 +65,13 @@ namespace LFL {
     SQLiteIdValueStore(SQLite::Database *db, const string &tn) { Open(db, tn); }
 
     void Open(SQLite::Database *db, const string &tn);
+    bool Erase(int row_id);
+    bool Update(int row_id, const BlobPiece &val);
     int Insert(const BlobPiece &val);
-    bool Update(int, const BlobPiece &val);
-    bool Erase(int);
+#ifdef LFL_FLATBUFFERS
+    int Insert(const FlatBufferPiece &blob) { return Insert(MakeBlobPiece(blob)); }
+    bool Update(int row_id, const FlatBufferPiece &blob) { return Update(row_id, MakeBlobPiece(blob)); }
+#endif
   };
 }; // namespace LFL
 #endif // LFL_CORE_APP_DB_SQLITE_H__

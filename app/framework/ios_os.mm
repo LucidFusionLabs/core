@@ -767,6 +767,14 @@ void SystemAlertView::Show(const string &arg) {
   [alert.alert show];
 }
 
+void SystemAlertView::ShowCB(const string &title, const string &arg, StringCB confirm_cb) {
+  auto alert = FromVoid<IOSAlert*>(impl);
+  alert.confirm_cb = move(confirm_cb);
+  alert.alert.title = MakeNSString(title);
+  if (alert.add_text) [alert.alert textFieldAtIndex:0].text = MakeNSString(arg);
+  [alert.alert show];
+}
+
 string SystemAlertView::RunModal(const string &arg) {
   auto alert = FromVoid<IOSAlert*>(impl);
   if (alert.add_text) [alert.alert textFieldAtIndex:0].text = MakeNSString(arg);
@@ -808,6 +816,7 @@ string SystemTableView::GetKey(int section, int row) { return [FromVoid<IOSTable
 int SystemTableView::GetTag(int section, int row) { return [FromVoid<IOSTable*>(impl) getTag:section row:row]; }
 void SystemTableView::SetTag(int section, int row, int val) { [FromVoid<IOSTable*>(impl) setTag:section row:row val:val]; }
 void SystemTableView::SetValue(int section, int row, const string &val) { [FromVoid<IOSTable*>(impl) setValue:section row:row val:val]; }
+void SystemTableView::SetTitle(const string &title) { FromVoid<IOSTable*>(impl).title = LFL::MakeNSString(title); }
 StringPairVec SystemTableView::GetSectionText(int section) { return [FromVoid<IOSTable*>(impl) dumpDataForSection:section]; }
 void SystemTableView::SetEditableSection(LFL::IntIntCB cb, int section) {
   FromVoid<IOSTable*>(impl).delete_row_cb = move(cb);
@@ -857,6 +866,7 @@ void SystemNavigationView::PushTable(SystemTableView *t) {
   [FromVoid<IOSNavigation*>(impl).controller pushViewController: FromVoid<IOSTable*>(t->impl) animated: YES];
 }
 
+void SystemNavigationView::PopAll() { [FromVoid<IOSNavigation*>(impl).controller popToRootViewControllerAnimated: YES]; }
 void SystemNavigationView::PopTable(int n) {
   for (int i = 0; i != n; ++i)
     [FromVoid<IOSNavigation*>(impl).controller popViewControllerAnimated: (i == n - 1)];

@@ -264,6 +264,8 @@ template <class I, class T> I LesserBound(I first, I last, const T& v, bool stri
 
 template <typename RI> typename RI::iterator_type ForwardIteratorFromReverse(RI ri) { return (++ri).base(); }
 
+template <class X> void SecureClear(vector<X>       *x) { x->assign(x->size(), X()); x->clear(); }
+template <class X> void SecureClear(basic_string<X> *x) { x->assign(x->size(), X()); x->clear(); }
 template <class X> basic_string<X> Substr(const basic_string<X> &in, size_t o=0, size_t l=basic_string<X>::npos) {
   return o < in.size() ? in.substr(o, l) : basic_string<X>();
 }

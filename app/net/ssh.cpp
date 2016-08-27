@@ -535,14 +535,17 @@ struct SSHClientConnection : public Connection::Handler {
           auto it = channels.find(msg.recipient_channel);
           if (it == channels.end()) return ERRORv(-1, c->Name(), ": EOF invalid channel");
           if (!WriteCipher(c, SSH::MSG_CHANNEL_CLOSE(it->second.remote_id))) return ERRORv(-1, c->Name(), ": write");
-          if (&it->second == session_channel) session_channel = nullptr;
+          if (&it->second == session_channel) {
+            if (!WriteCipher(c, SSH::MSG_DISCONNECT())) return ERRORv(-1, c->Name(), ": write");
+            session_channel = nullptr;
+          }
           channels.erase(it);
         } break;
 
         case SSH::MSG_CHANNEL_REQUEST::ID: {
           SSH::MSG_CHANNEL_REQUEST msg;
-          SSHTrace(c->Name(), ": MSG_CHANNEL_REQUEST");
           if (msg.In(&packet_s)) return ERRORv(-1, c->Name(), ": read MSG_CHANNEL_REQUEST");
+          SSHTrace(c->Name(), ": MSG_CHANNEL_REQUEST ", msg.request_type.str(), " want_reply=", bool(msg.want_reply));
         } break;
 
         case SSH::MSG_CHANNEL_SUCCESS::ID: {
@@ -618,7 +621,7 @@ struct SSHClientConnection : public Connection::Handler {
 
   int WriteChannelData(Connection *c, const StringPiece &b) {
     if (!password_prompts) {
-      if (!WriteToChannel(c, session_channel, b)) return -1;
+      if (!session_channel || !WriteToChannel(c, session_channel, b)) return -1;
     } else {
       bool cr = b.len && b.back() == '\r';
       pw.append(b.data(), b.size() - cr);
@@ -647,7 +650,7 @@ struct SSHClientConnection : public Connection::Handler {
     return success;
   }
 
-  void ClearPassword() { pw.assign(pw.size(), ' '); pw.clear(); }
+  void ClearPassword() { SecureClear(&pw); }
   void LoadPassword(Connection *c) {
     if ((loaded_pw = load_password_cb && load_password_cb(&pw))) WritePassword(c);
     if (loaded_pw) ClearPassword();
@@ -1126,6 +1129,13 @@ int SSH::MSG_CHANNEL_REQUEST::Size() const {
   return ret;
 }
 
+int SSH::MSG_CHANNEL_REQUEST::In(const Serializable::Stream *i) {
+  i->Ntohl(&recipient_channel);
+  i->ReadString(&request_type);
+  i->Read8(&want_reply);
+  return i->Result();
+}
+
 void SSH::MSG_CHANNEL_REQUEST::Out(Serializable::Stream *o) const {
   o->Htonl(recipient_channel);
   o->BString(request_type);
@@ -1145,6 +1155,8 @@ void SSH::MSG_CHANNEL_REQUEST::Out(Serializable::Stream *o) const {
     o->Htonl(height);
     o->Htonl(pixel_width);
     o->Htonl(pixel_height);
+  } else if (rt == "exit-status") {
+    o->Htonl(width);
   }
 }
 

@@ -8,6 +8,7 @@ if(LFL_SQLITE)
 endif()
 
 if(LFL_SQLCIPHER)
-  lfl_add_target(app_sqlcipher_sqlite STATIC_LIBRARY SOURCES db_sqlite.cpp COMPILE_DEFINITIONS -DLFL_SQLCIPHER
+  lfl_add_target(app_sqlcipher_sqlite STATIC_LIBRARY SOURCES db_sqlite.cpp
+                 COMPILE_DEFINITIONS -DLFL_SQLCIPHER ${SQLCIPHER_DEF}
                  INCLUDE_DIRECTORIES ${SQLCIPHER_INCLUDE} LINK_LIBRARIES ${SQLCIPHER_LIB})
 endif()
