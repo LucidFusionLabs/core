@@ -129,7 +129,7 @@ void DNS::MakeAnswerMap(const vector<DNS::Record> &in, AnswerMap *out) {
     if (e.question.empty() || e.answer.empty() || e.type != DNS::Type::CNAME) continue;
     AnswerMap::const_iterator a = out->find(e.answer);
     if (a == out->end()) continue;
-    VectorAppend((*out)[e.question], a->second.begin(), a->second.end());
+    VectorAppend(&(*out)[e.question], a->second);
   }
 }
 
@@ -140,7 +140,7 @@ void DNS::MakeAnswerMap(const vector<DNS::Record> &in, const AnswerMap &qmap, in
     AnswerMap::const_iterator q_iter = qmap.find(e.answer);
     if (e.question.empty() || e.answer.empty() || q_iter == qmap.end())
     { ERROR("DNS::MakeAnswerMap missing ", e.answer); continue; }
-    VectorAppend((*out)[e.question], q_iter->second.begin(), q_iter->second.end());
+    VectorAppend(&(*out)[e.question], q_iter->second);
   }
 }
 

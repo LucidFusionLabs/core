@@ -94,8 +94,8 @@ static std::vector<UIImage*> app_images;
 @implementation IOSMenu
   - (id)init:(const std::string&)title_text items:(LFL::MenuItemVec)item {
     self = [super init];
-    menu = item;
-    NSString *title = [NSString stringWithUTF8String: title_text.c_str()];
+    menu = move(item);
+    NSString *title = LFL::MakeNSString(title_text);
     _actions = [[UIActionSheet alloc] initWithTitle:title delegate:self
       cancelButtonTitle:@"Cancel" destructiveButtonTitle:nil otherButtonTitles:nil];
     for (auto &i : menu) [_actions addButtonWithTitle: LFL::MakeNSString(i.name)];
@@ -110,7 +110,6 @@ static std::vector<UIImage*> app_images;
 
 @implementation IOSToolbar
   {
-    UIToolbar *toolbar;
     int toolbar_height;
     std::unordered_map<std::string, void*> toolbar_titles;
     std::unordered_map<void*, LFL::Callback> toolbar_cb;
@@ -124,7 +123,7 @@ static std::vector<UIImage*> app_images;
       if (i) [items addObject: spacer];
       NSString *K = [NSString stringWithUTF8String: kv[i].shortcut.c_str()];
       UIBarButtonItem *item =
-        [[UIBarButtonItem alloc] initWithTitle:[NSString stringWithFormat:@"%@\U0000FE0E", K]
+        [[UIBarButtonItem alloc] initWithTitle:(([K length] && LFL::isascii([K characterAtIndex:0])) ? [NSString stringWithFormat:@"%@", K] : [NSString stringWithFormat:@"%@\U0000FE0E", K])
         style:UIBarButtonItemStylePlain target:self action:@selector(onClick:)];
       [item setTag:(kv[i].name == "toggle")];
       [items addObject:item];
@@ -133,9 +132,9 @@ static std::vector<UIImage*> app_images;
       [item release];
     }
     toolbar_height = 44;
-    toolbar = [[UIToolbar alloc] initWithFrame: [self getToolbarFrame]];
-    // [toolbar setBarStyle:UIBarStyleBlackTranslucent];
-    [toolbar setItems:items];
+    _toolbar = [[UIToolbar alloc] initWithFrame: [self getToolbarFrame]];
+    // [_toolbar setBarStyle:UIBarStyleBlackTranslucent];
+    [_toolbar setItems:items];
     [items release];
     [spacer release];
     return self;
@@ -172,10 +171,10 @@ static std::vector<UIImage*> app_images;
   - (void)show: (bool)show_or_hide {
     if (show_or_hide) {
       show_bottom.push_back(self);
-      [[LFUIApplication sharedAppDelegate].window addSubview: toolbar];
+      [[LFUIApplication sharedAppDelegate].window addSubview: _toolbar];
     } else {
       LFL::VectorEraseByValue(&show_bottom, self);
-      [toolbar removeFromSuperview];
+      [_toolbar removeFromSuperview];
     }
   }
 
@@ -186,7 +185,7 @@ static std::vector<UIImage*> app_images;
   }
 
   + (void)updateFrame {
-    for (auto t : show_bottom) t->toolbar.frame = [t getToolbarFrame];
+    for (auto t : show_bottom) t->_toolbar.frame = [t getToolbarFrame];
   }
 
   static std::vector<IOSToolbar*> show_bottom, show_top;
@@ -200,7 +199,8 @@ static std::vector<UIImage*> app_images;
   @property (nonatomic, assign) LFL::SystemTableView *lfl_self;
   @property (nonatomic, assign) LFL::IntIntCB delete_row_cb;
   @property (nonatomic)         std::string style;
-  @property (nonatomic)         int editable_section, selected_section, selected_row, second_col;
+  @property (nonatomic)         int editable_section, editable_start_row, selected_section, selected_row,
+                                    second_col;
   @property (copy)              void (^completed)();
 @end
 
@@ -217,7 +217,7 @@ static std::vector<UIImage*> app_images;
     data.emplace_back();
     for (auto &i : item) {
       if (i.type == "separator") {
-        data.push_back({i.key, std::vector<LFL::CompiledTableItem>()});
+        data.emplace_back(i.key);
         section_index++;
       } else {
         data[section_index].item.emplace_back(i);
@@ -234,10 +234,10 @@ static std::vector<UIImage*> app_images;
     }
   }
 
-  - (void)replaceSection:(int)section items:(const std::vector<LFL::TableItem>&)item {
+  - (void)replaceSection:(int)section items:(const std::vector<LFL::TableItem>&)item header:(const std::string&)h flag:(int)f {
     if (section == data.size()) data.emplace_back();
     CHECK_LT(section, data.size());
-    data[section] = LFL::CompiledTable();
+    data[section] = LFL::CompiledTable(h, f);
     for (auto &i : item) data[section].item.emplace_back(i);
     [self.tableView reloadSections:[NSIndexSet indexSetWithIndex: section]
       withRowAnimation:UITableViewRowAnimationNone];
@@ -522,8 +522,43 @@ static std::vector<UIImage*> app_images;
     return LFL::MakeNSString(data[section].header);
   }
 
+#if 1
+  - (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section {
+    CHECK_LT(section, data.size());
+    UIView *headerView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, tableView.frame.size.width, 44)];
+    UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(50, 11, tableView.frame.size.width-100, 21)];
+    label.text = LFL::MakeNSString(data[section].header);
+    label.textAlignment = NSTextAlignmentCenter;
+    [headerView addSubview:label];
+
+    if (data[section].flag & LFL::SystemTableView::EditButton) {
+      UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
+      [button addTarget:self action:@selector(toggleEditMode:) forControlEvents:UIControlEventTouchUpInside];
+      [button setTitle:@"Edit" forState:UIControlStateNormal];
+      [button sizeToFit];
+      [button setFrame:CGRectMake(tableView.frame.size.width - button.frame.size.width - 11, 11, button.frame.size.width, 21)];
+      [headerView addSubview:button];
+    }
+    return headerView;
+  }
+  - (void)toggleEditMode:(UIButton*)button {
+    [self.tableView setEditing:!self.tableView.editing animated:YES];
+    if (self.tableView.editing) [button setTitle:@"Done" forState:UIControlStateNormal];
+    else                        [button setTitle:@"Edit" forState:UIControlStateNormal];
+    [button sizeToFit];
+    [button setFrame:CGRectMake(self.tableView.frame.size.width - button.frame.size.width - 11, 11, button.frame.size.width, 21)];
+  }
+#endif
+
+  - (BOOL)tableView:(UITableView *)tableView canEditRowAtIndexPath:(NSIndexPath *)path {
+    return path.section == _editable_section;
+  }
+
   - (UITableViewCellEditingStyle)tableView:(UITableView *)tableView editingStyleForRowAtIndexPath:(NSIndexPath *)path {
-    return path.section == _editable_section ? UITableViewCellEditingStyleDelete : UITableViewCellEditingStyleNone;
+    if (path.section != _editable_section || path.row < _editable_start_row) return UITableViewCellEditingStyleNone;
+    [self checkExists:path.section row:path.row];
+    return (data[path.section].flag & LFL::SystemTableView::EditableIfHasTag && !data[path.section].item[path.row].item.tag) ?
+      UITableViewCellEditingStyleNone : UITableViewCellEditingStyleDelete;
   }
 
   - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)path {
@@ -608,12 +643,14 @@ static std::vector<UIImage*> app_images;
       }
 
       std::string val;
-      if (!compiled_item.gui_loaded) val = *v;
-      else if ((*type == "textinput") || (*type == "numinput") || (*type == "pwinput")) {
+      if (!compiled_item.gui_loaded) {
+          if (v->size() && (*v)[0] != 1) val = (*v)[0] == 2 ? v->substr(1) : *v;
+      } else if ((*type == "textinput") || (*type == "numinput") || (*type == "pwinput")) {
         IOSTextField *textfield = _second_col ? [[cell.contentView subviews] lastObject] : cell.accessoryView;
         val = LFL::GetNSString(textfield.text);
-        if (val.empty() && !textfield.modified && v->size() && (*v)[0] != 1)
-          val = (*v)[0] == 2 ? v->substr(1) : *v;
+        if (val.empty() && !textfield.modified) {
+          if (v->size() && (*v)[0] != 1) val = (*v)[0] == 2 ? v->substr(1) : *v;
+        }
       } else if (*type == "label") {
         UILabel *label = _second_col ? [[cell.contentView subviews] lastObject] : cell.accessoryView;
         val = LFL::GetNSString(label.text);
@@ -806,7 +843,11 @@ SystemTableView::SystemTableView(const string &title, const string &style, Table
 }
 
 void SystemTableView::AddNavigationButton(const TableItem &item, int align) { return [FromVoid<IOSTable*>(impl) loadNavigationButton:item withAlign:align]; }
-void SystemTableView::AddToolbar(SystemToolbarView *t) { [FromVoid<IOSTable*>(impl) setToolbar: FromVoid<IOSToolbar*>(t->impl)]; }
+void SystemTableView::AddToolbar(SystemToolbarView *t) {
+  [FromVoid<IOSTable*>(impl) setToolbar: FromVoid<IOSToolbar*>(t->impl)];
+  [FromVoid<IOSTable*>(impl).toolbar.toolbar setNeedsLayout];
+}
+
 void SystemTableView::Show(bool show_or_hide) {
   if (show_or_hide && show_cb) show_cb();
   [FromVoid<IOSTable*>(impl) show:show_or_hide];
@@ -818,9 +859,10 @@ void SystemTableView::SetTag(int section, int row, int val) { [FromVoid<IOSTable
 void SystemTableView::SetValue(int section, int row, const string &val) { [FromVoid<IOSTable*>(impl) setValue:section row:row val:val]; }
 void SystemTableView::SetTitle(const string &title) { FromVoid<IOSTable*>(impl).title = LFL::MakeNSString(title); }
 StringPairVec SystemTableView::GetSectionText(int section) { return [FromVoid<IOSTable*>(impl) dumpDataForSection:section]; }
-void SystemTableView::SetEditableSection(LFL::IntIntCB cb, int section) {
+void SystemTableView::SetEditableSection(int section, int start_row, LFL::IntIntCB cb) {
   FromVoid<IOSTable*>(impl).delete_row_cb = move(cb);
   FromVoid<IOSTable*>(impl).editable_section = section;
+  FromVoid<IOSTable*>(impl).editable_start_row = start_row;
 }
 
 void SystemTableView::SelectRow(int section, int row) {
@@ -831,8 +873,8 @@ void SystemTableView::SelectRow(int section, int row) {
 void SystemTableView::BeginUpdates() { [FromVoid<IOSTable*>(impl).tableView beginUpdates]; }
 void SystemTableView::EndUpdates() { [FromVoid<IOSTable*>(impl).tableView endUpdates]; }
 void SystemTableView::SetDropdown(int section, int row, int val) { [FromVoid<IOSTable*>(impl) setDropdown:section row:row index:val]; }
-void SystemTableView::SetSectionValues(const StringVec &item, int section) { [FromVoid<IOSTable*>(impl) setSectionValues:section items:item]; }
-void SystemTableView::ReplaceSection(TableItemVec item, int section) { [FromVoid<IOSTable*>(impl) replaceSection:section items:move(item)]; }
+void SystemTableView::SetSectionValues(int section, const StringVec &item) { [FromVoid<IOSTable*>(impl) setSectionValues:section items:item]; }
+void SystemTableView::ReplaceSection(int section, const string &h, int flag, TableItemVec item) { [FromVoid<IOSTable*>(impl) replaceSection:section items:move(item) header:h flag:flag]; }
 
 SystemNavigationView::~SystemNavigationView() { if (auto nav = FromVoid<IOSNavigation*>(impl)) [nav release]; }
 SystemNavigationView::SystemNavigationView() : impl([[IOSNavigation alloc] init]) {}

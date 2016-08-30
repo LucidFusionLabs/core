@@ -620,7 +620,7 @@ struct Terminal : public TextArea {
     virtual void IOCtlWindowSize(int w, int h) {}
   };
   struct Controller : public ByteSink {
-    bool ctrl_down=0, frame_on_keyboard_input=0;
+    bool ctrl_down=0, alt_down=0, frame_on_keyboard_input=0;
     virtual ~Controller() {}
     virtual int Open(TextArea*) = 0;
     virtual StringPiece Read() = 0;

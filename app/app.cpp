@@ -561,21 +561,23 @@ int Application::Init() {
   thread_pool.Open(X_or_1(FLAGS_threadpool_size));
   if (FLAGS_threadpool_size) thread_pool.Start();
 
-  if (FLAGS_enable_video) {
-    if (!screen->gd) screen->gd = CreateGraphicsDevice(opengles_version).release();
-    shaders = make_unique<Shaders>();
-    screen->gd->Init(screen->Box());
-  } else { windows[screen->id.v] = screen; }
+  if (screen) {
+    if (FLAGS_enable_video) {
+      if (!screen->gd) screen->gd = CreateGraphicsDevice(opengles_version).release();
+      shaders = make_unique<Shaders>();
+      screen->gd->Init(screen->Box());
+    } else { windows[screen->id.v] = screen; }
 
 #ifdef LFL_WINDOWS
-  if (FLAGS_enable_video && splash_color) {
-    screen->gd->ClearColor(*splash_color);
-    screen->gd->Clear();
-    screen->gd->Flush();
-    Video::Swap();
-    screen->gd->ClearColor(screen->gd->clear_color);
-  }
+    if (FLAGS_enable_video && splash_color) {
+      screen->gd->ClearColor(*splash_color);
+      screen->gd->Clear();
+      screen->gd->Flush();
+      Video::Swap();
+      screen->gd->ClearColor(screen->gd->clear_color);
+    }
 #endif
+  }
 
   if (FLAGS_enable_audio) {
     if (LoadModule((audio = make_unique<Audio>()).get())) return ERRORv(-1, "audio init failed");
@@ -586,8 +588,10 @@ int Application::Init() {
     if ((asset_loader = make_unique<AssetLoader>())->Init()) return ERRORv(-1, "asset loader init failed");
   }
 
-  if (FLAGS_enable_video) fonts->LoadDefaultFonts();
-  screen->default_font = FontRef(FontDesc::Default(), false);
+  if (screen) {
+    if (FLAGS_enable_video) fonts->LoadDefaultFonts();
+    screen->default_font = FontRef(FontDesc::Default(), false);
+  }
 
   if (FLAGS_enable_input) {
     if (LoadModule((input = make_unique<Input>()).get())) return ERRORv(-1, "input init failed");
@@ -607,7 +611,7 @@ int Application::Init() {
 
   scheduler.Init();
   if (scheduler.monolithic_frame) frame_time.GetTime(true);
-  else                    screen->frame_time.GetTime(true);
+  else if (screen)        screen->frame_time.GetTime(true);
   INFO("Application::Init() succeeded");
   initialized = true;
   return 0;
@@ -858,7 +862,7 @@ void Window::RenderToFrameBuffer(FrameBuffer *fb) {
 /* FrameScheduler */
 
 void FrameScheduler::Init() { 
-  screen->target_fps = FLAGS_target_fps;
+  if (screen) screen->target_fps = FLAGS_target_fps;
   wait_forever = !FLAGS_target_fps;
   maxfps.timer.GetTime(true);
   if (wait_forever && synchronize_waits) frame_mutex.lock();

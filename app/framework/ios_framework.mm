@@ -97,7 +97,7 @@ static const char* const* ios_argv = 0;
       _title_bar = [[UINavigationBar alloc] initWithFrame:CGRectMake(0, 0, CGRectGetWidth(wbounds), 44)];
       [_title_bar setTintColor:[UIColor whiteColor]];
       UINavigationItem *item = [[UINavigationItem alloc] init];
-      item.title = LFL::MakeNSString(LFL::screen->caption);
+      item.title = LFL::MakeNSString(LFL::screen ? LFL::screen->caption : LFL::app->name);
       [_title_bar setItems:@[item]];
       [window addSubview: _title_bar];
 
@@ -182,9 +182,9 @@ static const char* const* ios_argv = 0;
                    });
   }
 
-- (void)glkView:(GLKView *)v drawInRect:(CGRect)rect {
-  if (!_screen_width || !_screen_height) return;
-  if (LFL::screen->y != _screen_y ||
+  - (void)glkView:(GLKView *)v drawInRect:(CGRect)rect {
+    if (!_screen_width || !_screen_height || !LFL::screen) return;
+    if (LFL::screen->y != _screen_y ||
         LFL::screen->width != _screen_width || LFL::screen->height != _screen_height)
       WindowReshaped(0, _screen_y, _screen_width, _screen_height);
 
@@ -319,47 +319,49 @@ static const char* const* ios_argv = 0;
       [win removeGestureRecognizer:[gestures objectAtIndex:i]];
   }
 
-  - (void)doubleSwipeUp:   (id)sender { LFL::screen->gesture_swipe_up   = 1; }
-  - (void)doubleSwipeDown: (id)sender { LFL::screen->gesture_swipe_down = 1; }
+  - (void)doubleSwipeUp:   (id)sender { if (auto s = LFL::screen) s->gesture_swipe_up   = 1; }
+  - (void)doubleSwipeDown: (id)sender { if (auto s = LFL::screen) s->gesture_swipe_down = 1; }
   - (void)tapGesture: (UITapGestureRecognizer *)tapGestureRecognizer {
     UIView *v = [tapGestureRecognizer view];
     CGPoint position = [tapGestureRecognizer locationInView:v];
     int dpind = v.frame.origin.y == 0;
-    LFL::screen->gesture_tap[dpind] = 1;
-    LFL::screen->gesture_dpad_x[dpind] = position.x;
-    LFL::screen->gesture_dpad_y[dpind] = position.y;
-    int fired = MouseClick(1, 1, (int)position.x, LFL::screen->y + LFL::screen->height - (int)position.y);
-    if (fired && _frame_on_mouse_input) [self.view setNeedsDisplay];
+    if (auto s = LFL::screen) {
+      s->gesture_tap[dpind] = 1;
+      s->gesture_dpad_x[dpind] = position.x;
+      s->gesture_dpad_y[dpind] = position.y;
+      int fired = MouseClick(1, 1, (int)position.x, s->y + s->height - (int)position.y);
+      if (fired && _frame_on_mouse_input) [self.view setNeedsDisplay];
+    }
   }
 
   - (void)panGesture: (UIPanGestureRecognizer *)panGestureRecognizer {
     UIView *v = [panGestureRecognizer view];
     int dpind = v.frame.origin.y == 0;
-
-    if (panGestureRecognizer.state == UIGestureRecognizerStateChanged) {
-      // CGPoint velocity = [panGestureRecognizer translationInView:v];
-      CGPoint velocity = [panGestureRecognizer velocityInView:v];
-      if (fabs(velocity.x) > 15 || fabs(velocity.y) > 15) {
-          LFL::screen->gesture_dpad_dx[dpind] = velocity.x;
-          LFL::screen->gesture_dpad_dy[dpind] = velocity.y;
-      }
-      // CGPoint position = [panGestureRecognizer locationInView:v];
-      CGPoint position = [panGestureRecognizer locationOfTouch:0 inView:v];
-      if (!dpind) {
+    if (auto s = LFL::screen) {
+      if (panGestureRecognizer.state == UIGestureRecognizerStateChanged) {
+        // CGPoint velocity = [panGestureRecognizer translationInView:v];
+        CGPoint velocity = [panGestureRecognizer velocityInView:v];
+        if (fabs(velocity.x) > 15 || fabs(velocity.y) > 15) {
+          s->gesture_dpad_dx[dpind] = velocity.x;
+          s->gesture_dpad_dy[dpind] = velocity.y;
+        }
+        // CGPoint position = [panGestureRecognizer locationInView:v];
+        CGPoint position = [panGestureRecognizer locationOfTouch:0 inView:v];
+        if (!dpind) {
           position.x += v.frame.origin.x;
           position.y += v.frame.origin.y;
+        }
+        s->gesture_dpad_x[dpind] = position.x;
+        s->gesture_dpad_y[dpind] = position.y;
+        // INFOf("gest %f %f %f %f", position.x, position.y, velocity.x, velocity.y);
+        // INFOf("origin %f %f", v.frame.origin.x, v.frame.origin.y);
+      } else if (panGestureRecognizer.state == UIGestureRecognizerStateEnded) {
+        s->gesture_dpad_stop[dpind] = 1;
+        s->gesture_dpad_x[dpind] = 0;
+        s->gesture_dpad_y[dpind] = 0;
+        // CGPoint position = [panGestureRecognizer locationInView:v];
+        // INFOf("gest %f %f stop", position.x, position.y);
       }
-      LFL::screen->gesture_dpad_x[dpind] = position.x;
-      LFL::screen->gesture_dpad_y[dpind] = position.y;
-      // INFOf("gest %f %f %f %f", position.x, position.y, velocity.x, velocity.y);
-      // INFOf("origin %f %f", v.frame.origin.x, v.frame.origin.y);
-    }
-    else if (panGestureRecognizer.state == UIGestureRecognizerStateEnded) {
-      LFL::screen->gesture_dpad_stop[dpind] = 1;
-      LFL::screen->gesture_dpad_x[dpind] = 0;
-      LFL::screen->gesture_dpad_y[dpind] = 0;
-      // CGPoint position = [panGestureRecognizer locationInView:v];
-      // INFOf("gest %f %f stop", position.x, position.y);
     }
   }
 
@@ -455,10 +457,12 @@ static const char* const* ios_argv = 0;
     int dpind = v.frame.origin.y == 0, scale = [uiapp getScale];
     if (!dpind) position = CGPointMake(scale * (position.x + v.frame.origin.x), scale * (position.y + v.frame.origin.y));
     else        position = CGPointMake(scale * position.x, scale * position.y);
-    LFL::screen->gesture_dpad_x[dpind] = position.x;
-    LFL::screen->gesture_dpad_y[dpind] = position.y;
-    int fired = MouseClick(1, 1, (int)position.x, LFL::screen->y + LFL::screen->height - (int)position.y);
-    if (fired && uiapp.frame_on_mouse_input) [self.superview setNeedsDisplay];
+    if (auto s = LFL::screen) {
+      s->gesture_dpad_x[dpind] = position.x;
+      s->gesture_dpad_y[dpind] = position.y;
+      int fired = MouseClick(1, 1, (int)position.x, s->y + s->height - (int)position.y);
+      if (fired && uiapp.frame_on_mouse_input) [self.superview setNeedsDisplay];
+    }
   }
 
   - (void)touchesCancelled:(NSSet *)touches withEvent:(UIEvent *)event {}
@@ -469,11 +473,13 @@ static const char* const* ios_argv = 0;
     int dpind = v.frame.origin.y == 0, scale = [uiapp getScale];
     if (!dpind) position = CGPointMake(scale * (position.x + v.frame.origin.x), scale * (position.y + v.frame.origin.y));
     else        position = CGPointMake(scale * position.x, scale * position.y);
-    LFL::screen->gesture_dpad_stop[dpind] = 1;
-    LFL::screen->gesture_dpad_x[dpind] = 0;
-    LFL::screen->gesture_dpad_y[dpind] = 0;
-    int fired = MouseClick(1, 0, (int)position.x, LFL::screen->y + LFL::screen->height - (int)position.y);
-    if (fired && uiapp.frame_on_mouse_input) [self.superview setNeedsDisplay];
+    if (auto s = LFL::screen) {
+      s->gesture_dpad_stop[dpind] = 1;
+      s->gesture_dpad_x[dpind] = 0;
+      s->gesture_dpad_y[dpind] = 0;
+      int fired = MouseClick(1, 0, (int)position.x, s->y + s->height - (int)position.y);
+      if (fired && uiapp.frame_on_mouse_input) [self.superview setNeedsDisplay];
+    }
   }
 
   - (void)touchesMoved:(NSSet *)touches withEvent:(UIEvent *)event {
@@ -483,8 +489,10 @@ static const char* const* ios_argv = 0;
     int dpind = v.frame.origin.y == 0, scale = [uiapp getScale];
     if (!dpind) position = CGPointMake(scale * (position.x + v.frame.origin.x), scale * (position.y + v.frame.origin.y));
     else        position = CGPointMake(scale * position.x, scale * position.y);
-    LFL::screen->gesture_dpad_x[dpind] = position.x;
-    LFL::screen->gesture_dpad_y[dpind] = position.y;
+    if (auto s = LFL::screen) {
+      s->gesture_dpad_x[dpind] = position.x;
+      s->gesture_dpad_y[dpind] = position.y;
+    }
   }
 @end
 
@@ -499,18 +507,18 @@ namespace LFL {
 struct iOSFrameworkModule : public Module {
   int Init() {
     INFO("iOSFrameworkModule::Init()");
-    CHECK(!screen->id.v);
-    screen->id = LFL::MakeTyped([[LFUIApplication sharedAppDelegate] view]);
-    CHECK(screen->id.v);
-    app->windows[screen->id.v] = screen;
-
+    if (screen) {
+      CHECK(!screen->id.v);
+      screen->id = LFL::MakeTyped([[LFUIApplication sharedAppDelegate] view]);
+      CHECK(screen->id.v);
+      app->windows[screen->id.v] = screen;
+    }
     LFUIApplication *uiapp = [LFUIApplication sharedAppDelegate];
     CGFloat scale = [uiapp getScale];
     CGRect rect = [uiapp getFrame];
-    screen->width = rect.size.width * scale;
-    screen->height = rect.size.height * scale;
-    INFOf("viewWillLayoutSubviews %d %d vs %d %d",
-          screen->width, screen->height, [uiapp view].drawableWidth, [uiapp view].drawableHeight);
+    int w = rect.size.width * scale, h = rect.size.height * scale;
+    if (screen) Assign(&screen->width, &screen->height, w, h);
+    INFOf("iOSFrameworkModule::Init %d %d vs %d %d", w, h, [uiapp view].drawableWidth, [uiapp view].drawableHeight);
     return 0;
   }
 };

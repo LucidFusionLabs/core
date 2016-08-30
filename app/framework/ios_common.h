@@ -48,6 +48,7 @@
 @end
 
 @interface IOSToolbar : NSObject
+  @property (nonatomic, retain) UIToolbar *toolbar;
   + (int)getBottomHeight;
   + (void)updateFrame;
 @end

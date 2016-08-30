@@ -426,7 +426,9 @@ struct CompiledTableItem {
 
 struct CompiledTable {
   string header;
+  int flag;
   vector<CompiledTableItem> item;
+  CompiledTable(string h="", int f=0) : header(move(h)), flag(f) {}
 };
 
 typedef vector<MenuItem>  MenuItemVec;
@@ -756,6 +758,7 @@ struct SystemMenuView {
 };
 
 struct SystemTableView {
+  enum { EditButton=1, EditableIfHasTag=2 };
   VoidPtr impl;
   bool changed=0;
   Callback hide_cb, show_cb = [=](){ changed=0; }; 
@@ -772,15 +775,15 @@ struct SystemTableView {
   void SetValue(int section, int row, const string &val);
   void SetTitle(const string &title);
   void SelectRow(int section, int row);
-  StringPairVec GetSectionText(int section=0);
-  bool GetSectionText(int section_ind, vector<string*> out, bool check=1) { return GetPairValues(GetSectionText(section_ind), move(out), check); }
-  void SetEditableSection(IntIntCB cb=IntIntCB(), int section=0);
+  StringPairVec GetSectionText(int section);
+  bool GetSectionText(int section, vector<string*> out, bool check=1) { return GetPairValues(GetSectionText(section), move(out), check); }
+  void SetEditableSection(int section, int start_row, IntIntCB cb=IntIntCB());
 
   void BeginUpdates();
   void EndUpdates();
   void SetDropdown(int section, int row, int val);
-  void SetSectionValues(const StringVec&, int section=0);
-  void ReplaceSection(TableItemVec item, int section=0);
+  void SetSectionValues(int section, const StringVec&);
+  void ReplaceSection(int section, const string &h, int flag, TableItemVec item);
 };
 
 struct SystemNavigationView {
