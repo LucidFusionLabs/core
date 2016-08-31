@@ -317,7 +317,8 @@ template <class X> int VectorEraseByValue(vector<X> *v, const X& x) {
   return orig_size - v->size();
 }
 template <class X> int VectorRemoveUnique(vector<unique_ptr<X>> *v, const X* x) {
-  for (auto i = v->begin(), e = v->end(); i != e; ++i) if (i->get() == x) { v->erase(i); return 1; }
+  for (auto i = v->begin(), e = v->end(); i != e; ++i)
+    if (i->get() == x) { unique_ptr<X> y; i->swap(y); v->erase(i); return 1; }
   return 0;
 }
 template <class X, class Y> X* VectorAddUnique(Y *v, unique_ptr<X> x) {
