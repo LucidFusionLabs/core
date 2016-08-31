@@ -214,6 +214,17 @@ void FrameScheduler::DelFrameWaitSocket(Window *w, Socket fd) {
   wait_forever_sockets.Del(fd);
 }
 
+SystemMenuView::~SystemMenuView() {}
+SystemMenuView::SystemMenuView(const string &t, MenuItemVec i) {}
+void SystemMenuView::Show() {}
+unique_ptr<SystemMenuView> SystemMenuView::CreateEditMenu(vector<MenuItem> items) { return nullptr; }
+
+SystemAlertView::~SystemAlertView() {}
+SystemAlertView::SystemAlertView(AlertItemVec items) {}
+void SystemAlertView::Show(const string &arg) {}
+void SystemAlertView::ShowCB(const string &title, const string &arg, StringCB confirm_cb) {}
+string SystemAlertView::RunModal(const string &arg) { return ""; }
+
 unique_ptr<Module> CreateFrameworkModule() { return make_unique<X11FrameworkModule>(); }
 
 extern "C" int main(int argc, const char* const* argv) {

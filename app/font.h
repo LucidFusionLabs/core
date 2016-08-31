@@ -492,6 +492,7 @@ struct Fonts {
   unordered_map<string, Family> family_map;
   unordered_map<unsigned, FillColor> color_map;
   Font *default_font=0;
+  virtual ~Fonts();
 
   void SelectFillColor(GraphicsDevice*);
   FillColor *GetFillColor(const Color&);

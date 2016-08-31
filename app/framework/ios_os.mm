@@ -797,7 +797,6 @@ static std::vector<UIImage*> app_images;
 namespace LFL {
 SystemAlertView::~SystemAlertView() { if (auto alert = FromVoid<IOSAlert*>(impl)) [alert release]; }
 SystemAlertView::SystemAlertView(AlertItemVec items) : impl([[IOSAlert alloc] init: move(items)]) {}
-UIAlertView *GetUIAlertView(SystemToolbarView *w) { return FromVoid<IOSAlert*>(w->impl).alert; }
 void SystemAlertView::Show(const string &arg) {
   auto alert = FromVoid<IOSAlert*>(impl);
   if (alert.add_text) [alert.alert textFieldAtIndex:0].text = MakeNSString(arg);

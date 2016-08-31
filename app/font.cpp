@@ -324,6 +324,10 @@ int FakeFontEngine::InitGlyphs(Font *f, Glyph *g, int n) {
   } return n;
 }
 
+Fonts::~Fonts() {
+  if (fc_engine.ptr) fc_engine.ptr->Shutdown();
+}
+
 void Fonts::SelectFillColor(GraphicsDevice *gd) {
   gd->Color4f(1, 1, 1, 1);
   gd->EnableTexture();

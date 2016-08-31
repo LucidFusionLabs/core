@@ -25,7 +25,7 @@ extern FlagOfType<int> FLAGS_font_size_;
 
 static FcConfig *fc_config;
 
-void FCFontEngine::Shutdown() {}
+void FCFontEngine::Shutdown() { FcFini(); }
 
 string FCFontEngine::DebugString(Font *f) const {
   return StrCat("FCFont(", f->desc->DebugString(), "), H=", f->Height(), " fixed_width=", f->fixed_width, " mono=", f->mono?f->max_width:0);
