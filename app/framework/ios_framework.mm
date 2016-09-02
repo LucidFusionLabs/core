@@ -76,18 +76,17 @@ static const char* const* ios_argv = 0;
   {
     CGFloat scale;
     CGRect keyboard_frame;
-    std::unordered_map<int, NSFileHandle*> wait_forever_fh;
-    std::vector<NSFileHandle*> restart_wait_forever_fh;
     bool want_extra_scale;
     int current_orientation, target_fps;
     UIBackgroundTaskIdentifier bgTask;
   }
-  @synthesize window, controller, view, lview, rview, textField;
+  @synthesize window, controller, view, lview, rview, text_field;
 
   + (LFUIApplication *)sharedAppDelegate { return (LFUIApplication *)[[UIApplication sharedApplication] delegate]; }
 
   - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
     _resign_textfield_on_return = YES;
+    _main_wait_fh = [[NSMutableDictionary alloc] init];
 
     MyAppCreate(LFL::ios_argc, LFL::ios_argv);
     CGRect wbounds = [[UIScreen mainScreen] bounds];
@@ -144,12 +143,12 @@ static const char* const* ios_argv = 0;
     [self initNotifications];
 
     // text view for keyboard display
-    self.textField = [[[MyTextField alloc] initWithFrame: CGRectZero] autorelease];
-    self.textField.delegate = self;
-    self.textField.text = [NSString stringWithFormat:@"default"];
-    self.textField.autocorrectionType = UITextAutocorrectionTypeNo;
-    self.textField.autocapitalizationType = UITextAutocapitalizationTypeNone;
-    [self.window addSubview:self.textField];
+    self.text_field = [[[MyTextField alloc] initWithFrame: CGRectZero] autorelease];
+    self.text_field.delegate = self;
+    self.text_field.text = [NSString stringWithFormat:@"default"];
+    self.text_field.autocorrectionType = UITextAutocorrectionTypeNo;
+    self.text_field.autocapitalizationType = UITextAutocapitalizationTypeNone;
+    [self.window addSubview:self.text_field];
 
     [[NSFileManager defaultManager] changeCurrentDirectoryPath: [[NSBundle mainBundle] resourcePath]];
     NSLog(@"iOSMain argc=%d", LFL::app->argc);
@@ -189,9 +188,6 @@ static const char* const* ios_argv = 0;
       WindowReshaped(0, _screen_y, _screen_width, _screen_height);
 
     LFAppFrame(true); 
-
-    for (auto fh : restart_wait_forever_fh) [fh waitForDataInBackgroundAndNotify];
-    restart_wait_forever_fh.clear();
   }
 
   - (void)updateTargetFPS: (int)fps {
@@ -226,11 +222,11 @@ static const char* const* ios_argv = 0;
   }
 
   - (CGRect) getKeyboardFrame { return keyboard_frame; }
-  - (bool)isKeyboardFirstResponder { return [self.textField isFirstResponder]; }
-  - (void)hideKeyboard { [self.textField resignFirstResponder]; }
+  - (bool)isKeyboardFirstResponder { return [self.text_field isFirstResponder]; }
+  - (void)hideKeyboard { [self.text_field resignFirstResponder]; }
   - (void)showKeyboard {
-    if ([self.textField isFirstResponder]) [self.textField resignFirstResponder];
-    [self.textField becomeFirstResponder];
+    if ([self.text_field isFirstResponder]) [self.text_field resignFirstResponder];
+    [self.text_field becomeFirstResponder];
   }
 
   - (void)keyboardWillHide:(NSNotification *)notification {
@@ -365,28 +361,18 @@ static const char* const* ios_argv = 0;
     }
   }
 
-  - (void)setFrameWaitSocket: (int)fd {
-    NSFileHandle *fh = [[NSFileHandle alloc] initWithFileDescriptor:fd];
-    [[NSNotificationCenter defaultCenter] addObserver:self
-      selector:@selector(fileDataAvailable:) name:NSFileHandleDataAvailableNotification object:fh];
-    [fh waitForDataInBackgroundAndNotify];
-    wait_forever_fh[fd] = fh;
+  - (void)addMainWaitSocket:(int)fd callback:(std::function<bool()>)cb {
+    [_main_wait_fh
+      setObject: [[[ObjcFileHandleCallback alloc] initWithCB:move(cb) forWindow:self fileDescriptor:fd] autorelease]
+      forKey:    [NSNumber numberWithInt: fd]];
   }
 
-  - (void)delFrameWaitSocket: (int)fd {
-    NSFileHandle *fh = LFL::Remove(&wait_forever_fh, fd);
-    LFL::VectorEraseByValue(&restart_wait_forever_fh, fh);
-    [[NSNotificationCenter defaultCenter] removeObserver:self name:NSFileHandleDataAvailableNotification object:fh];
-    // [fh closeFile];
-    [fh release];
-    fh = nil;
+  - (void)delMainWaitSocket: (int)fd {
+    [_main_wait_fh removeObjectForKey: [NSNumber numberWithInt: fd]];
   }
 
-  - (void)fileDataAvailable: (NSNotification *)notification {
-    NSFileHandle *fh = (NSFileHandle*) [notification object];
-    restart_wait_forever_fh.push_back(fh);
-    [self.view setNeedsDisplay];
-  }
+  - (void)objcWindowSelect {}
+  - (void)objcWindowFrame { [self.view setNeedsDisplay]; }
 @end
 
 @implementation LFViewController
@@ -588,7 +574,7 @@ int Video::Swap() {
   return 0;
 }
 
-bool FrameScheduler::DoFrameWait() { return false; }
+bool FrameScheduler::DoMainWait() { return false; }
 void FrameScheduler::Setup() { rate_limit = synchronize_waits = wait_forever_thread = monolithic_frame = run_main_loop = 0; }
 void FrameScheduler::Wakeup(Window *w) {
   dispatch_async(dispatch_get_main_queue(), ^{ [GetTyped<GLKView*>(w->id) setNeedsDisplay]; });
@@ -601,33 +587,31 @@ void FrameScheduler::UpdateWindowTargetFPS(Window *w) {
   [[LFUIApplication sharedAppDelegate] updateTargetFPS: w->target_fps];
 }
 
-void FrameScheduler::AddFrameWaitMouse(Window*) {
+void FrameScheduler::AddMainWaitMouse(Window*) {
   [LFUIApplication sharedAppDelegate].frame_on_mouse_input = YES;
 }
 
-void FrameScheduler::DelFrameWaitMouse(Window*) {
+void FrameScheduler::DelMainWaitMouse(Window*) {
   [LFUIApplication sharedAppDelegate].frame_on_mouse_input = NO;
 }
 
-void FrameScheduler::AddFrameWaitKeyboard(Window*) {
+void FrameScheduler::AddMainWaitKeyboard(Window*) {
   [LFUIApplication sharedAppDelegate].frame_on_keyboard_input = YES;
 }
 
-void FrameScheduler::DelFrameWaitKeyboard(Window*) {
+void FrameScheduler::DelMainWaitKeyboard(Window*) {
  [LFUIApplication sharedAppDelegate].frame_on_keyboard_input = NO;
 }
 
-void FrameScheduler::AddFrameWaitSocket(Window *w, Socket fd, int flag) {
-  if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, w);
+void FrameScheduler::AddMainWaitSocket(Window *w, Socket fd, int flag, function<bool()> cb) {
   if (!wait_forever_thread) {
     CHECK_EQ(SocketSet::READABLE, flag);
-    [[LFUIApplication sharedAppDelegate] setFrameWaitSocket: fd];
+    [[LFUIApplication sharedAppDelegate] addMainWaitSocket:fd callback:move(cb)];
   }
 }
 
-void FrameScheduler::DelFrameWaitSocket(Window *w, Socket fd) {
-  if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd);
-  [[LFUIApplication sharedAppDelegate] delFrameWaitSocket: fd];
+void FrameScheduler::DelMainWaitSocket(Window *w, Socket fd) {
+  [[LFUIApplication sharedAppDelegate] delMainWaitSocket: fd];
 }
 
 unique_ptr<Module> CreateFrameworkModule() { return make_unique<iOSFrameworkModule>(); }

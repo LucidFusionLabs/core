@@ -13,6 +13,36 @@
   - (void)run:(const LFL::string&)a { if (cb) cb(a); }
 @end
 
+@implementation ObjcFileHandleCallback
+  {
+    std::function<bool()> cb;
+    id<ObjcWindow> win;
+  }
+
+  - (id)initWithCB:(std::function<bool()>)v forWindow:(id<ObjcWindow>)w fileDescriptor:(int)fd {
+    self = [super init];
+    cb = move(v);
+    win = w;
+    _fh = [[NSFileHandle alloc] initWithFileDescriptor:fd];
+    [[NSNotificationCenter defaultCenter] addObserver:self
+      selector:@selector(fileDataAvailable:) name:NSFileHandleDataAvailableNotification object:_fh];
+    [_fh waitForDataInBackgroundAndNotify];
+    return self;
+  }
+
+  - (void)dealloc {
+    [[NSNotificationCenter defaultCenter] removeObserver:self
+      name:NSFileHandleDataAvailableNotification object:_fh];
+    [super dealloc];
+  }
+
+  - (void)fileDataAvailable: (NSNotification *)notification {
+    [win objcWindowSelect];
+    if (cb()) [win objcWindowFrame];
+    [_fh waitForDataInBackgroundAndNotify];
+  }
+@end
+
 namespace LFL {
 void NSLogString(const string &text) { NSLog(@"%@", MakeNSString(text)); }
 

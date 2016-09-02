@@ -678,12 +678,12 @@ int Application::Main() {
 int Application::MainLoop() {
   INFO("MainLoop: Begin, run=", run);
   while (run) {
-    bool got_wakeup = scheduler.FrameWait();
+    bool got_wakeup = scheduler.MainWait();
     TimerDrivenFrame(got_wakeup);
 #ifdef LFL_ANDROID
     if (screen->minimized) { INFO("MainLoop: minimized"); return 0; }
 #endif
-    scheduler.FrameDone();
+    if (scheduler.rate_limit && app->run && FLAGS_target_fps) scheduler.maxfps.Limit();
     MSleep(1);
   }
   INFO("MainLoop: End, run=", run);
@@ -700,19 +700,19 @@ void Application::ResetGL() {
 Application::~Application() {
   run = 0;
   INFO("exiting");
+  vector<Window*> close_list;
+  for (auto &i : windows) close_list.push_back(i.second);
+  for (auto &i : close_list) CloseWindow(i);
   if (network_thread) {
     network_thread->Write(new Callback([](){}));
     network_thread->thread->Wait();
     network_thread->net->Free();
   }
+  if (fonts) fonts.reset();
+  if (shaders) shaders.reset();
   if (!FLAGS_threadpool_size && thread_pool.worker.size()) thread_pool.worker[0].queue->HandleMessages();
   else thread_pool.Stop();
   message_queue.HandleMessages();
-  if (fonts) fonts.reset();
-  if (shaders) shaders.reset();
-  vector<Window*> close_list;
-  for (auto &i : windows) close_list.push_back(i.second);
-  for (auto &i : close_list) CloseWindow(i);
   if (exit_cb) exit_cb();
   if (cuda) cuda->Free();
   for (auto &m : modules) m->Free();
@@ -878,16 +878,14 @@ void FrameScheduler::Start() {
   if (wait_forever_thread) wakeup_thread.Start();
 }
 
-void FrameScheduler::FrameDone() { if (rate_limit && app->run && FLAGS_target_fps) maxfps.Limit(); }
-
-bool FrameScheduler::FrameWait() {
+bool FrameScheduler::MainWait() {
   bool ret = false;
   if (wait_forever && !FLAGS_target_fps) {
     if (synchronize_waits) {
       wait_mutex.lock();
       frame_mutex.unlock();
     }
-    ret = DoFrameWait();
+    ret = DoMainWait();
     if (synchronize_waits) {
       frame_mutex.lock();
       wait_mutex.unlock();

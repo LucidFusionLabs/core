@@ -113,6 +113,7 @@ extern int optind;
 
 #define LABEL(x) " " #x "=", x
 #define ONCE(x) { static bool once=0; if (!once && (once=1)) { x; } }
+#define ONCE_ELSE(x, y) { static bool once=0; if (!once && (once=1)) { x; } else { y; } }
 #define EVERY_N(x, y) { static int every_N=0; if (every_N++ % (x) == 0) { y; } }
 #define EX_LT(x, a)    if (!((x) <  (a)))  INFO((x), " < ",  (a), ": EX_LT(",    #x, ", ", #a, ")"); 
 #define EX_GT(x, a)    if (!((x) >  (a)))  INFO((x), " > ",  (a), ": EX_GT(",    #x, ", ", #a, ")"); 
@@ -476,21 +477,20 @@ struct FrameScheduler {
   void Init();
   void Free();
   void Start();
-  bool FrameWait();
-  void FrameDone();
-  bool DoFrameWait();
+  bool MainWait();
+  bool DoMainWait();
   void Wakeup(Window*);
   bool WakeupIn(Window*, Time interval, bool force=0);
   void ClearWakeupIn(Window*);
   void UpdateTargetFPS(Window*, int fps);
   void UpdateWindowTargetFPS(Window*);
   void SetAnimating(Window*, bool);
-  void AddFrameWaitMouse(Window*);
-  void DelFrameWaitMouse(Window*);
-  void AddFrameWaitKeyboard(Window*);
-  void DelFrameWaitKeyboard(Window*);
-  void AddFrameWaitSocket(Window*, Socket fd, int flag);
-  void DelFrameWaitSocket(Window*, Socket fd);
+  void AddMainWaitMouse(Window*);
+  void DelMainWaitMouse(Window*);
+  void AddMainWaitKeyboard(Window*);
+  void DelMainWaitKeyboard(Window*);
+  void AddMainWaitSocket(Window*, Socket fd, int flag, function<bool()> = []{ return 1; });
+  void DelMainWaitSocket(Window*, Socket fd);
 };
 
 struct BrowserInterface {

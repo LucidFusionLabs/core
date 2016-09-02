@@ -73,7 +73,7 @@ struct X11FrameworkModule : public Module {
     if (!(display = XOpenDisplay(NULL))) return ERRORv(-1, "XOpenDisplay");
     if (!(vi = glXChooseVisual(display, 0, att))) return ERRORv(-1, "glXChooseVisual");
     app->scheduler.system_event_socket = ConnectionNumber(display);
-    app->scheduler.AddFrameWaitSocket(screen, app->scheduler.system_event_socket, SocketSet::READABLE);
+    app->scheduler.AddMainWaitSocket(screen, app->scheduler.system_event_socket, SocketSet::READABLE);
     SystemNetwork::SetSocketCloseOnExec(app->scheduler.system_event_socket, true);
     INFO("X11VideoModule::Init()");
     return Video::CreateWindow(screen) ? 0 : -1;
@@ -179,7 +179,7 @@ int Video::Swap() {
   return 0;
 }
 
-bool FrameScheduler::DoFrameWait() {
+bool FrameScheduler::DoMainWait() {
   unordered_set<Window*> wokeup;
   wait_forever_sockets.Select(-1);
   for (auto &s : wait_forever_sockets.socket)
@@ -201,15 +201,15 @@ void FrameScheduler::Wakeup(Window *w) {
 }
 
 void FrameScheduler::UpdateWindowTargetFPS(Window *w) {}
-void FrameScheduler::AddFrameWaitMouse(Window *w) { }
-void FrameScheduler::DelFrameWaitMouse(Window *w) {  }
-void FrameScheduler::AddFrameWaitKeyboard(Window *w) {  }
-void FrameScheduler::DelFrameWaitKeyboard(Window *w) {  }
-void FrameScheduler::AddFrameWaitSocket(Window *w, Socket fd, int flag) {
+void FrameScheduler::AddMainWaitMouse(Window *w) { }
+void FrameScheduler::DelMainWaitMouse(Window *w) {  }
+void FrameScheduler::AddMainWaitKeyboard(Window *w) {  }
+void FrameScheduler::DelMainWaitKeyboard(Window *w) {  }
+void FrameScheduler::AddMainWaitSocket(Window *w, Socket fd, int flag, function<bool()>) {
   if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, w);
   wait_forever_sockets.Add(fd, flag, w);
 }
-void FrameScheduler::DelFrameWaitSocket(Window *w, Socket fd) {
+void FrameScheduler::DelMainWaitSocket(Window *w, Socket fd) {
   if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd);
   wait_forever_sockets.Del(fd);
 }

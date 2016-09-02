@@ -28,13 +28,14 @@
   - (CGRect)getKeyboardToolbarFrame;
 @end
 
-@interface LFUIApplication : NSObject <UIApplicationDelegate, GLKViewDelegate, UITextFieldDelegate> {}
+@interface LFUIApplication : NSObject<UIApplicationDelegate, GLKViewDelegate, UITextFieldDelegate, ObjcWindow> {}
   @property (nonatomic, retain) UIWindow *window;
   @property (nonatomic, retain) LFViewController *controller;
   @property (nonatomic, retain) GLKView *view;
   @property (nonatomic, retain) UIView *lview, *rview;
-  @property (nonatomic, retain) MyTextField *textField;
+  @property (nonatomic, retain) MyTextField *text_field;
   @property (nonatomic, retain) UINavigationBar *title_bar;
+  @property (nonatomic, retain) NSMutableDictionary *main_wait_fh;
   @property (nonatomic, assign) UIViewController *top_controller;
   @property BOOL resign_textfield_on_return, frame_on_keyboard_input, frame_on_mouse_input, downscale, title;
   @property int screen_y, screen_width, screen_height;

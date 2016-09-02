@@ -92,16 +92,16 @@ bool Video::CreateWindow(Window *W) {
 void Video::StartWindow(Window*) {}
 int Video::Swap() { return 0; }
 
-bool FrameScheduler::DoFrameWait() { return false; }
+bool FrameScheduler::DoMainWait() { return false; }
 void FrameScheduler::Setup() { rate_limit = synchronize_waits = wait_forever_thread = 0; }
 void FrameScheduler::Wakeup(Window*) {}
 void FrameScheduler::UpdateWindowTargetFPS(Window*) {}
-void FrameScheduler::AddFrameWaitMouse(Window*) {}
-void FrameScheduler::DelFrameWaitMouse(Window*) {}
-void FrameScheduler::AddFrameWaitKeyboard(Window*) {}
-void FrameScheduler::DelFrameWaitKeyboard(Window*) {}
-void FrameScheduler::AddFrameWaitSocket(Window*, Socket fd, int flag) {}
-void FrameScheduler::DelFrameWaitSocket(Window*, Socket fd) {}
+void FrameScheduler::AddMainWaitMouse(Window*) {}
+void FrameScheduler::DelMainWaitMouse(Window*) {}
+void FrameScheduler::AddMainWaitKeyboard(Window*) {}
+void FrameScheduler::DelMainWaitKeyboard(Window*) {}
+void FrameScheduler::AddMainWaitSocket(Window*, Socket fd, int flag, function<bool()>) {}
+void FrameScheduler::DelMainWaitSocket(Window*, Socket fd) {}
 
 extern "C" int main(int argc, const char *argv[]) {
   MyAppCreate(argc, argv);

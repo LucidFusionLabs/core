@@ -26,6 +26,17 @@
   - (void)run:(const LFL::string&)v;
 @end
 
+@protocol ObjcWindow<NSObject>
+  - (void)objcWindowSelect;
+  - (void)objcWindowFrame;
+@end
+
+@interface ObjcFileHandleCallback : NSObject {}
+  @property (nonatomic, retain) NSFileHandle *fh;
+  - (id)initWithCB:(std::function<bool()>)cb forWindow:(id<ObjcWindow>)w fileDescriptor:(int)fd;
+  - (void)fileDataAvailable: (NSNotification *)notification;
+@end
+
 namespace LFL {
 void NSLogString(const string &text);
 string GetNSDocumentDirectory();

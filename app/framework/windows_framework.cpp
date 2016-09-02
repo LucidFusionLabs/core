@@ -334,7 +334,7 @@ int Video::Swap() {
   return 0;
 }
 
-bool FrameScheduler::DoFrameWait() { return false;  }
+bool FrameScheduler::DoMainWait() { return false;  }
 void FrameScheduler::UpdateWindowTargetFPS(Window*) {}
 void FrameScheduler::Setup() { synchronize_waits = wait_forever_thread = run_main_loop = 0; }
 void FrameScheduler::Wakeup(Window *w) { 
@@ -342,15 +342,15 @@ void FrameScheduler::Wakeup(Window *w) {
   // PostMessage(GetTyped<HWND>(w->id), WM_USER, 0, 0);
 }
 
-void FrameScheduler::AddFrameWaitMouse(Window *w) { GetTyped<WinWindow*>(w->impl)->frame_on_mouse_input = true; }
-void FrameScheduler::DelFrameWaitMouse(Window *w) { GetTyped<WinWindow*>(w->impl)->frame_on_mouse_input = false; }
-void FrameScheduler::AddFrameWaitKeyboard(Window *w) { GetTyped<WinWindow*>(w->impl)->frame_on_keyboard_input = true; }
-void FrameScheduler::DelFrameWaitKeyboard(Window *w) { GetTyped<WinWindow*>(w->impl)->frame_on_keyboard_input = false; }
-void FrameScheduler::AddFrameWaitSocket(Window *w, Socket fd, int flag) {
+void FrameScheduler::AddMainWaitMouse(Window *w) { GetTyped<WinWindow*>(w->impl)->frame_on_mouse_input = true; }
+void FrameScheduler::DelMainWaitMouse(Window *w) { GetTyped<WinWindow*>(w->impl)->frame_on_mouse_input = false; }
+void FrameScheduler::AddMainWaitKeyboard(Window *w) { GetTyped<WinWindow*>(w->impl)->frame_on_keyboard_input = true; }
+void FrameScheduler::DelMainWaitKeyboard(Window *w) { GetTyped<WinWindow*>(w->impl)->frame_on_keyboard_input = false; }
+void FrameScheduler::AddMainWaitSocket(Window *w, Socket fd, int flag, function<bool()>) {
   if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, w);
   WSAAsyncSelect(fd, GetTyped<HWND>(w->id), WM_USER, FD_READ | FD_CLOSE);
 }
-void FrameScheduler::DelFrameWaitSocket(Window *w, Socket fd) {
+void FrameScheduler::DelMainWaitSocket(Window *w, Socket fd) {
   if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd);
   WSAAsyncSelect(fd, GetTyped<HWND>(w->id), WM_USER, 0);
 }

@@ -166,16 +166,16 @@ int Video::Swap() {
   return 0;
 }
 
-void FrameScheduler::DoFrameWait() { glfwWaitEvents(); }
+void FrameScheduler::DoMainWait() { glfwWaitEvents(); }
 void FrameScheduler::Setup() {}
 void FrameScheduler::Wakeup(Window*) { if (wait_forever && screen && wait_forever_thread) glfwPostEmptyEvent(); }
 void FrameScheduler::UpdateWindowTargetFPS(Window*) {}
-void FrameScheduler::AddFrameWaitMouse(Window*) {}
-void FrameScheduler::DelFrameWaitMouse(Window*) {}
-void FrameScheduler::AddFrameWaitKeyboard(Window*) {}
-void FrameScheduler::DelFrameWaitKeyboard(Window*) {}
-void FrameScheduler::AddFrameWaitSocket(Window *w, Socket fd, int flag) { if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, w); }
-void FrameScheduler::DelFrameWaitSocket(Window *w, Socket fd) { if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd); }
+void FrameScheduler::AddMainWaitMouse(Window*) {}
+void FrameScheduler::DelMainWaitMouse(Window*) {}
+void FrameScheduler::AddMainWaitKeyboard(Window*) {}
+void FrameScheduler::DelMainWaitKeyboard(Window*) {}
+void FrameScheduler::AddMainWaitSocket(Window *w, Socket fd, int flag, function<bool()>) { if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, w); }
+void FrameScheduler::DelMainWaitSocket(Window *w, Socket fd) { if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd); }
 
 unique_ptr<Module> CreateFrameworkModule() {
   ONCE({ if (FLAGS_enable_video) {

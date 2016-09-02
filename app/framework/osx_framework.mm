@@ -32,7 +32,6 @@
     NSWindow *window;
     NSOpenGLContext  *context;
     NSOpenGLPixelFormat *pixel_format;
-    std::unordered_map<int, NSFileHandle*> wait_forever_fh;
 
     NSTimer *runloop_timer, *trigger_timer;
     NSTimeInterval trigger_timer_start;
@@ -56,6 +55,7 @@
 
   - (id)initWithFrame:(NSRect)frame pixelFormat:(NSOpenGLPixelFormat*)format {
     [super initWithFrame:frame];
+    _main_wait_fh = [[NSMutableDictionary alloc] init];
     pixel_format = [format retain];
     app = GetLFApp();
     use_timer = should_close = 1;
@@ -137,7 +137,7 @@
       if (first) INFOf("OSXModule impl = %s", "PassThru");
       exit(LFAppMainLoop());
     } else if (screen->target_fps == 0) {
-      if (first) INFOf("OSXModule impl = %s", "FrameWait");
+      if (first) INFOf("OSXModule impl = %s", "MainWait");
       [self setNeedsDisplay:YES];
     } else if (use_display_link) {
       if (first) INFOf("OSXModule impl = %s", "DisplayLink");
@@ -183,7 +183,7 @@
     if (app->run) LFAppFrame(true);
     else [[NSApplication sharedApplication] terminate:self];
   }
-
+   
   - (void)reshape {
     if (!initialized) return;
     [context update];
@@ -199,32 +199,19 @@
     if (WindowClosed()) LFAppAtExit();
   }
 
-  - (void)setFrameWaitSocket: (int)fd {
-    NSFileHandle *fh = [[NSFileHandle alloc] initWithFileDescriptor:fd];
-    [[NSNotificationCenter defaultCenter] addObserver:self
-      selector:@selector(fileDataAvailable:) name:NSFileHandleDataAvailableNotification object:fh];
-    [fh waitForDataInBackgroundAndNotify];
-    wait_forever_fh[fd] = fh;
+  - (void)addMainWaitSocket:(int)fd callback:(std::function<bool()>)cb {
+    [_main_wait_fh
+      setObject: [[[ObjcFileHandleCallback alloc] initWithCB:move(cb) forWindow:self fileDescriptor:fd] autorelease]
+      forKey:    [NSNumber numberWithInt: fd]];
   }
 
-  - (void)delFrameWaitSocket: (int)fd {
-    NSFileHandle *fh = LFL::RemoveOrNull(&wait_forever_fh, fd);
-    if (!fh) return ERRORf("del missing wait_forever_fh fd=%d", fd);
-    [[NSNotificationCenter defaultCenter] removeObserver:self
-      name:NSFileHandleDataAvailableNotification object:fh];
-    // [fh closeFile];
-    fh = nil;
+  - (void)delMainWaitSocket: (int)fd {
+    [_main_wait_fh removeObjectForKey: [NSNumber numberWithInt: fd]];
   }
 
-  - (void)fileDataAvailable: (NSNotification *)notification { 
-    NSFileHandle *fh = static_cast<NSFileHandle*>([notification object]);
-    SetNativeWindow(screen);
-    // [self setNeedsDisplay:YES]; 
-    [self getFrameForTime:nil];
-    [fh waitForDataInBackgroundAndNotify];
-  }
+  - (void)objcWindowSelect { SetNativeWindow(screen); }
+  - (void)objcWindowFrame { [self getFrameForTime:nil]; } 
 
-  - (void)fileReadCompleted: (NSNotification*)notification {}
   - (void)callbackRun:(id)sender { [(ObjcCallback*)[sender representedObject] run]; }
   - (void)mouseDown:(NSEvent*)e { [self mouseClick:e down:1]; }
   - (void)mouseUp:  (NSEvent*)e { [self mouseClick:e down:0]; }
@@ -559,8 +546,8 @@ int Video::Swap() {
   return 0;
 }
 
-bool FrameScheduler::DoFrameWait() { return false; }
 void FrameScheduler::Setup() { rate_limit = synchronize_waits = wait_forever_thread = monolithic_frame = run_main_loop = 0; }
+bool FrameScheduler::DoMainWait() { return false; }
 
 void FrameScheduler::Wakeup(Window *w) {
   if (wait_forever && w)
@@ -577,22 +564,20 @@ void FrameScheduler::UpdateWindowTargetFPS(Window *w) {
   [GetTyped<GameView*>(w->id) startThread:false];
 }
 
-void FrameScheduler::AddFrameWaitMouse(Window *w) { [GetTyped<GameView*>(w->id) setFrameOnMouseInput:1]; }
-void FrameScheduler::DelFrameWaitMouse(Window *w) { [GetTyped<GameView*>(w->id) setFrameOnMouseInput:0]; }
-void FrameScheduler::AddFrameWaitKeyboard(Window *w) { [GetTyped<GameView*>(w->id) setFrameOnKeyboardInput:1]; }
-void FrameScheduler::DelFrameWaitKeyboard(Window *w) { [GetTyped<GameView*>(w->id) setFrameOnKeyboardInput:0]; }
-void FrameScheduler::AddFrameWaitSocket(Window *w, Socket fd, int flag) {
-  if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, w);
+void FrameScheduler::AddMainWaitMouse(Window *w) { [GetTyped<GameView*>(w->id) setFrameOnMouseInput:1]; }
+void FrameScheduler::DelMainWaitMouse(Window *w) { [GetTyped<GameView*>(w->id) setFrameOnMouseInput:0]; }
+void FrameScheduler::AddMainWaitKeyboard(Window *w) { [GetTyped<GameView*>(w->id) setFrameOnKeyboardInput:1]; }
+void FrameScheduler::DelMainWaitKeyboard(Window *w) { [GetTyped<GameView*>(w->id) setFrameOnKeyboardInput:0]; }
+void FrameScheduler::AddMainWaitSocket(Window *w, Socket fd, int flag, function<bool()> cb) {
   if (!wait_forever_thread) {
     CHECK_EQ(SocketSet::READABLE, flag);
-    [GetTyped<GameView*>(w->id) setFrameWaitSocket: fd];
+    [GetTyped<GameView*>(w->id) addMainWaitSocket:fd callback:move(cb)];
   }
 }
 
-void FrameScheduler::DelFrameWaitSocket(Window *w, Socket fd) {
-  if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd);
+void FrameScheduler::DelMainWaitSocket(Window *w, Socket fd) {
   CHECK(w->id.v);
-  [GetTyped<GameView*>(w->id) delFrameWaitSocket: fd];
+  [GetTyped<GameView*>(w->id) delMainWaitSocket: fd];
 }
 
 unique_ptr<Module> CreateFrameworkModule() { return make_unique<OSXFrameworkModule>(); }

@@ -16,7 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-@interface GameView : NSView<NSWindowDelegate>
+@interface GameView : NSView<NSWindowDelegate, ObjcWindow>
+  @property (nonatomic, retain) NSMutableDictionary *main_wait_fh;
   + (NSOpenGLPixelFormat*)defaultPixelFormat;
   - (void)clearKeyModifiers;
   - (void)update;

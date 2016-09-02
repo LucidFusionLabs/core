@@ -79,7 +79,7 @@ struct AndroidFrameworkModule : public Module {
 
     Socket fd[2];
     CHECK(SystemNetwork::OpenSocketPair(fd));
-    app->scheduler.AddFrameWaitSocket(screen, (app->scheduler.system_event_socket = fd[0]), SocketSet::READABLE);
+    app->scheduler.AddMainWaitSocket(screen, (app->scheduler.system_event_socket = fd[0]), SocketSet::READABLE);
     app->scheduler.wait_forever_wakeup_socket = fd[1];
     app->scheduler.Wakeup(screen);
     return 0;
@@ -185,7 +185,7 @@ void FrameScheduler::Setup() {
   synchronize_waits = wait_forever_thread = 0;
 }
 
-bool FrameScheduler::DoFrameWait() {
+bool FrameScheduler::DoMainWait() {
   wait_forever_sockets.Select(-1);
   if (wait_forever_sockets.GetReadable(system_event_socket)) {
     char buf[512];
@@ -204,16 +204,16 @@ bool FrameScheduler::WakeupIn(Window*, Time interval, bool force) { return 0; }
 void FrameScheduler::ClearWakeupIn(Window*) {}
 void FrameScheduler::UpdateWindowTargetFPS(Window *w) {}
 
-void FrameScheduler::AddFrameWaitMouse(Window*)    { dynamic_cast<AndroidFrameworkModule*>(app->framework.get())->frame_on_mouse_input    = true;  }
-void FrameScheduler::DelFrameWaitMouse(Window*)    { dynamic_cast<AndroidFrameworkModule*>(app->framework.get())->frame_on_mouse_input    = false; }
-void FrameScheduler::AddFrameWaitKeyboard(Window*) { dynamic_cast<AndroidFrameworkModule*>(app->framework.get())->frame_on_keyboard_input = true;  }
-void FrameScheduler::DelFrameWaitKeyboard(Window*) { dynamic_cast<AndroidFrameworkModule*>(app->framework.get())->frame_on_keyboard_input = false; }
-void FrameScheduler::AddFrameWaitSocket(Window *w, Socket fd, int flag) {
+void FrameScheduler::AddMainWaitMouse(Window*)    { dynamic_cast<AndroidFrameworkModule*>(app->framework.get())->frame_on_mouse_input    = true;  }
+void FrameScheduler::DelMainWaitMouse(Window*)    { dynamic_cast<AndroidFrameworkModule*>(app->framework.get())->frame_on_mouse_input    = false; }
+void FrameScheduler::AddMainWaitKeyboard(Window*) { dynamic_cast<AndroidFrameworkModule*>(app->framework.get())->frame_on_keyboard_input = true;  }
+void FrameScheduler::DelMainWaitKeyboard(Window*) { dynamic_cast<AndroidFrameworkModule*>(app->framework.get())->frame_on_keyboard_input = false; }
+void FrameScheduler::AddMainWaitSocket(Window *w, Socket fd, int flag, function<bool()>) {
   if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, w);
   wait_forever_sockets.Add(fd, flag, w);
 }
 
-void FrameScheduler::DelFrameWaitSocket(Window*, Socket fd) {
+void FrameScheduler::DelMainWaitSocket(Window*, Socket fd) {
   if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd);
   wait_forever_sockets.Del(fd);
 }

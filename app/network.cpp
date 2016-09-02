@@ -1371,8 +1371,11 @@ bool NBReadable(Socket fd, int timeout) {
 int NBRead(Socket fd, char *buf, int len, int timeout) {
   if (timeout && !NBReadable(fd, timeout)) return 0;
   int o = 0, s = 0;
-  do if ((s = read(fd, buf+o, len-o)) > 0) o += s;
-  while (s > 0 && len - o > 1024);
+  do {
+    if ((s = read(fd, buf+o, len-o)) <= 0) {
+      if (!s || (s < 0 && !SystemNetwork::EWouldBlock())) return o ? o : -1;
+    } else o += s;
+  } while (s > 0 && len - o > 1024);
   return o;
 }
 
@@ -1380,12 +1383,6 @@ int NBRead(Socket fd, string *buf, int timeout) {
   int l = NBRead(fd, &(*buf)[0], buf->size(), timeout);
   buf->resize(max(0,l));
   return l;
-}
-
-string NBRead(Socket fd, int len, int timeout) {
-  string ret(len, 0);
-  NBRead(fd, &ret, timeout);
-  return ret;
 }
 
 #if 1

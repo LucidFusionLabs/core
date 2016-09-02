@@ -571,7 +571,6 @@ struct GeoResolution {
 
 int NBRead(Socket fd, char *buf, int size, int timeout=0);
 int NBRead(Socket fd, string *buf, int timeout=0);
-string NBRead(Socket fd, int size, int timeout=0);
 bool NBReadable(Socket fd, int timeout=0);
 bool NBFGets(FILE*, char *buf, int size, int timeout=0);
 bool FGets(char *buf, int size);
