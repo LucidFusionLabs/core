@@ -78,8 +78,13 @@ TEST(AppTest, InputMod) {
 
 #if defined(LFL_OPENSSL) || defined(LFL_COMMONCRYPTO)
 TEST(CryptoTest, MethodResolution) {
+  string pw_text = "password", plain_text = "the quick brown fox jumped over the lazy dog";
   EXPECT_EQ(string("\x68\xd2\x45\x2f\x71\x3a\x0b\x7f\xbf\x0f\xd0\xfb\x89\x05\x97\xad", 16),
-            Crypto::MD5("the quick brown fox jumped over the lazy dog"));
+            Crypto::MD5(plain_text));
+
+  EXPECT_EQ(string("\x17\x88\xfc\x24\x92\x51\xa5\x12\xe2\x67\xc4\xa6\xfa\x67\xfb\xe8\x60\x8f\x7a\xb3\x67\xfb\x80\xa7"
+                   "\xe7\x04\x1e\x58\x58\xfd\x41\x60\x4e\x9e\xbc\xd3\xab\x92\xdd\x2c\x6c\x73\x61\x12\xd5\xa1\xe1\xd1"),
+            Crypto::Blowfish(pw_text, plain_text, true)); 
 }
 #endif
 

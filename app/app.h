@@ -765,7 +765,8 @@ struct SystemTableView {
   virtual ~SystemTableView();
   SystemTableView(const string &title, const string &style, TableItemVec items, int second_col=0);
 
-  void AddNavigationButton(const TableItem &item, int align);
+  void DelNavigationButton(int id);
+  void AddNavigationButton(int id, const TableItem &item);
   void AddToolbar(SystemToolbarView*);
   void Show(bool show_or_hide);
 

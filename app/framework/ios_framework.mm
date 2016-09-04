@@ -87,10 +87,10 @@ static const char* const* ios_argv = 0;
   - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
     _resign_textfield_on_return = YES;
     _main_wait_fh = [[NSMutableDictionary alloc] init];
+    scale = [[UIScreen mainScreen] scale];
+    CGRect wbounds = [[UIScreen mainScreen] bounds];
 
     MyAppCreate(LFL::ios_argc, LFL::ios_argv);
-    CGRect wbounds = [[UIScreen mainScreen] bounds];
-    scale = [[UIScreen mainScreen] scale];
     self.window = [[[UIWindow alloc] initWithFrame:wbounds] autorelease];
     if (_title) {
       _title_bar = [[UINavigationBar alloc] initWithFrame:CGRectMake(0, 0, CGRectGetWidth(wbounds), 44)];

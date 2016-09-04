@@ -597,13 +597,13 @@ struct SSHClientConnection : public Connection::Handler {
 
   string ReadCipher(Connection *c, const StringPiece &m) {
     string dec_text(m.size(), 0);
-    if (Crypto::CipherUpdate(decrypt, m, &dec_text[0], dec_text.size()) != 1) return ERRORv("", c->Name(), ": decrypt failed");
+    if (Crypto::CipherUpdate(decrypt, m, &dec_text[0], dec_text.size()) != dec_text.size()) return ERRORv("", c->Name(), ": decrypt failed");
     return dec_text;
   }
 
   int WriteCipher(Connection *c, const string &m) {
     string enc_text(m.size(), 0);
-    if (Crypto::CipherUpdate(encrypt, m, &enc_text[0], enc_text.size()) != 1) return ERRORv(-1, c->Name(), ": encrypt failed");
+    if (Crypto::CipherUpdate(encrypt, m, &enc_text[0], enc_text.size()) != enc_text.size()) return ERRORv(-1, c->Name(), ": encrypt failed");
     enc_text += SSH::MAC(mac_algo_c2s, MAC_len_c, m, sequence_number_c2s-1, integrity_c2s, mac_prefix_c2s);
     return c->WriteFlush(enc_text) == m.size() + X_or_Y(mac_prefix_c2s, MAC_len_c);
   }
@@ -973,7 +973,7 @@ Crypto::CipherAlgo SSH::Cipher::Algo(int id, int *blocksize) {
     case TripDES_CBC:  if (blocksize) *blocksize = 8;     return Crypto::CipherAlgos::TripDES_CBC();
     case Blowfish_CBC: if (blocksize) *blocksize = 8;     return Crypto::CipherAlgos::Blowfish_CBC();
     case RC4:          if (blocksize) *blocksize = 16;    return Crypto::CipherAlgos::RC4();
-    default:           return 0;
+    default:           ERROR("unknown CipherAlgo: ", id); return 0;
   }
 };
 

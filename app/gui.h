@@ -616,6 +616,7 @@ struct Editor : public TextView {
 struct Terminal : public TextArea {
   struct State { enum { TEXT=0, ESC=1, CSI=2, OSC=3, CHARSET=4 }; };
   struct ByteSink {
+    virtual ~ByteSink() {}
     virtual int Write(const StringPiece &b) = 0;
     virtual void IOCtlWindowSize(int w, int h) {}
   };

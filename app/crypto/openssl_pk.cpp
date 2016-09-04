@@ -31,16 +31,12 @@
 #include "openssl/err.h"
 
 namespace LFL {
-static void OpenSSLEnsureAllAlgorithmsAdded() {
-  ONCE({ OpenSSL_add_all_algorithms(); });
-}
-
 static string CompleteBIO(BIO *bio) {
-   size_t bio_len = BIO_pending(bio);
-   string ret(bio_len, 0);
-   BIO_read(bio, &ret[0], bio_len);
-   BIO_free(bio);
-   return ret;
+ size_t bio_len = BIO_pending(bio);
+ string ret(bio_len, 0);
+ BIO_read(bio, &ret[0], bio_len);
+ BIO_free(bio);
+ return ret;
 }
 
 ECPoint NewECPoint(ECGroup g) { return EC_POINT_new(FromVoid<EC_GROUP*>(g)); }
@@ -191,7 +187,6 @@ string DSAPEMPrivateKey(DSAKey key, string pw) {
 }
 
 string ECDSAPEMPrivateKey(ECPair key, string pw) {
-  OpenSSLEnsureAllAlgorithmsAdded();
   BIO *pem = BIO_new(BIO_s_mem());
   EVP_PKEY *pkey = EVP_PKEY_new();
   if (!EVP_PKEY_set1_EC_KEY(pkey, FromVoid<EC_KEY*>(key))) return ERRORv("", "error assigning openssl pkey");
@@ -202,6 +197,7 @@ string ECDSAPEMPrivateKey(ECPair key, string pw) {
   return CompleteBIO(pem);
 }
 
+void Crypto::PublicKeyInit() { ONCE({ OpenSSL_add_all_algorithms(); }); }
 ECDef Crypto::EllipticCurve::NISTP256() { return Void(NID_X9_62_prime256v1); };
 ECDef Crypto::EllipticCurve::NISTP384() { return Void(NID_secp384r1); };
 ECDef Crypto::EllipticCurve::NISTP521() { return Void(NID_secp521r1); };
@@ -216,7 +212,6 @@ ECPair Crypto::EllipticCurve::NewPair(ECDef id, bool generate) {
 }
 
 bool Crypto::ParsePEM(const char *key, RSAKey *rsa_out, DSAKey *dsa_out, ECPair *ec_out, function<string(string)> passphrase_cb) {
-  OpenSSLEnsureAllAlgorithmsAdded();
   BIO *bio = BIO_new_mem_buf(const_cast<char*>(key), strlen(key));
   EVP_PKEY *pk = PEM_read_bio_PrivateKey(bio, nullptr, [](char *buf, int size, int rwflag, void *u) {
     string pw = (*reinterpret_cast<decltype(passphrase_cb)*>(u))("");

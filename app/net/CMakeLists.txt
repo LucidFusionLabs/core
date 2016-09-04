@@ -1,6 +1,9 @@
 # $Id: CMakeLists.txt 1298 2011-12-11 18:46:06Z justin $
 
 lfl_add_target(app_null_ssl STATIC_LIBRARY SOURCES null_ssl.cpp)
+lfl_add_target(app_net_smtp STATIC_LIBRARY SOURCES smtp.cpp)
+lfl_add_target(app_net_ssh STATIC_LIBRARY SOURCES ssh.cpp)
+lfl_add_target(app_net_rfb STATIC_LIBRARY SOURCES rfb.cpp)
 
 if(LFL_OPENSSL)
   lfl_add_target(app_openssl_ssl STATIC_LIBRARY SOURCES openssl_ssl.cpp

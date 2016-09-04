@@ -100,6 +100,8 @@ struct Crypto {
     static CipherAlgo AES128_CBC();
     static CipherAlgo AES256_CBC();
     static CipherAlgo TripDES_CBC();
+    static CipherAlgo DES_CBC();
+    static CipherAlgo DES_ECB();
     static CipherAlgo Blowfish_CBC();
     static CipherAlgo RC4();
     static const char *Name(CipherAlgo);
@@ -170,8 +172,10 @@ struct Crypto {
   static Cipher CipherInit();
   static void CipherFree(Cipher);
   static int  CipherGetBlockSize(Cipher);
-  static int  CipherOpen(Cipher, CipherAlgo, bool dir, const StringPiece &key, const StringPiece &iv);
+  static int  CipherOpen(Cipher, CipherAlgo, bool dir, const StringPiece &key, const StringPiece &iv,
+                         int padding=0, int keylen=0);
   static int  CipherUpdate(Cipher, const StringPiece &in, char *out, int outlen);
+  static int  CipherFinal(Cipher, char *out, int outlen);
 
   static Digest DigestOpen(DigestAlgo);
   static void DigestUpdate(Digest, const StringPiece &in);
@@ -192,6 +196,7 @@ struct Crypto {
                        function<string(string)> passphrase_cb = function<string(string)>());
   static string BCryptPBKDF(const StringPiece &pw, const StringPiece &salt, int size, int rounds);
   static string GetLastErrorText();
+  static void PublicKeyInit();
 };
 
 bool GetECName(ECDef, string *algo_name, string *curve_name, Crypto::DigestAlgo *hash_id);

@@ -61,6 +61,7 @@ struct BitString {
   static int LastClear (const unsigned char *b, int l) { for (auto i=b+l;      i != b; --i) { auto c = *(i-1); if (c != 255) return (i-b-1)*8 + ffs(~c)-1; } return -1; }
   static int LastClear (const          char *b, int l) { return LastClear (reinterpret_cast<const unsigned char*>(b), l); }
   static int FirstClear(const          char *b, int l) { return FirstClear(reinterpret_cast<const unsigned char*>(b), l); }
+  static unsigned char Reverse(unsigned char b) { return ((b * 0x0802LU & 0x22110LU) | (b * 0x8020LU & 0x88440LU)) * 0x10101LU >> 16; }
 };
 
 struct Unicode {

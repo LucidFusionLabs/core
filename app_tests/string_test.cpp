@@ -32,6 +32,8 @@ TEST(StringTest, Bit) {
   EXPECT_EQ(30, bit_indices[1]);
   EXPECT_EQ(34, bit_indices[2]);
   EXPECT_EQ(-1, bit_indices[3]);
+
+  EXPECT_EQ(0b01011101, BitString::Reverse(0b10111010));
 }
 
 TEST(StringTest, BitString) {

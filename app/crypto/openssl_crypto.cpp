@@ -32,6 +32,8 @@ Crypto::CipherAlgo Crypto::CipherAlgos::AES128_CTR()   { return CipherAlgo(EVP_a
 Crypto::CipherAlgo Crypto::CipherAlgos::AES128_CBC()   { return CipherAlgo(EVP_aes_128_cbc()); }
 Crypto::CipherAlgo Crypto::CipherAlgos::AES256_CBC()   { return CipherAlgo(EVP_aes_256_cbc()); }
 Crypto::CipherAlgo Crypto::CipherAlgos::TripDES_CBC()  { return CipherAlgo(EVP_des_ede3_cbc()); }
+Crypto::CipherAlgo Crypto::CipherAlgos::DES_CBC()      { return CipherAlgo(EVP_des_cbc()); }
+Crypto::CipherAlgo Crypto::CipherAlgos::DES_ECB()      { return CipherAlgo(EVP_des_ecb()); }
 Crypto::CipherAlgo Crypto::CipherAlgos::Blowfish_CBC() { return CipherAlgo(EVP_bf_cbc()); }
 Crypto::CipherAlgo Crypto::CipherAlgos::RC4()          { return CipherAlgo(EVP_rc4()); }
 Crypto::DigestAlgo Crypto::DigestAlgos::SHA1()         { return DigestAlgo(EVP_get_digestbyname("sha1")); }
@@ -53,12 +55,28 @@ const char *Crypto::MACAlgos   ::Name(MACAlgo    v) { return EVP_MD_name(FromVoi
 Crypto::Cipher Crypto::CipherInit() { return EVP_CIPHER_CTX_new(); }
 void Crypto::CipherFree(Cipher c) { EVP_CIPHER_CTX_free(FromVoid<EVP_CIPHER_CTX*>(c)); }
 int Crypto::CipherGetBlockSize(Cipher c) { return EVP_CIPHER_CTX_block_size(FromVoid<EVP_CIPHER_CTX*>(c)); }
-int Crypto::CipherOpen(Cipher c, CipherAlgo algo, bool dir, const StringPiece &key, const StringPiece &IV) { 
-  return EVP_CipherInit(FromVoid<EVP_CIPHER_CTX*>(c), FromVoid<const EVP_CIPHER*>(algo),
-                        MakeUnsigned(key.data()), MakeUnsigned(IV.data()), dir);
+
+int Crypto::CipherOpen(Cipher ctx, CipherAlgo algo, bool dir, const StringPiece &key, const StringPiece &IV,
+                       int padding, int keylen) { 
+  auto c = FromVoid<EVP_CIPHER_CTX*>(ctx);
+  if (EVP_CipherInit_ex(c, FromVoid<const EVP_CIPHER*>(algo), nullptr,
+                        keylen ? nullptr : MakeUnsigned(key.data()),
+                        keylen ? nullptr : MakeUnsigned(IV.data()), dir) != 1) return 0;
+  if (!padding) EVP_CIPHER_CTX_set_padding(c, 0);
+  if (!keylen) return 1;
+  EVP_CIPHER_CTX_set_key_length(c, key.size());
+  return EVP_CipherInit_ex(c, nullptr, nullptr, MakeUnsigned(key.data()), MakeUnsigned(IV.data()), dir);
 }
+
 int Crypto::CipherUpdate(Cipher c, const StringPiece &in, char *out, int outlen) {
-  return EVP_Cipher(FromVoid<EVP_CIPHER_CTX*>(c), MakeUnsigned(out), MakeUnsigned(in.data()), in.size());
+  if (EVP_CipherUpdate(FromVoid<EVP_CIPHER_CTX*>(c), MakeUnsigned(out), &outlen, MakeUnsigned(in.data()),
+                       in.size()) != 1) return -1;
+  return outlen;
+}
+
+int Crypto::CipherFinal(Cipher c, char *out, int outlen) {
+  if (EVP_CipherFinal_ex(FromVoid<EVP_CIPHER_CTX*>(c), MakeUnsigned(&out[0]), &outlen) != 1) return -1;
+  return outlen;
 }
 
 Crypto::Digest Crypto::DigestOpen(DigestAlgo algo) { CHECK(algo); EVP_MD_CTX *d=new EVP_MD_CTX(); EVP_DigestInit(d, FromVoid<const EVP_MD*>(algo)); return d; }
@@ -76,27 +94,5 @@ string Crypto::DigestFinish(Digest d) {
 Crypto::MAC Crypto::MACOpen(MACAlgo algo, const StringPiece &k) { HMAC_CTX *m=new HMAC_CTX(); HMAC_Init(m, k.data(), k.size(), FromVoid<const EVP_MD*>(algo)); return m; }
 void Crypto::MACUpdate(MAC m, const StringPiece &in) { HMAC_Update(FromVoid<HMAC_CTX*>(m), MakeUnsigned(in.data()), in.size()); }
 int Crypto::MACFinish(MAC m, char *out, int outlen) { unsigned len=outlen; HMAC_Final(FromVoid<HMAC_CTX*>(m), MakeUnsigned(out), &len); delete FromVoid<HMAC_CTX*>(m); return len; }
-
-string Crypto::Blowfish(const string &passphrase, const string &in, bool encrypt_or_decrypt) {
-  unsigned char iv[8] = {0,0,0,0,0,0,0,0};
-  EVP_CIPHER_CTX ctx; 
-  EVP_CIPHER_CTX_init(&ctx); 
-  EVP_CipherInit_ex(&ctx, EVP_bf_cbc(), NULL, NULL, NULL, encrypt_or_decrypt);
-  EVP_CIPHER_CTX_set_key_length(&ctx, passphrase.size());
-  EVP_CipherInit_ex(&ctx, NULL, NULL, MakeUnsigned(passphrase.c_str()), iv, encrypt_or_decrypt); 
-
-  int outlen = 0, tmplen = 0;
-  string out(in.size()+encrypt_or_decrypt*EVP_MAX_BLOCK_LENGTH, 0);
-  EVP_CipherUpdate(&ctx, MakeUnsigned(&out[0]), &outlen, MakeUnsigned(in.c_str()), in.size());
-  EVP_CipherFinal_ex(&ctx, MakeUnsigned(&out[0]) + outlen, &tmplen); 
-  if (in.size() % 8) outlen += tmplen;
-
-  EVP_CIPHER_CTX_cleanup(&ctx); 
-  if (encrypt_or_decrypt) {
-    CHECK_LE(outlen, out.size());
-    out.resize(outlen);
-  }
-  return out;
-}
 
 }; // namespace LFL

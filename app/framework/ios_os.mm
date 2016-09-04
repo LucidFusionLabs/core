@@ -313,6 +313,11 @@ static std::vector<UIImage*> app_images;
     if (_second_col) return CGRectMake(_second_col, 10, self.tableView.frame.size.width - _second_col - 30, 30);
     else             return CGRectMake(0, 0, 150, 30);
   }
+  
+  - (void)clearNavigationButton:(int)align {
+    if (align == LFL::HAlign::Right) self.navigationItem.rightBarButtonItem = nil;
+    else                             self.navigationItem.leftBarButtonItem  = nil;
+  }
 
   - (void)loadNavigationButton:(const LFL::TableItem&)item withAlign:(int)align {
     if (item.key == "Edit") {
@@ -841,7 +846,8 @@ SystemTableView::SystemTableView(const string &title, const string &style, Table
   impl = table;
 }
 
-void SystemTableView::AddNavigationButton(const TableItem &item, int align) { return [FromVoid<IOSTable*>(impl) loadNavigationButton:item withAlign:align]; }
+void SystemTableView::DelNavigationButton(int align) { return [FromVoid<IOSTable*>(impl) clearNavigationButton:align]; }
+void SystemTableView::AddNavigationButton(int align, const TableItem &item) { return [FromVoid<IOSTable*>(impl) loadNavigationButton:item withAlign:align]; }
 void SystemTableView::AddToolbar(SystemToolbarView *t) {
   [FromVoid<IOSTable*>(impl) setToolbar: FromVoid<IOSToolbar*>(t->impl)];
   [FromVoid<IOSTable*>(impl).toolbar.toolbar setNeedsLayout];

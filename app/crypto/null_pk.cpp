@@ -59,6 +59,7 @@ string RSAPEMPrivateKey(RSAKey key, string pw) { return ""; }
 string DSAPEMPrivateKey(DSAKey key, string pw) { return ""; }
 string ECDSAPEMPrivateKey(ECPair key, string pw) { return ""; }
   
+void Crypto::PublicKeyInit() {}
 ECDef Crypto::EllipticCurve::NISTP256() { return nullptr; }
 ECDef Crypto::EllipticCurve::NISTP384() { return nullptr; }
 ECDef Crypto::EllipticCurve::NISTP521() { return nullptr; }

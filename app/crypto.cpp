@@ -63,4 +63,22 @@ bool Crypto::GenerateKey(const string &algo, int bits, const string &pw, const s
   return true;
 }
 
+string Crypto::Blowfish(const string &passphrase, const string &in, bool encrypt_or_decrypt) {
+  char iv[8] = {0,0,0,0,0,0,0,0};
+  Cipher cipher = CipherInit();
+  CHECK_EQ(1, CipherOpen(cipher, CipherAlgos::Blowfish_CBC(),
+                         encrypt_or_decrypt, passphrase, StringPiece(iv, 8), 1, passphrase.size()));
+  int outlen = 0, tmplen = 0;
+  string out(in.size()+encrypt_or_decrypt*CipherGetBlockSize(cipher), 0);
+  outlen = CipherUpdate(cipher, in, &out[0], out.size());
+  tmplen = CipherFinal(cipher, &out[0] + outlen, out.size() - outlen);
+  CipherFree(cipher);
+  if (in.size() % 8) outlen += tmplen;
+  if (encrypt_or_decrypt) {
+    CHECK_LE(outlen, out.size());
+    out.resize(outlen);
+  }
+  return out;
+}
+
 }; // namespace LFL

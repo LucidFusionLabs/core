@@ -20,39 +20,40 @@
 #include "core/app/crypto.h"
 
 namespace LFL {
-Crypto::CipherAlgo Crypto::CipherAlgos::AES128_CTR()   { FATAL("not implemented"); }
-Crypto::CipherAlgo Crypto::CipherAlgos::AES128_CBC()   { FATAL("not implemented"); }
-Crypto::CipherAlgo Crypto::CipherAlgos::AES256_CBC()   { FATAL("not implemented"); }
-Crypto::CipherAlgo Crypto::CipherAlgos::TripDES_CBC()  { FATAL("not implemented"); }
-Crypto::CipherAlgo Crypto::CipherAlgos::Blowfish_CBC() { FATAL("not implemented"); }
-Crypto::CipherAlgo Crypto::CipherAlgos::RC4()          { FATAL("not implemented"); }
-Crypto::DigestAlgo Crypto::DigestAlgos::SHA1()         { FATAL("not implemented"); }
-Crypto::DigestAlgo Crypto::DigestAlgos::SHA256()       { FATAL("not implemented"); }
-Crypto::DigestAlgo Crypto::DigestAlgos::SHA384()       { FATAL("not implemented"); }
-Crypto::DigestAlgo Crypto::DigestAlgos::SHA512()       { FATAL("not implemented"); }
-Crypto::DigestAlgo Crypto::DigestAlgos::MD5()          { FATAL("not implemented"); }
-Crypto::MACAlgo    Crypto::   MACAlgos::MD5()          { FATAL("not implemented"); }
-Crypto::MACAlgo    Crypto::   MACAlgos::SHA1()         { FATAL("not implemented"); }
-Crypto::MACAlgo    Crypto::   MACAlgos::SHA256()       { FATAL("not implemented"); }
-Crypto::MACAlgo    Crypto::   MACAlgos::SHA512()       { FATAL("not implemented"); }
+Crypto::CipherAlgo Crypto::CipherAlgos::AES128_CTR()   { FATAL(not_implemented); }
+Crypto::CipherAlgo Crypto::CipherAlgos::AES128_CBC()   { FATAL(not_implemented); }
+Crypto::CipherAlgo Crypto::CipherAlgos::AES256_CBC()   { FATAL(not_implemented); }
+Crypto::CipherAlgo Crypto::CipherAlgos::TripDES_CBC()  { FATAL(not_implemented); }
+Crypto::CipherAlgo Crypto::CipherAlgos::DES_CBC()      { FATAL(not_implemented); }
+Crypto::CipherAlgo Crypto::CipherAlgos::DES_ECB()      { FATAL(not_implemented); }
+Crypto::CipherAlgo Crypto::CipherAlgos::Blowfish_CBC() { FATAL(not_implemented); }
+Crypto::CipherAlgo Crypto::CipherAlgos::RC4()          { FATAL(not_implemented); }
+Crypto::DigestAlgo Crypto::DigestAlgos::SHA1()         { FATAL(not_implemented); }
+Crypto::DigestAlgo Crypto::DigestAlgos::SHA256()       { FATAL(not_implemented); }
+Crypto::DigestAlgo Crypto::DigestAlgos::SHA384()       { FATAL(not_implemented); }
+Crypto::DigestAlgo Crypto::DigestAlgos::SHA512()       { FATAL(not_implemented); }
+Crypto::DigestAlgo Crypto::DigestAlgos::MD5()          { FATAL(not_implemented); }
+Crypto::MACAlgo    Crypto::   MACAlgos::MD5()          { FATAL(not_implemented); }
+Crypto::MACAlgo    Crypto::   MACAlgos::SHA1()         { FATAL(not_implemented); }
+Crypto::MACAlgo    Crypto::   MACAlgos::SHA256()       { FATAL(not_implemented); }
+Crypto::MACAlgo    Crypto::   MACAlgos::SHA512()       { FATAL(not_implemented); }
 int         Crypto::CipherAlgos::KeySize (CipherAlgo v) { return 0; }
 int         Crypto::DigestAlgos::HashSize(DigestAlgo v) { return 0; }
 int         Crypto::   MACAlgos::HashSize(MACAlgo v) { return 0; }
 const char *Crypto::DigestAlgos::Name(DigestAlgo v) { return "none"; }
 const char *Crypto::CipherAlgos::Name(CipherAlgo v) { return "none"; }
 const char *Crypto::MACAlgos   ::Name(MACAlgo    v) { return "none"; }
-Crypto::Cipher Crypto::CipherInit() { FATAL("not implemented"); }
-void Crypto::CipherFree(Cipher c) { FATAL("not implemented"); }
-int Crypto::CipherGetBlockSize(Cipher c) { FATAL("not implemented"); }
-int Crypto::CipherOpen(Cipher c, CipherAlgo algo, bool dir, const StringPiece &key, const StringPiece &IV) {  FATAL("not implemented"); }
-int Crypto::CipherUpdate(Cipher c, const StringPiece &in, char *out, int outlen) { FATAL("not implemented"); }
-int Crypto::DigestGetHashSize(Digest d) { FATAL("not implemented"); }
-Crypto::Digest Crypto::DigestOpen(DigestAlgo algo) { FATAL("not implemented"); }
-void Crypto::DigestUpdate(Digest d, const StringPiece &in) { FATAL("not implemented"); }
-string Crypto::DigestFinish(Digest d) { FATAL("not implemented"); }
-Crypto::MAC Crypto::MACOpen(MACAlgo algo, const StringPiece &k) { FATAL("not implemented"); }
-void Crypto::MACUpdate(MAC m, const StringPiece &in) { FATAL("not implemented"); }
-int Crypto::MACFinish(MAC m, char *out, int outlen) { FATAL("not implemented"); }
-string Crypto::Blowfish(const string &passphrase, const string &in, bool encrypt_or_decrypt) { FATAL("not implemented"); }
+Crypto::Cipher Crypto::CipherInit() { FATAL(not_implemented); }
+void Crypto::CipherFree(Cipher c) { FATAL(not_implemented); }
+int Crypto::CipherGetBlockSize(Cipher c) { FATAL(not_implemented); }
+int Crypto::CipherOpen(Cipher c, CipherAlgo algo, bool dir, const StringPiece &key, const StringPiece &IV, int, int) { FATAL(not_implemented); }
+int Crypto::CipherUpdate(Cipher c, const StringPiece &in, char *out, int outlen) { FATAL(not_implemented); }
+int Crypto::DigestGetHashSize(Digest d) { FATAL(not_implemented); }
+Crypto::Digest Crypto::DigestOpen(DigestAlgo algo) { FATAL(not_implemented); }
+void Crypto::DigestUpdate(Digest d, const StringPiece &in) { FATAL(not_implemented); }
+string Crypto::DigestFinish(Digest d) { FATAL(not_implemented); }
+Crypto::MAC Crypto::MACOpen(MACAlgo algo, const StringPiece &k) { FATAL(not_implemented); }
+void Crypto::MACUpdate(MAC m, const StringPiece &in) { FATAL(not_implemented); }
+int Crypto::MACFinish(MAC m, char *out, int outlen) { FATAL(not_implemented); }
 
 }; // namespace LFL
