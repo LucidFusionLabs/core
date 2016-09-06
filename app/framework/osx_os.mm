@@ -61,7 +61,7 @@
   }
   
   - (void)modalAlertDidEnd:(NSAlert *)alert returnCode:(NSInteger)returnCode contextInfo:(void *)contextInfo {
-    NSWindow *window = [LFL::GetTyped<GameView*>(LFL::screen->id) window];
+    NSWindow *window = [LFL::GetTyped<GameView*>(LFL::app->focused->id) window];
     [NSApp endSheet: window];
   }
 
@@ -177,14 +177,14 @@ SystemAlertView::SystemAlertView(AlertItemVec items) { impl = [[OSXAlert alloc] 
 void SystemAlertView::Show(const string &arg) {
   auto alert = FromVoid<OSXAlert*>(impl);
   if (alert.add_text) [alert.input setStringValue: [NSString stringWithUTF8String: arg.c_str()]];
-  [alert.alert beginSheetModalForWindow:[GetTyped<GameView*>(screen->id) window] modalDelegate:alert
+  [alert.alert beginSheetModalForWindow:[GetTyped<GameView*>(app->focused->id) window] modalDelegate:alert
     didEndSelector:@selector(alertDidEnd:returnCode:contextInfo:) contextInfo:nil];
-  [GetTyped<GameView*>(screen->id) clearKeyModifiers];
+  [GetTyped<GameView*>(app->focused->id) clearKeyModifiers];
 }
 
 string SystemAlertView::RunModal(const string &arg) {
   auto alert = FromVoid<OSXAlert*>(impl);
-  NSWindow *window = [GetTyped<GameView*>(screen->id) window];
+  NSWindow *window = [GetTyped<GameView*>(app->focused->id) window];
   if (alert.add_text) [alert.input setStringValue: MakeNSString(arg)];
   [alert.alert beginSheetModalForWindow:window modalDelegate:alert
     didEndSelector:@selector(modalAlertDidEnd:returnCode:contextInfo:) contextInfo:nil];
@@ -267,11 +267,11 @@ void Application::ShowSystemFileChooser(bool choose_files, bool choose_dirs, boo
 
 void Application::ShowSystemContextMenu(const MenuItemVec &items) {
   NSEvent *event = [NSEvent mouseEventWithType: NSLeftMouseDown
-                            location:           NSMakePoint(screen->mouse.x, screen->mouse.y)
+                            location:           NSMakePoint(app->focused->mouse.x, app->focused->mouse.y)
                             modifierFlags:      NSLeftMouseDownMask
                             timestamp:          0
-                            windowNumber:       [[LFL::GetTyped<GameView*>(screen->id) window] windowNumber]
-                            context:            [[LFL::GetTyped<GameView*>(screen->id) window] graphicsContext]
+                            windowNumber:       [[LFL::GetTyped<GameView*>(app->focused->id) window] windowNumber]
+                            context:            [[LFL::GetTyped<GameView*>(app->focused->id) window] graphicsContext]
                             eventNumber:        0
                             clickCount:         1
                             pressure:           1];
@@ -287,8 +287,8 @@ void Application::ShowSystemContextMenu(const MenuItemVec &items) {
     if (i.cb) [item setRepresentedObject: [[ObjcCallback alloc] initWithCB: i.cb]];
   }
 
-  [NSMenu popUpContextMenu:menu withEvent:event forView:LFL::GetTyped<GameView*>(screen->id)];
-  [LFL::GetTyped<GameView*>(screen->id) clearKeyModifiers];
+  [NSMenu popUpContextMenu:menu withEvent:event forView:LFL::GetTyped<GameView*>(app->focused->id)];
+  [LFL::GetTyped<GameView*>(app->focused->id) clearKeyModifiers];
 }
 
 void Application::OpenSystemBrowser(const string &url_text) {

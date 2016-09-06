@@ -185,7 +185,7 @@ struct OpenGLES1 : public GraphicsDevice, public QOpenGLFunctions {
 #endif
 #include "core/app/graphics/opengl_common.h"
   int target_matrix=-1;
-  OpenGLES1() { default_color.push_back(Color(1.0, 1.0, 1.0, 1.0)); }
+  OpenGLES1(Window *P) : GraphicsDevice(P) { default_color.push_back(Color(1.0, 1.0, 1.0, 1.0)); }
 
   void Init(const Box &b) {
     done_init = true;
@@ -339,6 +339,7 @@ struct OpenGLES2 : public GraphicsDevice, public QOpenGLFunctions {
   LFL::Material material;
   LFL::Light light[4];
   Deferred deferred;
+  OpenGLES2(Window *P) : GraphicsDevice(P) {}
 
   void Init(const Box &b) {
     done_init = true;
@@ -687,7 +688,7 @@ struct OpenGLES2 : public GraphicsDevice, public QOpenGLFunctions {
 };
 #endif // LFL_GLES2
 
-unique_ptr<GraphicsDevice> CreateGraphicsDevice(int opengles_version) {
+unique_ptr<GraphicsDevice> CreateGraphicsDevice(Window *w, int opengles_version) {
   unique_ptr<GraphicsDevice> gd;
 #ifdef LFL_GLEW
 #ifdef GLEW_MX
@@ -700,14 +701,14 @@ unique_ptr<GraphicsDevice> CreateGraphicsDevice(int opengles_version) {
 #endif
 
 #ifdef LFL_GLES2
-  if (opengles_version == 2) gd = make_unique<OpenGLES2>();
+  if (opengles_version == 2) gd = make_unique<OpenGLES2>(w);
 #ifdef LFL_GLES1
   else
 #endif
 #endif
 
 #ifdef LFL_GLES1  
-  if (opengles_version == 1) gd = make_unique<OpenGLES1>();
+  if (opengles_version == 1) gd = make_unique<OpenGLES1>(w);
 #endif
 
 #ifdef LFL_GLEW

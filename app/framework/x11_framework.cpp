@@ -73,10 +73,10 @@ struct X11FrameworkModule : public Module {
     if (!(display = XOpenDisplay(NULL))) return ERRORv(-1, "XOpenDisplay");
     if (!(vi = glXChooseVisual(display, 0, att))) return ERRORv(-1, "glXChooseVisual");
     app->scheduler.system_event_socket = ConnectionNumber(display);
-    app->scheduler.AddMainWaitSocket(screen, app->scheduler.system_event_socket, SocketSet::READABLE);
+    app->scheduler.AddMainWaitSocket(app->focused app->scheduler.system_event_socket, SocketSet::READABLE);
     SystemNetwork::SetSocketCloseOnExec(app->scheduler.system_event_socket, true);
     INFO("X11VideoModule::Init()");
-    return Video::CreateWindow(screen) ? 0 : -1;
+    return Video::CreateWindow(app->focused) ? 0 : -1;
   }
 
   int Free() {
@@ -86,6 +86,7 @@ struct X11FrameworkModule : public Module {
   }
 
   int Frame(unsigned clicks) {
+    Window *screen = app->focused;
     Display *display = GetTyped<Display*>(screen->surface);
     static const Atom delete_win = XInternAtom(display, "WM_DELETE_WINDOW", 0);
     XEvent xev;
@@ -116,7 +117,7 @@ void Application::CloseWindow(Window *W) {
   windows.erase(W->id.v);
   if (windows.empty()) run = false;
   if (window_closed_cb) window_closed_cb(W);
-  screen = nullptr;
+  focused = nullptr;
   if (windows.size() == 1) SetNativeWindow(windows.begin()->second);
 }
 
@@ -173,6 +174,7 @@ bool Video::CreateWindow(Window *W) {
 
 void Video::StartWindow(Window*) {}
 int Video::Swap() {
+  Window *screen = app->focused;
   screen->gd->Flush();
   glXSwapBuffers(GetTyped<Display*>(screen->surface), ::Window(screen->id.v));
   screen->gd->CheckForError(__FILE__, __LINE__);

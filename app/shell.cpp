@@ -24,7 +24,7 @@
 namespace LFL {
 DEFINE_bool(shell_debug, false, "Print shell commands");
 
-Shell::Shell() {
+Shell::Shell(Window *W) : parent(W) {
   command.emplace_back("quit",         bind(&Shell::quit,          this, _1));
   command.emplace_back("console",      bind(&Shell::console,       this, _1));
   command.emplace_back("cmds",         bind(&Shell::cmds,          this, _1));
@@ -100,7 +100,7 @@ void Shell::mousein (const vector<string>&) { app->GrabMouseFocus(); }
 void Shell::mouseout(const vector<string>&) { app->ReleaseMouseFocus(); }
 
 void Shell::quit(const vector<string>&) { app->run = false; }
-void Shell::console(const vector<string>&) { if (screen->console) screen->console->ToggleActive(); }
+void Shell::console(const vector<string>&) { if (parent->console) parent->console->ToggleActive(); }
 void Shell::showkeyboard(const vector<string>&) { app->OpenTouchKeyboard(); }
 
 void Shell::clipboard(const vector<string> &a) {
@@ -109,8 +109,8 @@ void Shell::clipboard(const vector<string> &a) {
 }
 
 void Shell::consolecolor(const vector<string>&) {
-  if (!screen->console) return;
-  screen->console->style.font.SetFont(app->fonts->Get(FLAGS_font, "", 9, Color::black));
+  if (!parent->console) return;
+  parent->console->style.font.SetFont(app->fonts->Get(FLAGS_font, "", 9, Color::black));
 }
 
 void Shell::savedir(const vector<string>&) { INFO(LFAppSaveDir()); }
@@ -123,8 +123,8 @@ void Shell::savesettings(const vector<string> &a) {
 void Shell::screenshot(const vector<string> &a) {
   if (a.empty()) return INFO("usage: screenshot <file> [tex_id]");
   Texture tex;
-  if (a.size() == 1) screen->gd->Screenshot(&tex);
-  else               screen->gd->DumpTexture(&tex, atoi(a[1]));
+  if (a.size() == 1) parent->gd->Screenshot(&tex);
+  else               parent->gd->DumpTexture(&tex, atoi(a[1]));
   LocalFile lf(a[0], "w");
   PngWriter::Write(&lf, tex);
 }
@@ -135,9 +135,9 @@ void Shell::fillmode(const vector<string>&) {
 #endif
 }
 
-void Shell::grabmode(const vector<string> &a) { if (screen->grab_mode.Next()) mousein(a); else mouseout(a); }
-void Shell::texmode(const vector<string>&) { if (screen->tex_mode.Next()) screen->gd->EnableTexture(); else screen->gd->DisableTexture(); }
-void Shell::swapaxis(const vector<string>&) { screen->SwapAxis(); }
+void Shell::grabmode(const vector<string> &a) { if (parent->grab_mode.Next()) mousein(a); else mouseout(a); }
+void Shell::texmode(const vector<string>&) { if (parent->tex_mode.Next()) parent->gd->EnableTexture(); else parent->gd->DisableTexture(); }
+void Shell::swapaxis(const vector<string>&) { parent->SwapAxis(); }
 
 void Shell::snap(const vector<string> &arg) {
   Asset      *a  = app->asset     (arg.size() ? arg[0] : "snap"); 
@@ -145,7 +145,7 @@ void Shell::snap(const vector<string> &arg) {
   if (a && sa) {
     app->audio->Snapshot(sa);
     RingSampler::Handle H(sa->wav.get());
-    glSpectogram(screen->gd, &H, &a->tex);
+    glSpectogram(parent->gd, &H, &a->tex);
   }
 }
 
@@ -293,7 +293,7 @@ void Shell::writesnap(const vector<string> &a) {
   }
 }
 
-void Shell::FPS(const vector<string>&) { INFO("FPS ", screen->fps.FPS()); }
+void Shell::FPS(const vector<string>&) { INFO("FPS ", parent->fps.FPS()); }
 
 void Shell::WGet(const vector<string> &a) {
   if (a.empty()) return;
@@ -316,13 +316,13 @@ void Shell::Slider(const vector<string> &a) {
   string flag_name = a[0];
   float total = a.size() >= 1 ? atof(a[1]) : 0;
   float inc   = a.size() >= 2 ? atof(a[2]) : 0;
-  screen->AddDialog(make_unique<FlagSliderDialog>(screen, flag_name, total ? total : 100, inc ? inc : 1));
+  parent->AddDialog(make_unique<FlagSliderDialog>(parent, flag_name, total ? total : 100, inc ? inc : 1));
 }
 
 void Shell::Edit(const vector<string> &a) {
   string s = Asset::FileContents("default.vert");
   if (s.empty()) INFO("missing file default.vert");
-  screen->AddDialog(make_unique<EditorDialog>(screen, FontDesc::Default(), new BufferFile(s, "default.vert")));
+  parent->AddDialog(make_unique<EditorDialog>(parent, FontDesc::Default(), new BufferFile(s, "default.vert")));
 }
 
 void Shell::cmds(const vector<string>&) {
@@ -332,7 +332,7 @@ void Shell::cmds(const vector<string>&) {
 void Shell::flags(const vector<string>&) { Singleton<FlagMap>::Get()->Print(); }
 
 void Shell::binds(const vector<string>&) {
-  auto bm = screen->GetInputController<BindMap>(0);
+  auto bm = parent->GetInputController<BindMap>(0);
   if (!bm) return;
   for (auto &b : bm->data) {}
 }

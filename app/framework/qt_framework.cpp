@@ -77,7 +77,7 @@ class QtWindow : public QWindow {
   void MyInit() {
     CHECK(!lfl_window->gl.v);
     QOpenGLContext *glc = new QOpenGLContext(this);
-    if (LFL::screen->gl.v) glc->setShareContext(GetTyped<QOpenGLContext*>(LFL::screen->gl));
+    if (LFL::app->focused->gl.v) glc->setShareContext(GetTyped<QOpenGLContext*>(LFL::app->focused->gl));
     glc->setFormat(requestedFormat());
     glc->create();
     lfl_window->gl = MakeTyped(glc);
@@ -93,11 +93,11 @@ class QtWindow : public QWindow {
       MyAppMain();
       if (!LFL::app->run) { lfl_qapp->exit(); return true; }
     }
-    if (!LFL::screen || LFL::screen->impl.v != this) LFL::app->MakeCurrentWindow(lfl_window);
+    if (!LFL::app->focused || LFL::app->focused->impl.v != this) LFL::app->MakeCurrentWindow(lfl_window);
     app->EventDrivenFrame(true);
     if (!app->run) { lfl_qapp->exit(); return true; }
     if (reenable_wait_forever_socket && !(reenable_wait_forever_socket=0)) wait_forever_socket->setEnabled(true);
-    if (LFL::screen->target_fps) RequestRender();
+    if (LFL::app->focused->target_fps) RequestRender();
     return QWindow::event(event);
   }
 
@@ -105,7 +105,7 @@ class QtWindow : public QWindow {
     QWindow::resizeEvent(ev);
     if (!init) return; 
     LFL::app->MakeCurrentWindow(lfl_window);
-    LFL::screen->Reshaped(Box(ev->size().width(), ev->size().height()));
+    LFL::app->focused->Reshaped(Box(ev->size().width(), ev->size().height()));
     RequestRender();
   }
 
@@ -156,7 +156,7 @@ class QtWindow : public QWindow {
   }
 
   static unsigned GetKeyCode(QKeyEvent *ev) { int k = ev->key(); return k < 256 && isalpha(k) ? ::tolower(k) : k; }
-  static point    GetMousePosition(QMouseEvent *ev) { return point(ev->x(), LFL::screen->height - ev->y()); }
+  static point    GetMousePosition(QMouseEvent *ev) { return point(ev->x(), LFL::app->focused->height - ev->y()); }
   static unsigned GetMouseButton  (QMouseEvent *ev) {
     int b = ev->button();
     if      (b == Qt::LeftButton)  return 1;
@@ -200,12 +200,12 @@ void Application::CloseWindow(Window *W) {
   windows.erase(W->id.v);
   if (windows.empty()) app->run = false;
   if (app->window_closed_cb) app->window_closed_cb(W);
-  screen = 0;
+  focused = 0;
 }
 
 void Application::MakeCurrentWindow(Window *W) {
-  screen = W; 
-  GetTyped<QOpenGLContext*>(screen->gl)->makeCurrent(GetTyped<QWindow*>(screen->id));
+  focused = W; 
+  GetTyped<QOpenGLContext*>(focused->gl)->makeCurrent(GetTyped<QWindow*>(focused->id));
 }
 
 void Window::SetCaption(const string &v) { GetTyped<QWindow*>(id)->setTitle(QString::fromUtf8(v.data(), v.size())); }
@@ -215,14 +215,15 @@ bool Window::Reshape(int w, int h) { GetTyped<QWindow*>(id)->resize(w, h); app->
 void Video::StartWindow(Window*) {}
 
 int Video::Swap() {
+  Window *screen = app->focused;
   GetTyped<QOpenGLContext*>(screen->gl)->swapBuffers(GetTyped<QWindow*>(screen->id));
   screen->gd->CheckForError(__FILE__, __LINE__);
   return 0;
 }
 
 void Application::LoseFocus() {}
-void Application::GrabMouseFocus()    { GetTyped<QtWindow*>(screen->impl)->grabbed=1; GetTyped<QWindow*>(screen->id)->setCursor(Qt::BlankCursor); screen->grab_mode.On();  screen->cursor_grabbed=true;  }
-void Application::ReleaseMouseFocus() { GetTyped<QtWindow*>(screen->impl)->grabbed=0; GetTyped<QWindow*>(screen->id)->unsetCursor();              screen->grab_mode.Off(); screen->cursor_grabbed=false; }
+void Application::GrabMouseFocus()    { auto screen=app->focused; GetTyped<QtWindow*>(screen->impl)->grabbed=1; GetTyped<QWindow*>(screen->id)->setCursor(Qt::BlankCursor); screen->grab_mode.On();  screen->cursor_grabbed=true;  }
+void Application::ReleaseMouseFocus() { auto screen=app->focused; GetTyped<QtWindow*>(screen->impl)->grabbed=0; GetTyped<QWindow*>(screen->id)->unsetCursor();              screen->grab_mode.Off(); screen->cursor_grabbed=false; }
 void Application::OpenTouchKeyboard() {}
 void Application::SetTouchKeyboardTiled(bool v) {}
 
@@ -264,8 +265,8 @@ void Dialog::MessageBox(const string &n) {
 extern "C" int main(int argc, const char *argv[]) {
   MyAppCreate(argc, argv);
   lfl_qapp = new QApplication(argc, const_cast<char**>(argv));
-  LFL::screen->gd = LFL::CreateGraphicsDevice(2).release();
-  Video::CreateWindow(LFL::screen);
+  LFL::app->focused->gd = LFL::CreateGraphicsDevice(LFL::app->focused, 2).release();
+  Video::CreateWindow(LFL::app->focused);
   return lfl_qapp->exec();
 }
 

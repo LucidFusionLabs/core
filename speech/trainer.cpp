@@ -904,7 +904,7 @@ extern "C" void MyAppCreate(int argc, const char* const* argv) {
   open_console = 1;
 #endif
   app = new Application(argc, argv);
-  screen = new Window();
+  app->focused = new Window();
   app->name = "trainer";
 }
 
@@ -919,14 +919,14 @@ extern "C" int MyAppMain() {
   app->soundasset.Add(SoundAsset("snap", 0, new RingSampler(FLAGS_sample_rate*FLAGS_sample_secs), 1, FLAGS_sample_rate, FLAGS_sample_secs));
   app->soundasset.Load();
   
-  screen->shell = make_unique<Shell>();
-  BindMap *binds = screen->AddInputController(make_unique<BindMap>());
-  binds->Add(Bind(Key::Backquote, Bind::CB(bind([&](){ screen->shell->console(vector<string>()); }))));
-  binds->Add(Bind(Key::Escape,    Bind::CB(bind(&Shell::quit,   screen->shell.get(), vector<string>()))));
-  binds->Add(Bind(Key::F5,        Bind::CB(bind(&Shell::play,   screen->shell.get(), vector<string>(1, "snap")))));
-  binds->Add(Bind(Key::F6,        Bind::CB(bind(&Shell::snap,   screen->shell.get(), vector<string>(1, "snap")))));
-  binds->Add(Bind(Key::F7,        Bind::CB(bind(&MyResynth,                          vector<string>(1, "snap")))));
-  binds->Add(Bind(Key::F8,        Bind::CB(bind(&Shell::sinth,  screen->shell.get(), vector<string>(1, "440" )))));
+  app->focused->shell = make_unique<Shell>(app->focused);
+  BindMap *binds = app->focused->AddInputController(make_unique<BindMap>());
+  binds->Add(Bind(Key::Backquote, Bind::CB(bind([&](){ app->focused->shell->console(vector<string>()); }))));
+  binds->Add(Bind(Key::Escape,    Bind::CB(bind(&Shell::quit,   app->focused->shell.get(), vector<string>()))));
+  binds->Add(Bind(Key::F5,        Bind::CB(bind(&Shell::play,   app->focused->shell.get(), vector<string>(1, "snap")))));
+  binds->Add(Bind(Key::F6,        Bind::CB(bind(&Shell::snap,   app->focused->shell.get(), vector<string>(1, "snap")))));
+  binds->Add(Bind(Key::F7,        Bind::CB(bind(&MyResynth,                                vector<string>(1, "snap")))));
+  binds->Add(Bind(Key::F8,        Bind::CB(bind(&Shell::sinth,  app->focused->shell.get(), vector<string>(1, "440" )))));
 
   string wavdir=FLAGS_homedir, featdir=FLAGS_homedir, modeldir=FLAGS_homedir, dtdir=FLAGS_homedir;
   wavdir += "/" + FLAGS_WavDir + "/";

@@ -35,6 +35,7 @@ struct BrowserController : public InputController {
     else if (event == Mouse::Event::Wheel)   browser->MouseWheel(0, down*32);
     else if (event == Mouse::Event::Button2) browser->MouseButton(2, down, last_mx, last_my);
     else if (event == Mouse::Event::Button1) {
+      Window *screen = app->focused;
       if (down) screen->active_textbox = 0;
       browser->MouseButton(1, down, screen->mouse.x, screen->mouse.y);
     }
@@ -159,7 +160,7 @@ struct Browser : public BrowserInterface {
   Box Viewport() const { return Box(viewport.Dimension()); }
   int VScrolled() const { return v_scrollbar.scrolled * X_or_Y(v_scrollbar.doc_height, 1000); }
   int HScrolled() const { return h_scrollbar.scrolled * 1000; }
-  void InitLayers(unique_ptr<LayersInterface> l) { CHECK(!layers); (layers = move(l))->Init(screen->gd, 2); }
+  void InitLayers(unique_ptr<LayersInterface> l) { CHECK(!layers); (layers = move(l))->Init(app->focused->gd, 2); }
   void PaintTile(int x, int y, int z, int flag, const MultiProcessPaintResource &paint);
   string GetURL() const { return String::ToUTF8(doc.node->URL); }
   void SetURLText(const string &s) { if (url_cb) url_cb(s); }

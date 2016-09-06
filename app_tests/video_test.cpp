@@ -66,13 +66,13 @@ TEST(VideoTest, Color) {
 }
 
 TEST(VideoTest, Box) {
-  Box box = screen->Box();
+  Box box = app->focused->Box();
   EXPECT_EQ(0, box.x);
   EXPECT_EQ(0, box.y);
   EXPECT_TRUE(box.w != 0);
   EXPECT_TRUE(box.h != 0);
-  EXPECT_EQ(box, screen->Box(1.0, 1.0));
-  EXPECT_EQ(box, screen->Box().center(screen->Box(1.0, 1.0)));
+  EXPECT_EQ(box, app->focused->Box(1.0, 1.0));
+  EXPECT_EQ(box, app->focused->Box().center(app->focused->Box(1.0, 1.0)));
 
   box = Box(640, 480);               EXPECT_EQ(Box(0,  0,  640, 480), box);
   box = Box::DelBorder(box, 40, 80); EXPECT_EQ(Box(20, 40, 600, 400), box);

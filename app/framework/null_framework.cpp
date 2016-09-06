@@ -55,8 +55,8 @@ const int Key::End        = -34;
 struct NullFrameworkModule : public Module {
   int Init() {
     INFO("NullFrameworkModule::Init()");
-    screen->id = MakeTyped(screen);
-    app->windows[screen->id.v] = screen;
+    app->focused->id = MakeTyped(app->focused);
+    app->windows[app->focused->id.v] = app->focused;
     return 0;
   }
 };
@@ -66,7 +66,7 @@ void Application::CloseWindow(Window *W) {
   windows.erase(W->id.v);
   if (windows.empty()) app->run = false;
   if (app->window_closed_cb) app->window_closed_cb(W);
-  screen = 0;
+  app->focused = 0;
 }
 
 void Application::LoseFocus() {}

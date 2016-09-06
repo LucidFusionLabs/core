@@ -589,7 +589,7 @@ int ProcessAPIClient::HandleCloseBufferRequest(int seq, const IPC::CloseBufferRe
 
 int ProcessAPIClient::HandleSetClearColorRequest(int seq, const IPC::SetClearColorRequest *req, Void) {
   if (auto c = req->c())
-    app->RunInMainThread(bind(&GraphicsDevice::ClearColor, screen->gd, Color(c->r(), c->g(), c->b(), c->a())));
+    app->RunInMainThread(bind(&GraphicsDevice::ClearColor, app->focused->gd, Color(c->r(), c->g(), c->b(), c->a())));
   return IPC::Done;
 }
 
@@ -599,7 +599,7 @@ int ProcessAPIClient::HandleSetDocsizeRequest(int seq, const IPC::SetDocsizeRequ
 }
 
 int ProcessAPIClient::HandleSetTitleRequest(int seq, const IPC::SetTitleRequest *req, Void) {
-  app->RunInMainThread(bind(&Window::SetCaption, screen, req->title() ? req->title()->str() : ""));
+  app->RunInMainThread(bind(&Window::SetCaption, app->focused, req->title() ? req->title()->str() : ""));
   return IPC::Done;
 }
 

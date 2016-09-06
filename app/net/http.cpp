@@ -628,7 +628,7 @@ void HTTPServer::SessionResource::ConnectionClosedCB(Connection *c) {
 HTTPServer::Response HTTPServer::ConsoleResource::Request(Connection *c, int method, const char *url, const char *args, const char *headers, const char *postdata, int postlen) {
   StringPiece v;
   if (args) HTTP::GrepURLArgs(args, 0, 1, "v", &v);
-  screen->shell->Run(v.str());
+  app->focused->shell->Run(v.str());
   string response = StrCat("<html>Shell::run('", v.str(), "')<br/></html>\n");
   return HTTPServer::Response("text/html; charset=UTF-8", &response);
 }

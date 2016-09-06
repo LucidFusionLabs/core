@@ -447,14 +447,14 @@ struct PhoneticSegmentationGUI : public GUI {
 
     if (geometry.get()) {
       geometry->SetPosition(win.TopLeft());
-      screen->gd->DisableTexture();
+      root->gd->DisableTexture();
       Scene::Select(root->gd, geometry.get());
       Scene::Draw(root->gd, geometry.get(), 0);
     }
 
     for (int i = 0; i < segments.size(); i++) {
       if (!segments[i].hover) continue;
-      font->Draw(segments[i].name, point(screen->width * (!flip ? .85 : .15), screen->height * (!flip ? .15 : .85)));
+      font->Draw(segments[i].name, point(root->width * (!flip ? .85 : .15), root->height * (!flip ? .15 : .85)));
       break;
     }
   }
@@ -465,7 +465,7 @@ struct PhoneticSegmentationGUI : public GUI {
     args.push_back(sound_asset_name);
     args.push_back(StrCat(beg*FLAGS_feat_hop));
     args.push_back(StrCat(len*FLAGS_feat_hop)); 
-    screen->shell->play(args);
+    root->shell->play(args);
   }
 };
 #endif /* LFL_CORE_APP_GUI_H__ */

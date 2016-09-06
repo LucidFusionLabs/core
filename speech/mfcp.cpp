@@ -31,7 +31,7 @@ extern "C" void MyAppCreate(int argc, const char* const* argv) {
   FLAGS_open_console = 1;
 #endif
   app = new Application(argc, argv);
-  screen = new Window();
+  app->focused = new Window();
 }
 
 extern "C" int MyAppMain() {

@@ -337,27 +337,28 @@ void Texture::Coordinates(float *texcoord, int w, int h, int wd, int hd) {
 }
 
 void Texture::Resize(int W, int H, int PF, int flag) {
+  GraphicsDevice *d = gd ? gd : app->focused->gd;
   if (PF) pf = PF;
   width=W; height=H;
   if (buf || (flag & Flag::CreateBuf)) RenewBuffer();
   if (!ID && (flag & Flag::CreateGL)) {
     if (!cubemap) {
-      screen->gd->DisableCubeMap();
-      screen->gd->GenTextures(GraphicsDevice::Texture2D, 1, &ID);
+      d->DisableCubeMap();
+      d->GenTextures(GraphicsDevice::Texture2D, 1, &ID);
     } else if (cubemap == CubeMap::PX) {
-      screen->gd->ActiveTexture(0);
-      screen->gd->GenTextures(GraphicsDevice::TextureCubeMap, 1, &ID);
+      d->ActiveTexture(0);
+      d->GenTextures(GraphicsDevice::TextureCubeMap, 1, &ID);
     }
     if (!(flag & Flag::RepeatGL)) {
-      screen->gd->TexParameter(GraphicsDevice::Texture2D, GraphicsDevice::TextureWrapS, GraphicsDevice::ClampToEdge);
-      screen->gd->TexParameter(GraphicsDevice::Texture2D, GraphicsDevice::TextureWrapT, GraphicsDevice::ClampToEdge);
+      d->TexParameter(GraphicsDevice::Texture2D, GraphicsDevice::TextureWrapS, GraphicsDevice::ClampToEdge);
+      d->TexParameter(GraphicsDevice::Texture2D, GraphicsDevice::TextureWrapT, GraphicsDevice::ClampToEdge);
     }
   }
   if (ID || cubemap) {
-    int opengl_width = screen->gd->TextureDim(width), opengl_height = screen->gd->TextureDim(height);
+    int opengl_width = d->TextureDim(width), opengl_height = d->TextureDim(height);
     int gl_tt = GLTexType(), gl_pt = GLPixelType(), gl_bt = GLBufferType();
-    if (ID) screen->gd->BindTexture(gl_tt, ID);
-    screen->gd->TexImage2D(gl_tt, 0, GraphicsDevice::GLInternalFormat, opengl_width, opengl_height, 0, gl_pt, gl_bt, 0);
+    if (ID) d->BindTexture(gl_tt, ID);
+    d->TexImage2D(gl_tt, 0, GraphicsDevice::GLInternalFormat, opengl_width, opengl_height, 0, gl_pt, gl_bt, 0);
     Coordinates(coord, width, height, opengl_width, opengl_height);
   }
 }
@@ -381,12 +382,13 @@ void Texture::UpdateBuffer(const unsigned char *B, const ::LFL::Box &box, int PF
   SimpleVideoResampler::Blit(B, buf, box.w, box.h, PF, linesize, 0, 0, pf, LineSize(), box.x, box.y, blit_flag);
 }
 
-void Texture::Bind() const { screen->gd->BindTexture(GLTexType(), ID); }
+void Texture::Bind() const { if (auto d = gd ? gd : app->focused->gd) d->BindTexture(GLTexType(), ID); }
 void Texture::ClearGL() { 
-  if (!app->MainThread()) { app->RunInMainThread(bind(&GraphicsDevice::DelTexture, screen->gd, ID)); ID=0; }
-  else if (ID) { 
-    if (screen) screen->gd->DelTexture(ID);
-    else if (FLAGS_gd_debug) ERROR("DelTexture no screen ", ID);
+  GraphicsDevice *d = gd ? gd : (app->focused ? app->focused->gd : 0);
+  if (!d) { if (FLAGS_gd_debug) ERROR("DelTexture no device ", ID); return; }
+  if (ID) {
+    if (!app->MainThread()) { app->RunInMainThread(bind(&GraphicsDevice::DelTexture, d, ID)); }
+    else d->DelTexture(ID);
     ID = 0;
   }
 }
@@ -401,11 +403,11 @@ void Texture::LoadGL(const unsigned char *B, const point &dim, int PF, int lines
 }
 
 void Texture::UpdateGL(const unsigned char *B, const ::LFL::Box &box, int flag) {
+  GraphicsDevice *d = gd ? gd : app->focused->gd;
   int gl_tt = GLTexType(), gl_y = (flag & Flag::FlipY) ? (height - box.y - box.h) : box.y;
-  screen->gd->BindTexture(gl_tt, ID);
-  screen->gd->TexSubImage2D(gl_tt, 0, box.x, gl_y, box.w, box.h, GLPixelType(), GLBufferType(), B);
+  d->BindTexture(gl_tt, ID);
+  d->TexSubImage2D(gl_tt, 0, box.x, gl_y, box.w, box.h, GLPixelType(), GLBufferType(), B);
 }
-
 
 #ifdef LFL_APPLE
 #import <CoreGraphics/CGBitmapContext.h> 
@@ -447,7 +449,7 @@ void TextureArray::DrawSequence(Asset *out, Entity *e, int *ind) {
   *ind = (*ind + 1) % a.size();
   const Texture *in = &a[*ind];
   out->tex.ID = in->ID;
-  if (out->geometry) Scene::Draw(screen->gd, out->geometry, e);
+  if (out->geometry) Scene::Draw(in->gd, out->geometry, e);
 }
 
 /* DepthTexture */
@@ -455,18 +457,18 @@ void TextureArray::DrawSequence(Asset *out, Entity *e, int *ind) {
 void DepthTexture::Resize(int W, int H, int DF, int flag) {
   if (DF) df = DF;
   width=W; height=H;
-  if (!ID && (flag & Flag::CreateGL)) screen->gd->GenRenderBuffers(1, &ID);
-  int opengl_width = screen->gd->TextureDim(width), opengl_height = screen->gd->TextureDim(height);
+  if (!ID && (flag & Flag::CreateGL)) gd->GenRenderBuffers(1, &ID);
+  int opengl_width = gd->TextureDim(width), opengl_height = gd->TextureDim(height);
   if (ID) {
-    screen->gd->BindRenderBuffer(ID);
-    screen->gd->RenderBufferStorage(Depth::OpenGLID(df), opengl_width, opengl_height);
+    gd->BindRenderBuffer(ID);
+    gd->RenderBufferStorage(Depth::OpenGLID(df), opengl_width, opengl_height);
   }
 }
 
 void DepthTexture::ClearGL() {
   if (ID) {
-    if (screen) screen->gd->DelRenderBuffers(1, &ID);
-    else if (FLAGS_gd_debug) ERROR("DelRenderBuffer no screen ", ID);
+    if (gd) gd->DelRenderBuffers(1, &ID);
+    else if (FLAGS_gd_debug) ERROR("DelRenderBuffer no device ", ID);
     ID = 0;
   }
 }
@@ -476,7 +478,7 @@ void DepthTexture::ClearGL() {
 void FrameBuffer::Resize(int W, int H, int flag) {
   width=W; height=H;
   if (!ID && (flag & Flag::CreateGL)) {
-    screen->gd->GenFrameBuffers(1, &ID);
+    gd->GenFrameBuffers(1, &ID);
     if (flag & Flag::CreateTexture)      AllocTexture(&tex);
     if (flag & Flag::CreateDepthTexture) AllocDepthTexture(&depth);
   } else {
@@ -484,7 +486,7 @@ void FrameBuffer::Resize(int W, int H, int flag) {
     depth.Resize(width, height);
   }
   Attach(tex.ID, depth.ID);
-  int status = screen->gd->CheckFrameBufferStatus();
+  int status = gd->CheckFrameBufferStatus();
   if (status != GraphicsDevice::FramebufferComplete) ERROR("FrameBuffer status ", status);
   if (flag & Flag::ReleaseFB) Release();
 }
@@ -497,25 +499,25 @@ void FrameBuffer::AllocTexture(Texture *out) {
 }
 
 void FrameBuffer::Release(bool update_viewport) {
-  screen->gd->BindFrameBuffer(screen->gd->default_framebuffer);
-  if (update_viewport) screen->gd->RestoreViewport(DrawMode::_2D);
+  gd->BindFrameBuffer(gd->default_framebuffer);
+  if (update_viewport) gd->RestoreViewport(DrawMode::_2D);
 }
 
 void FrameBuffer::Attach(int ct, int dt, bool update_viewport) {
-  screen->gd->BindFrameBuffer(ID);
-  if (ct) { if (tex  .ID != ct) tex.owner   = false; screen->gd->FrameBufferTexture     ((tex.ID   = ct)); }
-  if (dt) { if (depth.ID != dt) depth.owner = false; screen->gd->FrameBufferDepthTexture((depth.ID = dt)); }
+  gd->BindFrameBuffer(ID);
+  if (ct) { if (tex  .ID != ct) tex.owner   = false; gd->FrameBufferTexture     ((tex.ID   = ct)); }
+  if (dt) { if (depth.ID != dt) depth.owner = false; gd->FrameBufferDepthTexture((depth.ID = dt)); }
   if (update_viewport) {
     Box b(width, height);
-    screen->gd->ViewPort(b);
-    screen->gd->DrawMode(DrawMode::_2D, b, true);
+    gd->ViewPort(b);
+    gd->DrawMode(DrawMode::_2D, b, true);
   }
 }
 
 void FrameBuffer::ClearGL() {
   if (ID) {
-    if (screen) screen->gd->DelFrameBuffers(1, &ID);
-    else if (FLAGS_gd_debug) ERROR("DelFrameBuffer no screen ", ID);
+    if (gd) gd->DelFrameBuffers(1, &ID);
+    else if (FLAGS_gd_debug) ERROR("DelFrameBuffer no device ", ID);
     ID = 0;
   }
 }
@@ -523,22 +525,25 @@ void FrameBuffer::ClearGL() {
 /* Shader */
 
 void Shader::SetGlobalUniform1f(const string &name, float v) {
-  screen->gd->UseShader(&app->shaders->shader_default);  app->shaders->shader_default .SetUniform1f(name, v);
-  screen->gd->UseShader(&app->shaders->shader_normals);  app->shaders->shader_normals .SetUniform1f(name, v);
-  screen->gd->UseShader(&app->shaders->shader_cubemap);  app->shaders->shader_cubemap .SetUniform1f(name, v);
-  screen->gd->UseShader(&app->shaders->shader_cubenorm); app->shaders->shader_cubenorm.SetUniform1f(name, v);
+  GraphicsDevice *gd = app->focused->gd;
+  gd->UseShader(&app->shaders->shader_default);  app->shaders->shader_default .SetUniform1f(name, v);
+  gd->UseShader(&app->shaders->shader_normals);  app->shaders->shader_normals .SetUniform1f(name, v);
+  gd->UseShader(&app->shaders->shader_cubemap);  app->shaders->shader_cubemap .SetUniform1f(name, v);
+  gd->UseShader(&app->shaders->shader_cubenorm); app->shaders->shader_cubenorm.SetUniform1f(name, v);
 }
 
 void Shader::SetGlobalUniform2f(const string &name, float v1, float v2){ 
-  screen->gd->UseShader(&app->shaders->shader_default);  app->shaders->shader_default .SetUniform2f(name, v1, v2);
-  screen->gd->UseShader(&app->shaders->shader_normals);  app->shaders->shader_normals .SetUniform2f(name, v1, v2);
-  screen->gd->UseShader(&app->shaders->shader_cubemap);  app->shaders->shader_cubemap .SetUniform2f(name, v1, v2);
-  screen->gd->UseShader(&app->shaders->shader_cubenorm); app->shaders->shader_cubenorm.SetUniform2f(name, v1, v2);
+  GraphicsDevice *gd = app->focused->gd;
+  gd->UseShader(&app->shaders->shader_default);  app->shaders->shader_default .SetUniform2f(name, v1, v2);
+  gd->UseShader(&app->shaders->shader_normals);  app->shaders->shader_normals .SetUniform2f(name, v1, v2);
+  gd->UseShader(&app->shaders->shader_cubemap);  app->shaders->shader_cubemap .SetUniform2f(name, v1, v2);
+  gd->UseShader(&app->shaders->shader_cubenorm); app->shaders->shader_cubenorm.SetUniform2f(name, v1, v2);
 }
 
 int Shader::Create(const string &name, const string &vertex_shader, const string &fragment_shader, const ShaderDefines &defines, Shader *out) {
   INFO("Shader::Create ", name);
-  int p = screen->gd->CreateProgram();
+  GraphicsDevice *gd = app->focused->gd;
+  int p = gd->CreateProgram();
 
   string hdr =
     "#ifdef GL_ES\r\n"
@@ -551,33 +556,33 @@ int Shader::Create(const string &name, const string &vertex_shader, const string
   hdr += defines.text + string("\r\n");
 
   if (vertex_shader.size()) {
-    int vs = screen->gd->CreateShader(GraphicsDevice::VertexShader);
-    screen->gd->CompileShader(vs, { hdr.c_str(), vertex_shader.c_str() });
-    screen->gd->AttachShader(p, vs);
-    screen->gd->DelShader(vs);
+    int vs = gd->CreateShader(GraphicsDevice::VertexShader);
+    gd->CompileShader(vs, { hdr.c_str(), vertex_shader.c_str() });
+    gd->AttachShader(p, vs);
+    gd->DelShader(vs);
   }
 
   if (fragment_shader.size()) {
-    int fs = screen->gd->CreateShader(GraphicsDevice::FragmentShader);
-    screen->gd->CompileShader(fs, { hdr.c_str(), fragment_shader.c_str() });
-    screen->gd->AttachShader(p, fs);
-    screen->gd->DelShader(fs);
+    int fs = gd->CreateShader(GraphicsDevice::FragmentShader);
+    gd->CompileShader(fs, { hdr.c_str(), fragment_shader.c_str() });
+    gd->AttachShader(p, fs);
+    gd->DelShader(fs);
   }
 
-  if (1)                    screen->gd->BindAttribLocation(p, 0, "Position"   );
-  if (defines.normals)      screen->gd->BindAttribLocation(p, 1, "Normal"     );
-  if (defines.vertex_color) screen->gd->BindAttribLocation(p, 2, "VertexColor");
-  if (defines.tex_2d)       screen->gd->BindAttribLocation(p, 3, "TexCoordIn" );
+  if (1)                    gd->BindAttribLocation(p, 0, "Position"   );
+  if (defines.normals)      gd->BindAttribLocation(p, 1, "Normal"     );
+  if (defines.vertex_color) gd->BindAttribLocation(p, 2, "VertexColor");
+  if (defines.tex_2d)       gd->BindAttribLocation(p, 3, "TexCoordIn" );
 
-  screen->gd->LinkProgram(p);
+  gd->LinkProgram(p);
 
   int active_uniforms=0, max_uniform_components=0, active_attributes=0, max_attributes=0;
-  screen->gd->GetProgramiv(p, GraphicsDevice::ActiveUniforms, &active_uniforms);
-  screen->gd->GetProgramiv(p, GraphicsDevice::ActiveAttributes, &active_attributes);
+  gd->GetProgramiv(p, GraphicsDevice::ActiveUniforms, &active_uniforms);
+  gd->GetProgramiv(p, GraphicsDevice::ActiveAttributes, &active_attributes);
 #ifndef LFL_MOBILE
-  screen->gd->GetIntegerv(GraphicsDevice::MaxVertexUniformComp, &max_uniform_components);
+  gd->GetIntegerv(GraphicsDevice::MaxVertexUniformComp, &max_uniform_components);
 #endif
-  screen->gd->GetIntegerv(GraphicsDevice::MaxVertexAttributes, &max_attributes);
+  gd->GetIntegerv(GraphicsDevice::MaxVertexAttributes, &max_attributes);
   INFO("shader=", name, ", mu=", active_uniforms, " avg_comps/", max_uniform_components, ", ma=", active_attributes, "/", max_attributes);
 
   bool log_missing_attrib = false;
@@ -585,28 +590,28 @@ int Shader::Create(const string &name, const string &vertex_shader, const string
     *out = Shader();
     out->ID = p;
     out->name = name;
-    if ((out->slot_position             = screen->gd->GetAttribLocation (p, "Position"))            < 0 && log_missing_attrib) INFO("shader ", name, " missing Position");
-    if ((out->slot_normal               = screen->gd->GetAttribLocation (p, "Normal"))              < 0 && log_missing_attrib) INFO("shader ", name, " missing Normal");
-    if ((out->slot_color                = screen->gd->GetAttribLocation (p, "VertexColor"))         < 0 && log_missing_attrib) INFO("shader ", name, " missing VertexColor");
-    if ((out->slot_tex                  = screen->gd->GetAttribLocation (p, "TexCoordIn"))          < 0 && log_missing_attrib) INFO("shader ", name, " missing TexCoordIn");
-    if ((out->uniform_model             = screen->gd->GetUniformLocation(p, "Model"))               < 0 && log_missing_attrib) INFO("shader ", name, " missing Model");
-    if ((out->uniform_invview           = screen->gd->GetUniformLocation(p, "InverseView"))         < 0 && log_missing_attrib) INFO("shader ", name, " missing InverseView");
-    if ((out->uniform_modelview         = screen->gd->GetUniformLocation(p, "Modelview"))           < 0 && log_missing_attrib) INFO("shader ", name, " missing Modelview");
-    if ((out->uniform_modelviewproj     = screen->gd->GetUniformLocation(p, "ModelviewProjection")) < 0 && log_missing_attrib) INFO("shader ", name, " missing ModelviewProjection");
-    if ((out->uniform_campos            = screen->gd->GetUniformLocation(p, "CameraPosition"))      < 0 && log_missing_attrib) INFO("shader ", name, " missing CameraPosition");
-    if ((out->uniform_tex               = screen->gd->GetUniformLocation(p, "iChannel0"))           < 0 && log_missing_attrib) INFO("shader ", name, " missing Texture");
-    if ((out->uniform_cubetex           = screen->gd->GetUniformLocation(p, "CubeTexture"))         < 0 && log_missing_attrib) INFO("shader ", name, " missing CubeTexture");
-    if ((out->uniform_texon             = screen->gd->GetUniformLocation(p, "TexCoordEnabled"))     < 0 && log_missing_attrib) INFO("shader ", name, " missing TexCoordEnabled");
-    if ((out->uniform_coloron           = screen->gd->GetUniformLocation(p, "VertexColorEnabled"))  < 0 && log_missing_attrib) INFO("shader ", name, " missing VertexColorEnabled");
-    if ((out->uniform_colordefault      = screen->gd->GetUniformLocation(p, "DefaultColor"))        < 0 && log_missing_attrib) INFO("shader ", name, " missing DefaultColor");
-    if ((out->uniform_material_ambient  = screen->gd->GetUniformLocation(p, "MaterialAmbient"))     < 0 && log_missing_attrib) INFO("shader ", name, " missing MaterialAmbient");
-    if ((out->uniform_material_diffuse  = screen->gd->GetUniformLocation(p, "MaterialDiffuse"))     < 0 && log_missing_attrib) INFO("shader ", name, " missing MaterialDiffuse");
-    if ((out->uniform_material_specular = screen->gd->GetUniformLocation(p, "MaterialSpecular"))    < 0 && log_missing_attrib) INFO("shader ", name, " missing MaterialSpecular");
-    if ((out->uniform_material_emission = screen->gd->GetUniformLocation(p, "MaterialEmission"))    < 0 && log_missing_attrib) INFO("shader ", name, " missing MaterialEmission");
-    if ((out->uniform_light0_pos        = screen->gd->GetUniformLocation(p, "LightZeroPosition"))   < 0 && log_missing_attrib) INFO("shader ", name, " missing LightZeroPosition");
-    if ((out->uniform_light0_ambient    = screen->gd->GetUniformLocation(p, "LightZeroAmbient"))    < 0 && log_missing_attrib) INFO("shader ", name, " missing LightZeroAmbient");
-    if ((out->uniform_light0_diffuse    = screen->gd->GetUniformLocation(p, "LightZeroDiffuse"))    < 0 && log_missing_attrib) INFO("shader ", name, " missing LightZeroDiffuse");
-    if ((out->uniform_light0_specular   = screen->gd->GetUniformLocation(p, "LightZeroSpecular"))   < 0 && log_missing_attrib) INFO("shader ", name, " missing LightZeroSpecular");
+    if ((out->slot_position             = gd->GetAttribLocation (p, "Position"))            < 0 && log_missing_attrib) INFO("shader ", name, " missing Position");
+    if ((out->slot_normal               = gd->GetAttribLocation (p, "Normal"))              < 0 && log_missing_attrib) INFO("shader ", name, " missing Normal");
+    if ((out->slot_color                = gd->GetAttribLocation (p, "VertexColor"))         < 0 && log_missing_attrib) INFO("shader ", name, " missing VertexColor");
+    if ((out->slot_tex                  = gd->GetAttribLocation (p, "TexCoordIn"))          < 0 && log_missing_attrib) INFO("shader ", name, " missing TexCoordIn");
+    if ((out->uniform_model             = gd->GetUniformLocation(p, "Model"))               < 0 && log_missing_attrib) INFO("shader ", name, " missing Model");
+    if ((out->uniform_invview           = gd->GetUniformLocation(p, "InverseView"))         < 0 && log_missing_attrib) INFO("shader ", name, " missing InverseView");
+    if ((out->uniform_modelview         = gd->GetUniformLocation(p, "Modelview"))           < 0 && log_missing_attrib) INFO("shader ", name, " missing Modelview");
+    if ((out->uniform_modelviewproj     = gd->GetUniformLocation(p, "ModelviewProjection")) < 0 && log_missing_attrib) INFO("shader ", name, " missing ModelviewProjection");
+    if ((out->uniform_campos            = gd->GetUniformLocation(p, "CameraPosition"))      < 0 && log_missing_attrib) INFO("shader ", name, " missing CameraPosition");
+    if ((out->uniform_tex               = gd->GetUniformLocation(p, "iChannel0"))           < 0 && log_missing_attrib) INFO("shader ", name, " missing Texture");
+    if ((out->uniform_cubetex           = gd->GetUniformLocation(p, "CubeTexture"))         < 0 && log_missing_attrib) INFO("shader ", name, " missing CubeTexture");
+    if ((out->uniform_texon             = gd->GetUniformLocation(p, "TexCoordEnabled"))     < 0 && log_missing_attrib) INFO("shader ", name, " missing TexCoordEnabled");
+    if ((out->uniform_coloron           = gd->GetUniformLocation(p, "VertexColorEnabled"))  < 0 && log_missing_attrib) INFO("shader ", name, " missing VertexColorEnabled");
+    if ((out->uniform_colordefault      = gd->GetUniformLocation(p, "DefaultColor"))        < 0 && log_missing_attrib) INFO("shader ", name, " missing DefaultColor");
+    if ((out->uniform_material_ambient  = gd->GetUniformLocation(p, "MaterialAmbient"))     < 0 && log_missing_attrib) INFO("shader ", name, " missing MaterialAmbient");
+    if ((out->uniform_material_diffuse  = gd->GetUniformLocation(p, "MaterialDiffuse"))     < 0 && log_missing_attrib) INFO("shader ", name, " missing MaterialDiffuse");
+    if ((out->uniform_material_specular = gd->GetUniformLocation(p, "MaterialSpecular"))    < 0 && log_missing_attrib) INFO("shader ", name, " missing MaterialSpecular");
+    if ((out->uniform_material_emission = gd->GetUniformLocation(p, "MaterialEmission"))    < 0 && log_missing_attrib) INFO("shader ", name, " missing MaterialEmission");
+    if ((out->uniform_light0_pos        = gd->GetUniformLocation(p, "LightZeroPosition"))   < 0 && log_missing_attrib) INFO("shader ", name, " missing LightZeroPosition");
+    if ((out->uniform_light0_ambient    = gd->GetUniformLocation(p, "LightZeroAmbient"))    < 0 && log_missing_attrib) INFO("shader ", name, " missing LightZeroAmbient");
+    if ((out->uniform_light0_diffuse    = gd->GetUniformLocation(p, "LightZeroDiffuse"))    < 0 && log_missing_attrib) INFO("shader ", name, " missing LightZeroDiffuse");
+    if ((out->uniform_light0_specular   = gd->GetUniformLocation(p, "LightZeroSpecular"))   < 0 && log_missing_attrib) INFO("shader ", name, " missing LightZeroSpecular");
 
     int unused_attrib = 0;
     memset(out->unused_attrib_slot, -1, sizeof(out->unused_attrib_slot));
@@ -637,21 +642,24 @@ int Shader::CreateShaderToy(const string &name, const string &pixel_shader, Shad
 
   static string footer =
     "void main(void) { mainImage(gl_FragColor, gl_FragCoord.xy); }\r\n";
-  return Shader::Create(name, screen->gd->vertex_shader, StrCat(header, pixel_shader, footer), ShaderDefines(1,0,1,0), out);
+
+  GraphicsDevice *gd = app->focused->gd;
+  return Shader::Create(name, gd->vertex_shader, StrCat(header, pixel_shader, footer), ShaderDefines(1,0,1,0), out);
 }
 
-int Shader::GetUniformIndex(const string &name) { return screen->gd->GetUniformLocation(ID, name); }
-void Shader::SetUniform1i(const string &name, float v)                                { screen->gd->Uniform1i (GetUniformIndex(name), v); }
-void Shader::SetUniform1f(const string &name, float v)                                { screen->gd->Uniform1f (GetUniformIndex(name), v); }
-void Shader::SetUniform2f(const string &name, float v1, float v2)                     { screen->gd->Uniform2f (GetUniformIndex(name), v1, v2); }
-void Shader::SetUniform3f(const string &name, float v1, float v2, float v3)           { screen->gd->Uniform3f (GetUniformIndex(name), v1, v2, v3); }
-void Shader::SetUniform4f(const string &name, float v1, float v2, float v3, float v4) { screen->gd->Uniform4f (GetUniformIndex(name), v1, v2, v3, v4); }
-void Shader::SetUniform3fv(const string &name, const float *v)                        { screen->gd->Uniform3fv(GetUniformIndex(name), 1, v); }
-void Shader::SetUniform3fv(const string &name, int n, const float *v)                 { screen->gd->Uniform3fv(GetUniformIndex(name), n, v); }
+int Shader::GetUniformIndex(const string &name) { return app->focused->gd->GetUniformLocation(ID, name); }
+void Shader::SetUniform1i(const string &name, float v)                                { app->focused->gd->Uniform1i (GetUniformIndex(name), v); }
+void Shader::SetUniform1f(const string &name, float v)                                { app->focused->gd->Uniform1f (GetUniformIndex(name), v); }
+void Shader::SetUniform2f(const string &name, float v1, float v2)                     { app->focused->gd->Uniform2f (GetUniformIndex(name), v1, v2); }
+void Shader::SetUniform3f(const string &name, float v1, float v2, float v3)           { app->focused->gd->Uniform3f (GetUniformIndex(name), v1, v2, v3); }
+void Shader::SetUniform4f(const string &name, float v1, float v2, float v3, float v4) { app->focused->gd->Uniform4f (GetUniformIndex(name), v1, v2, v3, v4); }
+void Shader::SetUniform3fv(const string &name, const float *v)                        { app->focused->gd->Uniform3fv(GetUniformIndex(name), 1, v); }
+void Shader::SetUniform3fv(const string &name, int n, const float *v)                 { app->focused->gd->Uniform3fv(GetUniformIndex(name), n, v); }
 void Shader::ClearGL() {
   if (ID) {
-    if (screen) screen->gd->DelProgram(ID);
-    else if (FLAGS_gd_debug) ERROR("DelProgram no screen ", ID);
+    GraphicsDevice *gd = app->focused ? app->focused->gd : 0;
+    if (gd) gd->DelProgram(ID);
+    else if (FLAGS_gd_debug) ERROR("DelProgram no device ", ID);
     ID = 0;
   }
 }
@@ -669,10 +677,10 @@ void GraphicsDevice::PopColor() {
   UpdateColor();
 }
 
-void GraphicsDevice::RestoreViewport(int dm) { ViewPort(Box(screen->x + screen->width, screen->y + screen->height)); DrawMode(dm); }
+void GraphicsDevice::RestoreViewport(int dm) { ViewPort(Box(parent->x + parent->width, parent->y + parent->height)); DrawMode(dm); }
 void GraphicsDevice::TranslateRotateTranslate(float a, const Box &b) { float x=b.x+b.w/2.0, y=b.y+b.h/2.0; Translate(x,y,0); Rotatef(a,0,0,1); Translate(-x,-y,0); }
 
-void GraphicsDevice::DrawMode(int dm, bool flush) { return DrawMode(dm, screen->Box(), flush); }
+void GraphicsDevice::DrawMode(int dm, bool flush) { return DrawMode(dm, parent->Box(), flush); }
 void GraphicsDevice::DrawMode(int dm, const Box &b, bool flush) {
   if (draw_mode == dm && !flush) return;
   bool _2D = (draw_mode = dm) == DrawMode::_2D;
@@ -725,7 +733,7 @@ void GraphicsDevice::PopScissor() {
   auto &ss = scissor_stack.back();
   if (ss.size()) ss.pop_back();
   if (ss.size()) Scissor(ss.back());
-  else { Scissor(screen->Box()); DisableScissor(); }
+  else { Scissor(parent->Box()); DisableScissor(); }
 }
 
 void GraphicsDevice::PushScissorStack() {
@@ -739,7 +747,7 @@ void GraphicsDevice::PopScissorStack() {
   scissor_stack.pop_back();
   auto &ss = scissor_stack.back();
   if (ss.size()) Scissor(ss.back());
-  else { Scissor(screen->Box()); DisableScissor(); }
+  else { Scissor(parent->Box()); DisableScissor(); }
 }
 
 Box GraphicsDevice::GetViewport() const { Box vp; GetIntegerv(ViewportBox, &vp.x); return vp; }

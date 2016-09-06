@@ -1340,10 +1340,10 @@ void Decoder::VisualizeFeatures(AcousticModel::Compiled *model, Matrix *MFCC, Ma
   static bool interactive_done;
 
   delete segments;
-  segments = new PhoneticSegmentationGUI(screen, model, viterbi, "visbuf");
+  segments = new PhoneticSegmentationGUI(app->focused, model, viterbi, "visbuf");
   interactive_done = 0;
 
-  GraphicsContext gc(screen->gd);
+  GraphicsContext gc(segments->root->gd);
   SoundAsset sa;
   sa.name = "visbuf";
   sa.Load();
@@ -1354,18 +1354,18 @@ void Decoder::VisualizeFeatures(AcousticModel::Compiled *model, Matrix *MFCC, Ma
 
   Matrix *spect = Spectogram(&B, 0, FLAGS_feat_window, FLAGS_feat_hop, FLAGS_feat_window, vector<double>(), PowerDomain::dB);
   Asset *snap = app->asset("snap");
-  glSpectogram(screen->gd, spect, &snap->tex, 0);
+  glSpectogram(gc.gd, spect, &snap->tex, 0);
   delete spect;
 
   if (FLAGS_enable_audio) app->audio->QueueMixBuf(&B);
   INFO("vprob=", vprob, " vtime=", vtime.count());
-  Font *font = screen->default_font;
+  Font *font = segments->root->default_font;
 
   Box wcc = Box(5,345, 400,100);
   while (app->run && (app->audio->Out.size() || (interactive && !interactive_done))) {
     app->HandleEvents(app->frame_time.GetTime(true).count());
 
-    screen->gd->DrawMode(DrawMode::_2D);
+    gc.gd->DrawMode(DrawMode::_2D);
     app->asset("snap")->tex.Draw(&gc, wcc); // 4);
 
     int levels=10;
@@ -1393,7 +1393,7 @@ void Decoder::VisualizeFeatures(AcousticModel::Compiled *model, Matrix *MFCC, Ma
       // Box::FromScreen(2/3.0, .95, 1/3.0, .05, .0001, .0001);
       // next.Draw();
 
-      screen->DrawDialogs();
+      segments->root->DrawDialogs();
     }
 
     MSleep(1);

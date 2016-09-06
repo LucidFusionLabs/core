@@ -22,7 +22,7 @@ namespace LFL {
   
 struct RFBClient {
   typedef function<bool(string*)> LoadPasswordCB;
-  typedef function<void(Connection*, const StringPiece&)> UpdateCB;
+  typedef function<void(Connection*, const Box &b, int pf, const StringPiece &data)> UpdateCB;
   struct Params { string hostport, user; };
   static Connection *Open(Params params, LoadPasswordCB pcb, UpdateCB fcb,
                           Callback *detach=0, Callback *success=0);

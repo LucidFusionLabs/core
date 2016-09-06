@@ -68,14 +68,14 @@ void DisableBlend() { if (Changed(&blend_enabled, false)) { ClearDeferred(); glD
 void EnableBlend()  { if (Changed(&blend_enabled, true )) { ClearDeferred();  glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); GDDebug("Blend=1"); } }
 void BlendMode(int sm, int dm) { ClearDeferred(); glBlendFunc(sm, dm); GDDebug("BlendMode=", sm, ",", dm); }
 void ViewPort(Box w) {
-  if (FLAGS_swap_axis) w.swapaxis(LFL::screen->width, LFL::screen->height);
+  if (FLAGS_swap_axis) w.swapaxis(parent->width, parent->height);
   ClearDeferred();
   glViewport(w.x, w.y, w.w, w.h);
   GDDebug("Viewport(", w.x, ", ", w.y, ", ", w.w, ", ", w.h, ")");
 }
 
 void Scissor(Box w) {
-  if (FLAGS_swap_axis) w.swapaxis(LFL::screen->width, LFL::screen->height);
+  if (FLAGS_swap_axis) w.swapaxis(parent->width, parent->height);
   ClearDeferred();
   EnableScissor();
   glScissor(w.x, w.y, w.w, w.h);
@@ -114,7 +114,7 @@ void FrameBufferTexture(int id) { glFramebufferTexture2DEXT(GL_FRAMEBUFFER, GL_C
 void FrameBufferDepthTexture(int id) { glFramebufferRenderbufferEXT(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, id); }
 int CheckFrameBufferStatus() { return glCheckFramebufferStatusEXT(GL_FRAMEBUFFER); }
 
-void Screenshot(Texture *out) { ScreenshotBox(out, Box(LFL::screen->width, LFL::screen->height), Texture::Flag::FlipY); }
+void Screenshot(Texture *out) { ScreenshotBox(out, Box(parent->width, parent->height), Texture::Flag::FlipY); }
 void ScreenshotBox(Texture *out, const Box &b, int flag) {
   ClearDeferred();
   out->Resize(b.w, b.h, Texture::preferred_pf, Texture::Flag::CreateBuf);

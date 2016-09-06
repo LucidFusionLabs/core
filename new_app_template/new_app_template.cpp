@@ -83,17 +83,17 @@ extern "C" void MyAppCreate(int argc, const char* const* argv) {
   FLAGS_font_flag = FLAGS_console_font_flag = 0;
   FLAGS_enable_audio = FLAGS_enable_video = FLAGS_enable_input = FLAGS_console = 1;
   app = new Application(argc, argv);
-  screen = new Window();
+  app->focused = new Window();
   app->name = "$PKGNAME";
   app->window_start_cb = MyWindowStart;
   app->window_init_cb = MyWindowInit;
-  app->window_init_cb(screen);
+  app->window_init_cb(app->focused);
 }
 
 extern "C" int MyAppMain() {
   if (app->Create(__FILE__)) return -1;
   if (app->Init()) return -1;
-  screen->gd->default_draw_mode = DrawMode::_3D;
+  app->focused->gd->default_draw_mode = DrawMode::_3D;
 
   // app->asset.Add(name, texture,  scale, translate, rotate, geometry                  hull
   app->asset.Add("grid",  "",       0,     0,         0,      Grid::Grid3D().release(), nullptr, 0, 0          );
@@ -101,6 +101,6 @@ extern "C" int MyAppMain() {
   app->asset.Add("arrow", "",      .005,   1,        -90,     "arrow.obj",              nullptr, 0             );
   app->asset.Load();
 
-  app->StartNewWindow(screen);
+  app->StartNewWindow(app->focused);
   return app->Main();
 }

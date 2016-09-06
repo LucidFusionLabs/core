@@ -94,7 +94,7 @@ struct TerminalTest : public Terminal {
 TEST(GUITest, TextArea) { 
   {
     Font *font = app->fonts->Fake();
-    TextAreaTest ta(screen, font, 10);
+    TextAreaTest ta(app->focused, font, 10);
     ta.line.InsertAt(-1)->AssignText("a");
     EXPECT_EQ(String16(u"a"), ta.line[-1].Text16());
 
@@ -148,7 +148,7 @@ TEST(GUITest, TextArea) {
     // 0: 122, 1: 222, 2: 223, 3: 234, 4: 344, 5: 445
     TextBox::Line *L;
     Font *font = app->fonts->Fake();
-    TextAreaTest ta(screen, font);
+    TextAreaTest ta(app->focused, font);
     ta.reverse_line_fb = test_iter;
     ta.line_fb.wrap = 1;
     (L = ta.line.PushFront())->AssignText("1");       L->Layout();
@@ -503,7 +503,7 @@ TEST(GUITest, Editor) {
   Font *font = app->fonts->Fake();
   int fh = font->Height(), w = font->fixed_width;
   EXPECT_NE(0, fh); EXPECT_NE(0, w);
-  EditorTest e(screen, font, new BufferFile(string("1\n2 2 2\n3\n4 4\n5\n")), true);
+  EditorTest e(app->focused, font, new BufferFile(string("1\n2 2 2\n3\n4 4\n5\n")), true);
   LinesFrameBufferTest *test_fb = &e.line_fb_test;
   Box b(w, 3*fh);
   e.Draw(b, TextArea::DrawFlag::CheckResized);
@@ -756,7 +756,7 @@ TEST(GUITest, EditorScrollFuzz) {
   int fh = font->Height(), fw = font->fixed_width, last_ind=0;
   CHECK(fh && fw);
   for (int mode=0; mode<2; mode++) {
-    Editor e(screen, font, new LocalFile(fn, "r"));
+    Editor e(app->focused, font, new LocalFile(fn, "r"));
     if      (mode == 0) { e.CheckResized(Box(80*fw, 25*fh)); }
     else if (mode == 1) { e.CheckResized(Box(20*fw, 25*fh)); e.SetShouldWrap(true, true); }
 
@@ -790,7 +790,7 @@ TEST(GUITest, EditorUndoFuzz) {
   CHECK(fh && fw);
   for (int mode=0; mode<2; mode++) {
     BufferFile modified(string("")), undone(string("")), redone(string(""));
-    Editor e(screen, font, new LocalFile(fn, "r"));
+    Editor e(app->focused, font, new LocalFile(fn, "r"));
     if      (mode == 0) { e.CheckResized(Box(80*fw, 25*fh)); }
     else if (mode == 1) { e.CheckResized(Box(20*fw, 25*fh)); e.SetShouldWrap(true, true); }
     for (int iters=0; iters<1000; iters++) {
@@ -827,7 +827,7 @@ TEST(GUITest, Terminal) {
   cursor_attr &= ~Terminal::Style::Bold;
   EXPECT_EQ(4,  Terminal::Style::GetFGColorIndex(cursor_attr));
 
-  TerminalTest ta(nullptr, screen, app->fonts->Fake(), point(80, 25));
+  TerminalTest ta(nullptr, app->focused, app->fonts->Fake(), point(80, 25));
   int tw = ta.term_width, th = ta.term_height, fw = ta.style.font->FixedWidth(), fh = ta.style.font->Height();
   ta.CheckResized(Box(tw*fw, th*fh));
   EXPECT_EQ(80, ta.term_width);
@@ -880,7 +880,7 @@ TEST(GUITest, Terminal) {
 }
 
 TEST(GUITest, LineTokenProcessor) {
-  TextAreaTest ta(screen, app->fonts->Fake(), 10);
+  TextAreaTest ta(app->focused, app->fonts->Fake(), 10);
   ta.token_processing = 1;
   TextBox::Line *L = ta.line.InsertAt(-1);
 
@@ -1066,7 +1066,7 @@ TEST(GUITest, LineTokenProcessor) {
 }
 
 TEST(GUITest, TerminalTokenProcessor) {
-  TerminalTest ta(NULL, screen, app->fonts->Fake(), point(80, 25));
+  TerminalTest ta(NULL, app->focused, app->fonts->Fake(), point(80, 25));
   EXPECT_EQ(80, ta.term_width);
   EXPECT_EQ(25, ta.line.Size());
 

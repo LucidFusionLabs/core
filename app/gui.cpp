@@ -162,8 +162,8 @@ void Widget::Slider::Update(bool force) {
   bool flip = flag & Flag::Horizontal;
   int aw = dot_size, ah = dot_size;
   if (dragging) {
-    if (flip) scrolled = Clamp(    float(gui->RelativePosition(screen->mouse).x - track.x) / track.w, 0.0f, 1.0f);
-    else      scrolled = Clamp(1 - float(gui->RelativePosition(screen->mouse).y - track.y) / track.h, 0.0f, 1.0f);
+    if (flip) scrolled = Clamp(    float(gui->RelativePosition(gui->root->mouse).x - track.x) / track.w, 0.0f, 1.0f);
+    else      scrolled = Clamp(1 - float(gui->RelativePosition(gui->root->mouse).y - track.y) / track.h, 0.0f, 1.0f);
   }
   if (flip) gui->UpdateBoxX(track.x          + int((track.w - aw) * scrolled), drawbox_ind, IndexOrDefault(hitbox, 0, -1));
   else      gui->UpdateBoxY(track.top() - ah - int((track.h - ah) * scrolled), drawbox_ind, IndexOrDefault(hitbox, 0, -1));
@@ -381,7 +381,7 @@ void TextBox::Line::Layout(Box win, bool flush) {
 
 point TextBox::Line::Draw(point pos, int relayout_width, int g_offset, int g_len, const Box *scissor) {
   if (relayout_width >= 0) Layout(relayout_width);
-  data->glyphs.Draw(screen->gd, (p = pos), g_offset, g_len, scissor);
+  data->glyphs.Draw(parent->root->gd, (p = pos), g_offset, g_len, scissor);
   return p - point(0, parent->style.font->Height() + data->glyphs.height);
 }
 
@@ -464,11 +464,11 @@ void TextBox::LinesFrameBuffer::PushBackAndUpdateOffset(TextBox::Line *l, int lo
 }
 
 point TextBox::LinesFrameBuffer::Paint(TextBox::Line *l, point lp, const Box &b, int offset, int len) {
-  GraphicsContext gc(screen->gd);
+  auto p = l->parent;
+  GraphicsContext gc(p->root->gd);
   Box sb(lp.x, lp.y - b.h, b.w, b.h);
-  auto bg_color = l->parent->bg_color;
   app->fonts->SelectFillColor(gc.gd);
-  app->fonts->GetFillColor(bg_color ? *bg_color : Color::black)->Draw(&gc, sb);
+  app->fonts->GetFillColor(p->bg_color ? *p->bg_color : Color::black)->Draw(&gc, sb);
   l->Draw(lp + b.Position(), -1, offset, len, &sb);
   return point(lp.x, lp.y-b.h);
 }
@@ -2041,7 +2041,7 @@ void Terminal::ClearTerminal() {
 /* Console */
 
 Console::Console(Window *W, const FontRef &F, const Callback &C) : TextArea(W, F, 200, 50),
-  animating_cb(C) {
+  animating_cb(C), full_height(root->height * .4) {
   line_fb.wrap = write_timestamp = 1;
   line_fb.align_top_or_bot = false;
   SetToggleKey(Key::Backquote);
@@ -2229,12 +2229,12 @@ FlagSliderDialog::FlagSliderDialog(Window *w, const string &fn, float total, flo
 
 void Dialog::MessageBox(const string &n) {
   app->ReleaseMouseFocus();
-  screen->AddDialog(make_unique<MessageBoxDialog>(screen, n));
+  app->focused->AddDialog(make_unique<MessageBoxDialog>(app->focused, n));
 }
 
 void Dialog::TextureBox(const string &n) {
   app->ReleaseMouseFocus();
-  screen->AddDialog(make_unique<TextureBoxDialog>(screen, n));
+  app->focused->AddDialog(make_unique<TextureBoxDialog>(app->focused, n));
 }
 
 #ifdef LFL_BOOST

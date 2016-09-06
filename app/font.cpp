@@ -114,7 +114,7 @@ void Glyph::Draw(GraphicsContext *gc, const LFL::Box &b) const {
 
 void FillColor::Draw(GraphicsContext *gc, const LFL::Box &b) const {
   if (!ready) {
-    Texture fill(2, 2);
+    Texture fill(gc->gd, 2, 2);
     fill.RenewBuffer();
     SimpleVideoResampler::Fill(fill.buf, fill.width, fill.height, fill.pf, fill.LineSize(), 0, 0,
                                Color(internal.fillcolor.color));
@@ -133,8 +133,9 @@ void FillColor::Draw(GraphicsContext *gc, const LFL::Box &b) const {
   gc->DrawTexturedBox(b, tex.coord);
 }
 
-GlyphCache::GlyphCache(unsigned T, int W, int H) : dim(W, H ? H : W), tex(dim.w, dim.h, Texture::preferred_pf, T), flow(make_unique<Flow>(&dim)) {}
 GlyphCache::~GlyphCache() {}
+GlyphCache::GlyphCache(unsigned T, int W, int H) :
+  dim(W, H ? H : W), tex(nullptr, dim.w, dim.h, Texture::preferred_pf, T), flow(make_unique<Flow>(&dim)) {}
 
 void GlyphCache::Clear() {
   flow = make_unique<Flow>(&dim);
@@ -291,7 +292,7 @@ template <class X> int Font::Draw(const StringPieceT<X> &text, const Box &box, v
   DrawableBoxArray out;
   Shape(text, box, &out, draw_flag | DrawFlag::DontAssignFlowP);
   if (lb) *lb = out.line;
-  if (!(draw_flag & DrawFlag::Clipped)) out.Draw(screen->gd, box.TopLeft());
+  if (!(draw_flag & DrawFlag::Clipped)) out.Draw(app->focused->gd, box.TopLeft());
   return max(size_t(1), out.line.size());
 }
 
@@ -458,7 +459,7 @@ Font *Fonts::Change(Font *in, int new_size, const Color &new_fg, const Color &ne
 
 int Fonts::ScaledFontSize(int pointsize) {
   if (FLAGS_scale_font_height) {
-    float ratio = float(screen->height) / FLAGS_scale_font_height;
+    float ratio = float(app->focused->height) / FLAGS_scale_font_height;
     pointsize = RoundF(pointsize * ratio);
   }
   return pointsize + FLAGS_add_font_size;

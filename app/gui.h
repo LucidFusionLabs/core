@@ -321,15 +321,15 @@ struct TextBox : public GUI, public KeyboardController {
   const Color *bg_color=0;
 
   TextBox(Window *W, const FontRef &F=FontRef(), int LC=10);
-  virtual ~TextBox() { if (screen) Deactivate(); }
+  virtual ~TextBox() { if (root) Deactivate(); }
 
   virtual point RelativePosition(const point&) const;
   virtual int CommandLines() const { return 0; }
   virtual void Run(const string &cmd) { if (runcb) runcb(cmd); }
   virtual bool NotActive(const point &p) const { return !box.within(p) && mouse.drag.empty(); }
-  virtual bool Active() const { return screen->active_textbox == this; }
-  virtual void Activate()   { if (!Active()) { if (auto g=screen->active_textbox) g->Deactivate(); screen->active_textbox=this; } }
-  virtual void Deactivate() { if (Active()) screen->active_textbox = screen->default_textbox(); }
+  virtual bool Active() const { return root->active_textbox == this; }
+  virtual void Activate()   { if (!Active()) { if (auto g=root->active_textbox) g->Deactivate(); root->active_textbox=this; } }
+  virtual void Deactivate() { if (Active()) root->active_textbox = root->default_textbox(); }
   virtual bool ToggleActive() { if (!Active()) Activate(); else Deactivate(); return Active(); }
   virtual void Input(char k) { cmd_line.UpdateText(cursor.i.x++, String16(1, *MakeUnsigned<char>(&k)), cursor.attr); UpdateCommandFB(); UpdateCursor(); }
   virtual void Erase()       { if (!cursor.i.x) return; cmd_line.Erase(--cursor.i.x, 1); UpdateCommandFB(); UpdateCursor(); }
@@ -707,7 +707,7 @@ struct Console : public TextArea {
   Callback animating_cb;
   Time anim_time=Time(333), anim_begin=Time(0);
   bool animating=0, drawing=0, bottom_or_top=0, blend=1;
-  int full_height = screen->height * .4;
+  int full_height;
   Box *scissor=0, scissor_buf;
 
   Console(Window *W, const FontRef &F, const Callback &C=Callback());
@@ -717,7 +717,7 @@ struct Console : public TextArea {
 
   virtual ~Console() {}
   virtual int CommandLines() const { return cmd_line.Lines(); }
-  virtual void Run(const string &in) { screen->shell->Run(in); }
+  virtual void Run(const string &in) { root->shell->Run(in); }
   virtual void PageUp  () { TextArea::PageDown(); }
   virtual void PageDown() { TextArea::PageUp(); }
   virtual void Activate() { TextBox::Activate(); StartAnimating(); }
@@ -751,7 +751,7 @@ struct Dialog : public GUI {
   void LayoutReshapeControls(const point &d, MouseController*);
   bool HandleReshape(Box *outline);
   void DrawGradient(const point &p) const { GraphicsContext::DrawGradientBox1(root->gd, (title + p), title_gradient); }
-  void Reshape(bool *down) { mouse_start = screen->mouse; win_start = point(box.x, box.y); *down = 1; }
+  void Reshape(bool *down) { mouse_start = root->mouse; win_start = point(box.x, box.y); *down = 1; }
 
   static bool LessThan(const unique_ptr<Dialog> &l, const unique_ptr<Dialog> &r) { return l->zsort < r->zsort; }
   static void MessageBox(const string &text);

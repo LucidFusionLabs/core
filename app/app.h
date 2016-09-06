@@ -242,7 +242,6 @@ void Log(int level, const char *file, int line, const string &m);
 #include "core/app/types/time.h"
 
 namespace LFL {
-extern Window *screen;
 extern Application *app;
 extern const char *not_implemented;
 extern const bool DEBUG, MOBILE, IOS, ANDROID;
@@ -529,17 +528,20 @@ struct Window : public ::NativeWindow {
   GraphicsDevice *gd=0;
   point mouse, mouse_wheel;
   string caption;
+  Callback reshaped_cb;
   FrameCB frame_cb;
   Timer frame_time;
   RollingAvg<unsigned> fps;
   unique_ptr<Console> console;
   vector<GUI*> gui;
+  vector<InputController*> input;
   vector<unique_ptr<GUI>> my_gui;
-  vector<unique_ptr<InputController>> input;
+  vector<unique_ptr<InputController>> my_input;
   vector<unique_ptr<Dialog>> dialogs;
   FontRef default_font = FontRef(FontDesc::Default(), false);
+  function<GUI*()> default_controller = []{ return nullptr; };
   function<TextBox*()> default_textbox = []{ return nullptr; };
-  Callback reshaped_cb;
+  GUI *active_controller=0;
   TextBox *active_textbox=0;
   Dialog *top_dialog=0;
   unique_ptr<Shell> shell;
@@ -569,8 +571,9 @@ struct Window : public ::NativeWindow {
 
   template <class X> X* GetGUI(size_t i) { return i < gui.size() ? dynamic_cast<X*>(gui[i]) : nullptr; }
   template <class X> X* GetOwnGUI(size_t i) { return i < my_gui.size() ? dynamic_cast<X*>(my_gui[i].get()) : nullptr; }
-  template <class X> X* GetInputController(size_t i) { return i < input.size() ? dynamic_cast<X*>(input[i].get()) : nullptr; }
-  template <class X> X* AddInputController(unique_ptr<X> g) { return VectorAddUnique(&input, move(g)); }
+  template <class X> X* GetInputController(size_t i) { return i < input.size() ? dynamic_cast<X*>(input[i]) : nullptr; }
+  template <class X> X* GetOwnInputController(size_t i) { return i < my_input.size() ? dynamic_cast<X*>(my_input[i].get()) : nullptr; }
+  template <class X> X* AddInputController(unique_ptr<X> g) { auto gp = VectorAddUnique(&my_input, move(g)); input.push_back(gp); return gp; }
   template <class X> void DelGUIPointer(X **g) { DelGUI(*g); *g = nullptr; }
   template <class X> X* AddGUI(unique_ptr<X> g) {
     auto gp = VectorAddUnique(&my_gui, move(g));
@@ -584,7 +587,8 @@ struct Window : public ::NativeWindow {
     gui.push_back((my_gui[i] = move(g)).get());
     return gp;
   }
-  void DelInputController(InputController *g) { VectorRemoveUnique(&input, g); }
+  void DelInputController(InputController *g) { RemoveInputController(g); VectorRemoveUnique(&my_input, g); }
+  void RemoveInputController(InputController *g) { VectorEraseByValue(&input, g); }
   void RemoveGUI(GUI *g) { VectorEraseByValue(&gui, g); }
   void DelGUI(GUI *g);
   size_t NewGUI();
@@ -612,11 +616,12 @@ struct Application : public ::LFApp {
   unique_ptr<ProcessAPIClient> render_process;
   unique_ptr<ProcessAPIServer> main_process;
   unordered_map<void*, Window*> windows;
-  Callback exit_cb;
   function<void(Window*)> window_init_cb, window_start_cb, window_closed_cb = [](Window *w){ delete w; };
+  Window *focused=0;
   unordered_map<string, StringPiece> asset_cache;
   const Color *splash_color = &Color::black;
   bool log_pid=0;
+  Callback exit_cb;
 
   vector<Module*> modules;
   unique_ptr<Module> framework;
@@ -639,7 +644,7 @@ struct Application : public ::LFApp {
   bool Running() const { return run; }
   bool MainThread() const { return Thread::GetId() == main_thread_id; }
   bool MainProcess() const { return !main_process; }
-  double FPS() const { return screen->fps.FPS(); }
+  double FPS() const { return focused->fps.FPS(); }
   double CamFPS() const { return camera->fps.FPS(); }
   Window *GetWindow(void *id) const { return FindOrNull(windows, id); }
   int LoadModule(Module *m) { return m ? PushBack(modules, m)->Init() : 0; }
@@ -705,7 +710,7 @@ struct Application : public ::LFApp {
 
   template <class... Args> void RunInMainThread(Args&&... args) {
     message_queue.Write(new Callback(forward<Args>(args)...));
-    if (!FLAGS_target_fps) scheduler.Wakeup(screen);
+    if (!FLAGS_target_fps) scheduler.Wakeup(focused);
   }
   template <class... Args> void RunInNetworkThread(Args&&... args) {
     if (auto nt = network_thread.get()) nt->Write(new Callback(forward<Args>(args)...));
@@ -802,7 +807,7 @@ struct SystemNavigationView {
 };
 
 unique_ptr<Module> CreateFrameworkModule();
-unique_ptr<GraphicsDevice> CreateGraphicsDevice(int ver);
+unique_ptr<GraphicsDevice> CreateGraphicsDevice(Window*, int ver);
 unique_ptr<Module> CreateAudioModule(Audio*);
 unique_ptr<Module> CreateCameraModule(CameraState*);
 

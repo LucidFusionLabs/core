@@ -189,11 +189,12 @@ void Input::QueueMouseWheel(const point &p, const point &d) {
 }
 
 point Input::TransformMouseCoordinate(point p) {
-  if (FLAGS_swap_axis) p = point(screen->width - p.y, p.x);
-  return point(p.x, screen->height - p.y);
+  if (FLAGS_swap_axis) p = point(app->focused->width - p.y, p.x);
+  return point(p.x, app->focused->height - p.y);
 }
 
 void Input::ClearButtonsDown() {
+  Window *screen = app->focused;
   if (left_shift_down)  { KeyPress(Key::LeftShift,  0, 0); left_shift_down = 0; }
   if (right_shift_down) { KeyPress(Key::RightShift, 0, 0); left_shift_down = 0; }
   if (left_ctrl_down)   { KeyPress(Key::LeftCtrl,   0, 0); left_ctrl_down  = 0; }
@@ -265,6 +266,7 @@ int Input::KeyPress(int key, int mod, bool down) {
   int fired = KeyEventDispatch(event, down);
   if (fired) return fired;
 
+  Window *screen = app->focused;
   for (auto &g : screen->input)
     if (g->active) g->Button(event, down); 
 
@@ -279,6 +281,7 @@ int Input::KeyEventDispatch(InputEvent::Id event, bool down) {
   InputDebugIfDown("Input::KeyEventDispatch %s %d %d %d %d",
                    InputEvent::Name(event), key, shift_down, ctrl_down, cmd_down);
 
+  Window *screen = app->focused;
   if (KeyboardController *g = screen->active_textbox) do {
     if (g->toggle_bind.key == event && !g->toggle_once) return 0;
 
@@ -317,6 +320,7 @@ int Input::HandleSpecialKey(InputEvent::Id event, KeyboardController *g) {
 
 int Input::MouseMove(const point &p, const point &d) {
   if (!app->run) return 0;
+  Window *screen = app->focused;
   int fired = MouseEventDispatch(Mouse::Event::Motion, p, MouseButton1Down());
   if (!screen->grab_mode.Enabled()) return fired;
 
@@ -328,7 +332,7 @@ int Input::MouseMove(const point &p, const point &d) {
 
 int Input::MouseWheel(const point &p, const point &d) {
   if (!app->run) return 0;
-  int fired = MouseEventDispatch(Mouse::Event::Wheel, screen->mouse, d.y);
+  int fired = MouseEventDispatch(Mouse::Event::Wheel, app->focused->mouse, d.y);
   return fired;
 }
 
@@ -342,6 +346,7 @@ int Input::MouseClick(int button, bool down, const point &p) {
   int fired = MouseEventDispatch(event, p, down);
   if (fired) return fired;
 
+  Window *screen = app->focused;
   for (auto i = screen->input.begin(), e = screen->input.end(); i != e; ++i)
     if ((*i)->active) (*i)->Button(event, down);
 
@@ -349,6 +354,7 @@ int Input::MouseClick(int button, bool down, const point &p) {
 }
 
 int Input::MouseEventDispatch(InputEvent::Id event, const point &p, int down) {
+  Window *screen = app->focused;
   if      (event == paste_bind.key)      return KeyEventDispatch(event, down);
   else if (event == Mouse::Event::Wheel) screen->mouse_wheel = p;
   else                                   screen->mouse       = p;
@@ -367,9 +373,14 @@ int Input::MouseEventDispatch(InputEvent::Id event, const point &p, int down) {
   }
   if (bring_to_front) screen->BringDialogToFront(bring_to_front);
 
-  for (auto i = screen->gui.begin(), e = screen->gui.end(); i != e; ++i) {
+  if (auto g = screen->active_controller) {
+    if ((events = MouseEventDispatchGUI(event, p, down, g, &active_guis))) {
+      InputDebug("Input::MouseEventDispatch sent GUI[%p] events = %d", g, events);
+      return events;
+    }
+  } else for (auto b = screen->gui.begin(), e = screen->gui.end(), i = b; i != e; ++i) {
     if ((events = MouseEventDispatchGUI(event, p, down, *i, &active_guis))) {
-      InputDebug("Input::MouseEventDispatch sent GUI[%td] events = %d", i - screen->gui.begin(), events);
+      InputDebug("Input::MouseEventDispatch sent GUI[%d] events = %d", i - b, events);
       return events;
     }
   }
@@ -380,9 +391,9 @@ int Input::MouseEventDispatch(InputEvent::Id event, const point &p, int down) {
 }
 
 int Input::MouseEventDispatchGUI(InputEvent::Id event, const point &p, int down, GUI *g, int *active_guis) {
-  if (g->NotActive(screen->mouse)) return 0;
+  if (g->NotActive(g->root->mouse)) return 0;
   else (*active_guis)++;
-  int events = g->mouse.Input(event, g->RelativePosition(screen->mouse), down, 0);
+  int events = g->mouse.Input(event, g->RelativePosition(g->root->mouse), down, 0);
   if (!events && g->child_gui) return MouseEventDispatchGUI(event, p, down, g->child_gui, active_guis);
   return events;
 }
@@ -469,7 +480,7 @@ int MouseController::Input(InputEvent::Id event, const point &p, int down, int f
   else if (!down && but1)            { for (auto d : drag) if (hit.data[d].CB.Run(p, event, down)) fired++; drag.clear(); }
 
   InputDebugIfDown("MouseController::Input %s fired=%d, checked %zd of %zd hitboxes",
-                   screen->mouse.DebugString().c_str(), fired, boxes_checked, hit.data.size());
+                   p.DebugString().c_str(), fired, boxes_checked, hit.data.size());
   return fired;
 }
 

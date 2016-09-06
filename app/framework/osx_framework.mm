@@ -434,14 +434,14 @@ const int Key::End = 0xB7;
 struct OSXFrameworkModule : public Module {
   int Init() {
     INFO("OSXFrameworkModule::Init()");
-    CHECK(Video::CreateWindow(screen));
-    app->MakeCurrentWindow(screen);
+    CHECK(Video::CreateWindow(app->focused));
+    app->MakeCurrentWindow(app->focused);
     return 0;
   }
 };
 
 void Application::MakeCurrentWindow(Window *W) { 
-  if (W) [[GetTyped<GameView*>((screen = W)->id) openGLContext] makeCurrentContext];
+  if (W) [[GetTyped<GameView*>((focused = W)->id) openGLContext] makeCurrentContext];
 }
 
 void Application::CloseWindow(Window *W) {
@@ -449,7 +449,7 @@ void Application::CloseWindow(Window *W) {
   if (windows.empty()) run = false;
   if (app->window_closed_cb) app->window_closed_cb(W);
   // [static_cast<AppDelegate*>([NSApp delegate]) destroyWindow: [GetTyped<GameView*>(W->id) window]];
-  screen = 0;
+  focused = 0;
 }
 
 void Application::LoseFocus() { [GetTyped<GameView*>(GetNativeWindow()->id) clearKeyModifiers]; }
@@ -457,18 +457,18 @@ void Application::LoseFocus() { [GetTyped<GameView*>(GetNativeWindow()->id) clea
 void Application::ReleaseMouseFocus() { 
   CGDisplayShowCursor(kCGDirectMainDisplay);
   CGAssociateMouseAndMouseCursorPosition(true);
-  screen->grab_mode.Off();
-  screen->cursor_grabbed = 0;
+  focused->grab_mode.Off();
+  focused->cursor_grabbed = 0;
 }
 
 void Application::GrabMouseFocus() {
   CGDisplayHideCursor(kCGDirectMainDisplay);
   CGAssociateMouseAndMouseCursorPosition(false);
-  screen->grab_mode.On(); 
-  screen->cursor_grabbed = 1;
+  focused->grab_mode.On(); 
+  focused->cursor_grabbed = 1;
   CGWarpMouseCursorPosition
-    (NSPointToCGPoint([[GetTyped<GameView*>(screen->id) window] convertRectToScreen:
-                      NSMakeRect(screen->width / 2, screen->height / 2, 0, 0)].origin));
+    (NSPointToCGPoint([[GetTyped<GameView*>(focused->id) window] convertRectToScreen:
+                      NSMakeRect(focused->width / 2, focused->height / 2, 0, 0)].origin));
 }
 
 void Application::SetClipboardText(const string &s) {
@@ -539,6 +539,7 @@ void *Video::CompleteGLContextCreate(Window *W, void *gl_context) {
 }
 
 int Video::Swap() {
+  auto screen = app->focused;
   screen->gd->Flush();
   // [[GetTyped<GameView*>(screen->id) openGLContext] flushBuffer];
   CGLFlushDrawable([[GetTyped<GameView*>(screen->id) openGLContext] CGLContextObj]);

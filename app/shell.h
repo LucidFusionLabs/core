@@ -27,8 +27,9 @@ struct Shell {
     CB cb;
     Command(const string &N, const CB &Cb) : name(N), cb(Cb) {}
   };
+  Window *parent;
   vector<Command> command;
-  Shell();
+  Shell(Window *W);
 
   template <class... Args> void Add(Args&&... args) { command.emplace_back(forward<Args>(args)...); }
   void AddSceneCommands(Scene *scene);

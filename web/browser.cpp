@@ -381,7 +381,7 @@ void Browser::Open(const string &url) {
   if (app->render_process) return app->RunInNetworkThread(bind(&ProcessAPIClient::Navigate, app->render_process.get(), url));
   doc.parser->OpenFrame(url, nullptr);
   if (app->main_process) { app->main_process->SetURL(url); app->main_process->SetTitle(url); }
-  else                   { SetURLText(url); screen->SetCaption(url); }
+  else                   { SetURLText(url); app->focused->SetCaption(url); }
 }
 
 void Browser::KeyEvent(int key, bool down) {
@@ -396,14 +396,14 @@ void Browser::KeyEvent(int key, bool down) {
 }
 
 void Browser::MouseMoved(int x, int y) {
-  if (app->render_process || (!app->render_process && !app->main_process)) y -= screen->height+viewport.top()+VScrolled();
+  if (app->render_process || (!app->render_process && !app->main_process)) y -= app->focused->height+viewport.top()+VScrolled();
   if (app->render_process) { app->RunInNetworkThread(bind(&ProcessAPIClient::MouseMove, app->render_process.get(), x, y, x-mouse.x, y-mouse.y)); mouse=point(x,y); }
   else if (auto n = doc.node->documentElement()) { mouse=point(x,y); EventNode(n, initial_displacement, Mouse::Event::Motion); }
 }
 
 void Browser::MouseButton(int b, bool d, int x, int y) {
   // doc.gui.Input(b, mouse, d, 1);
-  if (app->render_process || (!app->render_process && !app->main_process)) y -= screen->height+viewport.top()+VScrolled();
+  if (app->render_process || (!app->render_process && !app->main_process)) y -= app->focused->height+viewport.top()+VScrolled();
   if (app->render_process) { app->RunInNetworkThread(bind(&ProcessAPIClient::MouseClick, app->render_process.get(), b, d, x, y)); mouse=point(x,y); }
   else if (auto n = doc.node->documentElement()) { mouse=point(x,y); EventNode(n, initial_displacement, Mouse::ButtonID(b)); }
 }
@@ -419,7 +419,7 @@ void Browser::AnchorClicked(DOM::HTMLAnchorElement *anchor) {
 
 void Browser::SetClearColor(const Color &c) {
   if (app->main_process) app->main_process->SetClearColor(c);
-  else                   screen->gd->ClearColor(c);
+  else                   app->focused->gd->ClearColor(c);
 }
 
 void Browser::SetViewport(int w, int h) {
@@ -508,7 +508,7 @@ void Browser::PaintNode(Flow *flow, DOM::Node *n, const point &displacement_in) 
   ComputedStyle *style = &render->style;
   bool is_body  = n->htmlElementType == DOM::HTML_BODY_ELEMENT;
   bool is_table = n->htmlElementType == DOM::HTML_TABLE_ELEMENT;
-  if (render->style_dirty || render->layout_dirty) { ScissorStack ss(screen->gd); LayoutNode(flow, n, 0); }
+  if (render->style_dirty || render->layout_dirty) { ScissorStack ss(app->focused->gd); LayoutNode(flow, n, 0); }
   if (render->display_none) return;
 
   if (!render->done_positioned) {
@@ -554,8 +554,8 @@ void Browser::PaintNode(Flow *flow, DOM::Node *n, const point &displacement_in) 
       render->tiles->AddDrawableBoxArray(render->child_bg,  displacement);
       render->tiles->AddDrawableBoxArray(render->child_box, displacement);
     } else {
-      render->child_bg .Draw(screen->gd, displacement);
-      render->child_box.Draw(screen->gd, displacement);
+      render->child_bg .Draw(app->focused->gd, displacement);
+      render->child_box.Draw(app->focused->gd, displacement);
     }
   }
   if (auto input = n->AsHTMLInputElement()) {

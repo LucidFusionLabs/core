@@ -47,7 +47,7 @@ void Geometry::ScrollTexCoord(float dx, float dx_extra, int *subtract_max_int) {
   if (subtract_max_int) *subtract_max_int = max_int;
   int width_bytes = width * sizeof(float);
   int vert_size = count * width_bytes;
-  screen->gd->VertexPointer(vd, GraphicsDevice::Float, width_bytes, 0, &vert[0], vert_size, &vert_ind, true, primtype);
+  app->focused->gd->VertexPointer(vd, GraphicsDevice::Float, width_bytes, 0, &vert[0], vert_size, &vert_ind, true, primtype);
 }
 
 string Asset::FileName(const string &asset_fn) {
@@ -81,7 +81,7 @@ File *Asset::OpenFile(const string &asset_fn) {
 
 void Asset::Unload() {
   if (parent) parent->Unloaded(this);
-  if (tex.ID && screen) tex.ClearGL();
+  if (tex.ID && app->focused) tex.ClearGL();
   if (geometry) { delete geometry; geometry = 0; }
   if (hull)     { delete hull;     hull     = 0; }
 }
@@ -142,8 +142,9 @@ Texture *Asset::LoadTexture(const MultiProcessFileResource &file, int max_image_
 }
 
 void Asset::LoadTextureArray(const string &fmt, const string &prefix, const string &suffix, int N, TextureArray*out, int flag) {
-  out->a.resize(N);
-  for (int i=0, l=out->a.size(); i<l; i++)
+  out->a.clear();
+  for (int i=0; i != N; i++) out->a.emplace_back(app->focused->gd);
+  for (int i=0; i != N; i++)
     Asset::LoadTexture(StringPrintf(fmt.c_str(), prefix.c_str(), i, suffix.c_str()), &out->a[i], 0, flag);
 }
 
@@ -281,9 +282,9 @@ void glIntersect(GraphicsDevice *gd, int x, int y, Color *c) {
   v2 *vert = reinterpret_cast<v2*>(&geom->vert[0]);
 
   vert[0] = v2(0, y);
-  vert[1] = v2(screen->width, y);
+  vert[1] = v2(app->focused->width, y);
   vert[2] = v2(x, 0);
-  vert[3] = v2(x, screen->height);
+  vert[3] = v2(x, app->focused->height);
 
   gd->DisableTexture();
   Scene::Select(gd, geom.get());
@@ -291,6 +292,7 @@ void glIntersect(GraphicsDevice *gd, int x, int y, Color *c) {
 }
 
 void glShadertoyShader(GraphicsDevice *gd, Shader *shader, const Texture *tex) {
+  Window *screen = app->focused;
   float scale = shader->scale;
   gd->UseShader(shader);
   shader->SetUniform1f("iGlobalTime", ToFSeconds(Now() - app->time_started).count());

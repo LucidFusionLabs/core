@@ -20,7 +20,7 @@ int CompareTextureToBuffer(int tex_id, const unsigned char *buf, int h, int line
   return 0;
 #else
   Texture test;
-  screen->gd->DumpTexture(&test, tex_id);
+  app->focused->gd->DumpTexture(&test, tex_id);
   return CompareTextureToBuffer(test, buf, h, linesize, fn, debug);
 #endif
 }
@@ -43,16 +43,16 @@ extern "C" int MyAppFrame(Window *W, unsigned clicks, int flag) {
 extern "C" void MyAppCreate(int argc, const char* const* argv) {
   LFL::FLAGS_enable_video = LFL::FLAGS_enable_input = true;
   LFL::app = new LFL::Application(argc, argv);
-  LFL::screen = new LFL::Window();
-  LFL::screen->frame_cb = MyAppFrame;
+  LFL::app->focused = new LFL::Window();
+  LFL::app->focused->frame_cb = MyAppFrame;
   testing::InitGoogleTest(&argc, const_cast<char**>(argv));
 }
 
 extern "C" int MyAppMain() {
   CHECK_EQ(0, LFL::app->Create(__FILE__));
   CHECK_EQ(0, LFL::app->Init());
-  LFL::screen->gd->have_npot_textures = false;
-  app->StartNewWindow(screen);
+  LFL::app->focused->gd->have_npot_textures = false;
+  app->StartNewWindow(app->focused);
   return app->Main();
 }
 
@@ -73,7 +73,7 @@ TEST(GLTest, Texture) {
   tex.UpdateGL(tex.buf, Box(dim, dim));
   EXPECT_EQ(0, CompareTextureToBuffer(tex.ID, pdata, dim, lsize, "gl_tests_02.png"));
 
-  GraphicsContext gc(screen->gd);
+  GraphicsContext gc(app->focused->gd);
   FrameBuffer fb(gc.gd);
   fb.Create(dim, dim, FrameBuffer::Flag::CreateTexture);
   gc.gd->EnableLayering();
@@ -111,10 +111,10 @@ TEST(GLTest, Texture) {
 }
 
 TEST(GLTest, Fonts) {
-  GraphicsContext gc(screen->gd);
+  GraphicsContext gc(app->focused->gd);
 
   Color c(0xffcdef12);
-  Texture tex(37, 93), tex2;
+  Texture tex(gc.gd, 37, 93), tex2;
   tex.RenewBuffer();
   SimpleVideoResampler::Fill(tex.buf, tex.width, tex.height, tex.pf, tex.LineSize(), 0, 0, c);
   EXPECT_EQ(4, Pixel::Size(tex.pf));
@@ -187,7 +187,7 @@ TEST(GLTest, CoreText) {
       else                    EXPECT_NE(0, cmp);
     }
   }
-  GraphicsContext gc(screen->gd);
+  GraphicsContext gc(app->focused->gd);
   FrameBuffer fb(gc.gd);
   fb.Create(g->tex.width, g->tex.height, FrameBuffer::Flag::CreateTexture);
   font->Draw(string(1, 'a'), Box(-g->bearing_x, g->tex.height - g->bearing_y, g->tex.width, font->ascender));

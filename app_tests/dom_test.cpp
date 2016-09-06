@@ -85,15 +85,15 @@ TEST(DOMTest, DOMNode) {
 }
 
 TEST(DOMTest, DOMTree) {
-  GUI sb_gui(screen);
-  Browser sb(&sb_gui, screen->Box());
+  GUI sb_gui(app->focused);
+  Browser sb(&sb_gui, app->focused->Box());
   sb.doc.parser->OpenHTML("<html>\n"
                           "<head><style> h1 { background-color: #123456; } </style></head>\n"
                           "<body style=\"background-color: #654321\">\n"
                           "<H1 class=\"foo  bar\">Very header</h1>\n"
                           "<P id=cat>In  the  begining  was  fun.</p>\n"
                           "</body>\n");
-  Box viewport = screen->Box();
+  Box viewport = app->focused->Box();
   sb.v_scrollbar.menuicon = app->fonts->Fake();
   sb.h_scrollbar.menuicon = app->fonts->Fake();
   sb.Draw(viewport);

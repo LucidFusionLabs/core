@@ -41,26 +41,26 @@
 #endif
 
 extern "C" void BreakHook() {}
-extern "C" void ShellRun(const char *text) { return LFL::screen->shell->Run(text); }
-extern "C" NativeWindow *GetNativeWindow() { return LFL::screen; }
+extern "C" void ShellRun(const char *text) { return LFL::app->focused->shell->Run(text); }
+extern "C" NativeWindow *GetNativeWindow() { return LFL::app->focused; }
 extern "C" LFApp        *GetLFApp()        { return LFL::app; }
 extern "C" int LFAppMain()                 { return LFL::app->Main(); }
 extern "C" int LFAppMainLoop()             { return LFL::app->MainLoop(); }
 extern "C" int LFAppFrame(bool handle_ev)  { return LFL::app->EventDrivenFrame(handle_ev); }
 extern "C" void LFAppTimerDrivenFrame()    { LFL::app->TimerDrivenFrame(true); }
-extern "C" void LFAppWakeup()              { return LFL::app->scheduler.Wakeup(LFL::screen); }
+extern "C" void LFAppWakeup()              { return LFL::app->scheduler.Wakeup(LFL::app->focused); }
 extern "C" void LFAppResetGL()             { return LFL::app->ResetGL(); }
 extern "C" const char *LFAppSaveDir()      { return LFL::app->savedir.c_str(); }
 extern "C" void LFAppAtExit()              { delete LFL::app; }
 extern "C" void LFAppShutdown()                   { LFL::app->run=0; LFAppWakeup(); }
-extern "C" void WindowReshaped(int x, int y, int w, int h)      { LFL::screen->Reshaped(LFL::Box(x, y, w, h)); }
-extern "C" void WindowMinimized()                               { LFL::screen->Minimized(); }
-extern "C" void WindowUnMinimized()                             { LFL::screen->UnMinimized(); }
-extern "C" bool WindowClosed()                                  { LFL::app->CloseWindow(LFL::screen); return LFL::app->windows.empty(); }
-extern "C" void QueueWindowReshaped(int x, int y, int w, int h) { LFL::app->RunInMainThread(LFL::bind(&LFL::Window::Reshaped,    LFL::screen, LFL::Box(x, y, w, h))); }
-extern "C" void QueueWindowMinimized()                          { LFL::app->RunInMainThread(LFL::bind(&LFL::Window::Minimized,   LFL::screen)); }
-extern "C" void QueueWindowUnMinimized()                        { LFL::app->RunInMainThread(LFL::bind(&LFL::Window::UnMinimized, LFL::screen)); }
-extern "C" void QueueWindowClosed()                             { LFL::app->RunInMainThread(LFL::bind([=](){ LFL::app->CloseWindow(LFL::screen); })); }
+extern "C" void WindowReshaped(int x, int y, int w, int h)      { LFL::app->focused->Reshaped(LFL::Box(x, y, w, h)); }
+extern "C" void WindowMinimized()                               { LFL::app->focused->Minimized(); }
+extern "C" void WindowUnMinimized()                             { LFL::app->focused->UnMinimized(); }
+extern "C" bool WindowClosed()                                  { LFL::app->CloseWindow(LFL::app->focused); return LFL::app->windows.empty(); }
+extern "C" void QueueWindowReshaped(int x, int y, int w, int h) { LFL::app->RunInMainThread(LFL::bind(&LFL::Window::Reshaped,    LFL::app->focused, LFL::Box(x, y, w, h))); }
+extern "C" void QueueWindowMinimized()                          { LFL::app->RunInMainThread(LFL::bind(&LFL::Window::Minimized,   LFL::app->focused)); }
+extern "C" void QueueWindowUnMinimized()                        { LFL::app->RunInMainThread(LFL::bind(&LFL::Window::UnMinimized, LFL::app->focused)); }
+extern "C" void QueueWindowClosed()                             { LFL::app->RunInMainThread(LFL::bind([=](){ LFL::app->CloseWindow(LFL::app->focused); })); }
 extern "C" int  KeyPress  (int b, int m, int d)                 { return LFL::app->input->KeyPress  (b, m, d); }
 extern "C" int  MouseClick(int b, int d, int x,  int y)         { return LFL::app->input->MouseClick(b, d, LFL::point(x, y)); }
 extern "C" int  MouseMove (int x, int y, int dx, int dy)        { return LFL::app->input->MouseMove (LFL::point(x, y), LFL::point(dx, dy)); }
@@ -71,8 +71,8 @@ extern "C" void EndpointRead(void *svc, const char *name, const char *buf, int l
 extern "C" NativeWindow *SetNativeWindowByID(void *id) { return SetNativeWindow(LFL::FindOrNull(LFL::app->windows, id)); }
 extern "C" NativeWindow *SetNativeWindow(NativeWindow *W) {
   CHECK(W);
-  if (W == LFL::screen) return W;
-  LFL::app->MakeCurrentWindow((LFL::screen = static_cast<LFL::Window*>(W)));
+  if (W == LFL::app->focused) return W;
+  LFL::app->MakeCurrentWindow((LFL::app->focused = static_cast<LFL::Window*>(W)));
   return W;
 }
 
@@ -137,7 +137,6 @@ const bool ANDROID = false;
 #endif
 
 Application *app = nullptr;
-Window *screen = nullptr;
 const char *not_implemented = "not implemented";
 
 DEFINE_int(loglevel, DEBUG ? 7 : 0, "Log level: [Fatal=-1, Error=0, Info=3, Debug=7]");
@@ -311,7 +310,7 @@ void Application::Log(int level, const char *file, int line, const char *message
     WriteLogLine(log_pid ? StrCat("[", pid, "] ", tbuf).c_str() : tbuf, message, file, line);
   }
   if (level == LFApp::Log::Fatal) LFAppFatal();
-  if (run && FLAGS_enable_video && screen && screen->console) screen->console->Write(message);
+  if (run && FLAGS_enable_video && focused && focused->console) focused->console->Write(message);
 }
 
 void Application::WriteLogLine(const char *tbuf, const char *message, const char *file, int line) {
@@ -346,9 +345,9 @@ void Application::WriteDebugLine(const char *message, const char *file, int line
 }
 
 void Application::CreateNewWindow() {
-  Window *orig_window = screen, *new_window = new Window();
+  Window *orig_window = focused, *new_window = new Window();
   if (window_init_cb) window_init_cb(new_window);
-  new_window->gd = CreateGraphicsDevice(opengles_version).release();
+  new_window->gd = CreateGraphicsDevice(new_window, opengles_version).release();
   CHECK(Video::CreateWindow(new_window));
   if (!new_window->started && (new_window->started = true)) {
     MakeCurrentWindow(new_window);
@@ -561,20 +560,20 @@ int Application::Init() {
   thread_pool.Open(X_or_1(FLAGS_threadpool_size));
   if (FLAGS_threadpool_size) thread_pool.Start();
 
-  if (screen) {
+  if (focused) {
     if (FLAGS_enable_video) {
-      if (!screen->gd) screen->gd = CreateGraphicsDevice(opengles_version).release();
+      if (!focused->gd) focused->gd = CreateGraphicsDevice(focused, opengles_version).release();
       shaders = make_unique<Shaders>();
-      screen->gd->Init(screen->Box());
-    } else { windows[screen->id.v] = screen; }
+      focused->gd->Init(focused->Box());
+    } else { windows[focused->id.v] = focused; }
 
 #ifdef LFL_WINDOWS
     if (FLAGS_enable_video && splash_color) {
-      screen->gd->ClearColor(*splash_color);
-      screen->gd->Clear();
-      screen->gd->Flush();
+      focused->gd->ClearColor(*splash_color);
+      focused->gd->Clear();
+      focused->gd->Flush();
       Video::Swap();
-      screen->gd->ClearColor(screen->gd->clear_color);
+      focused->gd->ClearColor(focused->gd->clear_color);
     }
 #endif
   }
@@ -588,9 +587,9 @@ int Application::Init() {
     if ((asset_loader = make_unique<AssetLoader>())->Init()) return ERRORv(-1, "asset loader init failed");
   }
 
-  if (screen) {
+  if (focused) {
     if (FLAGS_enable_video) fonts->LoadDefaultFonts();
-    screen->default_font = FontRef(FontDesc::Default(), false);
+    focused->default_font = FontRef(FontDesc::Default(), false);
   }
 
   if (FLAGS_enable_input) {
@@ -611,7 +610,7 @@ int Application::Init() {
 
   scheduler.Init();
   if (scheduler.monolithic_frame) frame_time.GetTime(true);
-  else if (screen)        screen->frame_time.GetTime(true);
+  else if (focused)      focused->frame_time.GetTime(true);
   INFO("Application::Init() succeeded");
   initialized = true;
   return 0;
@@ -638,11 +637,11 @@ int Application::HandleEvents(unsigned clicks) {
 
 int Application::EventDrivenFrame(bool handle_events) {
   if (!MainThread()) ERROR("Frame() called from thread ", Thread::GetId());
-  unsigned clicks = screen->frame_time.GetTime(true).count();
+  unsigned clicks = focused->frame_time.GetTime(true).count();
   if (handle_events) HandleEvents(clicks);
 
-  int ret = screen->Frame(clicks, 0);
-  if (FLAGS_frame_debug) INFO("frame_debug Application::Frame Window ", screen->id, " = ", ret);
+  int ret = focused->Frame(clicks, 0);
+  if (FLAGS_frame_debug) INFO("frame_debug Application::Frame Window ", focused->id, " = ", ret);
 
   frames_ran++;
   return clicks;
@@ -681,7 +680,7 @@ int Application::MainLoop() {
     bool got_wakeup = scheduler.MainWait();
     TimerDrivenFrame(got_wakeup);
 #ifdef LFL_ANDROID
-    if (screen->minimized) { INFO("MainLoop: minimized"); return 0; }
+    if (focused->minimized) { INFO("MainLoop: minimized"); return 0; }
 #endif
     if (scheduler.rate_limit && app->run && FLAGS_target_fps) scheduler.maxfps.Limit();
     MSleep(1);
@@ -699,7 +698,7 @@ void Application::ResetGL() {
 
 Application::~Application() {
   run = 0;
-  INFO("exiting");
+  INFO("exiting with ", windows.size(), " open windows");
   vector<Window*> close_list;
   for (auto &i : windows) close_list.push_back(i.second);
   for (auto &i : close_list) CloseWindow(i);
@@ -821,7 +820,7 @@ void Window::SwapAxis() {
 }
 
 int Window::Frame(unsigned clicks, int flag) {
-  if (screen != this) app->MakeCurrentWindow(this);
+  if (app->focused != this) app->MakeCurrentWindow(this);
 
   if (FLAGS_enable_video) {
     if (!frame_init && (frame_init = true))  {
@@ -836,7 +835,7 @@ int Window::Frame(unsigned clicks, int flag) {
   }
 
   /* frame */
-  int ret = frame_cb ? frame_cb(screen, clicks, flag) : 0;
+  int ret = frame_cb ? frame_cb(this, clicks, flag) : 0;
 
   /* allow app to skip frame */
   if (ret < 0) return ret;
@@ -862,7 +861,7 @@ void Window::RenderToFrameBuffer(FrameBuffer *fb) {
 /* FrameScheduler */
 
 void FrameScheduler::Init() { 
-  if (screen) screen->target_fps = FLAGS_target_fps;
+  if (app->focused) app->focused->target_fps = FLAGS_target_fps;
   wait_forever = !FLAGS_target_fps;
   maxfps.timer.GetTime(true);
   if (wait_forever && synchronize_waits) frame_mutex.lock();

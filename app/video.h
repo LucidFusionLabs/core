@@ -175,15 +175,16 @@ struct DrawableNop : public Drawable {
 
 struct Texture : public Drawable {
   static const int preferred_pf;
+  GraphicsDevice *gd;
   unsigned ID;
   unsigned char *buf;
   bool owner, buf_owner;
   int width, height, pf, cubemap;
   float coord[4] = { unit_texcoord[0], unit_texcoord[1], unit_texcoord[2], unit_texcoord[3] };
 
-  Texture(int w=0, int h=0, int PF=preferred_pf, unsigned id=0) : ID(id), buf(0), owner(1), buf_owner(1), width(w), height(h), pf(PF), cubemap(0) {}
-  Texture(int w,   int h,   int PF,           unsigned char *B) : ID(0),  buf(B), owner(1), buf_owner(0), width(w), height(h), pf(PF), cubemap(0) {}
-  Texture(const Texture &t) : ID(t.ID), buf(t.buf), owner(ID?0:1), buf_owner(buf?0:1), width(t.width), height(t.height), pf(t.pf), cubemap(t.cubemap) { memcpy(&coord, t.coord, sizeof(coord)); }
+  Texture(GraphicsDevice *D=0, int w=0, int h=0, int PF=preferred_pf, unsigned id=0) : gd(D), ID(id), buf(0), owner(1), buf_owner(1), width(w), height(h), pf(PF), cubemap(0) {}
+  Texture(                     int w,   int h,   int PF,           unsigned char *B) : gd(0), ID(0),  buf(B), owner(1), buf_owner(0), width(w), height(h), pf(PF), cubemap(0) {}
+  Texture(const Texture &t) : gd(t.gd), ID(t.ID), buf(t.buf), owner(ID?0:1), buf_owner(buf?0:1), width(t.width), height(t.height), pf(t.pf), cubemap(t.cubemap) { memcpy(&coord, t.coord, sizeof(coord)); }
   virtual ~Texture() { ClearBuffer(); if (owner) ClearGL(); }
 
   void Bind() const;
@@ -253,10 +254,12 @@ struct TextureArray {
 };
 
 struct DepthTexture {
+  GraphicsDevice *gd;
   unsigned ID;
   int width, height, df;
   bool owner=true;
-  DepthTexture(int w=0, int h=0, int DF=Depth::_16, unsigned id=0) : ID(id), width(w), height(h), df(DF) {}
+  DepthTexture(GraphicsDevice *D=0, int w=0, int h=0, int DF=Depth::_16, unsigned id=0) :
+    ID(id), gd(D), width(w), height(h), df(DF) {}
   ~DepthTexture() { if (owner) ClearGL(); }
 
   struct Flag { enum { CreateGL=1 }; };
@@ -343,6 +346,7 @@ struct GraphicsDevice {
   static const int ActiveUniforms, ActiveAttributes, MaxVertexAttributes, MaxVertexUniformComp, MaxViewportDims, ViewportBox, ScissorBox;
   static const int Fill, Line, Point, GLPreferredBuffer, GLInternalFormat;
 
+  Window *parent;
   int default_draw_mode = DrawMode::_2D, draw_mode = 0, default_framebuffer = 0;
   bool done_init = 0, have_framebuffer = 1, have_cubemap = 1, have_npot_textures = 1;
   bool blend_enabled = 0, invert_view_matrix = 0, track_model_matrix = 0, dont_clear_deferred = 0;
@@ -355,7 +359,7 @@ struct GraphicsDevice {
   vector<vector<Box>> scissor_stack;
   vector<int*> buffers;
 
-  GraphicsDevice() : scissor_stack(1) {}
+  GraphicsDevice(Window *W) : parent(W), scissor_stack(1) {}
   virtual ~GraphicsDevice() {}
   virtual void Init(const Box&) = 0;
   virtual bool ShaderSupport() const = 0;

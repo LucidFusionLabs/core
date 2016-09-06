@@ -434,7 +434,7 @@ void SocketWakeupThread::ThreadProc() {
       { ScopedMutex sm(sockets_mutex); my_sockets = sockets; }
       my_sockets.Select(-1);
       if (my_sockets.GetReadable(pipe[0])) { char buf[128]; recv(pipe[0], buf, sizeof(buf), 0); }
-      if (app->run) app->scheduler.Wakeup(screen);
+      if (app->run) app->scheduler.Wakeup(app->focused);
     }
     if (wait_mutex) { ScopedMutex sm(*wait_mutex); }
   }
@@ -841,7 +841,7 @@ void Service::Detach(Connection *c) {
   Service::Close(c);
   c->readable = c->writable = 0;
   app->RunInMainThread([=]() { (*c->detach)(); });
-  app->scheduler.Wakeup(screen);
+  app->scheduler.Wakeup(app->focused);
 }
 
 /* Network */
