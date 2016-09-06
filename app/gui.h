@@ -47,8 +47,8 @@ struct GUI {
   void UpdateBoxY(int y, int draw_box_ind, int input_box_ind);
   void IncrementBoxY(int y, int draw_box_ind, int input_box_ind);
 
-  virtual void Activate() { active = 1; }
-  virtual void Deactivate() { active = 0; }
+  virtual bool Activate()   { if ( active) return 0; active = 1; return 1; }
+  virtual bool Deactivate() { if (!active) return 0; active = 0; return 1; }
   virtual bool NotActive(const point &p) const { return !active; }
   virtual bool ToggleActive() { if ((active = !active)) Activate(); else Deactivate(); return active; }
   virtual point RelativePosition(const point &p) const { return p - box.TopLeft(); }
@@ -146,7 +146,7 @@ struct Widget {
   };
 };
 
-struct TextBox : public GUI, public KeyboardController {
+struct TextBox : public GUI, public TextboxController {
   struct Line;
   struct Lines;
   struct Colors {
@@ -328,8 +328,8 @@ struct TextBox : public GUI, public KeyboardController {
   virtual void Run(const string &cmd) { if (runcb) runcb(cmd); }
   virtual bool NotActive(const point &p) const { return !box.within(p) && mouse.drag.empty(); }
   virtual bool Active() const { return root->active_textbox == this; }
-  virtual void Activate()   { if (!Active()) { if (auto g=root->active_textbox) g->Deactivate(); root->active_textbox=this; } }
-  virtual void Deactivate() { if (Active()) root->active_textbox = root->default_textbox(); }
+  virtual bool Activate()   { if ( Active()) return 0; if (auto g = dynamic_cast<GUI*>(root->active_textbox)) g->Deactivate(); root->active_textbox = this; return 1; }
+  virtual bool Deactivate() { if (!Active()) return 0; root->active_textbox = root->default_textbox(); return 1; }
   virtual bool ToggleActive() { if (!Active()) Activate(); else Deactivate(); return Active(); }
   virtual void Input(char k) { cmd_line.UpdateText(cursor.i.x++, String16(1, *MakeUnsigned<char>(&k)), cursor.attr); UpdateCommandFB(); UpdateCursor(); }
   virtual void Erase()       { if (!cursor.i.x) return; cmd_line.Erase(--cursor.i.x, 1); UpdateCommandFB(); UpdateCursor(); }
@@ -340,6 +340,7 @@ struct TextBox : public GUI, public KeyboardController {
   virtual void HistUp()      { if (int c=cmd_last.ring.count) { AssignInput(cmd_last[cmd_last_ind]); cmd_last_ind=max(cmd_last_ind-1, -c); } }
   virtual void HistDown()    { if (int c=cmd_last.ring.count) { AssignInput(cmd_last[cmd_last_ind]); cmd_last_ind=min(cmd_last_ind+1, -1); } }
   virtual void Enter();
+  virtual void Tab() {}
 
   virtual String16 Text16() const { return cmd_line.Text16(); }
   virtual void AssignInput(const string &text) { cmd_line.AssignText(text); UpdateCommandFB(); UpdateCursorX(cmd_line.Size()); }
@@ -482,7 +483,7 @@ struct PropertyView : public TextView {
 
   virtual bool Empty() const { return !property_line.size(); }
   virtual void Clear() { property_line.Clear(); root_id=0; selected_line_no=-1; }
-  virtual void Deactivate() { TextBox::Deactivate(); selected_line_no=-1; }
+  virtual bool Deactivate() { bool ret = TextBox::Deactivate(); selected_line_no=-1; return ret; }
   virtual void SetRoot(Id id) { GetNode((root_id = id))->expanded = true; }
   virtual void Draw(const Box &w, int flag=DrawFlag::Default, Shader *shader=0);
   virtual void VisitExpandedChildren(Id id, const Node::Visitor &cb, int depth=0);
@@ -720,8 +721,8 @@ struct Console : public TextArea {
   virtual void Run(const string &in) { root->shell->Run(in); }
   virtual void PageUp  () { TextArea::PageDown(); }
   virtual void PageDown() { TextArea::PageUp(); }
-  virtual void Activate() { TextBox::Activate(); StartAnimating(); }
-  virtual void Deactivate() { TextBox::Deactivate(); StartAnimating(); }
+  virtual bool Activate()   { bool ret = TextBox::Activate();   StartAnimating(); return ret; }
+  virtual bool Deactivate() { bool ret = TextBox::Deactivate(); StartAnimating(); return ret; }
   virtual void Draw(const Box &b, int flag=DrawFlag::Default, Shader *shader=0);
   virtual void Draw();
   void StartAnimating();
@@ -883,7 +884,7 @@ struct HelperGUI : public GUI {
   };
   vector<Label> label;
   void AddLabel(const Box &w, const string &d, int h, const point &p) { label.emplace_back(w, d, h, font, p); }
-  void Activate() { active=1; /* ForceDirectedLayout(); */ }
+  bool Activate() { if (active) return 0; active=1; /* ForceDirectedLayout(); */ return 1; }
   void ForceDirectedLayout();
   void Draw();
 };

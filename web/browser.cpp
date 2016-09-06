@@ -389,7 +389,7 @@ void Browser::KeyEvent(int key, bool down) {
   else {
     if (auto n = doc.node->documentElement()) EventNode(n, initial_displacement, key);
     if (down && doc.active_input && doc.active_input->tiles) {
-      if (!app->input->HandleSpecialKey(key, doc.active_input)) doc.active_input->Input(key);
+      if (!doc.active_input->HandleSpecialKey(key)) doc.active_input->Input(key);
       doc.active_input->tiles->Run(TilesInterface::RunFlag::DontClear);
     }
   }

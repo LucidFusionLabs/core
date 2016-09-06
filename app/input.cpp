@@ -160,6 +160,45 @@ void BindMap::Button(InputEvent::Id event, bool d) {
   else if (d) b->Run(0);
 }
 
+int TextboxController::HandleSpecialKey(InputEvent::Id event) {
+  if      (event == Key::Backspace) { Erase();       return 1; }
+  else if (event == Key::Delete)    { Erase();       return 1; }
+  else if (event == Key::Return)    { Enter();       return 1; }
+  else if (event == Key::Left)      { CursorLeft();  return 1; }
+  else if (event == Key::Right)     { CursorRight(); return 1; }
+  else if (event == Key::Up)        { HistUp();      return 1; }
+  else if (event == Key::Down)      { HistDown();    return 1; }
+  else if (event == Key::PageUp)    { PageUp();      return 1; }
+  else if (event == Key::PageDown)  { PageDown();    return 1; }
+  else if (event == Key::Home)      { Home();        return 1; }
+  else if (event == Key::End)       { End();         return 1; }
+  else if (event == Key::Tab)       { Tab();         return 1; }
+  else if (event == Key::Escape)    { Escape();      return 1; }
+  return 0;
+}
+
+int TextboxController::SendKeyEvent(InputEvent::Id event, bool down) {
+  int key = InputEvent::GetKey(event);
+  bool shift_down = event & Key::Modifier::Shift, ctrl_down = event & Key::Modifier::Ctrl,
+       cmd_down = event & Key::Modifier::Cmd;
+  InputDebugIfDown("TextboxController::Input %s %d %d %d %d",
+                   InputEvent::Name(event), key, shift_down, ctrl_down, cmd_down);
+
+  if (toggle_bind.key == event && !toggle_once) return 0;
+
+  if (event == app->input->paste_bind.key) { Input(app->GetClipboardText()); return 1; }
+  if (HandleSpecialKey(event)) return 1;
+
+  if (cmd_down) return 0;
+  if (key >= 128) { InputDebug("TextboxController::Input unhandled key %lld", event); return 0; }
+
+  if (shift_down) key = Key::ShiftModified(key);
+  if (ctrl_down)  key = Key::CtrlModified(key);
+
+  Input(key);
+  return 1;
+}
+
 bool DragTracker::Update(const point &p, bool down) {
   bool start = !changing && down;
   if (start) beg_click = p;
@@ -274,48 +313,9 @@ int Input::KeyPress(int key, int mod, bool down) {
 }
 
 int Input::KeyEventDispatch(InputEvent::Id event, bool down) {
-  if (!down) return 0;
-  int key = InputEvent::GetKey(event);
-  bool shift_down = event & Key::Modifier::Shift, ctrl_down = event & Key::Modifier::Ctrl,
-       cmd_down = event & Key::Modifier::Cmd;
-  InputDebugIfDown("Input::KeyEventDispatch %s %d %d %d %d",
-                   InputEvent::Name(event), key, shift_down, ctrl_down, cmd_down);
-
-  Window *screen = app->focused;
-  if (KeyboardController *g = screen->active_textbox) do {
-    if (g->toggle_bind.key == event && !g->toggle_once) return 0;
-
-    if (event == paste_bind.key) { g->Input(app->GetClipboardText()); return 1; }
-    if (HandleSpecialKey(event, g)) return 1;
-
-    if (cmd_down) return 0;
-    if (key >= 128) { InputDebug("Input::KeyEventDispatch unhandled key %lld", event); break; }
-
-    if (shift_down) key = Key::ShiftModified(key);
-    if (ctrl_down)  key = Key::CtrlModified(key);
-
-    g->Input(key);
-    return 1;
-  } while(0);
-
-  return 0;
-}
-
-int Input::HandleSpecialKey(InputEvent::Id event, KeyboardController *g) {
-  if      (event == Key::Backspace) { g->Erase();       return 1; }
-  else if (event == Key::Delete)    { g->Erase();       return 1; }
-  else if (event == Key::Return)    { g->Enter();       return 1; }
-  else if (event == Key::Left)      { g->CursorLeft();  return 1; }
-  else if (event == Key::Right)     { g->CursorRight(); return 1; }
-  else if (event == Key::Up)        { g->HistUp();      return 1; }
-  else if (event == Key::Down)      { g->HistDown();    return 1; }
-  else if (event == Key::PageUp)    { g->PageUp();      return 1; }
-  else if (event == Key::PageDown)  { g->PageDown();    return 1; }
-  else if (event == Key::Home)      { g->Home();        return 1; }
-  else if (event == Key::End)       { g->End();         return 1; }
-  else if (event == Key::Tab)       { g->Tab();         return 1; }
-  else if (event == Key::Escape)    { g->Escape();      return 1; }
-  return 0;
+  KeyboardController *g = app->focused ? app->focused->active_textbox : 0;
+  if (!g || (!down && g->keydown_events_only)) return 0;
+  return g->SendKeyEvent(event, down);
 }
 
 int Input::MouseMove(const point &p, const point &d) {
@@ -366,16 +366,16 @@ int Input::MouseEventDispatch(InputEvent::Id event, const point &p, int down) {
   for (auto i = screen->dialogs.begin(); i != screen->dialogs.end(); /**/) {
     Dialog *g = i->get();
     if (g->NotActive(screen->mouse)) { i++; continue; }
-    fired += g->mouse.Input(event, g->RelativePosition(screen->mouse), down, 0);
+    fired += g->mouse.SendMouseEvent(event, g->RelativePosition(screen->mouse), down, 0);
     if (g->deleted) { screen->GiveDialogFocusAway(g); i = screen->dialogs.erase(i); continue; }
     if (event == Mouse::Event::Button1 && down && g->box.within(screen->mouse)) { bring_to_front = g; break; }
     i++;
   }
   if (bring_to_front) screen->BringDialogToFront(bring_to_front);
 
-  if (auto g = screen->active_controller) {
-    if ((events = MouseEventDispatchGUI(event, p, down, g, &active_guis))) {
-      InputDebug("Input::MouseEventDispatch sent GUI[%p] events = %d", g, events);
+  if (auto mc = screen->active_controller) {
+    if ((events = mc->SendMouseEvent(event, p, down, 0))) {
+      InputDebug("Input::MouseEventDispatch sent MouseController[%p] events = %d", mc, events);
       return events;
     }
   } else for (auto b = screen->gui.begin(), e = screen->gui.end(), i = b; i != e; ++i) {
@@ -385,7 +385,7 @@ int Input::MouseEventDispatch(InputEvent::Id event, const point &p, int down) {
     }
   }
 
-  InputDebugIfDown("Inut::MouseEventDispatch %s fired=%d, guis=%d/%zd",
+  InputDebugIfDown("Input::MouseEventDispatch %s fired=%d, guis=%d/%zd",
                    screen->mouse.DebugString().c_str(), fired, active_guis, screen->gui.size());
   return fired;
 }
@@ -393,7 +393,7 @@ int Input::MouseEventDispatch(InputEvent::Id event, const point &p, int down) {
 int Input::MouseEventDispatchGUI(InputEvent::Id event, const point &p, int down, GUI *g, int *active_guis) {
   if (g->NotActive(g->root->mouse)) return 0;
   else (*active_guis)++;
-  int events = g->mouse.Input(event, g->RelativePosition(g->root->mouse), down, 0);
+  int events = g->mouse.SendMouseEvent(event, g->RelativePosition(g->root->mouse), down, 0);
   if (!events && g->child_gui) return MouseEventDispatchGUI(event, p, down, g->child_gui, active_guis);
   return events;
 }
@@ -429,7 +429,7 @@ bool MouseControllerCallback::Run(const point &p, int button, int down, bool wro
   return ret;
 }
 
-int MouseController::Input(InputEvent::Id event, const point &p, int down, int flag) {
+int MouseController::SendMouseEvent(InputEvent::Id event, const point &p, int down, int flag) {
   int fired = 0, boxes_checked = 0;
   bool but1 = event == Mouse::Event::Button1;
   bool but2 = event == Mouse::Event::Button2;

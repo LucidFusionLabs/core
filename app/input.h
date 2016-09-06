@@ -106,9 +106,15 @@ struct BindMap : public InputController {
 
 struct KeyboardController {
   Bind toggle_bind;
-  bool toggle_once=0;
+  bool toggle_once=0, keydown_events_only=1;
   virtual ~KeyboardController() {}
   virtual void SetToggleKey(int TK, bool TO=0) { toggle_bind.key=TK; toggle_once=TO; }
+  virtual int SendKeyEvent(InputEvent::Id, bool down) { return 0; }
+};
+
+struct TextboxController : public KeyboardController {
+  int HandleSpecialKey(InputEvent::Id event);
+  virtual int SendKeyEvent(InputEvent::Id event, bool down);
   virtual void Input(const string &s) { for (int i=0; i<s.size(); i++) Input(s[i]); }
   virtual void Input(char key) {}
   virtual void Enter      () {}
@@ -177,7 +183,7 @@ struct MouseController {
   virtual int AddRightClickBox(const Box &w, const MouseControllerCallback &cb) { return hit.Insert(HitBox(Event::RightClick, w, cb)); }
   virtual int AddHoverBox     (const Box &w, const MouseControllerCallback &cb) { return hit.Insert(HitBox(Event::Hover,      w, cb)); }
   virtual int AddDragBox      (const Box &w, const MouseControllerCallback &cb) { return hit.Insert(HitBox(Event::Drag,       w, cb)); }
-  virtual int Input(InputEvent::Id, const point &p, int down, int flag);
+  virtual int SendMouseEvent(InputEvent::Id, const point &p, int down, int flag);
 };
 
 struct DragTracker {
@@ -216,7 +222,6 @@ struct Input : public Module {
 
   int KeyPress(int key, int mod, bool down);
   int KeyEventDispatch(InputEvent::Id event, bool down);
-  int HandleSpecialKey(InputEvent::Id, KeyboardController*);
 
   int MouseMove(const point &p, const point &d);
   int MouseWheel(const point &p, const point &d);

@@ -20,7 +20,6 @@
 #include "core/app/network.h"
 #include "core/app/net/rfb.h"
 
-#define LFL_RFB_DEBUG
 #ifdef LFL_RFB_DEBUG
 #define RFBTrace(...) INFO(__VA_ARGS__)
 #else
@@ -436,13 +435,14 @@ struct RFBClientConnection : public Connection::Handler {
               return ERRORv(-1, c->Name(), ": read FramebufferUpdate");
             }
             RFBTrace(c->Name(), ": FramebufferUpdate rects=", msg.rect.size());
-            processed = msg.Size();
+            processed = msg.Size() + 1;
             for (auto &r : msg.rect) {
               if (!r.w && !r.h) continue;
               int pf = GetPixelFormat(r.encoding, pixel_format.bits_per_pixel);
-              if (pf) update_cb(c, Box(r.x, r.y, r.w, r.h), pf, r.data);
+              if (pf) update_cb(c, Box(r.x, fb_h - r.y - r.h, r.w, r.h), pf, r.data);
               else ERROR("unknown encoding ", r.encoding, " ", pixel_format.bits_per_pixel);
             }
+            if (!Write(c, RFB::FramebufferUpdateRequest(Box(fb_w, fb_h), true))) return ERRORv(-1, c->Name(), ": write");
 
           } else if (msg_type == RFB::SetColorMapEntries::ID) {
             return ERRORv(-1, c->Name(), ": SetColorMapEntries not supported");
@@ -484,6 +484,24 @@ Connection *RFBClient::Open(Params p, RFBClient::LoadPasswordCB pcb, RFBClient::
   c->handler = make_unique<RFBClientConnection>(move(p), move(pcb), move(ucb),
                                                 move(success ? *success : Callback()));
   return c;
+}
+
+int RFBClient::WriteKeyEvent(Connection *c, uint32_t key, uint8_t down) {
+  if (!dynamic_cast<RFBClientConnection*>(c->handler.get())->Write(c, RFB::KeyEvent(key, down)))
+  { c->SetError(); return ERRORv(-1, c->Name(), ": write"); }
+  return 0;
+}
+
+int RFBClient::WritePointerEvent(Connection *c, uint16_t x, uint16_t y, uint8_t buttons) {
+  if (!dynamic_cast<RFBClientConnection*>(c->handler.get())->Write(c, RFB::PointerEvent(x, y, buttons)))
+  { c->SetError(); return ERRORv(-1, c->Name(), ": write"); }
+  return 0;
+}
+
+int RFBClient::WriteClientCutText(Connection *c, const StringPiece &text) {
+  if (!dynamic_cast<RFBClientConnection*>(c->handler.get())->Write(c, RFB::ClientCutText(text)))
+  { c->SetError(); return ERRORv(-1, c->Name(), ": write"); }
+  return 0;
 }
 
 }; // namespace LFL

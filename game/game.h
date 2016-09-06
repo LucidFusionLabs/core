@@ -961,8 +961,8 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
     particles.texture = parts->ID;
   }
 
-  void Activate  () { active=1; topbar.active=1; selected=last_selected=0; root->shell->mouseout(vector<string>()); app->HideAds(); }
-  void Deactivate() { active=0; topbar.active=0; UpdateSettings(); tab3_player_name.Deactivate(); app->ShowAds(); }
+  bool Activate  () { active=1; topbar.active=1; selected=last_selected=0; root->shell->mouseout(vector<string>()); app->HideAds(); return 1; }
+  bool Deactivate() { active=0; topbar.active=0; UpdateSettings(); tab3_player_name.Deactivate(); app->ShowAds(); return 1; }
   bool DecayBoxIfMatch(int l1, int l2) { if (l1 != l2) return 0; decay_box_line = l1; decay_box_left = 10; return 1; }
   void UpdateSettings() {
     root->shell->Run(StrCat("name ", String::ToUTF8(tab3_player_name.Text16())));
