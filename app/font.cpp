@@ -181,7 +181,7 @@ void GlyphCache::Load(const Font *f, const Glyph *g, const unsigned char *buf, i
     if (filter) filter(Box(g->tex.Dimension()), g->tex.buf, g->tex.LineSize(), g->tex.pf);
     // PngWriter::Write(StringPrintf("glyph%06x.png", g->id), g->tex);
     if (cache_glyph) {
-      tex.UpdateGL(g->tex.buf, Box(p, g->tex.Dimension()), Texture::Flag::FlipY); 
+      tex.UpdateGL(g->tex.buf, Box(p, g->tex.Dimension()), 0, Texture::Flag::FlipY); 
       g->tex.ClearBuffer();
     }
   }

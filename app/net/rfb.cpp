@@ -162,6 +162,34 @@ struct RFB {
     }
   };
 
+  struct SetPixelFormat : public Serializable {
+    static const int ID = 0;
+    PixelFormat pixel_format;
+    SetPixelFormat() : Serializable(ID) {}
+
+    int HeaderSize() const { return 4 + pixel_format.HeaderSize(); }
+    int Size() const { return 4 + pixel_format.Size(); }
+    int In(const Serializable::Stream *i) { return i->Result(); }
+    void Out(Serializable::Stream *o) const
+    { o->Write8(uint8_t(ID)); o->String(string(3, 0)); pixel_format.Out(o); }
+  };
+
+  struct SetEncodings : public Serializable {
+    static const int ID = 2;
+    vector<int> encodings;
+    SetEncodings(vector<int> E=vector<int>()) : Serializable(ID), encodings(move(E)) {}
+
+    int HeaderSize() const { return 4; }
+    int Size() const { return HeaderSize() + encodings.size() * 4; }
+    int In(const Serializable::Stream *i) { return i->Result(); }
+    void Out(Serializable::Stream *o) const {
+      o->Write8(uint8_t(ID));
+      o->Write8(uint8_t(0));
+      o->Htons(uint16_t(encodings.size()));
+      for (auto &e : encodings) o->Htonl(e);
+    }
+  };
+
   struct FramebufferUpdateRequest : public Serializable {
     static const int ID = 3;
     uint8_t incremental;
@@ -225,31 +253,51 @@ struct RFB {
 
   struct PixelData : public Serializable {
     enum { Raw=0, CopyRect=1, RRE=2, Hextile=5, TRLE=15, ZRLE=16, DesktopSizePE=-223, CursorPE=-239 };
+    struct Subencoding { enum { Raw=0, Solid=1, PackedPalette=2, PackedPaletteEnd=16, PlainRLE=128, PaletteRLE=130, PaletteRLEEnd=255 }; };
     const PixelFormat *pf;
-    uint16_t x, y, w, h;
+    ZLibReader *zreader;
+    uint16_t x, y, w, h, copy_x=0, copy_y=0;
     int encoding;
     StringPiece data;
-    PixelData(const PixelFormat *p) : Serializable(0), pf(p) {}
+    PixelData(const PixelFormat *p, ZLibReader *r) : Serializable(0), pf(p), zreader(r) {}
 
     string DebugString() const { return StrCat("{ x=", x, ", y=", y, ", w=", w, ", h=", h, ", encoding=", encoding, " }"); }
     int HeaderSize() const { return 12; }
     int Size() const { return HeaderSize() + data.size(); }
     void Out(Serializable::Stream *o) const {}
+
     int In(const Serializable::Stream *i) {
       i->Ntohs(&x);  i->Ntohs(&y);
       i->Ntohs(&w);  i->Ntohs(&h);  i->Ntohl(&encoding);
-      if (encoding == Raw) data.len = w * h * pf->bits_per_pixel/8;
-      else return ERRORv(-1, "unknown encoding: ", encoding);
-      data = StringPiece(i->Get(data.len), data.len);
-      return i->Result();
+
+      if (encoding == Raw) {
+        int len = w * h * pf->bits_per_pixel/8;
+        data = StringPiece(i->Get(len), len);
+        return i->Result();
+
+      } else if (encoding == CopyRect) {
+        i->Ntohs(&copy_x);
+        i->Ntohs(&copy_y);
+        return i->Result();
+
+      } else if (encoding == ZRLE) {
+        if (i->Remaining() < 4) { data = StringPiece(0, 4); i->error = true; return i->Result(); }
+        int len = 0;
+        i->Ntohl(&len);
+        const char *buf = i->Get(len);
+        data = StringPiece(buf ? buf - 4 : nullptr, len + 4);
+        return i->Result();
+
+      } else return ERRORv(-1, "unknown encoding: ", encoding);
     }
   };
 
   struct FramebufferUpdate : public Serializable {
     static const int ID = 0;
     const PixelFormat *pf;
+    ZLibReader *zreader;
     vector<PixelData> rect;
-    FramebufferUpdate(const PixelFormat *p) : Serializable(ID), pf(p) {}
+    FramebufferUpdate(const PixelFormat *p, ZLibReader *r) : Serializable(ID), pf(p), zreader(r) {}
 
     int HeaderSize() const { return 3; }
     int Size() const { int v=HeaderSize(); for (auto &r : rect) v += r.Size(); return v; }
@@ -260,7 +308,7 @@ struct RFB {
       i->Ntohs(&rects);
       rect.clear();
       for (uint16_t j = 0; !i->error && j != rects; ++j) {
-        rect.emplace_back(pf);
+        rect.emplace_back(pf, zreader);
         PixelData &r = rect.back();
         if (i->Remaining() < r.HeaderSize()) { i->error=true; return -1; }
         r.In(i);
@@ -306,9 +354,11 @@ struct RFBClientConnection : public Connection::Handler {
   uint8_t security_type=0;
   bool share_desktop=1;
   RFB::PixelFormat pixel_format;
+  ZLibReader zreader;
+  string decoded;
 
   RFBClientConnection(RFBClient::Params p, RFBClient::LoadPasswordCB PCB, RFBClient::UpdateCB UCB, Callback SCB) :
-    params(move(p)), load_password_cb(move(PCB)), update_cb(move(UCB)), success_cb(move(SCB)) {}
+    params(move(p)), load_password_cb(move(PCB)), update_cb(move(UCB)), success_cb(move(SCB)), zreader(66536) {}
 
   void Close(Connection *c) { update_cb(c, Box(), 0, StringPiece()); }
   int Connected(Connection *c) { return state == HANDSHAKE ? 0 : -1; }
@@ -410,6 +460,7 @@ struct RFBClientConnection : public Connection::Handler {
                    " ", msg.pixel_format.DebugString(), " ", msg.pixel_format.RGBParamString());
 
           if (!msg.pixel_format.true_color_flag) return ERRORv(-1, c->Name(), ": only true-color supported");
+          if (!Write(c, RFB::SetEncodings(vector<int>{ RFB::PixelData::ZRLE, RFB::PixelData::Raw }))) return ERRORv(-1, c->Name(), ": write");
           if (!Write(c, RFB::FramebufferUpdateRequest(Box(msg.fb_w, msg.fb_h), false))) return ERRORv(-1, c->Name(), ": write");
           processed = msg.Size();
           state = RUN;
@@ -417,9 +468,7 @@ struct RFBClientConnection : public Connection::Handler {
           fb_h = msg.fb_h;
           pixel_format = msg.pixel_format;
           c->rb.Resize(max(c->rb.size(), 2 * fb_w * fb_h * pixel_format.bits_per_pixel/8));
-          int pf = GetPixelFormat(RFB::PixelData::Raw, pixel_format.bits_per_pixel);
-          if (!pf) return ERRORv(-1, c->Name(), ": unknown pixel format ", RFB::PixelData::Raw, " ", pixel_format.bits_per_pixel);
-          update_cb(c, Box(fb_w, fb_h), pf, StringPiece());
+          update_cb(c, Box(fb_w, fb_h), 0, StringPiece());
         } break;
         
         case RUN: {
@@ -428,7 +477,7 @@ struct RFBClientConnection : public Connection::Handler {
           msg_s.Read8(&msg_type);
 
           if (msg_type == RFB::FramebufferUpdate::ID) {
-            RFB::FramebufferUpdate msg(&pixel_format);
+            RFB::FramebufferUpdate msg(&pixel_format, &zreader);
             if (c->rb.size() < total_processed + msg.Size()) break;
             if (msg.In(&msg_s)) {
               if (c->rb.size() < total_processed + msg.Size()) break;
@@ -438,9 +487,18 @@ struct RFBClientConnection : public Connection::Handler {
             processed = msg.Size() + 1;
             for (auto &r : msg.rect) {
               if (!r.w && !r.h) continue;
-              int pf = GetPixelFormat(r.encoding, pixel_format.bits_per_pixel);
-              if (pf) update_cb(c, Box(r.x, fb_h - r.y - r.h, r.w, r.h), pf, r.data);
-              else ERROR("unknown encoding ", r.encoding, " ", pixel_format.bits_per_pixel);
+              Box b(r.x, fb_h - r.y - r.h, r.w, r.h);
+              if (r.encoding == RFB::PixelData::CopyRect) {
+              } else if (r.encoding == RFB::PixelData::ZRLE) {
+                if (DecodeZRLE(c, b, StringPiece(r.data.buf + 4, r.data.len - 4))) return ERRORv(-1, "decode zrle");
+              } else if (r.encoding == RFB::PixelData::Raw) {
+                int pf = 0;
+                if      (pixel_format.bits_per_pixel == 32) pf = Pixel::BGR32;
+                else if (pixel_format.bits_per_pixel == 24) pf = Pixel::BGR24;
+                else return ERRORv(-1, "unknown encoding ", r.encoding, " ", pixel_format.bits_per_pixel);
+                update_cb(c, b, pf, r.data);
+              }
+              else return ERRORv(-1, "unknown encoding ", r.encoding);
             }
             if (!Write(c, RFB::FramebufferUpdateRequest(Box(fb_w, fb_h), true))) return ERRORv(-1, c->Name(), ": write");
 
@@ -462,18 +520,143 @@ struct RFBClientConnection : public Connection::Handler {
     return 0;
   }
 
+  int DecodeZRLE(Connection *c, const Box &b, const StringPiece &in) {
+    zreader.out.clear();
+    if (!zreader.Add(in)) return ERRORv(-1, "decompress failed");
+    return DecodeTRLE(c, b, 64, 64, Serializable::ConstStream(zreader.out.data(), zreader.out.size()));
+  }
+
+  int DecodeTRLE(Connection *c, const Box &box, int tile_width, int tile_height, const Serializable::ConstStream &zi) {
+    int cpixel_size = 3, ipf = cpixel_size == 3 ? Pixel::BGR24 : Pixel::BGR32, opf = Texture::preferred_pf;
+    int tiles_width  = NextMultipleOfN(box.w, tile_width)  / tile_width;
+    int tiles_height = NextMultipleOfN(box.h, tile_height) / tile_height;
+    int last_tile_width  = box.w - (tiles_width  - 1) * tile_width;
+    int last_tile_height = box.h - (tiles_height - 1) * tile_height;
+    int ips = Pixel::Size(ipf), ops = Pixel::Size(opf);
+#ifdef LFL_RFB_DEBUG
+    decoded.assign(box.w * box.h * ops, 0);
+#else 
+    decoded.resize(box.w * box.h * ops);
+#endif
+    for (int tile_y = 0; tile_y != tiles_height; tile_y++) {
+      for (int tile_x = 0; tile_x != tiles_width; tile_x++) {
+        int tile_w = tile_x == tiles_width -1 ? last_tile_width  : tile_width;
+        int tile_h = tile_y == tiles_height-1 ? last_tile_height : tile_height;
+        unsigned char subencoding = 0;
+        zi.Read8(&subencoding);
+
+        if (subencoding == RFB::PixelData::Subencoding::Raw) {
+          const char *pixel_data = zi.Get(tile_w * tile_h * ips);
+          if (int ret = zi.Result()) return ERRORv(ret, "parse raw subencoding: ", ret);
+          SimpleVideoResampler::Blit(MakeUnsigned(pixel_data), MakeUnsigned(&decoded[0]), tile_w, tile_h,
+                                     ipf, tile_w * ips, 0, 0,
+                                     opf, box.w * ops, tile_x * tile_width, tile_y * tile_height);
+
+        } else if (subencoding == RFB::PixelData::Subencoding::Solid) {
+          Color color = ReadRGB(zi);
+          if (int ret = zi.Result()) return ERRORv(ret, "parse solid subencoding: ", ret);
+          SimpleVideoResampler::Fill(MakeUnsigned(&decoded[0]), tile_w, tile_h,
+                                     opf, box.w * ops, tile_x * tile_width, tile_y * tile_height, color);
+
+        } else if (subencoding == RFB::PixelData::Subencoding::PlainRLE) {
+          int tile_pixels = tile_w * tile_h, p_i = 0;
+          while (p_i < tile_pixels && !zi.error) {
+            point ts(p_i % tile_w, p_i / tile_w);
+            Color color = ReadRGB(zi);
+            int run_len = ReadRunLength(zi);
+            p_i += run_len;
+            if (FillTileRange(MakeUnsigned(&decoded[0]), opf, box.w * ops,
+                              point(tile_x * tile_width, tile_y * tile_height),
+                              ts, point((p_i-1) % tile_w, (p_i-1) / tile_w), tile_w, color)) return -1;
+          }
+          if (int ret = zi.Result()) return ERRORv(ret, "parse plain rle subencoding: ", ret);
+          if (p_i != tile_pixels) return ERRORv(-1, "parse ", p_i, " instead of ", tile_pixels);
+
+        } else if (subencoding >= RFB::PixelData::Subencoding::PackedPalette &&
+                   subencoding <= RFB::PixelData::Subencoding::PackedPaletteEnd) {
+          int palette_size = subencoding, palette_bytes = palette_size * cpixel_size, line_size = box.w * ops;
+          int indices_per_byte = palette_size == 2 ? 8 : (palette_size < 5 ? 4 : 2), padded_bytes, ind_rowlen;
+          if      (indices_per_byte == 8) padded_bytes = (ind_rowlen = (tile_w + 7) / 8) * tile_h;
+          else if (indices_per_byte == 4) padded_bytes = (ind_rowlen = (tile_w + 3) / 4) * tile_h;
+          else if (indices_per_byte == 2) padded_bytes = (ind_rowlen = (tile_w + 1) / 2) * tile_h;
+          else return ERRORv(-1, "unknown indices per byte ", indices_per_byte);
+          const unsigned char *palette  = MakeUnsigned(zi.Get(palette_bytes));
+          const unsigned char *ind_data = MakeUnsigned(zi.Get(padded_bytes));
+          if (int ret = zi.Result()) return ERRORv(ret, "parse packed palette subencoding: ", ret);
+          for (int t_y = 0; t_y != tile_h; ++t_y) {
+            for (int t_x = 0; t_x != tile_w; ++t_x) {
+              int bit_offset = t_x % indices_per_byte;
+              uint8_t byte = ind_data[t_y * ind_rowlen + t_x / indices_per_byte], ind=0;
+              if      (indices_per_byte == 8) ind = (byte >> (7 - bit_offset))   & 1;
+              else if (indices_per_byte == 4) ind = (byte >> (6 - bit_offset*2)) & 3;
+              else if (indices_per_byte == 2) ind = (byte >> (4 - bit_offset*4)) & 0xf;
+              else return ERRORv(-1, "unknown indices per byte ", indices_per_byte);
+              SimpleVideoResampler::CopyPixel
+                (ipf, opf, palette + int(ind) * cpixel_size, MakeUnsigned
+                 (&decoded[0] + line_size*(tile_y*tile_height + t_y) + ops*(tile_x*tile_width + t_x)));
+            }
+          }
+
+        } else if (subencoding >= RFB::PixelData::Subencoding::PaletteRLE &&
+                   subencoding <= RFB::PixelData::Subencoding::PaletteRLEEnd) {
+          int palette_size = subencoding - 128, palette_bytes = palette_size * cpixel_size;
+          const unsigned char *palette = MakeUnsigned(zi.Get(palette_bytes));
+          int tile_pixels = tile_w * tile_h, p_i = 0;
+          while (p_i < tile_pixels && !zi.error) {
+            point ts(p_i % tile_w, p_i / tile_w);
+            unsigned char ind = 0;
+            zi.Read8(&ind);
+            auto c = palette + (int(ind) & 0x7f) * cpixel_size;
+            Color color(*(c+2), *(c+1), *(c+0));
+            int run_len = ind < 128 ? 1 : ReadRunLength(zi);
+            p_i += run_len;
+            if (FillTileRange(MakeUnsigned(&decoded[0]), opf, box.w * ops,
+                              point(tile_x * tile_width, tile_y * tile_height),
+                              ts, point((p_i-1) % tile_w, (p_i-1) / tile_w), tile_w, color)) return -1;
+          }
+          if (int ret = zi.Result()) return ERRORv(ret, "parse plain rle subencoding: ", ret);
+          if (p_i != tile_pixels) return ERRORv(-1, "parse ", p_i, " instead of ", tile_pixels);
+
+        } else return ERRORv(-1, "unknown subencoding: ", int(subencoding));
+      }
+    }
+    if (int remaining = zi.Remaining()) return ERRORv(-1, remaining, " extra zrle bytes");
+    update_cb(c, box, opf, decoded);
+    return 0;
+  }
+
   bool Write(Connection *c, const Serializable &m) {
     string text = m.ToString();
     return c->WriteFlush(text) == text.size();
   }
 
-  static int GetPixelFormat(int encoding, int bits_per_pixel) {
-    int pf = 0;
-    if (encoding == RFB::PixelData::Raw) {
-      if      (bits_per_pixel == 32) pf = Pixel::BGR32;
-      else if (bits_per_pixel == 24) pf = Pixel::BGR24;
-    }
-    return pf;
+  static Color ReadRGB(const Serializable::ConstStream &i) { 
+    unsigned char r = 0, g = 0, b = 0;
+    i.Read8(&b); i.Read8(&g); i.Read8(&r);
+    return Color(r, g, b);
+  }
+
+  static int ReadRunLength(const Serializable::ConstStream &i) {
+    int run_len = 0;
+    unsigned char byte_len = 0;
+    do { i.Read8(&byte_len); run_len += byte_len; }
+    while(byte_len == 255 && !i.error);
+    return run_len + 1;
+  }
+
+  static int FillTileRange(unsigned char *dst, int pf, int ls,
+                           point b, point ts, point te, int tile_w, const Color &color) {
+    int d_y = te.y - ts.y;
+    if (d_y == 0) {
+      if (te.x < ts.x) return ERRORv(-1, "negative advance ", ts.x, " to ", te.x);
+      SimpleVideoResampler::Fill(dst, te.x + 1 - ts.x, 1, pf, ls, b.x + ts.x, b.y + ts.y, color);
+    } else if (d_y > 0) {
+      SimpleVideoResampler::Fill(dst, tile_w - ts.x, 1, pf, ls, b.x + ts.x, b.y + ts.y, color);
+      if (d_y > 1)
+        SimpleVideoResampler::Fill(dst, tile_w, d_y - 1, pf, ls, b.x + 0, b.y + ts.y + 1, color);
+      SimpleVideoResampler::Fill(dst, te.x + 1, 1, pf, ls, b.x + 0, b.y + te.y, color);
+    } else return ERRORv(-1, "negative advance: ", ts.y, " to ", te.y);
+    return 0;
   }
 };
 

@@ -48,7 +48,7 @@ void GlyphCache::Load(const Font *f, const Glyph *g, HFONT hfont, int size, HDC 
     GdiFlush();
     g->tex.FlipBufferY();
     if (cache_glyph) {
-      tex.UpdateGL(g->tex.buf, Box(p, g->tex.Dimension()), Texture::Flag::FlipY);
+      tex.UpdateGL(g->tex.buf, Box(p, g->tex.Dimension()), 0, Texture::Flag::FlipY);
       g->tex.ClearBuffer();
     }
     SelectObject(dc, pf);

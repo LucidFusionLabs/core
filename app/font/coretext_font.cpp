@@ -91,7 +91,7 @@ void GlyphCache::Load(const Font *f, const Glyph *g, CGFontRef cgfont, int size)
     CGContextRelease(context);
     g->tex.FlipBufferY();
     if (cache_glyph) {
-      tex.UpdateGL(g->tex.buf, Box(p, g->tex.Dimension()), Texture::Flag::FlipY); 
+      tex.UpdateGL(g->tex.buf, Box(p, g->tex.Dimension()), 0, Texture::Flag::FlipY); 
       g->tex.ClearBuffer();
     }
     // INFOf("LoadGlyph U+%06x '%c' texID=%d %s point(%f,%f)", g->id, g->id, tex.ID, f->desc->DebugString().c_str(), point.x, point.y);

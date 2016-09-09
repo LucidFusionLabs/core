@@ -399,14 +399,15 @@ void Texture::LoadGL(const unsigned char *B, const point &dim, int PF, int lines
   temp .Resize(dim.x, dim.y, preferred_pf, Flag::CreateBuf);
   temp .UpdateBuffer(B, dim, PF, linesize, Flag::FlipY);
   this->Resize(dim.x, dim.y, preferred_pf, Flag::CreateGL | (flag & Flag::RepeatGL));
-  this->UpdateGL(temp.buf, LFL::Box(dim), flag);
+  this->UpdateGL(temp.buf, LFL::Box(dim), 0, flag);
 }
 
-void Texture::UpdateGL(const unsigned char *B, const ::LFL::Box &box, int flag) {
+void Texture::UpdateGL(const unsigned char *B, const ::LFL::Box &box, int pf, int flag) {
   GraphicsDevice *d = gd ? gd : app->focused->gd;
   int gl_tt = GLTexType(), gl_y = (flag & Flag::FlipY) ? (height - box.y - box.h) : box.y;
   d->BindTexture(gl_tt, ID);
-  d->TexSubImage2D(gl_tt, 0, box.x, gl_y, box.w, box.h, GLPixelType(), GLBufferType(), B);
+  d->TexSubImage2D(gl_tt, 0, box.x, gl_y, box.w, box.h,
+                   pf ? Pixel::OpenGLID(pf) : GLPixelType(), GLBufferType(), B);
 }
 
 #ifdef LFL_APPLE
@@ -764,7 +765,7 @@ Box GraphicsDevice::GetScissorBox() const {
 void GraphicsDevice::DrawPixels(const Box &b, const Texture &tex) {
   Texture temp;
   temp.Resize(tex.width, tex.height, tex.pf, Texture::Flag::CreateGL);
-  temp.UpdateGL(tex.buf, LFL::Box(tex.width, tex.height), Texture::Flag::FlipY); 
+  temp.UpdateGL(tex.buf, LFL::Box(tex.width, tex.height), 0, Texture::Flag::FlipY); 
   GraphicsContext::DrawTexturedBox1(this, b, temp.coord);
   temp.ClearGL();
 }
@@ -894,14 +895,20 @@ void SimpleVideoResampler::Filter(unsigned char *buf, int w, int h,
   CopyMatrixToColorChannels(&out, w, h, pw, ls, x, y, buf, ColorChannel::PixelOffset(channel));
 }
 
+void SimpleVideoResampler::Fill(unsigned char *dst, int len, int pf, const Color &c) {
+  int pw = Pixel::Size(pf); 
+  unsigned char pixel[4] = { uint8_t(c.R()), uint8_t(c.G()), uint8_t(c.B()), uint8_t(c.A()) };
+  for (int i = 0; i != len; ++i) CopyPixel(Pixel::RGBA, pf, pixel, dst + i*pw);
+}
+
 void SimpleVideoResampler::Fill(unsigned char *dst, int w, int h,
-                                int pf, int ls, int x, int y, const Color &c, int flag) {
+                                int pf, int ls, int x, int y, const Color &c) {
   int pw = Pixel::Size(pf); 
   unsigned char pixel[4] = { uint8_t(c.R()), uint8_t(c.G()), uint8_t(c.B()), uint8_t(c.A()) };
   for (int yi = 0; yi < h; ++yi) {
     for (int xi = 0; xi < w; ++xi) {
       unsigned char *dp = dst + (ls*(y + yi) + (x + xi)*pw);
-      CopyPixel(Pixel::RGBA, pf, pixel, dp, xi == 0, xi == w-1, flag);
+      CopyPixel(Pixel::RGBA, pf, pixel, dp);
     }
   }
 }

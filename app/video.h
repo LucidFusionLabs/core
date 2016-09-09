@@ -225,8 +225,8 @@ struct Texture : public Drawable {
 
   void LoadGL  (const MultiProcessTextureResource&);
   void LoadGL  (const unsigned char *B, const point &dim, int PF, int linesize, int flag=0);
-  void UpdateGL(const unsigned char *B, const ::LFL::Box &box, int flag=0);
-  void UpdateGL(const ::LFL::Box &b, int flag=0) { return UpdateGL(buf ? (buf+(b.y*width+b.x)*PixelSize()) : 0, b, flag); }
+  void UpdateGL(const unsigned char *B, const ::LFL::Box &box, int PF=0, int flag=0);
+  void UpdateGL(const ::LFL::Box &b, int PF=0, int flag=0) { return UpdateGL(buf ? (buf+(b.y*width+b.x)*PixelSize()) : 0, b, PF, flag); }
   void UpdateGL() { UpdateGL(LFL::Box(0, 0, width, height)); }
   void LoadGL(int flag=0) { LoadGL(buf, point(width, height), pf, LineSize(), flag); }
 
@@ -568,7 +568,7 @@ struct SimpleVideoResampler : public VideoResamplerInterface {
   virtual void Resample(const unsigned char *s, int sls, unsigned char *d, int dls, bool flip_x=0, bool flip_y=0);
 
   static bool Supports(int fmt);
-  static void CopyPixel(int s_fmt, int d_fmt, const unsigned char *sp, unsigned char *dp, bool sxb, bool sxe, int flag=0);
+  static void CopyPixel(int s_fmt, int d_fmt, const unsigned char *sp, unsigned char *dp, bool sxb=0, bool sxe=0, int flag=0);
   static void RGB2BGRCopyPixels(unsigned char *dst, const unsigned char *src, int l, int bpp);
 
   struct Flag { enum { FlipY=1, TransparentBlack=2, ZeroOnly=4 }; };
@@ -580,8 +580,9 @@ struct SimpleVideoResampler : public VideoResamplerInterface {
   static void Filter(unsigned char *dst, int w, int h,
                      int pf, int ls, int x, int y, Matrix *kernel, int channel, int flag=0);
 
+  static void Fill(unsigned char *dst, int l, int pf, const Color &c);
   static void Fill(unsigned char *dst, int w, int h,
-                   int pf, int ls, int x, int y, const Color &c, int flag=0);
+                   int pf, int ls, int x, int y, const Color &c);
 
   static void CopyColorChannelsToMatrix(const unsigned char *buf, int w, int h,
                                         int pw, int ls, int x, int y, Matrix *out, int po);
