@@ -27,8 +27,12 @@ void DelTextures(int n, const unsigned *id) {
   if (FLAGS_gd_debug) for (int i=0; i<n; i++) GDDebug("DelTexture ", id[i]);
   glDeleteTextures(n, id);
 }
+
 void TexImage2D(int targ, int l, int fi, int w, int h, int b, int f, int t, const void *data) { glTexImage2D(targ, l, fi, w, h, b, f, t, data); } 
 void TexSubImage2D(int targ, int l, int xo, int yo, int w, int h, int f, int t, const void *data) { glTexSubImage2D(targ, l, xo, yo, w, h, f, t, data); }
+void CopyTexImage2D(int targ, int l, int fi, int x, int y, int w, int h, int b) { glCopyTexImage2D(targ, l, fi, x, y, w, h, b); }
+void CopyTexSubImage2D(int targ, int l, int xo, int yo, int x, int y, int w, int h) { glCopyTexSubImage2D(targ, l, xo, yo, x, y, w, h); }
+
 void GenTextures(int t, int n, unsigned *out) {
   ClearDeferred();
   for (int i=0; i<n; i++) CHECK_EQ(0, out[i]);

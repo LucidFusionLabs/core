@@ -126,6 +126,8 @@ struct NullGraphicsDevice : public GraphicsDevice {
   void DelTextures(int n, const unsigned *id) {}
   void TexImage2D(int targ, int l, int fi, int w, int h, int b, int f, int t, const void*) {}
   void TexSubImage2D(int targ, int l, int xo, int yo, int w, int h, int f, int t, const void*) {}
+  void CopyTexImage2D(int targ, int l, int fi, int x, int y, int w, int h, int b) {}
+  void CopyTexSubImage2D(int targ, int l, int xo, int yo, int x, int y, int w, int h) {}
   void CheckForError(const char *file, int line) {}
   void EnableScissor() {}
   void DisableScissor() {}

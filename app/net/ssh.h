@@ -34,8 +34,19 @@ struct SSHClient {
   };
 
   struct Params {
+    struct Forward { int local; string host; int port; };
     string hostport, user, termvar, startup_command;
     bool compress, agent_forwarding, close_on_disconnect;
+    vector<Forward> forward_local, forward_remote;
+  };
+
+  struct Channel {
+    typedef function<int(Connection*, Channel*, const StringPiece&)> CB;
+    int local_id, remote_id, window_c=0, window_s=0;
+    bool opened=1, agent_channel=0;
+    string buf;
+    CB cb;
+    Channel(int L=0, int R=0) : local_id(L), remote_id(R) {}
   };
 
   typedef function<void(Connection*, const StringPiece&)> ResponseCB;
@@ -47,6 +58,9 @@ struct SSHClient {
   static void SetCredentialCB(Connection *c, FingerprintCB, LoadIdentityCB, LoadPasswordCB);
   static int SetTerminalWindowSize(Connection *c, int w, int h);
   static int WriteChannelData(Connection *c, const StringPiece &b);
+  static bool WriteToChannel(Connection *c, Channel *chan, const StringPiece &b);
+  static Channel *OpenTCPChannel(Connection *c, const StringPiece &sh, int sp,
+                                 const StringPiece &dh, int dp, SSHClient::Channel::CB cb);
 };
 
 struct SSH {

@@ -483,8 +483,8 @@ void FrameBuffer::Resize(int W, int H, int flag) {
     if (flag & Flag::CreateTexture)      AllocTexture(&tex);
     if (flag & Flag::CreateDepthTexture) AllocDepthTexture(&depth);
   } else {
-    tex.Resize(width, height);
-    depth.Resize(width, height);
+    if (tex.ID)     tex.Resize(width, height);
+    if (depth.ID) depth.Resize(width, height);
   }
   Attach(tex.ID, depth.ID);
   int status = gd->CheckFrameBufferStatus();

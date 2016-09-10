@@ -418,6 +418,8 @@ struct GraphicsDevice {
   virtual void DelTextures(int n, const unsigned *id) = 0;
   virtual void TexImage2D(int targ, int l, int fi, int w, int h, int b, int f, int t, const void*) = 0;
   virtual void TexSubImage2D(int targ, int l, int xo, int yo, int w, int h, int f, int t, const void*) = 0;
+  virtual void CopyTexImage2D(int targ, int l, int fi, int x, int y, int w, int h, int b) = 0;
+  virtual void CopyTexSubImage2D(int targ, int l, int xo, int yo, int x, int y, int w, int h) = 0;
   virtual void CheckForError(const char *file, int line) = 0;
   virtual void EnableScissor() = 0;
   virtual void DisableScissor() = 0;

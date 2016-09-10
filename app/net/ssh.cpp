@@ -29,13 +29,6 @@
 namespace LFL {
 struct SSHClientConnection : public Connection::Handler {
   enum { INIT=0, FIRST_KEXINIT=1, FIRST_KEXREPLY=2, FIRST_NEWKEYS=3, KEXINIT=4, KEXREPLY=5, NEWKEYS=6 };
-  struct Channel {
-    int local_id, remote_id, window_c=0, window_s=0;
-    bool agent_channel=0;
-    string buf;
-    Channel(int L=0, int R=0) : local_id(L), remote_id(R) {}
-  };
-
   SSHClient::Params params;
   SSHClient::ResponseCB cb;
   SSHClient::FingerprintCB host_fingerprint_cb;
@@ -50,8 +43,8 @@ struct SSHClientConnection : public Connection::Handler {
   unsigned char padding=0, packet_id=0;
   Serializable::ConstStream packet_s;
   std::mt19937 rand_eng;
-  unordered_map<int, Channel> channels;
-  Channel *session_channel=0;
+  unordered_map<int, SSHClient::Channel> channels;
+  SSHClient::Channel *session_channel=0;
   BigNumContext ctx;
   BigNum K;
   Crypto::DiffieHellman dh;
@@ -96,7 +89,7 @@ struct SSHClientConnection : public Connection::Handler {
       if (state == INIT) return 0;
     }
 
-    Channel *chan;
+    SSHClient::Channel *chan;
     for (;;) {
       bool encrypted = state > FIRST_NEWKEYS;
       if (!packet_len) {
@@ -400,6 +393,7 @@ struct SSHClientConnection : public Connection::Handler {
           if (!(chan = FindPtrOrNull(channels, msg.recipient_channel)) || chan->remote_id) return ERRORv(-1, c->Name(), ": open invalid channel");
           chan->remote_id = msg.sender_channel;
           chan->window_c = msg.initial_win_size;
+          chan->opened = true;
 
           if (chan == session_channel) {
             if (params.agent_forwarding) {
@@ -415,6 +409,8 @@ struct SSHClientConnection : public Connection::Handler {
             if (params.startup_command.size()) {
               if (!WriteToChannel(c, session_channel, params.startup_command)) return -1;
             }
+          } else if (chan->cb) {
+            if (int ret = chan->cb(c, chan, StringPiece())) return ret;
           }
         } break;
 
@@ -439,8 +435,11 @@ struct SSHClientConnection : public Connection::Handler {
             chan->window_s += initial_window_size;
           }
 
-          if (chan == session_channel) cb(c, msg.data);
-          else if (chan->agent_channel) {
+          if (chan == session_channel) {
+            cb(c, msg.data);
+          } else if (chan->cb) {
+            if (int ret = chan->cb(c, chan, msg.data)) return ret;
+          } else if (chan->agent_channel) {
             chan->buf.append(msg.data.buf, msg.data.len);
             while(chan->buf.size() > 4) {
               int agent_packet_len;
@@ -538,6 +537,9 @@ struct SSHClientConnection : public Connection::Handler {
           if (&it->second == session_channel) {
             if (!WriteCipher(c, SSH::MSG_DISCONNECT())) return ERRORv(-1, c->Name(), ": write");
             session_channel = nullptr;
+          } else if (it->second.cb) {
+            it->second.opened = false;
+            it->second.cb(c, &it->second, StringPiece());
           }
           channels.erase(it);
         } break;
@@ -630,7 +632,7 @@ struct SSHClientConnection : public Connection::Handler {
     return b.size();
   }
 
-  bool WriteToChannel(Connection *c, Channel *chan, const StringPiece &b) {
+  bool WriteToChannel(Connection *c, SSHClient::Channel *chan, const StringPiece &b) {
     if (!WriteCipher(c, SSH::MSG_CHANNEL_DATA(chan->remote_id, b))) return ERRORv(false, c->Name(), ": write");
     chan->window_c -= (b.size() - 4);
     return true;
@@ -669,6 +671,19 @@ struct SSHClientConnection : public Connection::Handler {
                                                  "", "", false))) return ERRORv(-1, c->Name(), ": write");
     return 0;
   }
+
+  SSHClient::Channel *OpenTCPChannel(Connection *c, const StringPiece &sh, int sp,
+                                     const StringPiece &dh, int dp, SSHClient::Channel::CB cb) {
+    if (!c || c->state != Connection::Connected || state <= FIRST_NEWKEYS) return nullptr;
+    SSHClient::Channel *chan = &channels[next_channel_id];
+    chan->local_id = next_channel_id++;
+    chan->window_s = initial_window_size;
+    chan->cb = move(cb);
+    if (!WriteCipher(c, SSH::MSG_CHANNEL_OPEN_TCPIP("direct-tcpip", chan->local_id, chan->window_s,
+                                                    max_packet_size, dh, dp, sh, sp)))
+      return ERRORv(nullptr, c->Name(), ": write");
+    return chan;
+  }
 };
 
 Connection *SSHClient::Open(Params p, const SSHClient::ResponseCB &cb, Callback *detach, Callback *success) { 
@@ -678,9 +693,14 @@ Connection *SSHClient::Open(Params p, const SSHClient::ResponseCB &cb, Callback 
   return c;
 }
 
-int  SSHClient::WriteChannelData     (Connection *c, const StringPiece &b) { return dynamic_cast<SSHClientConnection*>(c->handler.get())->WriteChannelData(c, b); }
-int  SSHClient::SetTerminalWindowSize(Connection *c, int w, int h)         { return dynamic_cast<SSHClientConnection*>(c->handler.get())->SetTerminalWindowSize(c, w, h); }
+int  SSHClient::WriteChannelData     (Connection *c,             const StringPiece &b) { return dynamic_cast<SSHClientConnection*>(c->handler.get())->WriteChannelData(c, b); }
+bool SSHClient::WriteToChannel       (Connection *c, Channel *x, const StringPiece &b) { return dynamic_cast<SSHClientConnection*>(c->handler.get())->WriteToChannel(c, x, b); }
+int  SSHClient::SetTerminalWindowSize(Connection *c, int w, int h)                     { return dynamic_cast<SSHClientConnection*>(c->handler.get())->SetTerminalWindowSize(c, w, h); }
 void SSHClient::SetCredentialCB      (Connection *c, FingerprintCB F, LoadIdentityCB LI, LoadPasswordCB LP) { dynamic_cast<SSHClientConnection*>(c->handler.get())->SetCredentialCB(F, LI, LP); }
+SSHClient::Channel *SSHClient::OpenTCPChannel(Connection *c, const StringPiece &sh, int sp,
+                                              const StringPiece &dh, int dp, SSHClient::Channel::CB cb) {
+  return dynamic_cast<SSHClientConnection*>(c->handler.get())->OpenTCPChannel(c, sh, sp, dh, dp, move(cb));
+}
 
 int SSH::BinaryPacketLength(const char *b, unsigned char *padding) {
   if (padding) *padding = *MakeUnsigned(b + 4);

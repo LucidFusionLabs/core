@@ -211,7 +211,33 @@ struct RFB {
     static const int ID = 4;
     uint32_t key;
     uint8_t down;
-    KeyEvent(uint32_t k=0, uint8_t d=0) : Serializable(ID), key(k), down(d) {}
+    KeyEvent(uint32_t k=0, uint8_t d=0) : Serializable(ID), down(d) {
+      if      (k == Key::Backspace)  key = 0xff08;
+      else if (k == Key::Tab)        key = 0xff09;
+      else if (k == Key::Return)     key = 0xff08;
+      else if (k == Key::Escape)     key = 0xff1b;
+      //else if (k == Key::Insert)   key = 0xff63;
+      else if (k == Key::Delete)     key = 0xffff;
+      else if (k == Key::Home)       key = 0xff50;
+      else if (k == Key::End)        key = 0xff57;
+      else if (k == Key::PageUp)     key = 0xff55;
+      else if (k == Key::PageDown)   key = 0xff56;
+      else if (k == Key::Left)       key = 0xff51;
+      else if (k == Key::Up)         key = 0xff52;
+      else if (k == Key::Right)      key = 0xff53;
+      else if (k == Key::Down)       key = 0xff54;
+      else if (k == Key::F1)         key = 0xffbe;
+      else if (k == Key::F2)         key = 0xffbf;
+      else if (k == Key::F3)         key = 0xffc0;
+      else if (k == Key::F4)         key = 0xffc1;
+      else if (k == Key::LeftShift)  key = 0xffe1;
+      else if (k == Key::RightShift) key = 0xffe2;
+      else if (k == Key::LeftCtrl)   key = 0xffe3;
+      else if (k == Key::RightCtrl)  key = 0xffe4;
+      else if (k == Key::LeftCmd)    key = 0xffe9;
+      else if (k == Key::RightCmd)   key = 0xffea;
+      else                           key = k;
+    }
 
     int HeaderSize() const { return 8; }
     int Size() const { return HeaderSize(); }
@@ -276,6 +302,7 @@ struct RFB {
         return i->Result();
 
       } else if (encoding == CopyRect) {
+        data = StringPiece(0, 4);
         i->Ntohs(&copy_x);
         i->Ntohs(&copy_y);
         return i->Result();
@@ -349,6 +376,7 @@ struct RFBClientConnection : public Connection::Handler {
   RFBClient::Params params;
   RFBClient::LoadPasswordCB load_password_cb;
   RFBClient::UpdateCB update_cb;
+  RFBClient::CopyCB copy_cb;
   Callback success_cb;
   int state=0, fb_w=0, fb_h=0;
   uint8_t security_type=0;
@@ -357,8 +385,9 @@ struct RFBClientConnection : public Connection::Handler {
   ZLibReader zreader;
   string decoded;
 
-  RFBClientConnection(RFBClient::Params p, RFBClient::LoadPasswordCB PCB, RFBClient::UpdateCB UCB, Callback SCB) :
-    params(move(p)), load_password_cb(move(PCB)), update_cb(move(UCB)), success_cb(move(SCB)), zreader(66536) {}
+  RFBClientConnection(RFBClient::Params p, RFBClient::LoadPasswordCB PCB, RFBClient::UpdateCB UCB,
+                      RFBClient::CopyCB CCB, Callback SCB) : params(move(p)), load_password_cb(move(PCB)),
+  update_cb(move(UCB)), copy_cb(move(CCB)), success_cb(move(SCB)), zreader(66536) {}
 
   void Close(Connection *c) { update_cb(c, Box(), 0, StringPiece()); }
   int Connected(Connection *c) { return state == HANDSHAKE ? 0 : -1; }
@@ -459,8 +488,10 @@ struct RFBClientConnection : public Connection::Handler {
           RFBTrace(c->Name(), ": ServerInit ", msg.name.str(), " w=", msg.fb_w, ", h=", msg.fb_h, 
                    " ", msg.pixel_format.DebugString(), " ", msg.pixel_format.RGBParamString());
 
+          vector<int> encodings{ RFB::PixelData::ZRLE, RFB::PixelData::Raw };
+          if (copy_cb) encodings.insert(encodings.begin(), RFB::PixelData::CopyRect);
           if (!msg.pixel_format.true_color_flag) return ERRORv(-1, c->Name(), ": only true-color supported");
-          if (!Write(c, RFB::SetEncodings(vector<int>{ RFB::PixelData::ZRLE, RFB::PixelData::Raw }))) return ERRORv(-1, c->Name(), ": write");
+          if (!Write(c, RFB::SetEncodings(encodings))) return ERRORv(-1, c->Name(), ": write");
           if (!Write(c, RFB::FramebufferUpdateRequest(Box(msg.fb_w, msg.fb_h), false))) return ERRORv(-1, c->Name(), ": write");
           processed = msg.Size();
           state = RUN;
@@ -489,6 +520,7 @@ struct RFBClientConnection : public Connection::Handler {
               if (!r.w && !r.h) continue;
               Box b(r.x, fb_h - r.y - r.h, r.w, r.h);
               if (r.encoding == RFB::PixelData::CopyRect) {
+                copy_cb(c, b, point(r.copy_x, r.copy_y));
               } else if (r.encoding == RFB::PixelData::ZRLE) {
                 if (DecodeZRLE(c, b, StringPiece(r.data.buf + 4, r.data.len - 4))) return ERRORv(-1, "decode zrle");
               } else if (r.encoding == RFB::PixelData::Raw) {
@@ -497,8 +529,7 @@ struct RFBClientConnection : public Connection::Handler {
                 else if (pixel_format.bits_per_pixel == 24) pf = Pixel::BGR24;
                 else return ERRORv(-1, "unknown encoding ", r.encoding, " ", pixel_format.bits_per_pixel);
                 update_cb(c, b, pf, r.data);
-              }
-              else return ERRORv(-1, "unknown encoding ", r.encoding);
+              } else return ERRORv(-1, "unknown encoding ", r.encoding);
             }
             if (!Write(c, RFB::FramebufferUpdateRequest(Box(fb_w, fb_h), true))) return ERRORv(-1, c->Name(), ": write");
 
@@ -661,10 +692,10 @@ struct RFBClientConnection : public Connection::Handler {
 };
 
 Connection *RFBClient::Open(Params p, RFBClient::LoadPasswordCB pcb, RFBClient::UpdateCB ucb,
-                            Callback *detach, Callback *success) { 
+                            RFBClient::CopyCB ccb, Callback *detach, Callback *success) { 
   Connection *c = app->net->tcp_client->Connect(p.hostport, 5900, detach);
   if (!c) return 0;
-  c->handler = make_unique<RFBClientConnection>(move(p), move(pcb), move(ucb),
+  c->handler = make_unique<RFBClientConnection>(move(p), move(pcb), move(ucb), move(ccb),
                                                 move(success ? *success : Callback()));
   return c;
 }
