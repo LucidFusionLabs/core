@@ -524,7 +524,9 @@ struct SSHClientConnection : public Connection::Handler {
           if (msg.In(&packet_s)) return ERRORv(-1, c->Name(), ": read MSG_CHANNEL_EOF ");
           SSHTrace(c->Name(), ": MSG_CHANNEL_EOF ", msg.recipient_channel);
           if (!(chan = FindPtrOrNull(channels, msg.recipient_channel))) return ERRORv(-1, c->Name(), ": eof invalid channel");
-          if (!WriteCipher(c, SSH::MSG_CHANNEL_EOF(chan->remote_id))) return ERRORv(-1, c->Name(), ": write");
+          if (!chan->sent_eof && (chan->sent_eof = true)) {
+            if (!WriteCipher(c, SSH::MSG_CHANNEL_EOF(chan->remote_id))) return ERRORv(-1, c->Name(), ": write");
+          }
         } break;
 
         case SSH::MSG_CHANNEL_CLOSE::ID: {
@@ -533,11 +535,14 @@ struct SSHClientConnection : public Connection::Handler {
           SSHTrace(c->Name(), ": MSG_CHANNEL_CLOSE ", msg.recipient_channel);
           auto it = channels.find(msg.recipient_channel);
           if (it == channels.end()) return ERRORv(-1, c->Name(), ": EOF invalid channel");
-          if (!WriteCipher(c, SSH::MSG_CHANNEL_CLOSE(it->second.remote_id))) return ERRORv(-1, c->Name(), ": write");
+          bool already_sent_close = it->second.sent_close;
+          if (!already_sent_close && (it->second.sent_close = true)) {
+            if (!WriteCipher(c, SSH::MSG_CHANNEL_CLOSE(it->second.remote_id))) return ERRORv(-1, c->Name(), ": write");
+          }
           if (&it->second == session_channel) {
             if (!WriteCipher(c, SSH::MSG_DISCONNECT())) return ERRORv(-1, c->Name(), ": write");
             session_channel = nullptr;
-          } else if (it->second.cb) {
+          } else if (!already_sent_close && it->second.cb) {
             it->second.opened = false;
             it->second.cb(c, &it->second, StringPiece());
           }
@@ -684,6 +689,13 @@ struct SSHClientConnection : public Connection::Handler {
       return ERRORv(nullptr, c->Name(), ": write");
     return chan;
   }
+
+  bool CloseChannel(Connection *c, SSHClient::Channel *chan) {
+    chan->sent_eof = chan->sent_close = true;
+    if (!WriteCipher(c, SSH::MSG_CHANNEL_EOF  (chan->remote_id))) return false;
+    if (!WriteCipher(c, SSH::MSG_CHANNEL_CLOSE(chan->remote_id))) return false;
+    return true;
+  }
 };
 
 Connection *SSHClient::Open(Params p, const SSHClient::ResponseCB &cb, Callback *detach, Callback *success) { 
@@ -695,6 +707,7 @@ Connection *SSHClient::Open(Params p, const SSHClient::ResponseCB &cb, Callback 
 
 int  SSHClient::WriteChannelData     (Connection *c,             const StringPiece &b) { return dynamic_cast<SSHClientConnection*>(c->handler.get())->WriteChannelData(c, b); }
 bool SSHClient::WriteToChannel       (Connection *c, Channel *x, const StringPiece &b) { return dynamic_cast<SSHClientConnection*>(c->handler.get())->WriteToChannel(c, x, b); }
+bool SSHClient::CloseChannel         (Connection *c, Channel *x)                       { return dynamic_cast<SSHClientConnection*>(c->handler.get())->CloseChannel(c, x); }
 int  SSHClient::SetTerminalWindowSize(Connection *c, int w, int h)                     { return dynamic_cast<SSHClientConnection*>(c->handler.get())->SetTerminalWindowSize(c, w, h); }
 void SSHClient::SetCredentialCB      (Connection *c, FingerprintCB F, LoadIdentityCB LI, LoadPasswordCB LP) { dynamic_cast<SSHClientConnection*>(c->handler.get())->SetCredentialCB(F, LI, LP); }
 SSHClient::Channel *SSHClient::OpenTCPChannel(Connection *c, const StringPiece &sh, int sp,

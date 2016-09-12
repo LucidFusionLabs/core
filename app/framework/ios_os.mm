@@ -201,6 +201,7 @@ static std::vector<UIImage*> app_images;
   @property (nonatomic)         std::string style;
   @property (nonatomic)         int editable_section, editable_start_row, selected_section, selected_row,
                                     second_col;
+  @property (copy)              void (^changed)(const std::string&);
   @property (copy)              void (^completed)();
 @end
 
@@ -264,6 +265,11 @@ static std::vector<UIImage*> app_images;
     data[section].item[r].item.tag = v;
   }
 
+  - (void)setHidden:(int)section row:(int)r val:(bool)v {
+    [self checkExists:section row:r];
+    data[section].item[r].item.hidden = v;
+  }
+
   - (void)setValue:(int)section row:(int)r val:(const std::string&)v {
     [self checkExists:section row:r];
     auto &ci = data[section].item[r];
@@ -291,6 +297,7 @@ static std::vector<UIImage*> app_images;
       CHECK_LT(ind, dropdown_table->data[0].item.size());
       dropdown_table.selected_row = ind;
       [self.tableView reloadRowsAtIndexPaths:@[path] withRowAnimation:UITableViewRowAnimationNone];
+      if (dropdown_table.changed) dropdown_table.changed(dropdown_table->data[0].item[ind].item.key);
     } 
   }
 
@@ -307,6 +314,11 @@ static std::vector<UIImage*> app_images;
   - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
     CHECK_LT(section, data.size());
     return data[section].item.size();
+  }
+
+  - (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)path {
+    if (path.section >= data.size() || path.row >= data[path.section].item.size()) return tableView.rowHeight;
+    return data[path.section].item[path.row].item.hidden ? 0 : tableView.rowHeight;
   }
 
   - (CGRect)getCellFrame {
@@ -352,6 +364,7 @@ static std::vector<UIImage*> app_images;
         for (int i=1, l=kv.size(); i != l; ++i) dropdown_options.push_back({kv[i], tv[i], vv[i]});
         auto dropdown_table = [[IOSTable alloc] initWithStyle: UITableViewStyleGrouped];
         [dropdown_table load:nullptr withTitle:kv[0] withStyle:"dropdown" items:dropdown_options];
+        if (item->item.depends.size()) dropdown_table.changed = [self makeChangedCB: *item];
         dropdown_table.completed = ^{
           [self.tableView beginUpdates];
           [self.tableView reloadRowsAtIndexPaths:@[path] withRowAnimation:UITableViewRowAnimationNone];
@@ -441,21 +454,8 @@ static std::vector<UIImage*> app_images;
         segmented_control.autoresizingMask = UIViewAutoresizingFlexibleWidth;
         segmented_control.segmentedControlStyle = UISegmentedControlStylePlain;
         segmented_control.selectedSegmentIndex = 0; 
-        if (compiled_item.item.depends.size()) {
-          segmented_control.changed = ^(const std::string &v){
-            auto it = compiled_item.item.depends.find(v);
-            if (it == compiled_item.item.depends.end()) return;
-            [self.tableView beginUpdates];
-            for (auto c : it->second) {
-              CHECK_LT(c.first, data.size());
-              CHECK_LT(c.second, data[c.first].item.size());
-              data[c.first].item[c.second].item.val = c.third;
-              NSIndexPath *p = [NSIndexPath indexPathForRow:c.second inSection:c.first];
-              [self.tableView reloadRowsAtIndexPaths:@[p] withRowAnimation:UITableViewRowAnimationNone];
-            }
-            [self.tableView endUpdates];
-          };
-        }
+        if (compiled_item.item.depends.size()) 
+          segmented_control.changed = [self makeChangedCB: compiled_item];
         [segmented_control addTarget:self action:@selector(segmentedControlClicked:)
           forControlEvents: UIControlEventValueChanged];
         [cell.contentView addSubview:segmented_control];
@@ -575,6 +575,11 @@ static std::vector<UIImage*> app_images;
     if (t == "command" || t == "button") compiled_item.item.cb();
     if (_modal_nav) {
       [self show: false];
+      if (_changed) {
+        [self.tableView beginUpdates];
+        _changed(compiled_item.item.key);
+        [self.tableView endUpdates];
+      }
       if (_completed) _completed();
     }
   }
@@ -669,6 +674,23 @@ static std::vector<UIImage*> app_images;
       ret.emplace_back(*k, val);
     }
     return ret;
+  }
+
+  - (void(^)(const std::string&)) makeChangedCB: (const LFL::CompiledTableItem&)compiled_item  {
+    return Block_copy(^(const std::string &v){
+      auto it = compiled_item.item.depends.find(v);
+      if (it == compiled_item.item.depends.end()) return;
+      for (auto &c : it->second) {
+        CHECK_LT(c.section, data.size());
+        CHECK_LT(c.row, data[c.section].item.size());
+        auto &ci = data[c.section].item[c.row];
+        ci.item.val = c.val;
+        ci.item.hidden = c.hidden;
+        if (c.right_icon) ci.item.right_icon = c.right_icon == -1 ? 0 : c.right_icon;
+        NSIndexPath *p = [NSIndexPath indexPathForRow:c.row inSection:c.section];
+        [self.tableView reloadRowsAtIndexPaths:@[p] withRowAnimation:UITableViewRowAnimationNone];
+      }
+    });
   }
 @end
 
@@ -862,6 +884,7 @@ string SystemTableView::GetKey(int section, int row) { return [FromVoid<IOSTable
 int SystemTableView::GetTag(int section, int row) { return [FromVoid<IOSTable*>(impl) getTag:section row:row]; }
 void SystemTableView::SetTag(int section, int row, int val) { [FromVoid<IOSTable*>(impl) setTag:section row:row val:val]; }
 void SystemTableView::SetValue(int section, int row, const string &val) { [FromVoid<IOSTable*>(impl) setValue:section row:row val:val]; }
+void SystemTableView::SetHidden(int section, int row, bool val) { [FromVoid<IOSTable*>(impl) setHidden:section row:row val:val]; }
 void SystemTableView::SetTitle(const string &title) { FromVoid<IOSTable*>(impl).title = LFL::MakeNSString(title); }
 StringPairVec SystemTableView::GetSectionText(int section) { return [FromVoid<IOSTable*>(impl) dumpDataForSection:section]; }
 void SystemTableView::SetEditableSection(int section, int start_row, LFL::IntIntCB cb) {

@@ -464,7 +464,10 @@ struct RFBClientConnection : public Connection::Handler {
           RFBTrace(c->Name(), ": SecurityResult ", msg.v);
           state = msg.v ? AUTH_FAILED : INIT;
           processed = msg.Size();
-          if (state == INIT) { if (!Write(c, RFB::ClientInit(share_desktop))) return ERRORv(-1, c->Name(), ": write"); }
+          if (state == INIT) {
+            if (success_cb) success_cb();
+            if (!Write(c, RFB::ClientInit(share_desktop))) return ERRORv(-1, c->Name(), ": write");
+          }
         } break;
 
         case AUTH_FAILED: {

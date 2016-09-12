@@ -406,13 +406,15 @@ struct AlertItem { string first, second; StringCB cb; };
 struct PanelItem { string type; Box box; StringCB cb; };
 
 struct TableItem {
-  typedef unordered_map<string, vector<Triple<int, int, string>>> Depends;
+  struct Dep { int section, row; string val; bool hidden; int right_icon; };
+  typedef unordered_map<string, vector<Dep>> Depends;
   string key, type, val, right_text;
   int tag, left_icon, right_icon;
   Callback cb, right_icon_cb;
   Depends depends;
-  TableItem(string K=string(), string T=string(), string V=string(), string RT=string(), int TG=0, int LI=0, int RI=0, Callback CB=Callback(), Callback RC=Callback(), Depends D=Depends())
-    : key(move(K)), type(move(T)), val(move(V)), right_text(move(RT)), tag(TG), left_icon(LI), right_icon(RI), cb(CB), right_icon_cb(move(RC)), depends(move(D)) {}
+  bool hidden;
+  TableItem(string K=string(), string T=string(), string V=string(), string RT=string(), int TG=0, int LI=0, int RI=0, Callback CB=Callback(), Callback RC=Callback(), Depends D=Depends(), bool H=false)
+    : key(move(K)), type(move(T)), val(move(V)), right_text(move(RT)), tag(TG), left_icon(LI), right_icon(RI), cb(CB), right_icon_cb(move(RC)), depends(move(D)), hidden(H) {}
   void CheckAssign(const string &k, Callback c) { CHECK_EQ(k, key); cb=move(c); }
 };
 
@@ -779,6 +781,7 @@ struct SystemTableView {
   int GetTag(int section, int row);
   void SetTag(int section, int row, int val);
   void SetValue(int section, int row, const string &val);
+  void SetHidden(int section, int row, bool val);
   void SetTitle(const string &title);
   void SelectRow(int section, int row);
   StringPairVec GetSectionText(int section);

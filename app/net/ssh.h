@@ -43,7 +43,7 @@ struct SSHClient {
   struct Channel {
     typedef function<int(Connection*, Channel*, const StringPiece&)> CB;
     int local_id, remote_id, window_c=0, window_s=0;
-    bool opened=1, agent_channel=0;
+    bool opened=1, agent_channel=0, sent_eof=0, sent_close=0;
     string buf;
     CB cb;
     Channel(int L=0, int R=0) : local_id(L), remote_id(R) {}
@@ -61,6 +61,7 @@ struct SSHClient {
   static bool WriteToChannel(Connection *c, Channel *chan, const StringPiece &b);
   static Channel *OpenTCPChannel(Connection *c, const StringPiece &sh, int sp,
                                  const StringPiece &dh, int dp, SSHClient::Channel::CB cb);
+  static bool CloseChannel(Connection *c, Channel *chan);
 };
 
 struct SSH {
