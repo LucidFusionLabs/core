@@ -67,6 +67,7 @@ const int Key::F11        = -31;
 const int Key::F12        = -32;
 const int Key::Home       = -33;
 const int Key::End        = -34;
+const int Key::Insert     = -35;
 
 static int                ios_argc = 0;
 static const char* const* ios_argv = 0;

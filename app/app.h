@@ -115,18 +115,18 @@ extern int optind;
 #define ONCE(x) { static bool once=0; if (!once && (once=1)) { x; } }
 #define ONCE_ELSE(x, y) { static bool once=0; if (!once && (once=1)) { x; } else { y; } }
 #define EVERY_N(x, y) { static int every_N=0; if (every_N++ % (x) == 0) { y; } }
-#define EX_LT(x, a)    if (!((x) <  (a)))  INFO((x), " < ",  (a), ": EX_LT(",    #x, ", ", #a, ")"); 
-#define EX_GT(x, a)    if (!((x) >  (a)))  INFO((x), " > ",  (a), ": EX_GT(",    #x, ", ", #a, ")"); 
-#define EX_GE(x, a)    if (!((x) >= (a)))  INFO((x), " >= ", (a), ": EX_GE(",    #x, ", ", #a, ")"); 
-#define EX_LE(x, a)    if (!((x) <= (a)))  INFO((x), " <= ", (a), ": EX_LE(",    #x, ", ", #a, ")"); 
-#define EX_EQ(x, a)    if (!((x) == (a)))  INFO((x), " == ", (a), ": EX_EQ(",    #x, ", ", #a, ")");
-#define EX_NE(x, a)    if (!((x) != (a)))  INFO((x), " != ", (a), ": EX_NE(",    #x, ", ", #a, ")");
-#define CHECK_LT(x, a) if (!((x) <  (a))) FATAL((x), " < ",  (a), ": CHECK_LT(", #x, ", ", #a, ")"); 
-#define CHECK_GT(x, a) if (!((x) >  (a))) FATAL((x), " > ",  (a), ": CHECK_GT(", #x, ", ", #a, ")"); 
-#define CHECK_GE(x, a) if (!((x) >= (a))) FATAL((x), " >= ", (a), ": CHECK_GE(", #x, ", ", #a, ")"); 
-#define CHECK_LE(x, a) if (!((x) <= (a))) FATAL((x), " <= ", (a), ": CHECK_LE(", #x, ", ", #a, ")"); 
-#define CHECK_EQ(x, a) if (!((x) == (a))) FATAL((x), " == ", (a), ": CHECK_EQ(", #x, ", ", #a, ")");
-#define CHECK_NE(x, a) if (!((x) != (a))) FATAL((x), " != ", (a), ": CHECK_NE(", #x, ", ", #a, ")");
+#define EX_LT(x, a)    if (!((x) <  (a))) INFO((x), " < ",  (a), ": EX_LT(",    #x, ", ", #a, ")")
+#define EX_GT(x, a)    if (!((x) >  (a))) INFO((x), " > ",  (a), ": EX_GT(",    #x, ", ", #a, ")")
+#define EX_GE(x, a)    if (!((x) >= (a))) INFO((x), " >= ", (a), ": EX_GE(",    #x, ", ", #a, ")")
+#define EX_LE(x, a)    if (!((x) <= (a))) INFO((x), " <= ", (a), ": EX_LE(",    #x, ", ", #a, ")")
+#define EX_EQ(x, a)    if (!((x) == (a))) INFO((x), " == ", (a), ": EX_EQ(",    #x, ", ", #a, ")")
+#define EX_NE(x, a)    if (!((x) != (a))) INFO((x), " != ", (a), ": EX_NE(",    #x, ", ", #a, ")")
+#define CHECK_LT(x, a) if (!((x) <  (a))) ::LFL::FatalMessage(__FILE__, __LINE__, ::LFL::StrCat((x), " < ",  (a), ": CHECK_LT(", #x, ", ", #a, ")")).GetStream()
+#define CHECK_GT(x, a) if (!((x) >  (a))) ::LFL::FatalMessage(__FILE__, __LINE__, ::LFL::StrCat((x), " > ",  (a), ": CHECK_GT(", #x, ", ", #a, ")")).GetStream()
+#define CHECK_GE(x, a) if (!((x) >= (a))) ::LFL::FatalMessage(__FILE__, __LINE__, ::LFL::StrCat((x), " >= ", (a), ": CHECK_GE(", #x, ", ", #a, ")")).GetStream()
+#define CHECK_LE(x, a) if (!((x) <= (a))) ::LFL::FatalMessage(__FILE__, __LINE__, ::LFL::StrCat((x), " <= ", (a), ": CHECK_LE(", #x, ", ", #a, ")")).GetStream()
+#define CHECK_EQ(x, a) if (!((x) == (a))) ::LFL::FatalMessage(__FILE__, __LINE__, ::LFL::StrCat((x), " == ", (a), ": CHECK_EQ(", #x, ", ", #a, ")")).GetStream()
+#define CHECK_NE(x, a) if (!((x) != (a))) ::LFL::FatalMessage(__FILE__, __LINE__, ::LFL::StrCat((x), " != ", (a), ": CHECK_NE(", #x, ", ", #a, ")")).GetStream()
 #define CHECK_RANGE(x, y, z) { CHECK_GE(x, y); CHECK_LT(x, z); }
 #define CHECK(x) if (!(x)) FATAL(#x)
 
@@ -245,6 +245,13 @@ namespace LFL {
 extern Application *app;
 extern const char *not_implemented;
 extern const bool DEBUG, MOBILE, IOS, ANDROID;
+
+struct FatalMessage {
+  const char *file; int line; string msg; std::stringstream stream;
+  FatalMessage(const char *F, int L, string M) : file(F), line(L), msg(move(M)) {}
+  ~FatalMessage() { ::LFL::Log(::LFApp::Log::Fatal, file, line, msg.append(stream.str())); throw(0); }
+  std::stringstream& GetStream() { return stream; }
+};
 
 struct Allocator {
   virtual ~Allocator() {}
@@ -405,32 +412,46 @@ struct MenuItem { string shortcut, name; Callback cb; };
 struct AlertItem { string first, second; StringCB cb; };
 struct PanelItem { string type; Box box; StringCB cb; };
 
-struct TableItem {
-  struct Dep { int section, row; string val; bool hidden; int right_icon; };
+struct TableItemChild {
+  struct Dep { int section, row; string val; bool hidden; int left_icon, right_icon; string key; };
+  enum { None=0, Label=1, Separator=2, Command=3, Button=4, Toggle=5, Selector=6, Dropdown=7,
+    FixedDropdown=8, TextInput=9, NumberInput=10, PasswordInput=11 }; 
   typedef unordered_map<string, vector<Dep>> Depends;
-  string key, type, val, right_text;
+  string key;
+  int type;
+  string val, right_text;
   int tag, left_icon, right_icon;
   Callback cb, right_icon_cb;
   Depends depends;
-  bool hidden;
-  TableItem(string K=string(), string T=string(), string V=string(), string RT=string(), int TG=0, int LI=0, int RI=0, Callback CB=Callback(), Callback RC=Callback(), Depends D=Depends(), bool H=false)
-    : key(move(K)), type(move(T)), val(move(V)), right_text(move(RT)), tag(TG), left_icon(LI), right_icon(RI), cb(CB), right_icon_cb(move(RC)), depends(move(D)), hidden(H) {}
+  bool hidden=false;
+  int ref=-1;
+  bool loaded=0, gui_loaded=0;
+  virtual ~TableItemChild() {}
+  TableItemChild(string K=string(), int T=0, string V=string(), string RT=string(), int TG=0, int LI=0,
+                 int RI=0, Callback CB=Callback(), Callback RC=Callback(), Depends D=Depends()) :
+    key(move(K)), type(T), val(move(V)), right_text(move(RT)), tag(TG), left_icon(LI), right_icon(RI),
+    cb(move(CB)), right_icon_cb(move(RC)), depends(move(D)) {}
   void CheckAssign(const string &k, Callback c) { CHECK_EQ(k, key); cb=move(c); }
 };
 
-struct CompiledTableItem {
-  enum { Normal=0, Dropdown=1 };
-  TableItem item;
-  int type, ref;
-  bool loaded=0, gui_loaded=0, control=0;
-  CompiledTableItem(const TableItem &i=TableItem(), int t=-1, int r=-1) : type(t), ref(r), item(i) {}
+struct TableItem : public TableItemChild {
+  vector<TableItemChild> child;
+  virtual ~TableItem() {}
+  TableItem(string K=string(), int T=0, string V=string(), string RT=string(), int TG=0, int LI=0,
+            int RI=0, Callback CB=Callback(), Callback RC=Callback(), Depends D=Depends(),
+            vector<TableItemChild> C=vector<TableItemChild>()) :
+    TableItemChild(move(K), T, move(V), move(RT), TG, LI, RI, move(CB), move(RC), move(D)), child(move(C)) {}
+  TableItem(TableItemChild &&x) :
+    TableItemChild(move(x.key), x.type, move(x.val), move(x.right_text), x.tag, x.left_icon, x.right_icon,
+                   move(x.cb), move(x.right_icon_cb), move(x.depends)) {}
+  vector<TableItem> MoveChildren() { vector<TableItem> v; for (auto &c : child) v.emplace_back(move(c)); return v; }
 };
 
-struct CompiledTable {
+struct Table {
   string header;
   int flag;
-  vector<CompiledTableItem> item;
-  CompiledTable(string h="", int f=0) : header(move(h)), flag(f) {}
+  vector<TableItem> item;
+  Table(string h="", int f=0) : header(move(h)), flag(f) {}
 };
 
 typedef vector<MenuItem>  MenuItemVec;

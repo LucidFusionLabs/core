@@ -58,6 +58,7 @@ const int Key::F11 = XK_F11;
 const int Key::F12 = XK_F12;
 const int Key::Home = XK_Home;
 const int Key::End = XK_End;
+const int Key::Insert = XK_Insert;
 
 static int GetKeyCodeFromXEvent(Display *display, const XEvent &xev) {
   return XKeycodeToKeysym(display, xev.xkey.keycode, xev.xkey.state & ShiftMask);

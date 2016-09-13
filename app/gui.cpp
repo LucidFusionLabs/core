@@ -1330,7 +1330,7 @@ void Editor::UpdateCursorLine() {
   cursor_glyphs = &line[-1-cursor.i.y];
   cursor.i.x = min(cursor.i.x, CursorGlyphsSize());
   cursor_start_line_number_offset = cursor_start_line_number - last_first_line;
-  if (!Wrap()) { CHECK_EQ(cursor.i.y, cursor_start_line_number_offset) }
+  if (!Wrap()) { CHECK_EQ(cursor.i.y, cursor_start_line_number_offset); }
 
   auto it = file_line.SecondBound(cursor_start_line_number+1);
   if (!it.ind) FATAL("missing line number: ", cursor_start_line_number, " size=", file_line.size(), ", wl=", wrapped_lines); 

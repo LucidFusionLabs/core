@@ -54,6 +54,7 @@ const int Key::F11        = 0xf00 | VK_F11;
 const int Key::F12        = 0xf00 | VK_F12;
 const int Key::Home       = 0xf00 | VK_HOME;
 const int Key::End        = 0xf00 | VK_END;
+const int Key::Insert     = 0xf00 | VK_INSERT;
 
 struct WinApp {
   HINSTANCE hInst = 0;

@@ -212,31 +212,20 @@ struct RFB {
     uint32_t key;
     uint8_t down;
     KeyEvent(uint32_t k=0, uint8_t d=0) : Serializable(ID), down(d) {
-      if      (k == Key::Backspace)  key = 0xff08;
-      else if (k == Key::Tab)        key = 0xff09;
-      else if (k == Key::Return)     key = 0xff08;
-      else if (k == Key::Escape)     key = 0xff1b;
-      //else if (k == Key::Insert)   key = 0xff63;
-      else if (k == Key::Delete)     key = 0xffff;
-      else if (k == Key::Home)       key = 0xff50;
-      else if (k == Key::End)        key = 0xff57;
-      else if (k == Key::PageUp)     key = 0xff55;
-      else if (k == Key::PageDown)   key = 0xff56;
-      else if (k == Key::Left)       key = 0xff51;
-      else if (k == Key::Up)         key = 0xff52;
-      else if (k == Key::Right)      key = 0xff53;
-      else if (k == Key::Down)       key = 0xff54;
-      else if (k == Key::F1)         key = 0xffbe;
-      else if (k == Key::F2)         key = 0xffbf;
-      else if (k == Key::F3)         key = 0xffc0;
-      else if (k == Key::F4)         key = 0xffc1;
-      else if (k == Key::LeftShift)  key = 0xffe1;
-      else if (k == Key::RightShift) key = 0xffe2;
-      else if (k == Key::LeftCtrl)   key = 0xffe3;
-      else if (k == Key::RightCtrl)  key = 0xffe4;
-      else if (k == Key::LeftCmd)    key = 0xffe9;
-      else if (k == Key::RightCmd)   key = 0xffea;
-      else                           key = k;
+      static const unordered_map<uint32_t, uint32_t> keymap{
+      { Key::Backspace,  0xff08 }, { Key::Tab,        0xff09 }, { Key::Return,     0xff08 },
+      { Key::Escape,     0xff1b }, { Key::Insert,     0xff63 }, { Key::Delete,     0xffff },
+      { Key::Home,       0xff50 }, { Key::End,        0xff57 }, { Key::PageUp,     0xff55 },
+      { Key::PageDown,   0xff56 }, { Key::Left,       0xff51 }, { Key::Up,         0xff52 },
+      { Key::Right,      0xff53 }, { Key::Down,       0xff54 }, { Key::F1,         0xffbe },
+      { Key::F2,         0xffbf }, { Key::F3,         0xffc0 }, { Key::F4,         0xffc1 },
+      { Key::F5,         0xffc2 }, { Key::F6,         0xffc3 }, { Key::F7,         0xffc4 },
+      { Key::F8,         0xffc5 }, { Key::F9,         0xffc6 }, { Key::F10,        0xffc7 },
+      { Key::F11,        0xffc8 }, { Key::F12,        0xffc9 }, { Key::LeftShift,  0xffe1 },
+      { Key::RightShift, 0xffe2 }, { Key::LeftCtrl,   0xffe3 }, { Key::RightCtrl,  0xffe4 },
+      { Key::LeftCmd,    0xffe9 }, { Key::RightCmd,   0xffea } };
+      auto it = keymap.find(k);
+      key = it != keymap.end() ? it->second : k;
     }
 
     int HeaderSize() const { return 8; }

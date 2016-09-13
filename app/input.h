@@ -34,7 +34,7 @@ struct Key {
     static Mod FromID(int id) { return Mod(id) << 32; }
   };
   static const int Escape, Return, Up, Down, Left, Right, LeftShift, RightShift, LeftCtrl, RightCtrl, LeftCmd, RightCmd;
-  static const int Tab, Space, Backspace, Delete, Quote, Backquote, PageUp, PageDown, Home, End;
+  static const int Tab, Space, Backspace, Delete, Quote, Backquote, PageUp, PageDown, Home, End, Insert;
   static const int F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F12;
   static int CtrlModified(int k);
   static int ShiftModified(int k);

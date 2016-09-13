@@ -430,6 +430,7 @@ const int Key::F11 = 0xAB;
 const int Key::F12 = 0xB0;
 const int Key::Home = 0xB3;
 const int Key::End = 0xB7;
+const int Key::Insert = -1;
 
 struct OSXFrameworkModule : public Module {
   int Init() {
