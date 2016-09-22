@@ -372,7 +372,7 @@ struct RFBClientConnection : public Connection::Handler {
   bool share_desktop=1;
   RFB::PixelFormat pixel_format;
   ZLibReader zreader;
-  string decoded;
+  string challenge, decoded;
 
   RFBClientConnection(RFBClient::Params p, RFBClient::LoadPasswordCB PCB, RFBClient::UpdateCB UCB,
                       RFBClient::CopyCB CCB, Callback SCB) : params(move(p)), load_password_cb(move(PCB)),
@@ -428,22 +428,12 @@ struct RFBClientConnection : public Connection::Handler {
           if (c->rb.size() < total_processed + msg.Size()) break;
           if (msg.In(&msg_s)) return ERRORv(-1, c->Name(), ": read VNCAuthenticationChallenge");
           RFBTrace(c->Name(), ": VNCAuthenticationChallenge ", HexEscape(msg.text.str(), ""));
-
-          string pw="", response(16, 0);
-          if (load_password_cb) load_password_cb(&pw);
-          pw.resize(8, 0);
-          for (auto i = MakeUnsigned(&pw[0]), e = i + pw.size(); i != e; ++i) *i = BitString::Reverse(*i);
-
-          Crypto::Cipher enc = Crypto::CipherInit();
-          Crypto::CipherOpen(enc, Crypto::CipherAlgos::DES_ECB(), true, pw, string(8, 0));
-          int len = Crypto::CipherUpdate(enc, msg.text, &response[0], response.size());
-          len += Crypto::CipherFinal(enc, &response[0+len], response.size()-len);
-          Crypto::CipherFree(enc);
-          if (len != 16) return ERRORv(-1, c->Name(), ": invalid challenge response len=", len);
-
-          if (!Write(c, RFB::VNCAuthenticationChallenge(response))) return ERRORv(-1, c->Name(), ": write");
-          state = SECURITY_RESULT;
+          if (16 != msg.text.size()) return ERRORv(-1, c->Name(), ": invalid challenge length");
+          challenge = msg.text.str();
           processed = msg.Size();
+          string pw;
+          if (load_password_cb && !load_password_cb(&pw)) break;
+          if (int ret = SendChallengeResponse(c, move(pw))) return ret;
         } break;
 
         case SECURITY_RESULT: {
@@ -540,6 +530,24 @@ struct RFBClientConnection : public Connection::Handler {
     }
 
     c->ReadFlush(total_processed);
+    return 0;
+  }
+
+  bool SendChallengeResponse(Connection *c, string pw) {
+    if (VNC_AUTH != state) return ERRORv(-1, "invalid state");
+    pw.resize(8, 0);
+    for (auto i = MakeUnsigned(&pw[0]), e = i + pw.size(); i != e; ++i) *i = BitString::Reverse(*i);
+
+    string response(16, 0);
+    Crypto::Cipher enc = Crypto::CipherInit();
+    Crypto::CipherOpen(enc, Crypto::CipherAlgos::DES_ECB(), true, pw, string(8, 0));
+    int len = Crypto::CipherUpdate(enc, challenge, &response[0], response.size());
+    len += Crypto::CipherFinal(enc, &response[0+len], response.size()-len);
+    Crypto::CipherFree(enc);
+    if (len != 16) return ERRORv(-1, c->Name(), ": invalid challenge response len=", len);
+
+    if (!Write(c, RFB::VNCAuthenticationChallenge(response))) return ERRORv(-1, c->Name(), ": write");
+    state = SECURITY_RESULT;
     return 0;
   }
 
@@ -692,19 +700,23 @@ Connection *RFBClient::Open(Params p, RFBClient::LoadPasswordCB pcb, RFBClient::
   return c;
 }
 
-int RFBClient::WriteKeyEvent(Connection *c, uint32_t key, uint8_t down) {
+int RFBClient::SendChallengeResponse(Connection *c, string pw) {
+  return dynamic_cast<RFBClientConnection*>(c->handler.get())->SendChallengeResponse(c, move(pw));
+}
+
+int RFBClient::SendKeyEvent(Connection *c, uint32_t key, uint8_t down) {
   if (!dynamic_cast<RFBClientConnection*>(c->handler.get())->Write(c, RFB::KeyEvent(key, down)))
   { c->SetError(); return ERRORv(-1, c->Name(), ": write"); }
   return 0;
 }
 
-int RFBClient::WritePointerEvent(Connection *c, uint16_t x, uint16_t y, uint8_t buttons) {
+int RFBClient::SendPointerEvent(Connection *c, uint16_t x, uint16_t y, uint8_t buttons) {
   if (!dynamic_cast<RFBClientConnection*>(c->handler.get())->Write(c, RFB::PointerEvent(x, y, buttons)))
   { c->SetError(); return ERRORv(-1, c->Name(), ": write"); }
   return 0;
 }
 
-int RFBClient::WriteClientCutText(Connection *c, const StringPiece &text) {
+int RFBClient::SendClientCutText(Connection *c, const StringPiece &text) {
   if (!dynamic_cast<RFBClientConnection*>(c->handler.get())->Write(c, RFB::ClientCutText(text)))
   { c->SetError(); return ERRORv(-1, c->Name(), ": write"); }
   return 0;

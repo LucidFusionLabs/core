@@ -34,7 +34,7 @@ struct SSHClient {
   };
 
   struct Params {
-    struct Forward { int local; string host; int port; };
+    struct Forward { int port; string target_host; int target_port; };
     string hostport, user, termvar, startup_command;
     bool compress, agent_forwarding, close_on_disconnect;
     vector<Forward> forward_local, forward_remote;
@@ -57,7 +57,9 @@ struct SSHClient {
 
   static void SetCredentialCB(Connection *c, FingerprintCB, LoadIdentityCB, LoadPasswordCB);
   static int SetTerminalWindowSize(Connection *c, int w, int h);
+  static bool AcceptHostKeyAndBeginAuthRequest(Connection *c);
   static int WriteChannelData(Connection *c, const StringPiece &b);
+  static bool WritePassword(Connection *c, const StringPiece &b);
   static bool WriteToChannel(Connection *c, Channel *chan, const StringPiece &b);
   static Channel *OpenTCPChannel(Connection *c, const StringPiece &sh, int sp,
                                  const StringPiece &dh, int dp, SSHClient::Channel::CB cb);

@@ -512,6 +512,7 @@ template <class X>       X *FindChar(      X *text, int (*ischar)(int), int (*is
 template <class X> const X *FindChar(const X *text, int (*ischar)(int), int (*isquote)(int), int len=-1, int *outlen=0);
 template <class X> int    LengthChar(const X* text, int (*ischar)(int), int len=-1);
 template <class X> int   RLengthChar(const X* text, int (*ischar)(int), int len);
+template <class X> bool ContainsChar(const X* text, int (*ischar)(int), int len=-1);
 
 template <class X> const X*        FindString(const StringPieceT<X> &haystack, const StringPieceT<X> &needle, bool case_sensitive=true);
 template <class X> int       FindStringOffset(const StringPieceT<X> &haystack, const StringPieceT<X> &needle, bool case_sensitive=true);

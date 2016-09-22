@@ -371,6 +371,16 @@ template int RLengthChar(const char*,        int(*)(int), int);
 template int RLengthChar(const char16_t*,    int(*)(int), int);
 template int RLengthChar(const DrawableBox*, int(*)(int), int);
 
+template <class X> bool ContainsChar(const X *in, int (*ischar)(int), int len) {
+  const X *p = in;
+  if (len >= 0) while (p-in < len) { if (ischar(*p)) return true; p++; }
+  else          while (*p)         { if (ischar(*p)) return true; p++; }
+  return false;
+}
+template bool ContainsChar(const char*,        int(*)(int), int);
+template bool ContainsChar(const char16_t*,    int(*)(int), int);
+template bool ContainsChar(const DrawableBox*, int(*)(int), int);
+
 template <class X> const X *FindString(const StringPieceT<X> &haystack, const StringPieceT<X> &needle, bool case_sensitive) {
   const X *it = case_sensitive ?
     std::search(haystack.begin(), haystack.end(), needle.begin(), needle.end()) :

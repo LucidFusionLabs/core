@@ -176,10 +176,17 @@ SystemAlertView::SystemAlertView(AlertItemVec items) { impl = [[OSXAlert alloc] 
 
 void SystemAlertView::Show(const string &arg) {
   auto alert = FromVoid<OSXAlert*>(impl);
-  if (alert.add_text) [alert.input setStringValue: [NSString stringWithUTF8String: arg.c_str()]];
+  if (alert.add_text) [alert.input setStringValue: MakeNSString(arg)];
   [alert.alert beginSheetModalForWindow:[GetTyped<GameView*>(app->focused->id) window] modalDelegate:alert
     didEndSelector:@selector(alertDidEnd:returnCode:contextInfo:) contextInfo:nil];
   [GetTyped<GameView*>(app->focused->id) clearKeyModifiers];
+}
+
+void SystemAlertView::ShowCB(const string &title, const string &msg, const string &arg, StringCB confirm_cb) {
+  [FromVoid<OSXAlert*>(impl).alert setMessageText: MakeNSString(title)];
+  [FromVoid<OSXAlert*>(impl).alert setInformativeText: MakeNSString(msg)];
+  string ret = RunModal(arg);
+  if (confirm_cb) confirm_cb(move(ret));
 }
 
 string SystemAlertView::RunModal(const string &arg) {

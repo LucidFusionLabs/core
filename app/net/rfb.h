@@ -27,9 +27,10 @@ struct RFBClient {
   struct Params { string hostport, user; };
   static Connection *Open(Params params, LoadPasswordCB pcb, UpdateCB fcb, CopyCB ccb,
                           Callback *detach=0, Callback *success=0);
-  static int WriteKeyEvent(Connection *c, uint32_t key, uint8_t down);
-  static int WritePointerEvent(Connection *c, uint16_t x, uint16_t y, uint8_t buttons);
-  static int WriteClientCutText(Connection *c, const StringPiece &text);
+  static int SendChallengeResponse(Connection *c, string pw);
+  static int SendKeyEvent(Connection *c, uint32_t key, uint8_t down);
+  static int SendPointerEvent(Connection *c, uint16_t x, uint16_t y, uint8_t buttons);
+  static int SendClientCutText(Connection *c, const StringPiece &text);
 };
 
 }; // namespace LFL

@@ -27,14 +27,22 @@ static std::vector<UIImage*> app_images;
 
 @interface IOSButton : UIButton 
   @property (nonatomic, assign) LFL::Callback cb;
+  - (void)buttonClicked:(IOSButton*)sender;
 @end
 @implementation IOSButton
+  - (void)buttonClicked:(IOSButton*)sender {
+    if (sender.cb) sender.cb();
+  }
 @end
 
 @interface IOSBarButtonItem : UIBarButtonItem
   @property (nonatomic, assign) LFL::Callback cb;
+  - (IBAction)buttonClicked:(IOSBarButtonItem*)sender;
 @end
 @implementation IOSBarButtonItem
+  - (IBAction)buttonClicked:(IOSBarButtonItem*)sender {
+    if (sender.cb) sender.cb();
+  }
 @end
 
 @interface IOSSegmentedControl : UISegmentedControl
@@ -74,6 +82,11 @@ static std::vector<UIImage*> app_images;
       otherButtonTitles: [NSString stringWithUTF8String: kv[3].first.c_str()], nil];
     if      ((_add_text = _style == "textinput")) _alert.alertViewStyle = UIAlertViewStylePlainTextInput;
     else if ((_add_text = _style == "pwinput"))   _alert.alertViewStyle = UIAlertViewStyleSecureTextInput;
+#if 0
+    UISwitch *onoff = [[UISwitch alloc] init];
+    [_alert setValue:onoff forKey:@"accessoryView"];
+    [onoff release];
+#endif
     return self;
   }
 
@@ -226,19 +239,27 @@ static std::vector<UIImage*> app_images;
     }
 
     self.title = LFL::MakeNSString(title);
-    self.tableView.separatorInset = UIEdgeInsetsZero;
+    if (_style != "indent") self.tableView.separatorInset = UIEdgeInsetsZero;
     [self.tableView setSeparatorStyle:UITableViewCellSeparatorStyleSingleLine];
-    [self.tableView setSeparatorColor:[UIColor blackColor]];
+    [self.tableView setSeparatorColor:[UIColor grayColor]];
     if (_style == "modal" || _style == "dropdown") {
       _modal_nav = [[UINavigationController alloc] initWithRootViewController: self];
       _modal_nav.modalTransitionStyle = UIModalTransitionStyleCoverVertical;
     }
   }
 
-  - (void)replaceSection:(int)section items:(const std::vector<LFL::TableItem>&)item header:(const std::string&)h flag:(int)f {
+  - (void)addRow:(int)section withItem:(LFL::TableItem)item {
     if (section == data.size()) data.emplace_back();
     CHECK_LT(section, data.size());
-    data[section] = LFL::Table(h, f);
+    data[section].item.emplace_back(move(item));
+    NSIndexPath *path = [NSIndexPath indexPathForRow:data[section].item.size()-1 inSection:section];
+    [self.tableView insertRowsAtIndexPaths:@[path] withRowAnimation:UITableViewRowAnimationNone];
+  }
+
+  - (void)replaceSection:(int)section items:(const std::vector<LFL::TableItem>&)item header:(const std::string&)h flag:(int)f addbutton:(LFL::Callback)addb {
+    if (section == data.size()) data.emplace_back();
+    CHECK_LT(section, data.size());
+    data[section] = LFL::Table(h, f, move(addb));
     for (auto &i : item) data[section].item.emplace_back(i);
     [self.tableView reloadSections:[NSIndexSet indexSetWithIndex: section]
       withRowAnimation:UITableViewRowAnimationNone];
@@ -339,8 +360,8 @@ static std::vector<UIImage*> app_images;
       IOSBarButtonItem *button = [[IOSBarButtonItem alloc] init];
       button.cb = item.cb;
       button.title = LFL::MakeNSString(item.key);
-      [button setTarget:self];
-      [button setAction:@selector(navButtonClicked:)];
+      [button setTarget:button];
+      [button setAction:@selector(buttonClicked:)];
       if (align == LFL::HAlign::Right) self.navigationItem.rightBarButtonItem = button;
       else                             self.navigationItem.leftBarButtonItem  = button;
       [button release];
@@ -355,6 +376,9 @@ static std::vector<UIImage*> app_images;
         item->ref = dropdowns.size();
         auto dropdown_table = [[IOSTable alloc] initWithStyle: UITableViewStyleGrouped];
         [dropdown_table load:nullptr withTitle:item->key withStyle:"dropdown" items:item->MoveChildren()];
+        [dropdown_table loadNavigationButton:
+          LFL::TableItem("Back", LFL::TableItem::Button, "", "", 0, 0, 0, [=](){ [dropdown_table show: false]; })
+          withAlign: LFL::HAlign::Left];
         if (item->depends.size()) dropdown_table.changed = [self makeChangedCB: *item];
         dropdown_table.completed = ^{
           [self.tableView beginUpdates];
@@ -388,6 +412,7 @@ static std::vector<UIImage*> app_images;
       CHECK_LT(path.section, data.size());
       CHECK_LT(path.row, data[path.section].item.size());
       cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:cellIdentifier];
+      cell.selectionStyle = UITableViewCellSelectionStyleNone;
       int type=0;
       const std::string *k=0, *v=0;
       auto &compiled_item = data[path.section].item[path.row];
@@ -432,6 +457,21 @@ static std::vector<UIImage*> app_images;
         else if (v->size())                              [textfield setText:        LFL::MakeNSString(*v)];
 
         cell.textLabel.text = LFL::MakeNSString(*k);
+
+#if 0
+        // if SSH label, change style to hyperlink for tapping into protocol settings
+        if ([cell.textLabel.text isEqualToString:@"SSH"]) {
+          // set color to blue and underline 
+//          UIColor *specialBlueColor = [UIColor colorWithRed:33/255 blue:119/255 green:247/255 alpha:1.0f];
+          UIColor *specialBlueColor = [UIColor blueColor];
+          cell.textLabel.attributedText = [[NSAttributedString alloc] initWithString:@"SSH" attributes:@{ 
+              NSForegroundColorAttributeName : specialBlueColor,
+              NSUnderlineColorAttributeName  : specialBlueColor,
+              NSUnderlineStyleAttributeName  : @(NSUnderlineStyleSingle)
+          }];
+        }
+#endif
+
         if (_second_col) [cell.contentView addSubview: textfield];
         else {
           textfield.textAlignment = NSTextAlignmentRight;
@@ -488,7 +528,7 @@ static std::vector<UIImage*> app_images;
         button.frame = CGRectMake(0, 0, 40, 40);
         [button setImage:image forState:UIControlStateNormal];
         button.cb = compiled_item.right_icon_cb;
-        [button addTarget:self action:@selector(rightIconClicked:) forControlEvents:UIControlEventTouchUpInside];
+        [button addTarget:button action:@selector(buttonClicked:) forControlEvents:UIControlEventTouchUpInside];
         if (cell.accessoryView) [cell.accessoryView addSubview: button];
         else cell.accessoryView = button;
       } else if (compiled_item.right_text.size()) {
@@ -528,6 +568,15 @@ static std::vector<UIImage*> app_images;
     label.text = LFL::MakeNSString(data[section].header);
     label.textAlignment = NSTextAlignmentCenter;
     [headerView addSubview:label];
+
+    if (data[section].add_cb) {
+      IOSButton *button = [IOSButton buttonWithType:UIButtonTypeSystem];
+      [button addTarget:button action:@selector(buttonClicked:) forControlEvents:UIControlEventTouchUpInside];
+      [button setTitle:@"Add" forState:UIControlStateNormal];
+      [button sizeToFit];
+      [button setFrame:CGRectMake(11, 11, button.frame.size.width, 21)];
+      [headerView addSubview:button];
+    }
 
     if (data[section].flag & LFL::SystemTableView::EditButton) {
       UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
@@ -608,14 +657,6 @@ static std::vector<UIImage*> app_images;
     _lfl_self->changed = true;
     if (segmented_control.changed) segmented_control.changed
       (LFL::GetNSString([segmented_control titleForSegmentAtIndex: segmented_control.selectedSegmentIndex]));
-  }
-
-  - (void)rightIconClicked:(IOSButton*)sender {
-    if (sender.cb) sender.cb();
-  }
-
-  - (IBAction)navButtonClicked:(IOSBarButtonItem*)sender {
-    if (sender.cb) sender.cb();
   }
 
   - (IBAction) switchFlipped: (UISwitch*) onoff {
@@ -828,10 +869,11 @@ void SystemAlertView::Show(const string &arg) {
   [alert.alert show];
 }
 
-void SystemAlertView::ShowCB(const string &title, const string &arg, StringCB confirm_cb) {
+void SystemAlertView::ShowCB(const string &title, const string &msg, const string &arg, StringCB confirm_cb) {
   auto alert = FromVoid<IOSAlert*>(impl);
   alert.confirm_cb = move(confirm_cb);
   alert.alert.title = MakeNSString(title);
+  alert.alert.message = MakeNSString(msg);
   if (alert.add_text) [alert.alert textFieldAtIndex:0].text = MakeNSString(arg);
   [alert.alert show];
 }
@@ -878,6 +920,7 @@ void SystemTableView::Show(bool show_or_hide) {
   [FromVoid<IOSTable*>(impl) show:show_or_hide];
 }
 
+void SystemTableView::AddRow(int section, TableItem item) { return [FromVoid<IOSTable*>(impl) addRow:section withItem:move(item)]; }
 string SystemTableView::GetKey(int section, int row) { return [FromVoid<IOSTable*>(impl) getKey:section row:row]; }
 int SystemTableView::GetTag(int section, int row) { return [FromVoid<IOSTable*>(impl) getTag:section row:row]; }
 void SystemTableView::SetTag(int section, int row, int val) { [FromVoid<IOSTable*>(impl) setTag:section row:row val:val]; }
@@ -900,7 +943,8 @@ void SystemTableView::BeginUpdates() { [FromVoid<IOSTable*>(impl).tableView begi
 void SystemTableView::EndUpdates() { [FromVoid<IOSTable*>(impl).tableView endUpdates]; }
 void SystemTableView::SetDropdown(int section, int row, int val) { [FromVoid<IOSTable*>(impl) setDropdown:section row:row index:val]; }
 void SystemTableView::SetSectionValues(int section, const StringVec &item) { [FromVoid<IOSTable*>(impl) setSectionValues:section items:item]; }
-void SystemTableView::ReplaceSection(int section, const string &h, int flag, TableItemVec item) { [FromVoid<IOSTable*>(impl) replaceSection:section items:move(item) header:h flag:flag]; }
+void SystemTableView::ReplaceSection(int section, const string &h, int flag, TableItemVec item, Callback add_button)
+{ [FromVoid<IOSTable*>(impl) replaceSection:section items:move(item) header:h flag:flag addbutton:move(add_button)]; }
 
 SystemNavigationView::~SystemNavigationView() { if (auto nav = FromVoid<IOSNavigation*>(impl)) [nav release]; }
 SystemNavigationView::SystemNavigationView() : impl([[IOSNavigation alloc] init]) {}

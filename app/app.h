@@ -450,8 +450,9 @@ struct TableItem : public TableItemChild {
 struct Table {
   string header;
   int flag;
+  Callback add_cb;
   vector<TableItem> item;
-  Table(string h="", int f=0) : header(move(h)), flag(f) {}
+  Table(string h="", int f=0, Callback c=Callback()) : header(move(h)), flag(f), add_cb(move(c)) {}
 };
 
 typedef vector<MenuItem>  MenuItemVec;
@@ -756,7 +757,7 @@ struct SystemAlertView {
   virtual ~SystemAlertView();
   SystemAlertView(AlertItemVec items);
   void Show(const string &arg);
-  void ShowCB(const string &title, const string &arg, StringCB confirm_cb);
+  void ShowCB(const string &title, const string &msg, const string &arg, StringCB confirm_cb);
   string RunModal(const string &arg);
 };
 
@@ -811,9 +812,10 @@ struct SystemTableView {
 
   void BeginUpdates();
   void EndUpdates();
+  void AddRow(int section, TableItem item);
   void SetDropdown(int section, int row, int val);
   void SetSectionValues(int section, const StringVec&);
-  void ReplaceSection(int section, const string &h, int flag, TableItemVec item);
+  void ReplaceSection(int section, const string &h, int flag, TableItemVec item, Callback add_button=Callback());
 };
 
 struct SystemNavigationView {

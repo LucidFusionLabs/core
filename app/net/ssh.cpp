@@ -39,7 +39,7 @@ struct SSHClientConnection : public Connection::Handler {
   string V_C, V_S, KEXINIT_C, KEXINIT_S, H_text, session_id, integrity_c2s, integrity_s2c, decrypt_buf, pw;
   int state=0, packet_len=0, packet_MAC_len=0, MAC_len_c=0, MAC_len_s=0, encrypt_block_size=0, decrypt_block_size=0, server_version=0;
   unsigned sequence_number_c2s=0, sequence_number_s2c=0, password_prompts=0, userauth_fail=0;
-  bool guessed_c=0, guessed_s=0, guessed_right_c=0, guessed_right_s=0, loaded_pw=0;
+  bool guessed_c=0, guessed_s=0, guessed_right_c=0, guessed_right_s=0, accepted_hostkey=0, loaded_pw=0;
   unsigned char padding=0, packet_id=0;
   Serializable::ConstStream packet_s;
   std::mt19937 rand_eng;
@@ -208,14 +208,15 @@ struct SSHClientConnection : public Connection::Handler {
 
         case SSH::MSG_KEXDH_REPLY::ID:
         case SSH::MSG_KEX_DH_GEX_REPLY::ID: {
+          string fingerprint;
           if (state != FIRST_KEXREPLY && state != KEXREPLY) return ERRORv(-1, c->Name(), ": unexpected state ", state);
           if (guessed_s && !guessed_right_s && !(guessed_s=0)) { INFO(c->Name(), ": server guessed wrong, ignoring packet"); break; }
-          
+
           if (packet_id == SSH::MSG_KEXDH_REPLY::ID && SSH::KEX::X25519DiffieHellman(kex_method)) {
             SSH::MSG_KEX_ECDH_REPLY msg; // MSG_KEX_ECDH_REPLY and MSG_KEXDH_REPLY share ID 31
             if (msg.In(&packet_s)) return ERRORv(-1, c->Name(), ": read MSG_KEX_ECDH_REPLY");
             SSHTrace(c->Name(), ": MSG_KEX_ECDH_REPLY for X25519DH");
-            if (host_fingerprint_cb && !host_fingerprint_cb(hostkey_type, msg.k_s)) return ERRORv(-1, c->Name(), "host fingerprint rejected");
+            if (!accepted_hostkey) fingerprint = msg.k_s.str();
 
             x25519dh.remotepubkey = msg.q_s.str();
             if (!x25519dh.ComputeSecret(&K)) return ERRORv(-1, c->Name(), ": x25519dh");
@@ -226,7 +227,7 @@ struct SSHClientConnection : public Connection::Handler {
             SSH::MSG_KEX_ECDH_REPLY msg; // MSG_KEX_ECDH_REPLY and MSG_KEXDH_REPLY share ID 31
             if (msg.In(&packet_s)) return ERRORv(-1, c->Name(), ": read MSG_KEX_ECDH_REPLY");
             SSHTrace(c->Name(), ": MSG_KEX_ECDH_REPLY for ECDH");
-            if (host_fingerprint_cb && !host_fingerprint_cb(hostkey_type, msg.k_s)) return ERRORv(-1, c->Name(), "host fingerprint rejected");
+            if (!accepted_hostkey) fingerprint = msg.k_s.str();
 
             ecdh.s_text = msg.q_s.str();
             ECPointSetData(ecdh.g, ecdh.s, ecdh.s_text);
@@ -247,15 +248,19 @@ struct SSHClientConnection : public Connection::Handler {
             SSH::MSG_KEXDH_REPLY msg(dh.f);
             if (msg.In(&packet_s)) return ERRORv(-1, c->Name(), ": read MSG_KEXDH_REPLY");
             SSHTrace(c->Name(), ": MSG_KEXDH_REPLY");
-            if (host_fingerprint_cb && !host_fingerprint_cb(hostkey_type, msg.k_s)) return ERRORv(-1, c->Name(), "host fingerprint rejected");
+            if (!accepted_hostkey) fingerprint = msg.k_s.str();
 
             if (!dh.ComputeSecret(&K, ctx)) return ERRORv(-1, c->Name(), ": dh");
             if ((v = ComputeExchangeHashAndVerifyHostKey(c, msg.k_s, msg.h_sig)) != 1) return ERRORv(-1, c->Name(), ": verify hostkey failed: ", v);
             // fall forward
           }
 
-          state = state == FIRST_KEXREPLY ? FIRST_NEWKEYS : NEWKEYS;
           if (!WriteClearOrEncrypted(c, SSH::MSG_NEWKEYS())) return ERRORv(-1, c->Name(), ": write");
+          if (state == FIRST_KEXREPLY) {
+            state = FIRST_NEWKEYS;
+            if (host_fingerprint_cb) accepted_hostkey = host_fingerprint_cb(hostkey_type, fingerprint);
+            else                     accepted_hostkey = true;
+          } else state = NEWKEYS;
         } break;
 
         case SSH::MSG_NEWKEYS::ID: {
@@ -269,7 +274,7 @@ struct SSHClientConnection : public Connection::Handler {
           integrity_c2s = DeriveKey(kex_hash, 'E', MAC_len_c);
           integrity_s2c = DeriveKey(kex_hash, 'F', MAC_len_s);
           state = NEWKEYS;
-          if (!WriteCipher(c, SSH::MSG_SERVICE_REQUEST("ssh-userauth"))) return ERRORv(-1, c->Name(), ": write");
+          if (accepted_hostkey && !AcceptHostKeyAndBeginAuthRequest(c)) return ERRORv(-1, c->Name(), ": write");
         } break;
 
         case SSH::MSG_SERVICE_ACCEPT::ID: {
@@ -654,13 +659,18 @@ struct SSHClientConnection : public Connection::Handler {
       success = WriteCipher(c, SSH::MSG_USERAUTH_INFO_RESPONSE(prompt));
     }
     password_prompts = 0;
+    ClearPassword();
     return success;
   }
 
   void ClearPassword() { SecureClear(&pw); }
   void LoadPassword(Connection *c) {
-    if ((loaded_pw = load_password_cb && load_password_cb(&pw))) WritePassword(c);
-    if (loaded_pw) ClearPassword();
+    if ((loaded_pw = bool(load_password_cb)) && load_password_cb(&pw)) WritePassword(c);
+  }
+
+  bool AcceptHostKeyAndBeginAuthRequest(Connection *c) {
+    accepted_hostkey = true;
+    return WriteCipher(c, SSH::MSG_SERVICE_REQUEST("ssh-userauth"));
   }
 
   void SetCredentialCB(SSHClient::FingerprintCB F, SSHClient::LoadIdentityCB LI,
@@ -705,7 +715,9 @@ Connection *SSHClient::Open(Params p, const SSHClient::ResponseCB &cb, Callback 
   return c;
 }
 
+bool SSHClient::AcceptHostKeyAndBeginAuthRequest(Connection *c)                        { return dynamic_cast<SSHClientConnection*>(c->handler.get())->AcceptHostKeyAndBeginAuthRequest(c); }
 int  SSHClient::WriteChannelData     (Connection *c,             const StringPiece &b) { return dynamic_cast<SSHClientConnection*>(c->handler.get())->WriteChannelData(c, b); }
+bool SSHClient::WritePassword        (Connection *c,             const StringPiece &b) { auto p=dynamic_cast<SSHClientConnection*>(c->handler.get()); p->pw=b.str(); return p->WritePassword(c); }
 bool SSHClient::WriteToChannel       (Connection *c, Channel *x, const StringPiece &b) { return dynamic_cast<SSHClientConnection*>(c->handler.get())->WriteToChannel(c, x, b); }
 bool SSHClient::CloseChannel         (Connection *c, Channel *x)                       { return dynamic_cast<SSHClientConnection*>(c->handler.get())->CloseChannel(c, x); }
 int  SSHClient::SetTerminalWindowSize(Connection *c, int w, int h)                     { return dynamic_cast<SSHClientConnection*>(c->handler.get())->SetTerminalWindowSize(c, w, h); }
