@@ -413,9 +413,9 @@ struct AlertItem { string first, second; StringCB cb; };
 struct PanelItem { string type; Box box; StringCB cb; };
 
 struct TableItemChild {
-  struct Dep { int section, row; string val; bool hidden; int left_icon, right_icon; string key; };
-  enum { None=0, Label=1, Separator=2, Command=3, Button=4, Toggle=5, Selector=6, Dropdown=7,
-    FixedDropdown=8, TextInput=9, NumberInput=10, PasswordInput=11 }; 
+  struct Dep { int section, row; string val; bool hidden; int left_icon, right_icon; string key; Callback cb; };
+  enum { None=0, Label=1, Separator=2, Command=3, Button=4, Toggle=5, Selector=6, Picker=7,
+    Dropdown=8, FixedDropdown=9, TextInput=10, NumberInput=11, PasswordInput=12 }; 
   typedef unordered_map<string, vector<Dep>> Depends;
   string key;
   int type;
@@ -829,6 +829,7 @@ struct SystemNavigationView {
   void Show(bool show_or_hide);
   void PushTable(SystemTableView*);
   void PopTable(int num=1);
+  void PopToRoot();
   void PopAll();
 };
 
@@ -836,6 +837,7 @@ unique_ptr<Module> CreateFrameworkModule();
 unique_ptr<GraphicsDevice> CreateGraphicsDevice(Window*, int ver);
 unique_ptr<Module> CreateAudioModule(Audio*);
 unique_ptr<Module> CreateCameraModule(CameraState*);
+void InitCrashReporting(const string &id);
 
 }; // namespace LFL
 #endif // LFL_CORE_APP_APP_H__

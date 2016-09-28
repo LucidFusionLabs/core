@@ -2,6 +2,7 @@
 
 lfl_add_target(app_null_framework STATIC_LIBRARY SOURCES null_framework.cpp)
 lfl_add_target(app_null_os STATIC_LIBRARY SOURCES null_os.cpp)
+lfl_add_target(app_null_crashreporting STATIC_LIBRARY SOURCES null_crashreporting.cpp)
 
 if(LFL_ANDROID)
   lfl_add_target(app_android_os STATIC_LIBRARY SOURCES android_os.cpp LINK_LIBRARIES -llog -lz)
@@ -39,6 +40,13 @@ if(LFL_OSX)
   target_include_directories(app_osx_framework PUBLIC ${LFL_APP_INCLUDE})
   target_compile_definitions(app_osx_framework PUBLIC ${LFL_APP_DEF})
   target_compile_options(app_osx_framework PUBLIC -fobjc-abi-version=2 -fobjc-legacy-dispatch)
+endif()
+
+if(LFL_CRITTERCISM AND (LFL_IOS OR LFL_OSX))
+  lfl_add_target(app_crittercism_crashreporting STATIC_LIBRARY SOURCES crittercism_crashreporting.mm
+                 COMPILE_OPTIONS -fobjc-abi-version=2 -fobjc-legacy-dispatch
+                 INCLUDE_DIRECTORIES ${CRITTERCISM_INCLUDE}
+                 LINK_LIBRARIES ${CRITTERCISM_LIB} "-framework SystemConfiguration")
 endif()
 
 if(LFL_LINUX)

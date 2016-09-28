@@ -299,7 +299,10 @@ void glShadertoyShader(GraphicsDevice *gd, Shader *shader, const Texture *tex) {
   shader->SetUniform1f("iBlend", FLAGS_shadertoy_blend);
   shader->SetUniform4f("iMouse", screen->mouse.x, screen->mouse.y, app->input->MouseButton1Down(), 0);
   shader->SetUniform3f("iResolution", XY_or_Y(scale, screen->x + screen->width), XY_or_Y(scale, screen->y + screen->height), 0);
-  if (tex) shader->SetUniform3f("iChannelResolution", XY_or_Y(scale, tex->width), XY_or_Y(scale, tex->height), 1);
+  if (tex) {
+    shader->SetUniform3f("iChannelResolution", XY_or_Y(scale, tex->width), XY_or_Y(scale, tex->height), 1);
+    shader->SetUniform4f("iTargetBox", 0, 0, XY_or_Y(scale, tex->width), XY_or_Y(scale, tex->height));
+  }
 }
 
 void glShadertoyShaderWindows(GraphicsDevice *gd, Shader *shader, const Color &backup_color, const Box &w,                   const Texture *tex) { glShadertoyShaderWindows(gd, shader, backup_color, vector<const Box*>(1, &w), tex); }

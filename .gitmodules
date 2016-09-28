@@ -108,3 +108,6 @@
 [submodule "imports/mosh"]
 	path = imports/mosh
 	url = https://github.com/mobile-shell/mosh
+[submodule "imports/crittercism"]
+	path = imports/crittercism
+	url = https://github.com/LucidFusionLabs/crittercism

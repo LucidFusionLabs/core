@@ -629,15 +629,18 @@ int Shader::CreateShaderToy(const string &name, const string &pixel_shader, Shad
   static string header =
     "uniform float iGlobalTime, iBlend;\r\n"
     "uniform vec3 iResolution;\r\n"
-    "uniform vec4 iMouse;\r\n"
+    "uniform vec4 iTargetBox, iMouse;\r\n"
     "uniform sampler2D iChannel0;\r\n"
     "uniform vec3 iChannelResolution[1];\r\n"
     "uniform vec2 iChannelScroll[1], iChannelModulus[1];\r\n"
+    "uniform bool iChannelFlip[1];\r\n"
     "#define SampleChannelAtPointAndModulus(c, p, m) texture2D(c, mod((p), (m)))\r\n"
     "#define SampleChannelAtPoint(c, p) SampleChannelAtPointAndModulus(c, p, iChannelModulus[0])\r\n"
-    "#define SamplePoint() ((fragCoord.xy + iChannelScroll[0]) / iChannelResolution[0].xy)\r\n"
-    "#define SamplePointFlipY() vec2((fragCoord.x + iChannelScroll[0].x) / iChannelResolution[0].x, \\\r\n"
-    "                                (iChannelResolution[0].y - fragCoord.y - iChannelScroll[0].y) / iChannelResolution[0].y)\r\n"
+    "#define SamplePointXY() (((fragCoord.xy - iTargetBox.xy) * iChannelResolution[0].xy / iTargetBox.zw + iChannelScroll[0]) / iChannelResolution[0].xy)\r\n"
+    "#define SamplePointFlippedXY() vec2(((fragCoord.x - iTargetBox.x)                           * iChannelResolution[0].x / iTargetBox.z + iChannelScroll[0].x) / iChannelResolution[0].x, \\\r\n"
+    "                                    (iChannelResolution[0].y - (fragCoord.y - iTargetBox.y) * iChannelResolution[0].y / iTargetBox.w - iChannelScroll[0].y) / iChannelResolution[0].y)\r\n"
+    "#define SamplePoint() (iChannelFlip[0] ? SamplePointFlippedXY() : SamplePointXY())\r\n"
+    "#define SamplePointFlipY() (iChannelFlip[0] ? SamplePointXY() : SamplePointFlippedXY())\r\n"
     "#define SampleChannel(c) SampleChannelAtPoint(c, SamplePoint())\r\n"
     "#define BlendChannels(c1,c2) ((c1)*iBlend + (c2)*(1.0-iBlend))\r\n";
 

@@ -216,6 +216,12 @@ if(LFL_TCMALLOC)
       -fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free PARENT_SCOPE)
 endif()
 
+# crittercism
+if(LFL_CRITTERCISM)
+  set(CRITTERCISM_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/crittercism/iOS/Crittercism.framework/Headers PARENT_SCOPE)
+  set(CRITTERCISM_LIB "-F${CMAKE_CURRENT_SOURCE_DIR}/crittercism/iOS -framework Crittercism" PARENT_SCOPE)
+endif()
+
 # openssl
 if(LFL_OPENSSL)
   if(LFL_WINDOWS)

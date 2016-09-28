@@ -204,6 +204,91 @@ static std::vector<UIImage*> app_images;
   static std::vector<IOSToolbar*> show_bottom, show_top;
 @end
 
+@interface IOSPicker : UIPickerView<UIPickerViewDelegate>
+  {
+    std::vector<std::vector<std::string>> columns;
+    std::vector<int> picked_row;
+  }
+  - (bool)didSelect;
+@end
+
+@implementation IOSPicker
+  - (id)initWithColumns:(std::vector<std::vector<std::string>>)col {
+    self = [super init];
+    columns = move(col);
+    super.delegate = self;
+    super.showsSelectionIndicator = YES;
+    super.hidden = NO;
+    super.layer.borderColor = [UIColor grayColor].CGColor;
+    super.layer.borderWidth = 4;
+    [self setBackgroundColor:[UIColor whiteColor]];
+    return self;
+  }
+
+  - (void)pickerView:(UIPickerView *)pV didSelectRow:(NSInteger)row inComponent:(NSInteger)component {
+    CHECK_RANGE(component, 0, columns.size());
+    if (picked_row.size() != columns.size()) picked_row.resize(columns.size());
+    picked_row[component] = row;
+    if ([self didSelect]) [self removeFromSuperview];
+  }
+
+  - (bool)didSelect { return false; }
+  - (NSInteger)numberOfComponentsInPickerView:(UIPickerView *)pickerView { return columns.size(); }
+  - (NSInteger)pickerView:(UIPickerView *)pickerView numberOfRowsInComponent:(NSInteger)component { 
+    CHECK_RANGE(component, 0, columns.size());
+    return columns[component].size();
+  }
+
+  - (NSString *)pickerView:(UIPickerView *)pickerView titleForRow:(NSInteger)row forComponent:(NSInteger)component {
+    CHECK_RANGE(component, 0, columns.size());
+    CHECK_RANGE(row, 0, columns[component].size());
+    return [NSString stringWithUTF8String: columns[component][row].c_str()];
+  }
+@end
+
+@interface IOSFontPicker : IOSPicker
+@end
+
+@implementation IOSFontPicker
+  {
+    LFL::StringVecCB font_change_cb;
+  }
+
+  - (id)init {
+    self = [super initWithColumns: std::vector<std::vector<std::string>>{}];
+    [IOSFontPicker getSystemFonts:     &LFL::PushBack(columns, {})];
+    [IOSFontPicker getSystemFontSizes: &LFL::PushBack(columns, {})];
+    return self;
+  }
+
+  - (void)selectFont: (const std::string &)name size:(int)s cb:(LFL::StringVecCB)v {
+    font_change_cb = move(v);
+    if (picked_row.size() != columns.size()) picked_row.resize(columns.size());
+    for (auto b = columns[0].begin(), e = columns[0].end(), i = b; i != e; ++i)
+      if (*i == name) picked_row[0] = i - b;
+    picked_row[1] = LFL::Clamp(s-1, 1, 64);
+    [self selectRow:picked_row[0] inComponent:0 animated:NO];
+    [self selectRow:picked_row[1] inComponent:1 animated:NO];
+  }
+
+  - (bool)didSelect {
+    font_change_cb(LFL::StringVec{columns[0][picked_row[0]], columns[1][picked_row[1]]});
+    return true;
+  }
+
+  + (void)getSystemFonts:(std::vector<std::string>*)out {
+    NSArray *families = [UIFont familyNames];
+    for (NSString *family_name in families) {
+      NSArray *fonts = [UIFont fontNamesForFamilyName:family_name];
+      for (NSString *font_name in fonts) out->push_back([font_name UTF8String]);
+    }
+  }
+
+  + (void)getSystemFontSizes:(std::vector<std::string>*)out {
+    for (int i=0; i<64; ++i) out->push_back(LFL::StrCat(i+1));
+  }
+@end
+
 @interface IOSTable : UITableViewController
   @property (nonatomic, retain) UIView *header;
   @property (nonatomic, retain) UILabel *header_label;
@@ -494,6 +579,12 @@ static std::vector<UIImage*> app_images;
         [cell.contentView addSubview:segmented_control];
         [segmented_control release]; 
 
+      } else if (type == LFL::TableItem::Picker) {
+        std::vector<std::vector<std::string>> col;
+        [IOSFontPicker getSystemFonts: &LFL::PushBack(col, {})];
+        IOSPicker *picker = [[IOSPicker alloc] initWithColumns: move(col)];
+        [cell.contentView addSubview:picker];
+
       } else if (type == LFL::TableItem::Button) {
         cell.textLabel.text = LFL::MakeNSString(*k);
         cell.textLabel.textAlignment = NSTextAlignmentCenter;
@@ -726,6 +817,7 @@ static std::vector<UIImage*> app_images;
         if (c.left_icon)  ci.left_icon  = c.left_icon  == -1 ? 0 : c.left_icon;
         if (c.right_icon) ci.right_icon = c.right_icon == -1 ? 0 : c.right_icon;
         if (c.key.size()) ci.key = c.key;
+        if (c.cb)         ci.cb = c.cb;
         NSIndexPath *p = [NSIndexPath indexPathForRow:c.row inSection:c.section];
         [self.tableView reloadRowsAtIndexPaths:@[p] withRowAnimation:UITableViewRowAnimationNone];
       }
@@ -743,86 +835,6 @@ static std::vector<UIImage*> app_images;
     _controller = [[UINavigationController alloc] initWithNavigationBarClass:nil toolbarClass:nil];
     [_controller setToolbarHidden:YES animated:YES];
     return self;
-  }
-@end
-
-@interface IOSPicker : NSObject<UIPickerViewDelegate>
-  {
-    std::vector<std::vector<std::string>> columns;
-    std::vector<int> picked_row;
-  }
-  @property (nonatomic, retain) UIPickerView *picker;
-  - (bool)didSelect;
-@end
-
-@implementation IOSPicker
-  - (id)init {
-    self = [super init];
-    _picker = [[UIPickerView alloc] init];
-    _picker.delegate = self;
-    _picker.showsSelectionIndicator = YES;
-    _picker.hidden = NO;
-    _picker.layer.borderColor = [UIColor grayColor].CGColor;
-    _picker.layer.borderWidth = 4;
-    [_picker setBackgroundColor:[UIColor whiteColor]];
-    return self;
-  }
-
-  - (void)pickerView:(UIPickerView *)pV didSelectRow:(NSInteger)row inComponent:(NSInteger)component {
-    CHECK_RANGE(component, 0, columns.size());
-    if (picked_row.size() != columns.size()) picked_row.resize(columns.size());
-    picked_row[component] = row;
-    if ([self didSelect]) [_picker removeFromSuperview];
-  }
-
-  - (bool)didSelect { return false; }
-  - (NSInteger)numberOfComponentsInPickerView:(UIPickerView *)pickerView { return columns.size(); }
-  - (NSInteger)pickerView:(UIPickerView *)pickerView numberOfRowsInComponent:(NSInteger)component { 
-    CHECK_RANGE(component, 0, columns.size());
-    return columns[component].size();
-  }
-
-  - (NSString *)pickerView:(UIPickerView *)pickerView titleForRow:(NSInteger)row forComponent:(NSInteger)component {
-    CHECK_RANGE(component, 0, columns.size());
-    CHECK_RANGE(row, 0, columns[component].size());
-    return [NSString stringWithUTF8String: columns[component][row].c_str()];
-  }
-@end
-
-@interface IOSFontPicker : IOSPicker
-@end
-
-@implementation IOSFontPicker
-  {
-    LFL::StringVecCB font_change_cb;
-  }
-
-  - (id)init {
-    self = [super init];
-    columns.push_back({});
-    NSArray *families = [UIFont familyNames];
-    for (NSString *family_name in families) {
-      NSArray *fonts = [UIFont fontNamesForFamilyName:family_name];
-      for (NSString *font_name in fonts) columns.back().push_back([font_name UTF8String]);
-    }
-    columns.push_back({});
-    for (int i=0; i<64; ++i) columns.back().push_back(LFL::StrCat(i+1));
-    return self;
-  }
-
-  - (void)selectFont: (const std::string &)name size:(int)s cb:(LFL::StringVecCB)v {
-    font_change_cb = move(v);
-    if (picked_row.size() != columns.size()) picked_row.resize(columns.size());
-    for (auto b = columns[0].begin(), e = columns[0].end(), i = b; i != e; ++i)
-      if (*i == name) picked_row[0] = i - b;
-    picked_row[1] = LFL::Clamp(s-1, 1, 64);
-    [self.picker selectRow:picked_row[0] inComponent:0 animated:NO];
-    [self.picker selectRow:picked_row[1] inComponent:1 animated:NO];
-  }
-
-  - (bool)didSelect {
-    font_change_cb(LFL::StringVec{columns[0][picked_row[0]], columns[1][picked_row[1]]});
-    return true;
   }
 @end
 
@@ -978,7 +990,17 @@ void SystemNavigationView::PushTable(SystemTableView *t) {
   [FromVoid<IOSNavigation*>(impl).controller pushViewController: FromVoid<IOSTable*>(t->impl) animated: YES];
 }
 
-void SystemNavigationView::PopAll() { [FromVoid<IOSNavigation*>(impl).controller popToRootViewControllerAnimated: YES]; }
+void SystemNavigationView::PopToRoot() {
+  if (root) [FromVoid<IOSNavigation*>(impl).controller popToRootViewControllerAnimated: YES];
+}
+
+void SystemNavigationView::PopAll() {
+  if (root && !(root=0)) {
+    [FromVoid<IOSNavigation*>(impl).controller popToRootViewControllerAnimated: NO];
+    [FromVoid<IOSNavigation*>(impl).controller setViewControllers:@[] animated:NO];
+  }
+}
+
 void SystemNavigationView::PopTable(int n) {
   for (int i = 0; i != n; ++i)
     [FromVoid<IOSNavigation*>(impl).controller popViewControllerAnimated: (i == n - 1)];
@@ -987,7 +1009,7 @@ void SystemNavigationView::PopTable(int n) {
 void Application::ShowSystemFontChooser(const FontDesc &cur_font, const StringVecCB &cb) {
   static IOSFontPicker *font_chooser = [[IOSFontPicker alloc] init];
   [font_chooser selectFont:cur_font.name size:cur_font.size cb:cb];
-  [[LFUIApplication sharedAppDelegate].view addSubview: font_chooser.picker];
+  [[LFUIApplication sharedAppDelegate].view addSubview: font_chooser];
 }
 
 void Application::OpenSystemBrowser(const string &url_text) {

@@ -761,6 +761,9 @@ void TextArea::Draw(const Box &b, int flag, Shader *shader) {
   if (shader) {
     float scale = shader->scale;
     glShadertoyShader(gc.gd, shader);
+    shader->SetUniform1i("iChannelFlip", 0);
+    shader->SetUniform4f("iTargetBox", 0, 0,   XY_or_Y(scale, gc.gd->TextureDim(line_fb.w)), 
+                                               XY_or_Y(scale, gc.gd->TextureDim(line_fb.h)));
     shader->SetUniform3f("iChannelResolution", XY_or_Y(scale, gc.gd->TextureDim(line_fb.w)), 
                                                XY_or_Y(scale, gc.gd->TextureDim(line_fb.h)), 1);
     shader->SetUniform2f("iChannelScroll", XY_or_Y(scale, -line_fb.scroll.x * line_fb.w),
