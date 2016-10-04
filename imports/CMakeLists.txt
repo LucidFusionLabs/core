@@ -222,6 +222,17 @@ if(LFL_CRITTERCISM)
   set(CRITTERCISM_LIB "-F${CMAKE_CURRENT_SOURCE_DIR}/crittercism/iOS -framework Crittercism" PARENT_SCOPE)
 endif()
 
+# HockeyApp
+if(LFL_HOCKEYAPP)
+  if(LFL_HOCKEYAPP_CRASHREPORTING_ONLY)
+    set(HOCKEYAPP_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/HockeyApp/HockeySDK-iOS/HockeySDKCrashOnly/HockeySDK.framework/Headers PARENT_SCOPE)
+    set(HOCKEYAPP_LIB "-F${CMAKE_CURRENT_SOURCE_DIR}/HockeyApp/HockeySDK-iOS/HockeySDKCrashOnly -framework HockeySDK" PARENT_SCOPE)
+  else()
+    set(HOCKEYAPP_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/HockeyApp/HockeySDK-iOS/HockeySDK.embeddedframework/HockeySDK.framework/Headers PARENT_SCOPE)
+    set(HOCKEYAPP_LIB "-F${CMAKE_CURRENT_SOURCE_DIR}/HockeyApp/HockeySDK-iOS/HockeySDK.embeddedframework -framework HockeySDK" PARENT_SCOPE)
+  endif()
+endif()
+
 # openssl
 if(LFL_OPENSSL)
   if(LFL_WINDOWS)

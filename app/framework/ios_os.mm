@@ -206,16 +206,14 @@ static std::vector<UIImage*> app_images;
 
 @interface IOSPicker : UIPickerView<UIPickerViewDelegate>
   {
-    std::vector<std::vector<std::string>> columns;
-    std::vector<int> picked_row;
+    LFL::PickerItem item;
   }
-  - (bool)didSelect;
 @end
 
 @implementation IOSPicker
-  - (id)initWithColumns:(std::vector<std::vector<std::string>>)col {
+  - (id)initWithColumns:(LFL::PickerItem)in {
     self = [super init];
-    columns = move(col);
+    item = move(in);
     super.delegate = self;
     super.showsSelectionIndicator = YES;
     super.hidden = NO;
@@ -226,23 +224,22 @@ static std::vector<UIImage*> app_images;
   }
 
   - (void)pickerView:(UIPickerView *)pV didSelectRow:(NSInteger)row inComponent:(NSInteger)component {
-    CHECK_RANGE(component, 0, columns.size());
-    if (picked_row.size() != columns.size()) picked_row.resize(columns.size());
-    picked_row[component] = row;
-    if ([self didSelect]) [self removeFromSuperview];
+    CHECK_RANGE(component, 0, item.data.size());
+    if (item.picked.size() != item.data.size()) item.picked.resize(item.data.size());
+    item.picked[component] = row;
+    if (item.cb) { if (item.cb(&item)) [self removeFromSuperview]; }
   }
 
-  - (bool)didSelect { return false; }
-  - (NSInteger)numberOfComponentsInPickerView:(UIPickerView *)pickerView { return columns.size(); }
+  - (NSInteger)numberOfComponentsInPickerView:(UIPickerView *)pickerView { return item.data.size(); }
   - (NSInteger)pickerView:(UIPickerView *)pickerView numberOfRowsInComponent:(NSInteger)component { 
-    CHECK_RANGE(component, 0, columns.size());
-    return columns[component].size();
+    CHECK_RANGE(component, 0, item.data.size());
+    return item.data[component].size();
   }
 
   - (NSString *)pickerView:(UIPickerView *)pickerView titleForRow:(NSInteger)row forComponent:(NSInteger)component {
-    CHECK_RANGE(component, 0, columns.size());
-    CHECK_RANGE(row, 0, columns[component].size());
-    return [NSString stringWithUTF8String: columns[component][row].c_str()];
+    CHECK_RANGE(component, 0, item.data.size());
+    CHECK_RANGE(row, 0, item.data[component].size());
+    return [NSString stringWithUTF8String: item.data[component][row].c_str()];
   }
 @end
 
@@ -255,25 +252,20 @@ static std::vector<UIImage*> app_images;
   }
 
   - (id)init {
-    self = [super initWithColumns: std::vector<std::vector<std::string>>{}];
-    [IOSFontPicker getSystemFonts:     &LFL::PushBack(columns, {})];
-    [IOSFontPicker getSystemFontSizes: &LFL::PushBack(columns, {})];
+    LFL::PickerItem p;
+    p.cb = [=](LFL::PickerItem *x) -> bool {
+      font_change_cb(LFL::StringVec{x->data[0][x->picked[0]], x->data[1][x->picked[1]]});
+      return true;
+    };
+    self = [super initWithColumns: move(p)];
+    [IOSFontPicker getSystemFonts:     &LFL::PushBack(item.data, {})];
+    [IOSFontPicker getSystemFontSizes: &LFL::PushBack(item.data, {})];
     return self;
   }
 
-  - (void)selectFont: (const std::string &)name size:(int)s cb:(LFL::StringVecCB)v {
+  - (void)selectFont:(const std::string&)name size:(int)s cb:(LFL::StringVecCB)v {
     font_change_cb = move(v);
-    if (picked_row.size() != columns.size()) picked_row.resize(columns.size());
-    for (auto b = columns[0].begin(), e = columns[0].end(), i = b; i != e; ++i)
-      if (*i == name) picked_row[0] = i - b;
-    picked_row[1] = LFL::Clamp(s-1, 1, 64);
-    [self selectRow:picked_row[0] inComponent:0 animated:NO];
-    [self selectRow:picked_row[1] inComponent:1 animated:NO];
-  }
-
-  - (bool)didSelect {
-    font_change_cb(LFL::StringVec{columns[0][picked_row[0]], columns[1][picked_row[1]]});
-    return true;
+    [IOSFontPicker selectFont:name withPicker:self size:s];
   }
 
   + (void)getSystemFonts:(std::vector<std::string>*)out {
@@ -286,6 +278,15 @@ static std::vector<UIImage*> app_images;
 
   + (void)getSystemFontSizes:(std::vector<std::string>*)out {
     for (int i=0; i<64; ++i) out->push_back(LFL::StrCat(i+1));
+  }
+
+  + (void)selectFont:(const std::string &)name withPicker:(IOSPicker*)picker size:(int)s {
+    if (picker->item.picked.size() != picker->item.data.size()) picker->item.picked.resize(picker->item.data.size());
+    for (auto b = picker->item.data[0].begin(), e = picker->item.data[0].end(), i = b; i != e; ++i)
+      if (*i == name) { picker->item.picked[0] = i - b; break; }
+    picker->item.picked[1] = LFL::Clamp(s-1, 1, 64);
+    [picker selectRow:picker->item.picked[0] inComponent:0 animated:NO];
+    [picker selectRow:picker->item.picked[1] inComponent:1 animated:NO];
   }
 @end
 
@@ -425,7 +426,11 @@ static std::vector<UIImage*> app_images;
 
   - (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)path {
     if (path.section >= data.size() || path.row >= data[path.section].item.size()) return tableView.rowHeight;
-    return data[path.section].item[path.row].hidden ? 0 : tableView.rowHeight;
+    const auto &ci = data[path.section].item[path.row];
+    if (ci.hidden) return 0;
+    else if (ci.gui_loaded &&
+             (ci.type == LFL::TableItem::Picker || ci.type == LFL::TableItem::FontPicker)) return ci.height;
+    else return tableView.rowHeight;
   }
 
   - (CGRect)getCellFrame {
@@ -465,11 +470,7 @@ static std::vector<UIImage*> app_images;
           LFL::TableItem("Back", LFL::TableItem::Button, "", "", 0, 0, 0, [=](){ [dropdown_table show: false]; })
           withAlign: LFL::HAlign::Left];
         if (item->depends.size()) dropdown_table.changed = [self makeChangedCB: *item];
-        dropdown_table.completed = ^{
-          [self.tableView beginUpdates];
-          [self.tableView reloadRowsAtIndexPaths:@[path] withRowAnimation:UITableViewRowAnimationNone];
-          [self.tableView endUpdates];
-        };
+        dropdown_table.completed = ^{ [self reloadRowAtIndexPath:path withRowAnimation:UITableViewRowAnimationNone]; };
         dropdowns.push_back(dropdown_table);
       }
     }
@@ -579,11 +580,44 @@ static std::vector<UIImage*> app_images;
         [cell.contentView addSubview:segmented_control];
         [segmented_control release]; 
 
-      } else if (type == LFL::TableItem::Picker) {
-        std::vector<std::vector<std::string>> col;
-        [IOSFontPicker getSystemFonts: &LFL::PushBack(col, {})];
-        IOSPicker *picker = [[IOSPicker alloc] initWithColumns: move(col)];
+      } else if (type == LFL::TableItem::Picker || type == LFL::TableItem::FontPicker) {
+        LFL::PickerItem item;
+        int row = path.row, section = path.section;
+        if (type == LFL::TableItem::Picker) item = *compiled_item.picker;
+        else {
+          [IOSFontPicker getSystemFonts:     &LFL::PushBack(item.data, {})];
+          [IOSFontPicker getSystemFontSizes: &LFL::PushBack(item.data, {})];
+          auto fontdesc = &LFL::app->focused->default_font.desc;
+          item.cb = [=](LFL::PickerItem *x) -> bool {
+            fontdesc->name =           x->data[0][x->picked[0]];
+            fontdesc->size = LFL::atoi(x->data[1][x->picked[1]]);
+          };
+        }
+
+        item.cb = [=](LFL::PickerItem *x) -> bool {
+          if (item.cb) item.cb(x);
+          data[section].item[row].hidden = true;
+          [self.tableView beginUpdates];
+          [self.tableView reloadRowsAtIndexPaths:@[[NSIndexPath indexPathForRow:row inSection:section]]
+            withRowAnimation:UITableViewRowAnimationNone];
+          if (row > 0) {
+            LFL::string v;
+            for (int i=0, l=x->picked.size(); i!=l; ++i)
+              LFL::StrAppend(&v, v.size() ? " " : "", x->data[i][x->picked[i]]);
+            data[section].item[row-1].val = move(v);
+            [self.tableView reloadRowsAtIndexPaths:@[[NSIndexPath indexPathForRow:row-1 inSection:section]]
+             withRowAnimation:UITableViewRowAnimationTop];
+          }
+          [self.tableView endUpdates];
+          return false;
+        };
+        IOSPicker *picker = [[IOSPicker alloc] initWithColumns: move(item)];
+        if (type == LFL::TableItem::FontPicker) {
+          auto fontdesc = &LFL::app->focused->default_font.desc;
+          [IOSFontPicker selectFont:fontdesc->name withPicker:picker size:fontdesc->size];
+        }
         [cell.contentView addSubview:picker];
+        compiled_item.height = picker.frame.size.height;
 
       } else if (type == LFL::TableItem::Button) {
         cell.textLabel.text = LFL::MakeNSString(*k);
@@ -703,9 +737,17 @@ static std::vector<UIImage*> app_images;
     [self checkExists:path.section row:path.row];
     _selected_row = path.row;
     _selected_section = path.section;
-    const auto &compiled_item = data[path.section].item[path.row];
-    if (compiled_item.type == LFL::TableItem::Command || compiled_item.type == LFL::TableItem::Button)
+    auto &compiled_item = data[path.section].item[path.row];
+    if (compiled_item.type == LFL::TableItem::Command || compiled_item.type == LFL::TableItem::Button) {
       compiled_item.cb();
+    } else if (compiled_item.type == LFL::TableItem::Label && path.row + 1 < data[path.section].item.size()) {
+      auto &next_compiled_item = data[path.section].item[path.row+1];
+      if (next_compiled_item.type == LFL::TableItem::Picker ||
+          next_compiled_item.type == LFL::TableItem::FontPicker) {
+        next_compiled_item.hidden = !next_compiled_item.hidden;
+        [self reloadRowAtIndexPath:path withRowAnimation:UITableViewRowAnimationNone];
+      }
+    }
     if (_modal_nav) {
       [self show: false];
       if (_changed) {
@@ -822,6 +864,12 @@ static std::vector<UIImage*> app_images;
         [self.tableView reloadRowsAtIndexPaths:@[p] withRowAnimation:UITableViewRowAnimationNone];
       }
     });
+  }
+
+  - (void)reloadRowAtIndexPath:(NSIndexPath*)path withRowAnimation:(UITableViewRowAnimation)animation {
+    [self.tableView beginUpdates];
+    [self.tableView reloadRowsAtIndexPaths:@[path] withRowAnimation:animation];
+    [self.tableView endUpdates];
   }
 @end
 
@@ -1059,6 +1107,7 @@ void Application::HideAds() {}
 int Application::LoadSystemImage(const string &n) {
   UIImage *image = [UIImage imageNamed:MakeNSString(n)];
   if (!image) return 0;
+  [image retain];
   app_images.push_back(image);
   return app_images.size();
 }

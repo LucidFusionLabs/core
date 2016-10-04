@@ -111,3 +111,6 @@
 [submodule "imports/crittercism"]
 	path = imports/crittercism
 	url = https://github.com/LucidFusionLabs/crittercism
+[submodule "imports/hockeyapp"]
+	path = imports/hockeyapp
+	url = https://github.com/LucidFusionLabs/hockeyapp

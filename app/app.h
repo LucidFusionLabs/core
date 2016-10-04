@@ -412,10 +412,17 @@ struct MenuItem { string shortcut, name; Callback cb; };
 struct AlertItem { string first, second; StringCB cb; };
 struct PanelItem { string type; Box box; StringCB cb; };
 
+struct PickerItem {
+  typedef function<bool(PickerItem*)> CB;
+  vector<vector<string>> data;
+  vector<int> picked;
+  CB cb;
+};
+
 struct TableItemChild {
   struct Dep { int section, row; string val; bool hidden; int left_icon, right_icon; string key; Callback cb; };
   enum { None=0, Label=1, Separator=2, Command=3, Button=4, Toggle=5, Selector=6, Picker=7,
-    Dropdown=8, FixedDropdown=9, TextInput=10, NumberInput=11, PasswordInput=12 }; 
+    Dropdown=8, FixedDropdown=9, TextInput=10, NumberInput=11, PasswordInput=12, FontPicker=13 }; 
   typedef unordered_map<string, vector<Dep>> Depends;
   string key;
   int type;
@@ -423,14 +430,15 @@ struct TableItemChild {
   int tag, left_icon, right_icon;
   Callback cb, right_icon_cb;
   Depends depends;
-  bool hidden=false;
-  int ref=-1;
+  bool hidden;
+  PickerItem *picker;
+  int ref=-1, height=0;
   bool loaded=0, gui_loaded=0;
   virtual ~TableItemChild() {}
   TableItemChild(string K=string(), int T=0, string V=string(), string RT=string(), int TG=0, int LI=0,
-                 int RI=0, Callback CB=Callback(), Callback RC=Callback(), Depends D=Depends()) :
-    key(move(K)), type(T), val(move(V)), right_text(move(RT)), tag(TG), left_icon(LI), right_icon(RI),
-    cb(move(CB)), right_icon_cb(move(RC)), depends(move(D)) {}
+                 int RI=0, Callback CB=Callback(), Callback RC=Callback(), Depends D=Depends(), bool H=false,
+                 PickerItem *P=0) : key(move(K)), type(T), val(move(V)), right_text(move(RT)), tag(TG),
+  left_icon(LI), right_icon(RI), cb(move(CB)), right_icon_cb(move(RC)), depends(move(D)), hidden(H), picker(P) {}
   void CheckAssign(const string &k, Callback c) { CHECK_EQ(k, key); cb=move(c); }
 };
 
@@ -438,12 +446,12 @@ struct TableItem : public TableItemChild {
   vector<TableItemChild> child;
   virtual ~TableItem() {}
   TableItem(string K=string(), int T=0, string V=string(), string RT=string(), int TG=0, int LI=0,
-            int RI=0, Callback CB=Callback(), Callback RC=Callback(), Depends D=Depends(),
-            vector<TableItemChild> C=vector<TableItemChild>()) :
-    TableItemChild(move(K), T, move(V), move(RT), TG, LI, RI, move(CB), move(RC), move(D)), child(move(C)) {}
+            int RI=0, Callback CB=Callback(), Callback RC=Callback(), Depends D=Depends(), bool H=false,
+            PickerItem *P=0, vector<TableItemChild> C=vector<TableItemChild>()) :
+    TableItemChild(move(K), T, move(V), move(RT), TG, LI, RI, move(CB), move(RC), move(D), H, P), child(move(C)) {}
   TableItem(TableItemChild &&x) :
     TableItemChild(move(x.key), x.type, move(x.val), move(x.right_text), x.tag, x.left_icon, x.right_icon,
-                   move(x.cb), move(x.right_icon_cb), move(x.depends)) {}
+                   move(x.cb), move(x.right_icon_cb), move(x.depends), x.hidden, x.picker) {}
   vector<TableItem> MoveChildren() { vector<TableItem> v; for (auto &c : child) v.emplace_back(move(c)); return v; }
 };
 

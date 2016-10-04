@@ -73,6 +73,7 @@ elseif(LFL_IOS)
     set(entitlements_plist ${CMAKE_CURRENT_SOURCE_DIR}/iphone-Entitlements.plist)
 
     add_custom_command(TARGET ${target} POST_BUILD WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+      COMMAND rm -rf ${pkgname}.dSYM
       COMMAND rm -rf i${pkgname}.app
       COMMAND mkdir  i${pkgname}.app
       COMMAND cp ${info_plist} i${pkgname}.app/Info.plist
@@ -83,6 +84,7 @@ elseif(LFL_IOS)
       COMMAND for d in ${CMAKE_CURRENT_SOURCE_DIR}/${target}-iphone/\*.lproj\;  do if [ -d $$d ]; then cp -R $$d i${pkgname}.app\; fi\; done
       COMMAND for d in ${CMAKE_CURRENT_SOURCE_DIR}/${target}-iphone/\*.bundle\; do if [ -d $$d ]; then cp -R $$d i${pkgname}.app\; fi\; done
       COMMAND for f in ${CMAKE_CURRENT_SOURCE_DIR}/${target}-iphone/Resources/\*\; do o=`basename $$f | sed s/xib$$/nib/`\; ${LFL_APPLE_DEVELOPER}/usr/bin/ibtool --warnings --errors --notices --compile ${CMAKE_CURRENT_BINARY_DIR}/i${pkgname}.app/$$o $$f\; done
+      COMMAND dsymutil ${target} -o ${pkgname}.dSYM
       COMMAND cp ${target} i${pkgname}.app
       COMMAND if ! [ ${LFL_IOS_SIM} ]\; then codesign -f -s \"${LFL_IOS_CERT}\" --entitlements ${entitlements_plist} i${pkgname}.app\; fi)
 
@@ -91,6 +93,9 @@ elseif(LFL_IOS)
       COMMAND mkdir -p Payload
       COMMAND cp -rp i${pkgname}.app Payload
       COMMAND zip -r i${pkgname}.ipa Payload)
+
+    add_custom_target(${target}_help WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+      COMMAND echo "Symbolicate with: atos -arch armv7 -o ./i${pkgname}.app/${target} -l 0xcc000 0x006cf99f")
 
     if(LFL_IOS_SIM)
       add_custom_target(${target}_run WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} DEPENDS ${target}

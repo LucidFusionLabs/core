@@ -49,6 +49,13 @@ if(LFL_CRITTERCISM AND (LFL_IOS OR LFL_OSX))
                  LINK_LIBRARIES ${CRITTERCISM_LIB} "-framework SystemConfiguration")
 endif()
 
+if(LFL_HOCKEYAPP AND LFL_IOS)
+  lfl_add_target(app_hockeyapp_crashreporting STATIC_LIBRARY SOURCES hockeyapp_crashreporting.mm
+                 COMPILE_OPTIONS -fobjc-abi-version=2 -fobjc-legacy-dispatch
+                 INCLUDE_DIRECTORIES ${HOCKEYAPP_INCLUDE}
+                 LINK_LIBRARIES ${HOCKEYAPP_LIB} "-framework SystemConfiguration")
+endif()
+
 if(LFL_LINUX)
   lfl_add_target(app_linux_os STATIC_LIBRARY SOURCES linux_os.cpp
                  LINK_LIBRARIES -lutil -lz -lpng -lpthread -ldl -lbz2)
