@@ -214,6 +214,7 @@ using LFL_STL11_NAMESPACE::is_signed;
 using LFL_STL11_NAMESPACE::is_pod;
 using LFL_STL11_NAMESPACE::make_unsigned;
 using LFL_STL11_NAMESPACE::make_signed;
+using LFL_STL11_NAMESPACE::make_unique;
 using LFL_STL11_NAMESPACE::make_shared;
 using LFL_STL11_NAMESPACE::make_tuple;
 using LFL_STL11_NAMESPACE::isinf;
@@ -417,6 +418,9 @@ struct PickerItem {
   vector<vector<string>> data;
   vector<int> picked;
   CB cb;
+  string Picked(int i) const { return data[i][picked[i]]; }
+  string PickedString() const
+  { string v; for (int i=0, l=data.size(); i!=l; ++i) StrAppend(&v, i ? " " : "", Picked(i)); return v; }
 };
 
 struct TableItemChild {
@@ -813,6 +817,7 @@ struct SystemTableView {
   void SetValue(int section, int row, const string &val);
   void SetHidden(int section, int row, bool val);
   void SetTitle(const string &title);
+  PickerItem *GetPicker(int section, int row);
   void SelectRow(int section, int row);
   StringPairVec GetSectionText(int section);
   bool GetSectionText(int section, vector<string*> out, bool check=1) { return GetPairValues(GetSectionText(section), move(out), check); }

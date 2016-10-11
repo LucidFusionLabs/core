@@ -20,12 +20,6 @@
 #define LFL_CORE_APP_TYPES_TYPES_H__
 
 namespace LFL {
-#ifdef LFL_WINDOWS
-using LFL_STL11_NAMESPACE::make_unique;
-#else
-template<typename T, typename ...Args>
-unique_ptr<T> make_unique(Args&& ...args) { return unique_ptr<T>(new T(forward<Args>(args)...)); }
-#endif
 template <class X> typename make_unsigned<X>::type *MakeUnsigned(X *x) { return reinterpret_cast<typename make_unsigned<X>::type*>(x); }
 template <class X> typename make_signed  <X>::type *MakeSigned  (X *x) { return reinterpret_cast<typename make_signed  <X>::type*>(x); }
 inline       char *MakeSigned(      unsigned char *x) { return reinterpret_cast<      char*>(x); }

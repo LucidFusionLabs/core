@@ -556,6 +556,7 @@ inline string Split(const StringPiece &in, int (*ischar)(int)) { string ret; Spl
 vector<string> Split(const string&, char delim);
 void Join(string *out, const vector<string> &in);
 void Join(string *out, const vector<string> &in, int inB, int inE);
+void Join(vector<string> *out, const vector<string> &in, const string &separator, bool left_or_right); 
 string Join(const vector<const char *> &strs, const string &separator);
 string Join(const vector<string> &strs, const string &separator);
 string Join(const vector<string> &strs, const string &separator, int beg_ind, int end_ind);

@@ -82,6 +82,13 @@ Box::Box(const float *v4, bool round) {
   else       { x=   int(v4[0]); y=   int(v4[1]); w=   int(v4[2]); h=   int(v4[3]); }
 }
 
+Box Box::FromString(const string &v) {
+  Box box;
+  StringWordIter csv(v, iscomma);
+  csv.ScanN(&box.x, 4);
+  return box;
+}
+
 string Box::DebugString() const { return StringPrintf("Box = { %d, %d, %d, %d }", x, y, w, h); }
 
 float Box::ScrollCrimped(float tex0, float tex1, float scroll, float *min, float *mid1, float *mid2, float *max) {

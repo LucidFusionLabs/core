@@ -208,6 +208,7 @@ static std::vector<UIImage*> app_images;
   {
     LFL::PickerItem item;
   }
+  - (LFL::PickerItem*)getItem;
 @end
 
 @implementation IOSPicker
@@ -230,6 +231,7 @@ static std::vector<UIImage*> app_images;
     if (item.cb) { if (item.cb(&item)) [self removeFromSuperview]; }
   }
 
+  - (LFL::PickerItem*)getItem { return &item; }
   - (NSInteger)numberOfComponentsInPickerView:(UIPickerView *)pickerView { return item.data.size(); }
   - (NSInteger)pickerView:(UIPickerView *)pickerView numberOfRowsInComponent:(NSInteger)component { 
     CHECK_RANGE(component, 0, item.data.size());
@@ -240,6 +242,18 @@ static std::vector<UIImage*> app_images;
     CHECK_RANGE(component, 0, item.data.size());
     CHECK_RANGE(row, 0, item.data[component].size());
     return [NSString stringWithUTF8String: item.data[component][row].c_str()];
+  }
+
+  - (void)selectRows:(const LFL::StringVec&)v {
+    if (item.picked.size() != item.data.size()) item.picked.resize(item.data.size());
+    CHECK_EQ(item.picked.size(), v.size());
+    for (int col=0, l=v.size(); col != v.size(); ++col) {
+      const LFL::string &name = v[col];
+      for (auto b = item.data[col].begin(), e = item.data[col].end(), i = b; i != e; ++i) {
+        if (*i == name) { item.picked[col] = i - b; break; }
+      }
+      [self selectRow:item.picked[col] inComponent:col animated:NO];
+    }
   }
 @end
 
@@ -257,9 +271,9 @@ static std::vector<UIImage*> app_images;
       font_change_cb(LFL::StringVec{x->data[0][x->picked[0]], x->data[1][x->picked[1]]});
       return true;
     };
+    [IOSFontPicker getSystemFonts:     &LFL::PushBack(p.data, {})];
+    [IOSFontPicker getSystemFontSizes: &LFL::PushBack(p.data, {})];
     self = [super initWithColumns: move(p)];
-    [IOSFontPicker getSystemFonts:     &LFL::PushBack(item.data, {})];
-    [IOSFontPicker getSystemFontSizes: &LFL::PushBack(item.data, {})];
     return self;
   }
 
@@ -280,13 +294,8 @@ static std::vector<UIImage*> app_images;
     for (int i=0; i<64; ++i) out->push_back(LFL::StrCat(i+1));
   }
 
-  + (void)selectFont:(const std::string &)name withPicker:(IOSPicker*)picker size:(int)s {
-    if (picker->item.picked.size() != picker->item.data.size()) picker->item.picked.resize(picker->item.data.size());
-    for (auto b = picker->item.data[0].begin(), e = picker->item.data[0].end(), i = b; i != e; ++i)
-      if (*i == name) { picker->item.picked[0] = i - b; break; }
-    picker->item.picked[1] = LFL::Clamp(s-1, 1, 64);
-    [picker selectRow:picker->item.picked[0] inComponent:0 animated:NO];
-    [picker selectRow:picker->item.picked[1] inComponent:1 animated:NO];
+  + (void)selectFont:(const std::string&)name withPicker:(IOSPicker*)picker size:(int)s {
+    [picker selectRows:LFL::StringVec{ name, LFL::StrCat(s) }];
   }
 @end
 
@@ -331,6 +340,18 @@ static std::vector<UIImage*> app_images;
     if (_style == "modal" || _style == "dropdown") {
       _modal_nav = [[UINavigationController alloc] initWithRootViewController: self];
       _modal_nav.modalTransitionStyle = UIModalTransitionStyleCoverVertical;
+    }
+
+    if (_second_col < 0) {
+      UIFont *font = [UIFont boldSystemFontOfSize:[UIFont labelFontSize]];
+      NSDictionary *attr = @{NSFontAttributeName:font, NSForegroundColorAttributeName:[UIColor blackColor]};
+      for (auto &d : data) {
+        for (auto &i : d.item) {
+          const CGSize size = [LFL::MakeNSString(i.key) sizeWithAttributes:attr];
+          if (size.width > _second_col) _second_col = size.width;
+        }
+      }
+      _second_col += 30;
     }
   }
 
@@ -381,12 +402,14 @@ static std::vector<UIImage*> app_images;
     [self checkExists:section row:r];
     auto &ci = data[section].item[r];
     ci.val = v;
-    if (ci.loaded && (ci.type == LFL::TableItem::Dropdown || ci.type == LFL::TableItem::FixedDropdown)) {
+    if (!ci.loaded) return;
+    if (ci.type == LFL::TableItem::Dropdown || ci.type == LFL::TableItem::FixedDropdown) {
       std::vector<std::string> vv=LFL::Split(v, ',');
       CHECK_RANGE(ci.ref, 0, dropdowns.size());
       auto dropdown_table = dropdowns[ci.ref];
       CHECK_EQ(dropdown_table->data[0].item.size(), vv.size()-1) << ": " << v;
       for (int j=1; j < vv.size(); ++j) dropdown_table->data[0].item[j-1].val = vv[j];
+    } else if (ci.type == LFL::TableItem::Picker) {
     }
   }
 
@@ -434,8 +457,8 @@ static std::vector<UIImage*> app_images;
   }
 
   - (CGRect)getCellFrame {
-    if (_second_col) return CGRectMake(_second_col, 10, self.tableView.frame.size.width - _second_col - 30, 30);
-    else             return CGRectMake(0, 0, 150, 30);
+    if (_second_col) return CGRectMake(_second_col, 0, self.tableView.frame.size.width - _second_col - 30, 44);
+    else             return CGRectMake(0, 0, 150, 44);
   }
   
   - (void)clearNavigationButton:(int)align {
@@ -495,29 +518,37 @@ static std::vector<UIImage*> app_images;
     UITableViewCell *cell = [self.tableView dequeueReusableCellWithIdentifier:cellIdentifier];
     if (cell) { [cell release]; cell = nil; }
     if (cell == nil) {
-      CHECK_LT(path.section, data.size());
-      CHECK_LT(path.row, data[path.section].item.size());
+      int type = 0, row = path.row, section = path.section;
+      CHECK_LT(section, data.size());
+      CHECK_LT(row, data[section].item.size());
       cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:cellIdentifier];
       cell.selectionStyle = UITableViewCellSelectionStyleNone;
-      int type=0;
+
       const std::string *k=0, *v=0;
-      auto &compiled_item = data[path.section].item[path.row];
+      auto &compiled_item = data[section].item[row];
       [self loadCellItem:cell withPath:path withItem:&compiled_item outK:&k outT:&type outV:&v];
       compiled_item.gui_loaded = true;
+      UIColor *blue = [UIColor colorWithRed:0.0/255 green:122.0/255 blue:255.0/255 alpha:1];
 
       if (compiled_item.type == LFL::TableItem::Dropdown) {
         UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
-        [button setTitle:@"\U000002C5" forState:UIControlStateNormal];
-        button.frame = CGRectMake(_second_col - 10, 10, 10, 30.0);
-        [button setTitleColor:[UIColor blueColor] forState:UIControlStateNormal];
+        button.frame = CGRectMake(0, 0, _second_col, 40.0);
         [button addTarget:self action:@selector(dropDownClicked:) forControlEvents:UIControlEventTouchUpInside];
         [button setTag: compiled_item.ref];
         [cell.contentView addSubview: button];
+        cell.textLabel.textColor = blue;
+        UILabel *label = [[UILabel alloc] initWithFrame: CGRectMake(_second_col - 10, 0, 10, 44.0)];
+        label.textColor = blue;
+        label.text = @"\U000002C5";
+        [cell.contentView addSubview: label];
+        [label release];
       }
 
-      if (int icon = compiled_item.left_icon) {
-        CHECK_LE(icon, app_images.size());
-        cell.imageView.image = app_images[icon - 1]; 
+      if (type != LFL::TableItem::Button) {
+        if (int icon = compiled_item.left_icon) {
+          CHECK_LE(icon, app_images.size());
+          cell.imageView.image = app_images[icon - 1]; 
+        }
       }
 
       bool textinput=0, numinput=0, pwinput=0;
@@ -543,27 +574,12 @@ static std::vector<UIImage*> app_images;
         else if (v->size())                              [textfield setText:        LFL::MakeNSString(*v)];
 
         cell.textLabel.text = LFL::MakeNSString(*k);
-
-#if 0
-        // if SSH label, change style to hyperlink for tapping into protocol settings
-        if ([cell.textLabel.text isEqualToString:@"SSH"]) {
-          // set color to blue and underline 
-//          UIColor *specialBlueColor = [UIColor colorWithRed:33/255 blue:119/255 green:247/255 alpha:1.0f];
-          UIColor *specialBlueColor = [UIColor blueColor];
-          cell.textLabel.attributedText = [[NSAttributedString alloc] initWithString:@"SSH" attributes:@{ 
-              NSForegroundColorAttributeName : specialBlueColor,
-              NSUnderlineColorAttributeName  : specialBlueColor,
-              NSUnderlineStyleAttributeName  : @(NSUnderlineStyleSingle)
-          }];
-        }
-#endif
-
         if (_second_col) [cell.contentView addSubview: textfield];
         else {
           textfield.textAlignment = NSTextAlignmentRight;
           cell.accessoryView = textfield;
         }
-        if (path.section == _selected_section && path.row == _selected_row) [textfield becomeFirstResponder];
+        if (section == _selected_section && row == _selected_row) [textfield becomeFirstResponder];
         [textfield release];
 
       } else if (type == LFL::TableItem::Selector) {
@@ -582,46 +598,49 @@ static std::vector<UIImage*> app_images;
 
       } else if (type == LFL::TableItem::Picker || type == LFL::TableItem::FontPicker) {
         LFL::PickerItem item;
-        int row = path.row, section = path.section;
         if (type == LFL::TableItem::Picker) item = *compiled_item.picker;
         else {
           [IOSFontPicker getSystemFonts:     &LFL::PushBack(item.data, {})];
           [IOSFontPicker getSystemFontSizes: &LFL::PushBack(item.data, {})];
-          auto fontdesc = &LFL::app->focused->default_font.desc;
-          item.cb = [=](LFL::PickerItem *x) -> bool {
-            fontdesc->name =           x->data[0][x->picked[0]];
-            fontdesc->size = LFL::atoi(x->data[1][x->picked[1]]);
-          };
         }
-
         item.cb = [=](LFL::PickerItem *x) -> bool {
-          if (item.cb) item.cb(x);
-          data[section].item[row].hidden = true;
-          [self.tableView beginUpdates];
-          [self.tableView reloadRowsAtIndexPaths:@[[NSIndexPath indexPathForRow:row inSection:section]]
-            withRowAnimation:UITableViewRowAnimationNone];
-          if (row > 0) {
-            LFL::string v;
-            for (int i=0, l=x->picked.size(); i!=l; ++i)
-              LFL::StrAppend(&v, v.size() ? " " : "", x->data[i][x->picked[i]]);
-            data[section].item[row-1].val = move(v);
-            [self.tableView reloadRowsAtIndexPaths:@[[NSIndexPath indexPathForRow:row-1 inSection:section]]
-             withRowAnimation:UITableViewRowAnimationTop];
-          }
-          [self.tableView endUpdates];
+          [self pickerPicked:x withSection:section andRow:row];
           return false;
         };
+
+        int picker_cols = item.data.size();
         IOSPicker *picker = [[IOSPicker alloc] initWithColumns: move(item)];
-        if (type == LFL::TableItem::FontPicker) {
-          auto fontdesc = &LFL::app->focused->default_font.desc;
-          [IOSFontPicker selectFont:fontdesc->name withPicker:picker size:fontdesc->size];
+        if (row > 0) {
+          LFL::StringVec v, joined(picker_cols, "");
+          LFL::Split(data[section].item[row-1].val, LFL::isspace, &v);
+          LFL::Join(&joined, v, " ", false); 
+          [picker selectRows: joined];
         }
         [cell.contentView addSubview:picker];
         compiled_item.height = picker.frame.size.height;
 
       } else if (type == LFL::TableItem::Button) {
-        cell.textLabel.text = LFL::MakeNSString(*k);
-        cell.textLabel.textAlignment = NSTextAlignmentCenter;
+        if (int icon = compiled_item.left_icon) {
+          CHECK_LE(icon, app_images.size());
+          UIImage *image = app_images[icon - 1]; 
+          IOSButton *button = [IOSButton buttonWithType:UIButtonTypeCustom];
+          [button addTarget:button action:@selector(buttonClicked:) forControlEvents:UIControlEventTouchUpInside];
+          button.cb = [=](){ data[section].item[row].cb(); };
+          button.frame = cell.frame;
+          int spacing = -10, target_height = 40, margin = fabs(button.frame.size.height - target_height) / 2;
+          // [button setFont:[UIFont boldSystemFontOfSize:[UIFont labelFontSize]]];
+          [button setTitleColor:blue forState:UIControlStateNormal];
+          [button setTitle:LFL::MakeNSString(*k) forState:UIControlStateNormal];
+          [button setImage:image forState:UIControlStateNormal];
+          button.imageView.contentMode = UIViewContentModeScaleAspectFit;
+          [button setTitleEdgeInsets:UIEdgeInsetsMake(0, spacing, 0, 0)];
+          [button setImageEdgeInsets:UIEdgeInsetsMake(margin, 0, margin, spacing)];
+          [cell.contentView addSubview:button];
+          [button release];
+        } else {
+          cell.textLabel.text = LFL::MakeNSString(*k);
+          cell.textLabel.textAlignment = NSTextAlignmentCenter;
+        }
 
       } else if (type == LFL::TableItem::Toggle) {
         UISwitch *onoff = [[UISwitch alloc] init];
@@ -762,7 +781,7 @@ static std::vector<UIImage*> app_images;
   - (void)show:(bool)show_or_hide {
     auto uiapp = [LFUIApplication sharedAppDelegate];
     if (show_or_hide) {
-      if (_modal_nav) [uiapp.top_controller presentModalViewController:self.modal_nav animated:YES];
+      if (_modal_nav) [uiapp.top_controller presentViewController:self.modal_nav animated:YES completion:nil];
       else            [uiapp.view addSubview: self.tableView];
     } else {
       if (_modal_nav) [uiapp.top_controller dismissViewControllerAnimated:YES completion:nil];
@@ -796,8 +815,30 @@ static std::vector<UIImage*> app_images;
     _lfl_self->changed = true;
   }
 
+  - (void)pickerPicked:(LFL::PickerItem*)x withSection:(int)section andRow:(int)row {
+    _lfl_self->changed = true;
+    data[section].item[row].hidden = true;
+    [self.tableView beginUpdates];
+    [self.tableView reloadRowsAtIndexPaths:@[[NSIndexPath indexPathForRow:row inSection:section]]
+      withRowAnimation:UITableViewRowAnimationNone];
+    if (row > 0) {
+      data[section].item[row-1].val = x->PickedString();
+      [self.tableView reloadRowsAtIndexPaths:@[[NSIndexPath indexPathForRow:row-1 inSection:section]]
+       withRowAnimation:UITableViewRowAnimationTop];
+    }
+    [self.tableView endUpdates];
+  }
+
   - (void)willMoveToParentViewController:(UIViewController *)parent {
     if (parent == nil && _lfl_self && _lfl_self->hide_cb) _lfl_self->hide_cb();
+  }
+
+  - (LFL::PickerItem*)getPicker:(int)section row:(int)r {
+    [self checkExists:section row:r];
+    NSIndexPath *path = [NSIndexPath indexPathForRow:r inSection:section];
+    UITableViewCell *cell = [self.tableView cellForRowAtIndexPath:path];
+    IOSPicker *picker_control = [[cell.contentView subviews] lastObject];
+    return [picker_control getItem];
   }
 
   - (LFL::StringPairVec)dumpDataForSection: (int)ind {
@@ -840,6 +881,9 @@ static std::vector<UIImage*> app_images;
       } else if (type == LFL::TableItem::Toggle) {
         UISwitch *onoff = (UISwitch*)cell.accessoryView;
         val = onoff.on ? "1" : "";
+      } else if (type == LFL::TableItem::Picker || type == LFL::TableItem::FontPicker) {
+        IOSPicker *picker_control = [[cell.contentView subviews] lastObject];
+        val = [picker_control getItem]->PickedString();
       }
       ret.emplace_back(*k, val);
     }
@@ -987,6 +1031,7 @@ void SystemTableView::SetTag(int section, int row, int val) { [FromVoid<IOSTable
 void SystemTableView::SetValue(int section, int row, const string &val) { [FromVoid<IOSTable*>(impl) setValue:section row:row val:val]; }
 void SystemTableView::SetHidden(int section, int row, bool val) { [FromVoid<IOSTable*>(impl) setHidden:section row:row val:val]; }
 void SystemTableView::SetTitle(const string &title) { FromVoid<IOSTable*>(impl).title = LFL::MakeNSString(title); }
+PickerItem *SystemTableView::GetPicker(int section, int row) { return [FromVoid<IOSTable*>(impl) getPicker:section row:row]; }
 StringPairVec SystemTableView::GetSectionText(int section) { return [FromVoid<IOSTable*>(impl) dumpDataForSection:section]; }
 void SystemTableView::SetEditableSection(int section, int start_row, LFL::IntIntCB cb) {
   FromVoid<IOSTable*>(impl).delete_row_cb = move(cb);

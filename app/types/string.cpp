@@ -441,6 +441,19 @@ void Join(string *out, const vector<string> &in, int inB, int inE) {
   int size = 0;        for (int i = inB; i < inE; i++) size += in[i].size();
   StrAppendInit(size); for (int i = inB; i < inE; i++) { StrCatAdd(in[i]); } StrAppendReturn();
 }
+void Join(vector<string> *out, const vector<string> &in, const string &separator, bool left_or_right) {
+  if (left_or_right) {
+    for (int ii=0, oi=0; oi<out->size(); oi++) {
+      if (ii >= in.size()) (*out)[oi] = "";
+      else (*out)[oi] = (oi < out->size()-1) ? in[ii++] : Join(in, " ", ii, in.size());
+    }
+  } else {
+    for (int ii=in.size()-1, oi=out->size()-1; oi>=0; oi--) {
+      if (ii < 0) (*out)[oi] = "";
+      else (*out)[oi] = (oi > 0) ? in[ii--] : Join(in, " ", 0, ii+1);
+    }
+  }
+}
 string Join(const vector<const char *> &strs, const string &separator) {
   string ret;
   for (auto &i : strs) StrAppend(&ret, ret.size()?separator:"", i);
