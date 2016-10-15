@@ -28,6 +28,7 @@ before_install:
 
 script:
   - if [ $TRAVIS_OS_NAME == linux ]; then mkdir linux; cd linux; fi
+  - export CC=clang-3.6 CXX=clang++-3.6
   - cmake ..
   - cd app_tests
   - make -j4 tests
