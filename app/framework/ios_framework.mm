@@ -75,7 +75,8 @@ static const char* const* ios_argv = 0;
 
 @implementation LFUIApplication
   {
-    CGFloat scale;
+    CGFloat scale, pinch_scale;
+    CGPoint pinch_point;
     CGRect keyboard_frame;
     bool want_extra_scale;
     int current_orientation, target_fps;
@@ -157,7 +158,6 @@ static const char* const* ios_argv = 0;
     INFOf("didFinishLaunchingWithOptions, views: %p, %p, %p, csf=%f", self.view, self.lview, self.rview, scale);
 
     [self.window makeKeyAndVisible];
-    [self initGestureRecognizers];
     return YES;
   }
 
@@ -273,40 +273,61 @@ static const char* const* ios_argv = 0;
     current_orientation = new_orientation;
   }
 
-  - (void)initGestureRecognizers {
+  - (void)initVerticalSwipeGestureRecognizers:(int)touches {
     UIWindow *win = [[[UIApplication sharedApplication] windows] objectAtIndex:0];
-    INFOf("UIWindow frame: %s", [NSStringFromCGRect(win.frame) UTF8String]);
-
-    UISwipeGestureRecognizer *up = [[UISwipeGestureRecognizer alloc] initWithTarget:self action:@selector(doubleSwipeUp:)];
+    UISwipeGestureRecognizer *up = [[UISwipeGestureRecognizer alloc] initWithTarget:self action:@selector(swipeUp:)];
     up.direction = UISwipeGestureRecognizerDirectionUp;
-    up.numberOfTouchesRequired = 2;
+    up.numberOfTouchesRequired = touches;
     [win addGestureRecognizer:up];
     [up release];
 
-    UISwipeGestureRecognizer *down = [[UISwipeGestureRecognizer alloc] initWithTarget:self action:@selector(doubleSwipeDown:)];
+    UISwipeGestureRecognizer *down = [[UISwipeGestureRecognizer alloc] initWithTarget:self action:@selector(swipeDown:)];
     down.direction = UISwipeGestureRecognizerDirectionDown;
-    down.numberOfTouchesRequired = 2;
+    down.numberOfTouchesRequired = touches;
     [win addGestureRecognizer:down];
     [down release];
-#if 0
-    // one-finger press and drag sends control stick movements- up, down, left, right
+  }
+
+  - (void)initHorizontalSwipeGestureRecognizers:(int)touches {
+    UIWindow *win = [[[UIApplication sharedApplication] windows] objectAtIndex:0];
+    UISwipeGestureRecognizer *left = [[UISwipeGestureRecognizer alloc] initWithTarget:self action:@selector(swipeLeft:)];
+    left.direction = UISwipeGestureRecognizerDirectionLeft;
+    left.numberOfTouchesRequired = touches;
+    [win addGestureRecognizer:left];
+    [left release];
+
+    UISwipeGestureRecognizer *right = [[UISwipeGestureRecognizer alloc] initWithTarget:self action:@selector(swipeRight:)];
+    right.direction = UISwipeGestureRecognizerDirectionRight;
+    right.numberOfTouchesRequired = touches;
+    [win addGestureRecognizer:right];
+    [right release];
+  }
+
+  - (void)initPanGestureRecognizers {
     UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(panGesture:)];
     pan.minimumNumberOfTouches = 1;
     pan.maximumNumberOfTouches = 1;
     [[LFUIApplication sharedAppDelegate].lview addGestureRecognizer:pan];
-    [pan release]; pan = nil;
+    [pan release];
 
     pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(panGesture:)];
     pan.minimumNumberOfTouches = 1;
     pan.maximumNumberOfTouches = 1;
     [[LFUIApplication sharedAppDelegate].rview addGestureRecognizer:pan];
-    [pan release]; pan = nil;
+    [pan release];
+  }
 
-    // one-finger hit sends jump movement
+  - (void)initTapGestureRecognizers {
     UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(tapGesture:)];
     [[LFUIApplication sharedAppDelegate].view addGestureRecognizer:tap];
     [tap release];
-#endif
+  }
+
+  - (void)initPinchGestureRecognizers {
+    UIWindow *win = [[[UIApplication sharedApplication] windows] objectAtIndex:0];
+    UIPinchGestureRecognizer *pinch = [[UIPinchGestureRecognizer alloc] initWithTarget:self action:@selector(pinchGesture:)];
+    [win addGestureRecognizer:pinch];
+    [pinch release];
   }
 
   - (void)shutdownGestureRecognizers {
@@ -316,8 +337,11 @@ static const char* const* ios_argv = 0;
       [win removeGestureRecognizer:[gestures objectAtIndex:i]];
   }
 
-  - (void)doubleSwipeUp:   (id)sender { if (auto s = LFL::app->focused) s->gesture_swipe_up   = 1; }
-  - (void)doubleSwipeDown: (id)sender { if (auto s = LFL::app->focused) s->gesture_swipe_down = 1; }
+  - (void)swipeUp:    (id)sender { LFL::point p(0,  1); if (LFL::app->input->MouseWheel(p, p) && _frame_on_mouse_input) [self.view setNeedsDisplay]; }
+  - (void)swipeDown:  (id)sender { LFL::point p(0, -1); if (LFL::app->input->MouseWheel(p, p) && _frame_on_mouse_input) [self.view setNeedsDisplay]; }
+  - (void)swipeLeft:  (id)sender { LFL::point p(-1, 0); if (LFL::app->input->MouseWheel(p, p) && _frame_on_mouse_input) [self.view setNeedsDisplay]; }
+  - (void)swipeRight: (id)sender { LFL::point p( 1, 0); if (LFL::app->input->MouseWheel(p, p) && _frame_on_mouse_input) [self.view setNeedsDisplay]; }
+
   - (void)tapGesture: (UITapGestureRecognizer *)tapGestureRecognizer {
     UIView *v = [tapGestureRecognizer view];
     CGPoint position = [tapGestureRecognizer locationInView:v];
@@ -360,6 +384,18 @@ static const char* const* ios_argv = 0;
         // INFOf("gest %f %f stop", position.x, position.y);
       }
     }
+  }
+
+  - (void)pinchGesture: (UIPinchGestureRecognizer*)pinch {
+    if (pinch.state == UIGestureRecognizerStateBegan) {
+      pinch_scale = 1.0;
+      pinch_point = [pinch locationInView: window];
+    }
+    CGFloat p_scale = 1.0 + (pinch_scale - pinch.scale);
+    LFL::v2 p(pinch_point.x, pinch_point.y), d(p_scale, p_scale);
+    int fired = LFL::app->input->MouseZoom(p, d);
+    if (fired && _frame_on_mouse_input) [self.view setNeedsDisplay];
+    pinch_scale = p_scale;
   }
 
   - (void)addMainWaitSocket:(int)fd callback:(std::function<bool()>)cb {
@@ -447,7 +483,7 @@ static const char* const* ios_argv = 0;
     if (auto s = LFL::app->focused) {
       s->gesture_dpad_x[dpind] = position.x;
       s->gesture_dpad_y[dpind] = position.y;
-      int fired = MouseClick(1, 1, (int)position.x, s->y + s->height - (int)position.y);
+      int fired = LFL::app->input->MouseClick(1, 1, LFL::point(position.x, s->y + s->height - (int)position.y));
       if (fired && uiapp.frame_on_mouse_input) [self.superview setNeedsDisplay];
     }
   }
@@ -534,7 +570,7 @@ void Application::ReleaseMouseFocus() {}
 
 string Application::GetClipboardText() { return [[UIPasteboard generalPasteboard].string UTF8String]; }
 void Application::SetClipboardText(const string &s) {
-  [UIPasteboard generalPasteboard].string = [NSString stringWithUTF8String:s.c_str()];
+  if (auto ns = MakeNSString(s)) [UIPasteboard generalPasteboard].string = ns;
 }
 
 void Application::OpenTouchKeyboard() { [[LFUIApplication sharedAppDelegate] showKeyboard]; }
@@ -552,6 +588,10 @@ int Application::SetExtraScale(bool v) { return [[LFUIApplication sharedAppDeleg
 void Application::SetDownScale(bool v) { [[LFUIApplication sharedAppDelegate] downScale:v]; }
 void Application::SetTitleBar(bool v) { [LFUIApplication sharedAppDelegate].title = true; }
 void Application::SetKeepScreenOn(bool v) {}
+void Application::SetVerticalSwipeRecognizer(int touches) { [[LFUIApplication sharedAppDelegate] initVerticalSwipeGestureRecognizers: touches]; }
+void Application::SetHorizontalSwipeRecognizer(int touches) { [[LFUIApplication sharedAppDelegate] initHorizontalSwipeGestureRecognizers: touches]; }
+void Application::SetPanRecognizer(bool enabled) { [[LFUIApplication sharedAppDelegate] initPanGestureRecognizers]; }
+void Application::SetPinchRecognizer(bool enabled) { [[LFUIApplication sharedAppDelegate] initPinchGestureRecognizers]; }
 
 void Window::SetResizeIncrements(float x, float y) {}
 void Window::SetTransparency(float v) {}

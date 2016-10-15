@@ -37,7 +37,7 @@ struct GUI {
   GUI *child_gui=0;
   bool active=0;
 
-  GUI(Window *R, const Box &B=Box()) : root(R), box(B) {}
+  GUI(Window *R, const Box &B=Box()) : root(R), box(B), mouse(this) {}
   virtual ~GUI() {}
 
   DrawableBoxArray *ResetGUI() { ClearGUI(); return &child_box; }
@@ -312,7 +312,7 @@ struct TextBox : public GUI, public TextboxController {
   RingVector<string> cmd_last;
   Color cmd_color=Color::white, selection_color=Color(Color::grey70, 0.5);
   bool deactivate_on_enter=0, token_processing=0, insert_mode=1, run_blank_cmd=0;
-  int start_line=0, end_line=0, start_line_adjust=0, skip_last_lines=0, default_attr=0, cmd_last_ind=-1, context_gui_ind=-1;
+  int start_line=0, end_line=0, start_line_adjust=0, skip_last_lines=0, default_attr=0, cmd_last_ind=-1, context_gui_ind=-1, wheel_gui_ind=-1;
   function<void(const Selection::Point&)> selection_cb;
   function<void(const shared_ptr<Control>&)> new_link_cb;
   function<void(Control*)> hover_control_cb;
@@ -380,7 +380,7 @@ struct TextArea : public TextBox {
   Lines line;
   LinesFrameBuffer line_fb;
   Time write_last=Time(0);
-  bool wrap_lines=1, write_timestamp=0, write_newline=1, reverse_line_fb=0, cursor_enabled=1;
+  bool wrap_lines=1, write_timestamp=0, write_newline=1, reverse_line_fb=0, cursor_enabled=1, touch_toggles_keyboard=0;
   int line_left=0, end_line_adjust=0, start_line_cutoff=0, end_line_cutoff=0;
   int extra_height=0, scroll_inc=10, scrolled_lines=0;
   float v_scrolled=0, h_scrolled=0, last_v_scrolled=0, last_h_scrolled=0;
@@ -431,6 +431,7 @@ struct TextArea : public TextBox {
   void CopyText(const Selection::Point &beg, const Selection::Point &end);
   string CopyText(int beg_line_ind, int beg_char_ind, int end_line_end, int end_char_ind, bool add_nl);
   void InitContextMenu(const MouseController::CB &cb) { context_gui_ind = mouse.AddRightClickBox(box, cb); }
+  void InitWheelMenu(const MouseController::CoordCB &cb) { wheel_gui_ind = mouse.AddWheelBox(box, cb); }
 };
 
 struct TextView : public TextArea {

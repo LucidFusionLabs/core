@@ -159,11 +159,11 @@ struct GraphicsContext {
   GraphicsDevice *gd;
   const Drawable::Attr *attr;
   GraphicsContext(GraphicsDevice *d=0, const Drawable::Attr *a=0) : gd(d), attr(a) {}
-  void DrawTexturedBox(const Box &b, const float *texcoord=0) { return DrawTexturedBox1(gd, b, texcoord); }
+  void DrawTexturedBox(const Box &b, const float *texcoord=0, int orientation=0) { return DrawTexturedBox1(gd, b, texcoord, orientation); }
   void DrawGradientBox(const Box &b, const Color *c) { return DrawGradientBox1(gd, b, c); }
   void DrawCrimpedBox(const Box &b, const float *tc, int o, float sx=0, float sy=0) { return DrawCrimpedBox1(gd, b, tc, o, sx, sy); }
   void DrawBox3(const Box3 &b, const point &p=point(), const Color *c=0) { return DrawTexturedBox3(gd, b, p, c); }
-  static void DrawTexturedBox1(GraphicsDevice*, const Box&, const float *texcoord=0);
+  static void DrawTexturedBox1(GraphicsDevice*, const Box&, const float *texcoord=0, int orientation=0);
   static void DrawGradientBox1(GraphicsDevice*, const Box&, const Color*);
   static void DrawCrimpedBox1(GraphicsDevice*, const Box&, const float *texcoord, int orientation, float scrollX=0, float scrollY=0);
   static void DrawTexturedBox3(GraphicsDevice*, const Box3&, const point &p=point(), const Color *c=0);
@@ -243,6 +243,7 @@ struct Texture : public Drawable {
   HBITMAP CreateGDIBitMap(HDC dc);
 #endif
   static void Coordinates(float *texcoord, int w, int h, int wd, int hd);
+  static void Coordinates(float *texcoord, const Box &b, int wd, int hd);
   static const int minx_coord_ind, miny_coord_ind, maxx_coord_ind, maxy_coord_ind;
   static const float unit_texcoord[4];
 };

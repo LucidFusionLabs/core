@@ -720,6 +720,10 @@ struct Application : public ::LFApp {
   void SetTouchKeyboardTiled(bool);
   void ToggleTouchKeyboard();
   void SetAutoRotateOrientation(bool);
+  void SetVerticalSwipeRecognizer(int touches);
+  void SetHorizontalSwipeRecognizer(int touches);
+  void SetPanRecognizer(bool enabled);
+  void SetPinchRecognizer(bool enabled);
 
   int SetMultisample(bool on);
   int SetExtraScale(bool on); /// e.g. Retina display

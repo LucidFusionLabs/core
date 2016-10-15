@@ -71,7 +71,7 @@ void Tiles::DrawBox(GraphicsContext *gc, const Drawable *d, const Box &b) {
 }
 
 void Tiles::DrawBackground(GraphicsDevice *gd, const Box &b) {
-  AddCallback(&b, bind(&GraphicsContext::DrawTexturedBox1, gd, b, NullPointer<float>()));
+  AddCallback(&b, bind(&GraphicsContext::DrawTexturedBox1, gd, b, NullPointer<float>(), 0));
 }
 
 void Tiles::AddScissor(const Box &b) {

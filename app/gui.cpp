@@ -663,6 +663,7 @@ void TextArea::Resized(const Box &b, bool font_size_changed) {
   SetDimension(b.w, b.h);
   if (selection.gui_ind >= 0) UpdateBox(Box(0,-b.h,b.w,b.h*2), -1, selection.gui_ind);
   if (context_gui_ind   >= 0) UpdateBox(Box(0,-b.h,b.w,b.h*2), -1, context_gui_ind);
+  if (wheel_gui_ind     >= 0) UpdateBox(Box(0,-b.h,b.w,b.h*2), -1, wheel_gui_ind);
   UpdateLines(last_v_scrolled, 0, 0, 0);
   UpdateCursor();
   Redraw(false, font_size_changed);
@@ -791,7 +792,7 @@ void TextArea::DrawHoverLink(const Box &b) {
     if (!i.w || !i.h) continue;
     point p = i.BottomLeft();
     p.y = outside_scroll_region ? (p.y + fb_h) : RingIndex::Wrap(p.y + line_fb.scroll.y * fb_h, fb_h);
-    glLine(root->gd, p + point(b.x, 0), point(i.BottomRight().x, p.y) + point(b.x, 0), &Color::white);
+    glLine(root->gd, p + point(b.x, b.y), point(i.BottomRight().x, p.y) + point(b.x, b.y), &Color::white);
   }
   if (hover_control_cb) hover_control_cb(hover_control);
 }
@@ -810,6 +811,9 @@ bool TextArea::GetGlyphFromCoordsOffset(const point &p, Selection::Point *out, i
 }
 
 void TextArea::InitSelection() {
+  wheel_gui_ind = mouse.AddWheelBox
+    (Box(), MouseController::CoordCB
+     ([=](int button, int x, int y, int down) { if (y > 0) ScrollUp(); else ScrollDown(); }));
   selection.gui_ind = mouse.AddDragBox
     (Box(), MouseController::CoordCB(bind(&TextArea::DragCB, this, _1, _2, _3, _4)));
 }
@@ -827,7 +831,8 @@ void TextArea::DragCB(int, int, int, int down) {
   if (down) {
     if (!Active()) Activate();
 #ifdef LFL_MOBILE
-    return app->ToggleTouchKeyboard();
+    if (touch_toggles_keyboard) app->ToggleTouchKeyboard();
+    return;
 #endif
   }
 

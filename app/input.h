@@ -42,7 +42,7 @@ struct Key {
 
 struct Mouse {
   struct Button { static const InputEvent::Id _1, _2; };
-  struct Event  { static const InputEvent::Id Motion, Wheel, Button1, Button2; };
+  struct Event  { static const InputEvent::Id Motion, Wheel, Zoom, Button1, Button2; };
   static InputEvent::Id ButtonID(int button);
 };
 
@@ -164,7 +164,7 @@ struct MouseController {
   typedef MouseControllerCallback::CB CB;
   typedef MouseControllerCallback::BoolCB BoolCB;
   typedef MouseControllerCallback::CoordCB CoordCB;
-  struct Event { enum { Click=1, RightClick=2, Hover=3, Drag=4 }; };
+  struct Event { enum { Click=1, RightClick=2, Hover=3, Drag=4, Wheel=5, Zoom=6 }; };
   struct HitBox {
     Box box;
     int evtype, val=0;
@@ -173,17 +173,22 @@ struct MouseController {
     HitBox(int ET=0, const Box &b=Box(), const MouseControllerCallback &cb=MouseControllerCallback()) : box(b), evtype(ET), CB(cb) {}
   };
 
+  GUI *parent_gui;
   IterableFreeListVector<HitBox, &HitBox::deleted> hit;
   unordered_set<int> drag;
   vector<int> hover;
 
+  MouseController(GUI *P=0) : parent_gui(P) {}
   virtual ~MouseController() { Clear(); }
   virtual void Clear() { hit.Clear(); }
   virtual int AddClickBox     (const Box &w, const MouseControllerCallback &cb) { return hit.Insert(HitBox(Event::Click,      w, cb)); }
   virtual int AddRightClickBox(const Box &w, const MouseControllerCallback &cb) { return hit.Insert(HitBox(Event::RightClick, w, cb)); }
+  virtual int AddZoomBox      (const Box &w, const MouseControllerCallback &cb) { return hit.Insert(HitBox(Event::Zoom,       w, cb)); }
+  virtual int AddWheelBox     (const Box &w, const MouseControllerCallback &cb) { return hit.Insert(HitBox(Event::Wheel,      w, cb)); }
   virtual int AddHoverBox     (const Box &w, const MouseControllerCallback &cb) { return hit.Insert(HitBox(Event::Hover,      w, cb)); }
   virtual int AddDragBox      (const Box &w, const MouseControllerCallback &cb) { return hit.Insert(HitBox(Event::Drag,       w, cb)); }
   virtual int SendMouseEvent(InputEvent::Id, const point &p, int down, int flag);
+  virtual int SendWheelEvent(InputEvent::Id, const v2 &p, const v2 &d) { return 0; }
 };
 
 struct DragTracker {
@@ -194,9 +199,14 @@ struct DragTracker {
 
 struct Input : public Module {
   struct InputCB {
-    enum { KeyPress=1, MouseClick=2, MouseMove=3, MouseWheel=4 };
-    int type, x, y, a, b;
-    InputCB(int T=0, int X=0, int Y=0, int A=0, int B=0) : type(T), x(X), y(Y), a(A), b(B) {}
+    enum { KeyPress=1, MouseClick=2, MouseMove=3, MouseWheel=4, MouseZoom=5 };
+    int type;
+    UNION Data {
+      struct { int   x, y, a, b; } iv;
+      struct { float x, y, a, b; } fv;
+    } data;
+    InputCB(int T=0, int X=0, int Y=0, int A=0, int B=0) : type(T) { data.iv.x=X; data.iv.y=Y; data.iv.a=A; data.iv.b=B; }
+    InputCB(int T, float X, float Y, float A, float B, bool round) : type(T) { data.fv.x=X; data.fv.y=Y; data.fv.a=A; data.fv.b=B; }
   };
 
   bool left_shift_down = 0, right_shift_down = 0, left_ctrl_down = 0, right_ctrl_down = 0;
@@ -209,6 +219,7 @@ struct Input : public Module {
   void QueueMouseClick(int button, bool down, const point &p);
   void QueueMouseMovement(const point &p, const point &d);
   void QueueMouseWheel(const point &p, const point &d);
+  void QueueMouseZoom(const v2 &p, const v2 &d);
 
   bool ShiftKeyDown() const { return left_shift_down || right_shift_down; }
   bool CtrlKeyDown() const { return left_ctrl_down || right_ctrl_down; }
@@ -223,6 +234,7 @@ struct Input : public Module {
   int KeyPress(int key, int mod, bool down);
   int KeyEventDispatch(InputEvent::Id event, bool down);
 
+  int MouseZoom(const v2 &p, const v2 &d);
   int MouseMove(const point &p, const point &d);
   int MouseWheel(const point &p, const point &d);
   int MouseClick(int button, bool down, const point &p);

@@ -163,27 +163,46 @@ void Material::SetMaterialColor(const Color &color) {
 
 /* GrahicsContext */
 
-void GraphicsContext::DrawTexturedBox1(GraphicsDevice *gd, const Box &b, const float *texcoord) {
+void GraphicsContext::DrawTexturedBox1(GraphicsDevice *gd, const Box &b, const float *texcoord, int orientation) {
   static const float default_texcoord[4] = {0, 0, 1, 1};
   const float *tc = X_or_Y(texcoord, default_texcoord);
 #if 1
-  float verts[] = { float(b.x),     float(b.y),     tc[Texture::minx_coord_ind], tc[Texture::miny_coord_ind],
-                    float(b.x),     float(b.y+b.h), tc[Texture::minx_coord_ind], tc[Texture::maxy_coord_ind],
-                    float(b.x+b.w), float(b.y),     tc[Texture::maxx_coord_ind], tc[Texture::miny_coord_ind],
-                    float(b.x),     float(b.y+b.h), tc[Texture::minx_coord_ind], tc[Texture::maxy_coord_ind],
-                    float(b.x+b.w), float(b.y),     tc[Texture::maxx_coord_ind], tc[Texture::miny_coord_ind],
-                    float(b.x+b.w), float(b.y+b.h), tc[Texture::maxx_coord_ind], tc[Texture::maxy_coord_ind] };
-  bool changed = gd->VertexPointer(2, GraphicsDevice::Float, sizeof(float)*4, 0,               verts, sizeof(verts), NULL, true, GraphicsDevice::Triangles);
-  if (changed)   gd->TexPointer   (2, GraphicsDevice::Float, sizeof(float)*4, sizeof(float)*2, verts, sizeof(verts), NULL, false);
+#define DrawTexturedBoxTriangles(gd, v) \
+  bool changed = gd->VertexPointer(2, GraphicsDevice::Float, sizeof(float)*4, 0,               v, sizeof(v), NULL, true, GraphicsDevice::Triangles); \
+  if (changed)   gd->TexPointer   (2, GraphicsDevice::Float, sizeof(float)*4, sizeof(float)*2, v, sizeof(v), NULL, false); \
   if (1)         gd->DeferDrawArrays(GraphicsDevice::Triangles, 0, 6);
+
+  if (orientation == 0) {
+    float verts[] = { float(b.x),     float(b.y),     tc[Texture::minx_coord_ind], tc[Texture::miny_coord_ind],
+                      float(b.x),     float(b.y+b.h), tc[Texture::minx_coord_ind], tc[Texture::maxy_coord_ind],
+                      float(b.x+b.w), float(b.y),     tc[Texture::maxx_coord_ind], tc[Texture::miny_coord_ind],
+                      float(b.x),     float(b.y+b.h), tc[Texture::minx_coord_ind], tc[Texture::maxy_coord_ind],
+                      float(b.x+b.w), float(b.y),     tc[Texture::maxx_coord_ind], tc[Texture::miny_coord_ind],
+                      float(b.x+b.w), float(b.y+b.h), tc[Texture::maxx_coord_ind], tc[Texture::maxy_coord_ind] };
+    DrawTexturedBoxTriangles(gd, verts);
+  } else if (orientation == 1) {
+    float verts[] = { float(b.x),     float(b.y),     tc[Texture::minx_coord_ind], tc[Texture::maxy_coord_ind],
+                      float(b.x),     float(b.y+b.h), tc[Texture::minx_coord_ind], tc[Texture::miny_coord_ind],
+                      float(b.x+b.w), float(b.y),     tc[Texture::maxx_coord_ind], tc[Texture::maxy_coord_ind],
+                      float(b.x),     float(b.y+b.h), tc[Texture::minx_coord_ind], tc[Texture::miny_coord_ind],
+                      float(b.x+b.w), float(b.y),     tc[Texture::maxx_coord_ind], tc[Texture::maxy_coord_ind],
+                      float(b.x+b.w), float(b.y+b.h), tc[Texture::maxx_coord_ind], tc[Texture::miny_coord_ind] };
+    DrawTexturedBoxTriangles(gd, verts);
+  }
 #else
-  float verts[] = { float(x),   float(y),   tc[Texture::minx_coord_ind], tc[Texture::miny_coord_ind],
-                    float(x),   float(y+h), tc[Texture::minx_coord_ind], tc[Texture::maxy_coord_ind],
-                    float(x+w), float(y),   tc[Texture::maxx_coord_ind], tc[Texture::miny_coord_ind],
-                    float(x+w), float(y+h), tc[Texture::maxx_coord_ind], tc[Texture::maxy_coord_ind] };
-  bool changed = gd->VertexPointer(2, GraphicsDevice::Float, sizeof(float)*4, 0,               verts, sizeof(verts), NULL, true, GraphicsDevice::TriangleStrip);
-  if  (changed)  gd->TexPointer   (2, GraphicsDevice::Float, sizeof(float)*4, sizeof(float)*2, verts, sizeof(verts), NULL, false);
+#define DrawTexturedBoxTriangleStrip(gd, v) \
+  bool changed = gd->VertexPointer(2, GraphicsDevice::Float, sizeof(float)*4, 0,               verts, sizeof(verts), NULL, true, GraphicsDevice::TriangleStrip); \
+  if  (changed)  gd->TexPointer   (2, GraphicsDevice::Float, sizeof(float)*4, sizeof(float)*2, verts, sizeof(verts), NULL, false); \
   if (1)         gd->DeferDrawArrays(GraphicsDevice::TriangleStrip, 0, 4);
+
+  if (orientation == 0) {
+    float verts[] = { float(x),   float(y),   tc[Texture::minx_coord_ind], tc[Texture::miny_coord_ind],
+                      float(x),   float(y+h), tc[Texture::minx_coord_ind], tc[Texture::maxy_coord_ind],
+                      float(x+w), float(y),   tc[Texture::maxx_coord_ind], tc[Texture::miny_coord_ind],
+                      float(x+w), float(y+h), tc[Texture::maxx_coord_ind], tc[Texture::maxy_coord_ind] };
+    DrawTexturedBoxTriangleStrip(gd, verts);
+  } else if (orientation == 1) {
+  }
 #endif
 }
 
@@ -330,10 +349,19 @@ int Texture::GLBufferType() const {
   return pf == preferred_pf ? GraphicsDevice::GLPreferredBuffer : GraphicsDevice::UnsignedByte;
 }
 
-void Texture::Coordinates(float *texcoord, int w, int h, int wd, int hd) {
-  texcoord[minx_coord_ind] = texcoord[miny_coord_ind] = 0;
-  texcoord[maxx_coord_ind] = float(w) / wd;
-  texcoord[maxy_coord_ind] = float(h) / hd;
+void Texture::Coordinates(float *texcoord, int w, int h, int wd, int hd) { return Coordinates(texcoord, Box(w,h), wd, hd); }
+void Texture::Coordinates(float *texcoord, const Box &b, int wd, int hd) {
+  if (!wd || !hd) {
+    texcoord[0] = unit_texcoord[0];
+    texcoord[1] = unit_texcoord[1];
+    texcoord[2] = unit_texcoord[2];
+    texcoord[3] = unit_texcoord[3];
+  } else {
+    texcoord[minx_coord_ind] = float(b.x)       / wd;
+    texcoord[miny_coord_ind] = float(b.y)       / hd;
+    texcoord[maxx_coord_ind] = float(b.x + b.w) / wd;
+    texcoord[maxy_coord_ind] = float(b.y + b.h) / hd;
+  }
 }
 
 void Texture::Resize(int W, int H, int PF, int flag) {
