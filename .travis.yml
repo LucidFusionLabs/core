@@ -20,8 +20,8 @@ before_install:
   - if [ $TRAVIS_OS_NAME == osx ]; then brew update && brew install llvm && brew install homebrew/versions/cmake30 && brew link --force llvm; fi
 
 install:
-  - if [ $TRAVIS_OS_NAME == linux ]; then sudo apt-get install -qq gcc-5.2 g++-5.2; fi
-  - if [ $TRAVIS_OS_NAME == linux ]; then sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-5.2 90; fi
+  - if [ $TRAVIS_OS_NAME == linux ]; then sudo apt-get install -qq gcc-5 g++-5; fi
+  - if [ $TRAVIS_OS_NAME == linux ]; then sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-5 90; fi
 
 script:
   - if [ $TRAVIS_OS_NAME == linux ]; then mkdir linux; cd linux; fi
