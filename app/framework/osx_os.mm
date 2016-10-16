@@ -310,7 +310,4 @@ string Application::GetSystemDeviceName() {
   return ret;
 }
 
-void Application::ShowAds() {}
-void Application::HideAds() {}
-
 }; // namespace LFL

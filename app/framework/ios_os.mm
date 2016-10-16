@@ -319,7 +319,7 @@ static std::vector<UIImage*> app_images;
     std::vector<LFL::Table> data;
     std::vector<IOSTable*> dropdowns;
   }
-  
+
   - (void)load:(LFL::SystemTableView*)lself withTitle:(const std::string&)title withStyle:(const std::string&)sty items:(const std::vector<LFL::TableItem>&)item {
     _lfl_self = lself;
     _style = sty;
@@ -363,10 +363,10 @@ static std::vector<UIImage*> app_images;
     [self.tableView insertRowsAtIndexPaths:@[path] withRowAnimation:UITableViewRowAnimationNone];
   }
 
-  - (void)replaceSection:(int)section items:(const std::vector<LFL::TableItem>&)item header:(const std::string&)h flag:(int)f addbutton:(LFL::Callback)addb {
+  - (void)replaceSection:(int)section items:(const std::vector<LFL::TableItem>&)item header:(const std::string&)h image:(int)im flag:(int)f addbutton:(LFL::Callback)addb {
     if (section == data.size()) data.emplace_back();
     CHECK_LT(section, data.size());
-    data[section] = LFL::Table(h, f, move(addb));
+    data[section] = LFL::Table(h, im, f, move(addb));
     for (auto &i : item) data[section].item.emplace_back(i);
     [self.tableView reloadSections:[NSIndexSet indexSetWithIndex: section]
       withRowAnimation:UITableViewRowAnimationNone];
@@ -704,14 +704,40 @@ static std::vector<UIImage*> app_images;
     return LFL::MakeNSString(data[section].header);
   }
 
-#if 1
+  - (CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section {
+    CHECK_LT(section, data.size());
+    if (int h = data[section].header_height) return h;
+    if (int image = data[section].image) {
+      UIImageView *image_view = [[UIImageView alloc] initWithImage: app_images[image - 1]];
+      data[section].header_height = 44 + image_view.frame.size.height;
+      [image_view release];
+      return data[section].header_height;
+    }
+    return UITableViewAutomaticDimension;
+  }
+
   - (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section {
     CHECK_LT(section, data.size());
     UIView *headerView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, tableView.frame.size.width, 44)];
-    UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(50, 11, tableView.frame.size.width-100, 21)];
-    label.text = LFL::MakeNSString(data[section].header);
-    label.textAlignment = NSTextAlignmentCenter;
-    [headerView addSubview:label];
+
+    if (int image = data[section].image) {
+      UIImageView *image_view = [[UIImageView alloc] initWithImage: app_images[image - 1]];
+      data[section].header_height = 44 + image_view.frame.size.height;
+      image_view.contentMode = UIViewContentModeCenter;
+      image_view.center = CGPointMake(headerView.frame.size.width/2, image_view.frame.size.height/2);
+      headerView.frame = CGRectMake(0, 0, tableView.frame.size.width, data[section].header_height);
+      [headerView addSubview: image_view];
+      [image_view release];
+    }
+
+    if (data[section].header.size()) {
+      UILabel *label = [[UILabel alloc] initWithFrame:
+        CGRectMake(50, headerView.frame.size.height-1-21-11, headerView.frame.size.width-100, 21)];
+      label.text = LFL::MakeNSString(data[section].header);
+      label.textAlignment = NSTextAlignmentCenter;
+      [headerView addSubview:label];
+      [label release];
+    }
 
     if (data[section].add_cb) {
       IOSButton *button = [IOSButton buttonWithType:UIButtonTypeSystem];
@@ -732,6 +758,7 @@ static std::vector<UIImage*> app_images;
     }
     return headerView;
   }
+
   - (void)toggleEditMode:(UIButton*)button {
     [self.tableView setEditing:!self.tableView.editing animated:YES];
     if (self.tableView.editing) [button setTitle:@"Done" forState:UIControlStateNormal];
@@ -739,7 +766,6 @@ static std::vector<UIImage*> app_images;
     [button sizeToFit];
     [button setFrame:CGRectMake(self.tableView.frame.size.width - button.frame.size.width - 11, 11, button.frame.size.width, 21)];
   }
-#endif
 
   - (BOOL)tableView:(UITableView *)tableView canEditRowAtIndexPath:(NSIndexPath *)path {
     return path.section == _editable_section;
@@ -917,6 +943,28 @@ static std::vector<UIImage*> app_images;
   }
 @end
 
+@interface IOSTextView : UIViewController<UITextViewDelegate>
+  @property (nonatomic, retain) UITextView *textView;
+  @property (nonatomic, retain) NSString *text;
+@end
+
+@implementation IOSTextView
+  - (id)initWithText:(NSString*)t {
+    self = [super init];
+    self.text = t;
+    return self;
+  }
+
+  - (void)viewDidLoad {
+    self.textView = [[[UITextView alloc] initWithFrame:self.view.frame] autorelease];
+    self.textView.delegate = self;
+    self.textView.textColor = [UIColor blackColor];
+    //self.textView.backgroundColor = [UIColor grayColor];
+    self.textView.text = self.text;
+    [self.view addSubview:self.textView];
+  }
+@end
+
 @interface IOSNavigation : NSObject<UINavigationControllerDelegate>
   @property (nonatomic, retain) UINavigationController *controller;
 @end
@@ -1048,8 +1096,14 @@ void SystemTableView::BeginUpdates() { [FromVoid<IOSTable*>(impl).tableView begi
 void SystemTableView::EndUpdates() { [FromVoid<IOSTable*>(impl).tableView endUpdates]; }
 void SystemTableView::SetDropdown(int section, int row, int val) { [FromVoid<IOSTable*>(impl) setDropdown:section row:row index:val]; }
 void SystemTableView::SetSectionValues(int section, const StringVec &item) { [FromVoid<IOSTable*>(impl) setSectionValues:section items:item]; }
-void SystemTableView::ReplaceSection(int section, const string &h, int flag, TableItemVec item, Callback add_button)
-{ [FromVoid<IOSTable*>(impl) replaceSection:section items:move(item) header:h flag:flag addbutton:move(add_button)]; }
+void SystemTableView::ReplaceSection(int section, const string &h, int image, int flag, TableItemVec item, Callback add_button)
+{ [FromVoid<IOSTable*>(impl) replaceSection:section items:move(item) header:h image:image flag:flag addbutton:move(add_button)]; }
+
+SystemTextView::~SystemTextView() { if (auto view = FromVoid<IOSTextView*>(impl)) [view release]; }
+SystemTextView::SystemTextView(File *f) : SystemTextView(f ? f->Contents() : "") {}
+SystemTextView::SystemTextView(const string &text) :
+  impl([[IOSTextView alloc] initWithText:[[[NSString alloc]
+       initWithBytes:text.data() length:text.size() encoding:NSASCIIStringEncoding] autorelease]]) {}
 
 SystemNavigationView::~SystemNavigationView() { if (auto nav = FromVoid<IOSNavigation*>(impl)) [nav release]; }
 SystemNavigationView::SystemNavigationView() : impl([[IOSNavigation alloc] init]) {}
@@ -1077,10 +1131,15 @@ SystemTableView *SystemNavigationView::Back() {
   return nullptr;
 }
 
-void SystemNavigationView::PushTable(SystemTableView *t) {
+void SystemNavigationView::PushTableView(SystemTableView *t) {
   if (!root) root = t;
   if (t->show_cb) t->show_cb();
   [FromVoid<IOSNavigation*>(impl).controller pushViewController: FromVoid<IOSTable*>(t->impl) animated: YES];
+}
+
+void SystemNavigationView::PushTextView(SystemTextView *t) {
+  if (t->show_cb) t->show_cb();
+  [FromVoid<IOSNavigation*>(impl).controller pushViewController: FromVoid<IOSTextView*>(t->impl) animated: YES];
 }
 
 void SystemNavigationView::PopToRoot() {
@@ -1094,7 +1153,7 @@ void SystemNavigationView::PopAll() {
   }
 }
 
-void SystemNavigationView::PopTable(int n) {
+void SystemNavigationView::PopView(int n) {
   for (int i = 0; i != n; ++i)
     [FromVoid<IOSNavigation*>(impl).controller popViewControllerAnimated: (i == n - 1)];
 }
@@ -1146,15 +1205,18 @@ bool Application::LoadKeychain(const string &keyname, string *val_out) {
   return   val_out->size();
 }
 
-void Application::ShowAds() {}
-void Application::HideAds() {}
-
 int Application::LoadSystemImage(const string &n) {
   UIImage *image = [UIImage imageNamed:MakeNSString(n)];
   if (!image) return 0;
   [image retain];
   app_images.push_back(image);
   return app_images.size();
+}
+
+string Application::GetVersion() {
+  NSDictionary *info = [[NSBundle mainBundle] infoDictionary];
+  NSString *version = [info objectForKey:@"CFBundleVersion"];
+  return version ? GetNSString(version) : "";
 }
 
 String16 Application::GetLocalizedString16(const char *key) { return String16(); }
@@ -1177,6 +1239,24 @@ string Application::GetLocalizedInteger(int number) {
     [formatter setLocale:[NSLocale autoupdatingCurrentLocale]];
   });
   return [[formatter stringFromNumber: [NSNumber numberWithLong:number]] UTF8String];
+}
+
+void Application::LoadDefaultSettings(const StringPairVec &v) {
+  NSMutableDictionary *defaults = [[NSMutableDictionary alloc] init];
+  for (auto &i : v) [defaults setValue:MakeNSString(i.second) forKey:MakeNSString(i.first)];
+  [[NSUserDefaults standardUserDefaults] registerDefaults:defaults];
+  [defaults release];
+}
+
+string Application::GetSetting(const string &key) {
+  if (auto v = [[NSUserDefaults standardUserDefaults] stringForKey:MakeNSString(key)]) return GetNSString(v);
+  else return "";
+}
+
+void Application::SaveSettings(const StringPairVec &v) {
+  NSUserDefaults* defaults = [NSUserDefaults standardUserDefaults];
+  for (auto &i : v) [defaults setObject:MakeNSString(i.second) forKey:MakeNSString(i.first)];
+  [defaults synchronize];
 }
 
 }; // namespace LFL

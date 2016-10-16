@@ -227,7 +227,8 @@ typedef V2<float> v2;
 typedef V2<int> point;
 typedef lock_guard<mutex> ScopedMutex;
 typedef vector<string> StringVec;
-typedef vector<pair<string, string>> StringPairVec;
+typedef pair<string, string> StringPair;
+typedef vector<StringPair> StringPairVec;
 typedef function<void()> Callback;
 typedef function<void(int)> IntCB;
 typedef function<void(int, int)> IntIntCB;
@@ -461,10 +462,10 @@ struct TableItem : public TableItemChild {
 
 struct Table {
   string header;
-  int flag;
+  int image, flag, header_height=0;
   Callback add_cb;
   vector<TableItem> item;
-  Table(string h="", int f=0, Callback c=Callback()) : header(move(h)), flag(f), add_cb(move(c)) {}
+  Table(string h="", int i=0, int f=0, Callback c=Callback()) : header(move(h)), image(i), flag(f), add_cb(move(c)) {}
 };
 
 typedef vector<MenuItem>  MenuItemVec;
@@ -731,12 +732,10 @@ struct Application : public ::LFApp {
   void SetTitleBar(bool on);
   void SetKeepScreenOn(bool on);
 
-  bool LoadKeychain(const string &key,       string *val);
+  bool LoadKeychain(const string &key, string *val);
   void SaveKeychain(const string &key, const string &val);
 
-  void ShowAds();
-  void HideAds();
-
+  string   GetVersion();
   string   GetLocalizedString   (const char *key);
   String16 GetLocalizedString16 (const char *key);
   string   GetLocalizedInteger  (int number);
@@ -760,10 +759,13 @@ struct Application : public ::LFApp {
     thread_pool.Write(new Callback(forward<Args>(args)...));
   } 
 
+  static StringPiece LoadResource(int id);
+  static void *GetSymbol(const string &n);
+  static string GetSetting(const string &key);
+  static void SaveSettings(const StringPairVec&);
+  static void LoadDefaultSettings(const StringPairVec&);
   static void Daemonize(const char *dir, const char *progname);
   static void Daemonize(FILE *fout, FILE *ferr);
-  static void *GetSymbol(const string &n);
-  static StringPiece LoadResource(int id);
   static void WriteLogLine(const char *tbuf, const char *message, const char *file, int line);
   static void WriteDebugLine(const char *message, const char *file, int line);
 };
@@ -832,7 +834,15 @@ struct SystemTableView {
   void AddRow(int section, TableItem item);
   void SetDropdown(int section, int row, int val);
   void SetSectionValues(int section, const StringVec&);
-  void ReplaceSection(int section, const string &h, int flag, TableItemVec item, Callback add_button=Callback());
+  void ReplaceSection(int section, const string &h, int image, int flag, TableItemVec item, Callback add_button=Callback());
+};
+
+struct SystemTextView {
+  VoidPtr impl;
+  Callback hide_cb, show_cb;
+  virtual ~SystemTextView();
+  SystemTextView(File *file);
+  SystemTextView(const string &text);
 };
 
 struct SystemNavigationView {
@@ -844,17 +854,25 @@ struct SystemNavigationView {
 
   SystemTableView *Back();
   void Show(bool show_or_hide);
-  void PushTable(SystemTableView*);
-  void PopTable(int num=1);
+  void PushTableView(SystemTableView*);
+  void PushTextView(SystemTextView*);
+  void PopView(int num=1);
   void PopToRoot();
   void PopAll();
+};
+
+struct SystemAdvertisingView {
+  VoidPtr impl;
+  SystemAdvertisingView();
+  void Show();
+  void Hide();
 };
 
 unique_ptr<Module> CreateFrameworkModule();
 unique_ptr<GraphicsDevice> CreateGraphicsDevice(Window*, int ver);
 unique_ptr<Module> CreateAudioModule(Audio*);
 unique_ptr<Module> CreateCameraModule(CameraState*);
-void InitCrashReporting(const string &id);
+void InitCrashReporting(const string &id, const string &name, const string &email);
 
 }; // namespace LFL
 #endif // LFL_CORE_APP_APP_H__

@@ -41,8 +41,8 @@ namespace LFL {
 void NSLogString(const string &text);
 string GetNSDocumentDirectory();
 
-inline string GetNSString(NSString *x) { return [x UTF8String]; }
-inline NSString *MakeNSString(const string &x) { return [NSString stringWithUTF8String: x.c_str()]; }
+inline string GetNSString(NSString *x) { return x ? string([x UTF8String]) : string(); }
+inline NSString *MakeNSString(const string &x) { return [[[NSString alloc] initWithBytes:x.data() length:x.size() encoding:NSUTF8StringEncoding] autorelease]; }
 NSArray *MakeNSStringArray(const vector<string>&);
 
 }; // namespace LFL
