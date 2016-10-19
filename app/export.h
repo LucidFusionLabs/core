@@ -257,9 +257,8 @@ struct NativeWindow {
   typed_ptr id, gl, surface, glew_context, impl, user1, user2, user3;
   int x, y, width, height, target_fps;
   bool started, minimized, cursor_grabbed, frame_init, animating;
-  int gesture_tap[2], gesture_dpad_stop[2];
-  float gesture_dpad_x[2], gesture_dpad_y[2], gesture_dpad_dx[2], gesture_dpad_dy[2], multitouch_keyboard_x;
   short resize_increment_x, resize_increment_y;
+  float multitouch_keyboard_x;
 };
 
 struct CameraState {

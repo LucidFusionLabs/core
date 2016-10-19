@@ -42,7 +42,9 @@ struct Key {
 
 struct Mouse {
   struct Button { static const InputEvent::Id _1, _2; };
-  struct Event  { static const InputEvent::Id Motion, Wheel, Zoom, Button1, Button2; };
+  struct Event  {
+    static const InputEvent::Id Motion, Motion2, Click, Click2, DoubleClick, DoubleClick2, Wheel, Zoom, Swipe; 
+  };
   static InputEvent::Id ButtonID(int button);
 };
 
@@ -187,8 +189,8 @@ struct MouseController {
   virtual int AddWheelBox     (const Box &w, const MouseControllerCallback &cb) { return hit.Insert(HitBox(Event::Wheel,      w, cb)); }
   virtual int AddHoverBox     (const Box &w, const MouseControllerCallback &cb) { return hit.Insert(HitBox(Event::Hover,      w, cb)); }
   virtual int AddDragBox      (const Box &w, const MouseControllerCallback &cb) { return hit.Insert(HitBox(Event::Drag,       w, cb)); }
-  virtual int SendMouseEvent(InputEvent::Id, const point &p, int down, int flag);
-  virtual int SendWheelEvent(InputEvent::Id, const v2 &p, const v2 &d) { return 0; }
+  virtual int SendMouseEvent(InputEvent::Id, const point &p, const point &d, int down, int flag);
+  virtual int SendWheelEvent(InputEvent::Id, const v2    &p, const v2    &d) { return 0; }
 };
 
 struct DragTracker {
@@ -199,7 +201,7 @@ struct DragTracker {
 
 struct Input : public Module {
   struct InputCB {
-    enum { KeyPress=1, MouseClick=2, MouseMove=3, MouseWheel=4, MouseZoom=5 };
+    enum { KeyPress=1, MouseClick=2, MouseMove=3, MouseWheel=4, MouseZoom=5, MouseSwipe=6 };
     int type;
     UNION Data {
       struct { int   x, y, a, b; } iv;
@@ -218,7 +220,8 @@ struct Input : public Module {
   void QueueKeyPress(int key, int mod, bool down);
   void QueueMouseClick(int button, bool down, const point &p);
   void QueueMouseMovement(const point &p, const point &d);
-  void QueueMouseWheel(const point &p, const point &d);
+  void QueueMouseSwipe(const point &p, const point &d);
+  void QueueMouseWheel(const v2 &p, const v2 &d);
   void QueueMouseZoom(const v2 &p, const v2 &d);
 
   bool ShiftKeyDown() const { return left_shift_down || right_shift_down; }
@@ -234,12 +237,13 @@ struct Input : public Module {
   int KeyPress(int key, int mod, bool down);
   int KeyEventDispatch(InputEvent::Id event, bool down);
 
-  int MouseZoom(const v2 &p, const v2 &d);
   int MouseMove(const point &p, const point &d);
-  int MouseWheel(const point &p, const point &d);
+  int MouseSwipe(const point &p, const point &d);
+  int MouseWheel(const v2 &p, const v2 &d);
+  int MouseZoom(const v2 &p, const v2 &d);
   int MouseClick(int button, bool down, const point &p);
-  int MouseEventDispatch(InputEvent::Id event, const point &p, int down);
-  int MouseEventDispatchGUI(InputEvent::Id event, const point &p, int down, GUI *g, int *active_guis);
+  int MouseEventDispatch(InputEvent::Id event, const point &p, const point &d, int down);
+  int MouseEventDispatchGUI(InputEvent::Id event, const point &p, const point &d, int down, GUI *g, int *active_guis);
 
   static point TransformMouseCoordinate(point p);
 };

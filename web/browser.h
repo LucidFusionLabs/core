@@ -31,10 +31,10 @@ struct BrowserController : public InputController {
   BrowserController(BrowserInterface *B) : browser(B) { active=1; }
   void Button(InputEvent::Id event, bool down) {
     int key = InputEvent::GetKey(event);
-    if (key)                                 browser->KeyEvent(key, down);
-    else if (event == Mouse::Event::Wheel)   browser->MouseWheel(0, down*32);
-    else if (event == Mouse::Event::Button2) browser->MouseButton(2, down, last_mx, last_my);
-    else if (event == Mouse::Event::Button1) {
+    if (key)                                browser->KeyEvent(key, down);
+    else if (event == Mouse::Event::Wheel)  browser->MouseWheel(0, down*32);
+    else if (event == Mouse::Event::Click2) browser->MouseButton(2, down, last_mx, last_my);
+    else if (event == Mouse::Event::Click) {
       Window *screen = app->focused;
       if (down) screen->active_textbox = 0;
       browser->MouseButton(1, down, screen->mouse.x, screen->mouse.y);

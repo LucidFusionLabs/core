@@ -893,6 +893,7 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
   Widget::Button gplus_signin_button, gplus_signout_button, gplus_quick, gplus_invite, gplus_accept;
 #endif
   Browser browser;
+  SystemAdvertisingView ads;
   MenuParticles particles;
   Entity *cam=0;
 
@@ -961,8 +962,8 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
     particles.texture = parts->ID;
   }
 
-  bool Activate  () { active=1; topbar.active=1; selected=last_selected=0; root->shell->mouseout(vector<string>()); app->HideAds(); return 1; }
-  bool Deactivate() { active=0; topbar.active=0; UpdateSettings(); tab3_player_name.Deactivate(); app->ShowAds(); return 1; }
+  bool Activate  () { active=1; topbar.active=1; selected=last_selected=0; root->shell->mouseout(vector<string>()); ads.Hide(); return 1; }
+  bool Deactivate() { active=0; topbar.active=0; UpdateSettings(); tab3_player_name.Deactivate(); ads.Show(); return 1; }
   bool DecayBoxIfMatch(int l1, int l2) { if (l1 != l2) return 0; decay_box_line = l1; decay_box_left = 10; return 1; }
   void UpdateSettings() {
     root->shell->Run(StrCat("name ", String::ToUTF8(tab3_player_name.Text16())));
@@ -1384,6 +1385,7 @@ struct GameMultiTouchControls {
   void Update(unsigned clicks) {
     Window *screen = app->focused;
     Entity *cam = &client->world->scene->cam;
+#if 0
     if (swipe_controls) {
       if (screen->gesture_dpad_stop[0]) dp0_x = dp0_y = 0;
       else if (screen->gesture_dpad_dx[0] || screen->gesture_dpad_dy[0]) {
@@ -1467,6 +1469,7 @@ struct GameMultiTouchControls {
         else if (!g1 && !g2) { rpad_down = DOWN;  }
       }
     }
+#endif
   }
 };
 }; // namespace LFL

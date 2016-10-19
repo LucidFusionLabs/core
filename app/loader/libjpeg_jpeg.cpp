@@ -33,7 +33,7 @@ static boolean JpegFillInputBuffer(j_decompress_ptr jds) {
   MyJpegSourceMgr *src = reinterpret_cast<MyJpegSourceMgr*>(jds->src);
   src->pub.next_input_byte = EOI_BUFFER;
   src->pub.bytes_in_buffer = 1;
-  return true;
+  return boolean(true);
 }
 
 static void JpegSkipInputData(j_decompress_ptr jds, long len) {
@@ -81,7 +81,7 @@ int JpegReader::Read(const string &data, Texture *out) {
 
   jpeg_create_decompress(&jds);
   JpegMemSrc(&jds, data.data(), data.size());
-  if (jpeg_read_header(&jds, 1) != 1) { jpeg_destroy_decompress(&jds); return ERRORv(-1, "jpeg decompress failed "); }
+  if (jpeg_read_header(&jds, boolean(true)) != 1) { jpeg_destroy_decompress(&jds); return ERRORv(-1, "jpeg decompress failed "); }
   jpeg_start_decompress(&jds);
 
   if      (jds.output_components == 1) out->pf = Pixel::GRAY8;
@@ -93,7 +93,7 @@ int JpegReader::Read(const string &data, Texture *out) {
   else if (jds.output_components == 4) out->pf = Pixel::RGBA;
   else { ERROR("unsupported jpeg components ", jds.output_components); jpeg_destroy_decompress(&jds); return -1; }
 
-#ifndef WIN32
+#ifdef JCS_EXTENSIONS
   if      (out->pf == Pixel::RGBA)  jds.out_color_space = JCS_EXT_RGBA;
   else if (out->pf == Pixel::BGRA)  jds.out_color_space = JCS_EXT_BGRA;
   else if (out->pf == Pixel::RGB24) jds.out_color_space = JCS_EXT_RGB;

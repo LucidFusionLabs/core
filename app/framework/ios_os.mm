@@ -780,6 +780,7 @@ static std::vector<UIImage*> app_images;
 
   - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)path {
     [self checkExists:path.section row:path.row];
+    [self.tableView deselectRowAtIndexPath:path animated:NO];
     _selected_row = path.row;
     _selected_section = path.section;
     auto &compiled_item = data[path.section].item[path.row];
@@ -949,8 +950,9 @@ static std::vector<UIImage*> app_images;
 @end
 
 @implementation IOSTextView
-  - (id)initWithText:(NSString*)t {
+  - (id)initWithTitle:(NSString*)title andText:(NSString*)t {
     self = [super init];
+    self.title = title;
     self.text = t;
     return self;
   }
@@ -1100,9 +1102,9 @@ void SystemTableView::ReplaceSection(int section, const string &h, int image, in
 { [FromVoid<IOSTable*>(impl) replaceSection:section items:move(item) header:h image:image flag:flag addbutton:move(add_button)]; }
 
 SystemTextView::~SystemTextView() { if (auto view = FromVoid<IOSTextView*>(impl)) [view release]; }
-SystemTextView::SystemTextView(File *f) : SystemTextView(f ? f->Contents() : "") {}
-SystemTextView::SystemTextView(const string &text) :
-  impl([[IOSTextView alloc] initWithText:[[[NSString alloc]
+SystemTextView::SystemTextView(const string &title, File *f) : SystemTextView(title, f ? f->Contents() : "") {}
+SystemTextView::SystemTextView(const string &title, const string &text) :
+  impl([[IOSTextView alloc] initWithTitle:MakeNSString(title) andText:[[[NSString alloc]
        initWithBytes:text.data() length:text.size() encoding:NSASCIIStringEncoding] autorelease]]) {}
 
 SystemNavigationView::~SystemNavigationView() { if (auto nav = FromVoid<IOSNavigation*>(impl)) [nav release]; }
@@ -1157,6 +1159,10 @@ void SystemNavigationView::PopView(int n) {
   for (int i = 0; i != n; ++i)
     [FromVoid<IOSNavigation*>(impl).controller popViewControllerAnimated: (i == n - 1)];
 }
+
+SystemAdvertisingView::SystemAdvertisingView() {}
+void SystemAdvertisingView::Show() {}
+void SystemAdvertisingView::Hide() {}
 
 void Application::ShowSystemFontChooser(const FontDesc &cur_font, const StringVecCB &cb) {
   static IOSFontPicker *font_chooser = [[IOSFontPicker alloc] init];
@@ -1248,9 +1254,9 @@ void Application::LoadDefaultSettings(const StringPairVec &v) {
   [defaults release];
 }
 
+string Application::GetSystemDeviceName() { return GetNSString([[UIDevice currentDevice] name]); }
 string Application::GetSetting(const string &key) {
-  if (auto v = [[NSUserDefaults standardUserDefaults] stringForKey:MakeNSString(key)]) return GetNSString(v);
-  else return "";
+  return GetNSString([[NSUserDefaults standardUserDefaults] stringForKey:MakeNSString(key)]);
 }
 
 void Application::SaveSettings(const StringPairVec &v) {

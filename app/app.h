@@ -563,7 +563,7 @@ struct Window : public ::NativeWindow {
   typedef function<int(Window*, unsigned, int)> FrameCB;
 
   GraphicsDevice *gd=0;
-  point mouse, mouse_wheel;
+  point mouse, mouse_v, mouse2, mouse2_v, mouse_wheel;
   string caption;
   Callback reshaped_cb;
   FrameCB frame_cb;
@@ -841,8 +841,8 @@ struct SystemTextView {
   VoidPtr impl;
   Callback hide_cb, show_cb;
   virtual ~SystemTextView();
-  SystemTextView(File *file);
-  SystemTextView(const string &text);
+  SystemTextView(const string &title, File *file);
+  SystemTextView(const string &title, const string &text);
 };
 
 struct SystemNavigationView {

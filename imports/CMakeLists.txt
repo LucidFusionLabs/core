@@ -78,7 +78,7 @@ endif()
 
 # jpeg
 if(LFL_JPEG)
-  if(WIN32)
+  if(WIN32 OR LFL_IOS)
     set(3P_LIBRARY_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR}/libjpeg)
     set(JPEG_LIBRARY libjpeg)
     add_subdirectory(OpenCV/3rdparty/libjpeg libjpeg)

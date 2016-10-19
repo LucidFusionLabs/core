@@ -78,6 +78,7 @@ string Application::GetClipboardText() { return ""; }
 void Application::SetClipboardText(const string &s) {}
 
 void Application::OpenTouchKeyboard() {}
+void Application::ToggleTouchKeyboard() {}
 void Application::SetTouchKeyboardTiled(bool v) {}
 void Application::SetAutoRotateOrientation(bool v) {}
 

@@ -277,9 +277,6 @@ endmacro()
 # app
 add_subdirectory(${LFL_SOURCE_DIR}/core/app)
 
-# app unit tests
-add_subdirectory(${LFL_SOURCE_DIR}/core/app_tests)
-
 # web
 add_subdirectory(${LFL_SOURCE_DIR}/core/web)
 

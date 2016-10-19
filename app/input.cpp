@@ -36,26 +36,34 @@ DEFINE_int(keyboard_repeat, 50, "Keyboard repeat in milliseconds");
 DEFINE_int(keyboard_delay, 180, "Keyboard delay until repeat in milliseconds");
 DEFINE_bool(input_debug, false, "Debug input events");
 
-const InputEvent::Id Key::Modifier::Shift  = 1LL<<32;
-const InputEvent::Id Key::Modifier::Ctrl   = 1LL<<33;
-const InputEvent::Id Key::Modifier::Cmd    = 1LL<<34;
-const InputEvent::Id Mouse::Button::_1     = 1LL<<35;
-const InputEvent::Id Mouse::Button::_2     = 1LL<<36;
-const InputEvent::Id MouseEvent            = 1LL<<37;
-const InputEvent::Id Mouse::Event::Motion  = MouseEvent+0;
-const InputEvent::Id Mouse::Event::Wheel   = MouseEvent+1;
-const InputEvent::Id Mouse::Event::Zoom    = MouseEvent+2;
-const InputEvent::Id Mouse::Event::Button1 = Mouse::Button::_1;
-const InputEvent::Id Mouse::Event::Button2 = Mouse::Button::_2;
+const InputEvent::Id Key::Modifier::Shift       = 1LL<<32;
+const InputEvent::Id Key::Modifier::Ctrl        = 1LL<<33;
+const InputEvent::Id Key::Modifier::Cmd         = 1LL<<34;
+const InputEvent::Id Mouse::Button::_1          = 1LL<<35;
+const InputEvent::Id Mouse::Button::_2          = 1LL<<36;
+const InputEvent::Id MouseEvent                 = 1LL<<37;
+const InputEvent::Id Mouse::Event::Motion       = MouseEvent+0;
+const InputEvent::Id Mouse::Event::Motion2      = MouseEvent+1;
+const InputEvent::Id Mouse::Event::Wheel        = MouseEvent+2;
+const InputEvent::Id Mouse::Event::Zoom         = MouseEvent+3;
+const InputEvent::Id Mouse::Event::Swipe        = MouseEvent+4;
+const InputEvent::Id Mouse::Event::Click        = Mouse::Button::_1;
+const InputEvent::Id Mouse::Event::Click2       = Mouse::Button::_2;
+const InputEvent::Id Mouse::Event::DoubleClick  = Mouse::Button::_1+1;
+const InputEvent::Id Mouse::Event::DoubleClick2 = Mouse::Button::_2+1;
 
 const char *InputEvent::Name(InputEvent::Id event) {
   switch (event) {
-    case Mouse::Event::Motion:  return "MouseMotion";
-    case Mouse::Event::Wheel:   return "MouseWheel";
-    case Mouse::Event::Zoom:    return "MouseZoom";
-    case Mouse::Event::Button1: return "MouseButton1";
-    case Mouse::Event::Button2: return "MouseButton2";
-    default:                    return "Unknown";
+    case Mouse::Event::Motion:       return "MouseMotion";
+    case Mouse::Event::Motion2:      return "MouseMotion2";
+    case Mouse::Event::Click:        return "Click";
+    case Mouse::Event::Click2:       return "Click2";
+    case Mouse::Event::DoubleClick:  return "DoubleClick";
+    case Mouse::Event::DoubleClick2: return "DoubleClick2";
+    case Mouse::Event::Wheel:        return "MouseWheel";
+    case Mouse::Event::Zoom:         return "MouseZoom";
+    case Mouse::Event::Swipe:        return "MouseSwipe";
+    default:                         return "Unknown";
   }
 }
 
@@ -224,7 +232,12 @@ void Input::QueueMouseMovement(const point &p, const point &d) {
   queued_input.emplace_back(InputCB::MouseMove, p.x, p.y, d.x, d.y);
 }
 
-void Input::QueueMouseWheel(const point &p, const point &d) {
+void Input::QueueMouseSwipe(const point &p, const point &d) {
+  ScopedMutex sm(queued_input_mutex);
+  queued_input.emplace_back(InputCB::MouseSwipe, p.x, p.y, d.x, d.y);
+}
+
+void Input::QueueMouseWheel(const v2 &p, const v2 &d) {
   ScopedMutex sm(queued_input_mutex);
   queued_input.emplace_back(InputCB::MouseWheel, p.x, p.y, d.x, d.y);
 }
@@ -283,7 +296,8 @@ int Input::DispatchQueuedInput(bool event_on_keyboard_input, bool event_on_mouse
       case InputCB::KeyPress:   v = KeyPress  (i.data.iv.x, i.data.iv.y, i.data.iv.a);                            if (event_on_keyboard_input) events += v; break;
       case InputCB::MouseClick: v = MouseClick(i.data.iv.a, i.data.iv.b, point(i.data.iv.x, i.data.iv.y));        if (event_on_mouse_input)    events += v; break;
       case InputCB::MouseMove:  v = MouseMove (point(i.data.iv.x, i.data.iv.y), point(i.data.iv.a, i.data.iv.b)); if (event_on_mouse_input)    events += v; break;
-      case InputCB::MouseWheel: v = MouseWheel(point(i.data.iv.x, i.data.iv.y), point(i.data.iv.a, i.data.iv.b)); if (event_on_mouse_input)    events += v; break;
+      case InputCB::MouseSwipe: v = MouseSwipe(point(i.data.iv.x, i.data.iv.y), point(i.data.iv.a, i.data.iv.b)); if (event_on_mouse_input)    events += v; break;
+      case InputCB::MouseWheel: v = MouseWheel(point(i.data.fv.x, i.data.fv.y), point(i.data.fv.a, i.data.fv.b)); if (event_on_mouse_input)    events += v; break;
       case InputCB::MouseZoom:  v = MouseZoom (point(i.data.fv.x, i.data.fv.y), point(i.data.fv.a, i.data.fv.b)); if (event_on_mouse_input)    events += v; break;
     }
   return events;
@@ -329,7 +343,7 @@ int Input::KeyEventDispatch(InputEvent::Id event, bool down) {
 int Input::MouseMove(const point &p, const point &d) {
   if (!app->run) return 0;
   Window *screen = app->focused;
-  int fired = MouseEventDispatch(Mouse::Event::Motion, p, MouseButton1Down());
+  int fired = MouseEventDispatch(Mouse::Event::Motion, p, d, MouseButton1Down());
   if (!screen->grab_mode.Enabled()) return fired;
 
   for (auto &g : screen->input)
@@ -338,12 +352,23 @@ int Input::MouseMove(const point &p, const point &d) {
   return fired;
 }
 
-int Input::MouseWheel(const point &p, const point &d) {
+int Input::MouseSwipe(const point &p, const point &d) {
   int events = 0;
-  INFO("heeere wheel");
   if (!app->run || !app->focused) return events;
   if (auto mc = app->focused->active_controller) {
-    if ((events = mc->SendWheelEvent(Mouse::Event::Wheel, v2(p.x, p.y), v2(d.x, d.y)))) { 
+    if ((events = mc->SendWheelEvent(Mouse::Event::Swipe, v2(p.x, p.y), v2(d.x, d.y)))) { 
+      InputDebug("Input::MouseWheel sent MouseController[%p] events = %d", mc, events);
+      return events;
+    }
+  }
+  return events;
+}
+
+int Input::MouseWheel(const v2 &p, const v2 &d) {
+  int events = 0;
+  if (!app->run || !app->focused) return events;
+  if (auto mc = app->focused->active_controller) {
+    if ((events = mc->SendWheelEvent(Mouse::Event::Wheel, p, d))) { 
       InputDebug("Input::MouseWheel sent MouseController[%p] events = %d", mc, events);
       return events;
     }
@@ -370,7 +395,7 @@ int Input::MouseClick(int button, bool down, const point &p) {
   else if (event == Mouse::Button::_2) mouse_but2_down = down;
   // event |= (CtrlKeyDown() ? Key::Modifier::Ctrl : 0) | (CmdKeyDown() ? Key::Modifier::Cmd : 0);
 
-  int fired = MouseEventDispatch(event, p, down);
+  int fired = MouseEventDispatch(event, p, point(), down);
   if (fired) return fired;
 
   Window *screen = app->focused;
@@ -380,7 +405,7 @@ int Input::MouseClick(int button, bool down, const point &p) {
   return fired;
 }
 
-int Input::MouseEventDispatch(InputEvent::Id event, const point &p, int down) {
+int Input::MouseEventDispatch(InputEvent::Id event, const point &p, const point &d, int down) {
   Window *screen = app->focused;
   if      (event == paste_bind.key)      return KeyEventDispatch(event, down);
   else if (event == Mouse::Event::Wheel) screen->mouse_wheel = p;
@@ -393,20 +418,20 @@ int Input::MouseEventDispatch(InputEvent::Id event, const point &p, int down) {
   for (auto i = screen->dialogs.begin(); i != screen->dialogs.end(); /**/) {
     Dialog *g = i->get();
     if (g->NotActive(screen->mouse)) { i++; continue; }
-    fired += g->mouse.SendMouseEvent(event, g->RelativePosition(screen->mouse), down, 0);
+    fired += g->mouse.SendMouseEvent(event, g->RelativePosition(screen->mouse), d, down, 0);
     if (g->deleted) { screen->GiveDialogFocusAway(g); i = screen->dialogs.erase(i); continue; }
-    if (event == Mouse::Event::Button1 && down && g->box.within(screen->mouse)) { bring_to_front = g; break; }
+    if (event == Mouse::Event::Click && down && g->box.within(screen->mouse)) { bring_to_front = g; break; }
     i++;
   }
   if (bring_to_front) screen->BringDialogToFront(bring_to_front);
 
   if (auto mc = screen->active_controller) {
-    if ((events = mc->SendMouseEvent(event, mc->parent_gui ? mc->parent_gui->RelativePosition(p) : p, down, 0))) {
+    if ((events = mc->SendMouseEvent(event, mc->parent_gui ? mc->parent_gui->RelativePosition(p) : p, d, down, 0))) {
       InputDebug("Input::MouseEventDispatch sent MouseController[%p] events = %d", mc, events);
       return events;
     }
   } else for (auto b = screen->gui.begin(), e = screen->gui.end(), i = b; i != e; ++i) {
-    if ((events = MouseEventDispatchGUI(event, p, down, *i, &active_guis))) {
+    if ((events = MouseEventDispatchGUI(event, p, d, down, *i, &active_guis))) {
       InputDebug("Input::MouseEventDispatch sent GUI[%d] events = %d", i - b, events);
       return events;
     }
@@ -417,11 +442,11 @@ int Input::MouseEventDispatch(InputEvent::Id event, const point &p, int down) {
   return fired;
 }
 
-int Input::MouseEventDispatchGUI(InputEvent::Id event, const point &p, int down, GUI *g, int *active_guis) {
+int Input::MouseEventDispatchGUI(InputEvent::Id event, const point &p, const point &d, int down, GUI *g, int *active_guis) {
   if (g->NotActive(g->root->mouse)) return 0;
   else (*active_guis)++;
-  int events = g->mouse.SendMouseEvent(event, g->RelativePosition(g->root->mouse), down, 0);
-  if (!events && g->child_gui) return MouseEventDispatchGUI(event, p, down, g->child_gui, active_guis);
+  int events = g->mouse.SendMouseEvent(event, g->RelativePosition(g->root->mouse), d, down, 0);
+  if (!events && g->child_gui) return MouseEventDispatchGUI(event, p, d, down, g->child_gui, active_guis);
   return events;
 }
 
@@ -456,10 +481,10 @@ bool MouseControllerCallback::Run(const point &p, int button, int down, bool wro
   return ret;
 }
 
-int MouseController::SendMouseEvent(InputEvent::Id event, const point &p, int down, int flag) {
+int MouseController::SendMouseEvent(InputEvent::Id event, const point &p, const point &dp, int down, int flag) {
   int fired = 0, boxes_checked = 0;
-  bool but1  = event == Mouse::Event::Button1;
-  bool but2  = event == Mouse::Event::Button2;
+  bool but1  = event == Mouse::Event::Click;
+  bool but2  = event == Mouse::Event::Click2;
   bool wheel = event == Mouse::Event::Wheel;
   bool zoom  = event == Mouse::Event::Zoom;
 

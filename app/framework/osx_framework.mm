@@ -236,6 +236,19 @@
     }
   }
 
+  - (void)magnifyWithEvent:(NSEvent*)event {
+    CGFloat p_scale = [event magnification] + 1.0;
+    LFL::v2 d(p_scale, p_scale);
+    int fired = LFL::app->input->MouseZoom(LFL::app->focused ? LFL::app->focused->mouse : LFL::point(), d);
+    if (fired && frame_on_mouse_input) [self setNeedsDisplay:YES]; 
+  }
+
+  - (void)swipeWithEvent:(NSEvent*)event {
+    LFL::v2 d([event deltaX], [event deltaY]);
+    int fired = LFL::app->input->MouseWheel(d, d);
+    if (fired && frame_on_mouse_input) [self setNeedsDisplay:YES]; 
+  }
+
   - (void)keyDown:(NSEvent *)theEvent { [self keyPress:theEvent down:1]; }
   - (void)keyUp:  (NSEvent *)theEvent { [self keyPress:theEvent down:0]; }
   - (void)keyPress:(NSEvent *)theEvent down:(bool)d {
@@ -490,6 +503,10 @@ void Application::SetTouchKeyboardTiled(bool v) {}
 int Application::SetExtraScale(bool v) { return false; }
 void Application::SetDownScale(bool v) {}
 void Application::SetAutoRotateOrientation(bool v) {}
+void Application::SetVerticalSwipeRecognizer(int touches) {}
+void Application::SetHorizontalSwipeRecognizer(int touches) {}
+void Application::SetPanRecognizer(bool enabled) {}
+void Application::SetPinchRecognizer(bool enabled) {}
 
 void Window::SetCaption(const string &v) { 
   [GetTyped<GameView*>(id) window].title = [NSString stringWithUTF8String:v.c_str()];

@@ -326,7 +326,7 @@ static const char* const* ios_argv = 0;
   - (void)initPinchGestureRecognizers {
     UIWindow *win = [[[UIApplication sharedApplication] windows] objectAtIndex:0];
     UIPinchGestureRecognizer *pinch = [[UIPinchGestureRecognizer alloc] initWithTarget:self action:@selector(pinchGesture:)];
-    [win addGestureRecognizer:pinch];
+    [[LFUIApplication sharedAppDelegate].view addGestureRecognizer:pinch];
     [pinch release];
   }
 
@@ -337,31 +337,50 @@ static const char* const* ios_argv = 0;
       [win removeGestureRecognizer:[gestures objectAtIndex:i]];
   }
 
-  - (void)swipeUp:    (id)sender { LFL::point p(0,  1); if (LFL::app->input->MouseWheel(p, p) && _frame_on_mouse_input) [self.view setNeedsDisplay]; }
-  - (void)swipeDown:  (id)sender { LFL::point p(0, -1); if (LFL::app->input->MouseWheel(p, p) && _frame_on_mouse_input) [self.view setNeedsDisplay]; }
-  - (void)swipeLeft:  (id)sender { LFL::point p(-1, 0); if (LFL::app->input->MouseWheel(p, p) && _frame_on_mouse_input) [self.view setNeedsDisplay]; }
-  - (void)swipeRight: (id)sender { LFL::point p( 1, 0); if (LFL::app->input->MouseWheel(p, p) && _frame_on_mouse_input) [self.view setNeedsDisplay]; }
+  - (void)swipeUp:    (UISwipeGestureRecognizer*)sender { [self swipe:LFL::point(0,  1) withSender:sender]; }
+  - (void)swipeDown:  (UISwipeGestureRecognizer*)sender { [self swipe:LFL::point(0, -1) withSender:sender]; }
+  - (void)swipeLeft:  (UISwipeGestureRecognizer*)sender { [self swipe:LFL::point(-1, 0) withSender:sender]; }
+  - (void)swipeRight: (UISwipeGestureRecognizer*)sender { [self swipe:LFL::point( 1, 0) withSender:sender]; }
+  - (void)swipe:(LFL::point)p withSender:(UISwipeGestureRecognizer*)sender {
+    if (LFL::app->input->MouseSwipe(p, p) && _frame_on_mouse_input) [self.view setNeedsDisplay];
+  }
 
   - (void)tapGesture: (UITapGestureRecognizer *)tapGestureRecognizer {
     UIView *v = [tapGestureRecognizer view];
     CGPoint position = [tapGestureRecognizer locationInView:v];
     int dpind = v.frame.origin.y == 0;
     if (auto s = LFL::app->focused) {
+#if 0
       s->gesture_tap[dpind] = 1;
       s->gesture_dpad_x[dpind] = position.x;
       s->gesture_dpad_y[dpind] = position.y;
+#endif
       int fired = MouseClick(1, 1, (int)position.x, s->y + s->height - (int)position.y);
       if (fired && _frame_on_mouse_input) [self.view setNeedsDisplay];
     }
   }
 
   - (void)panGesture: (UIPanGestureRecognizer *)panGestureRecognizer {
+    if (![panGestureRecognizer numberOfTouches]) return;
     UIView *v = [panGestureRecognizer view];
+    CGPoint position = [panGestureRecognizer locationOfTouch:0 inView:v];
+    CGPoint velocity = [panGestureRecognizer velocityInView:v];
     int dpind = v.frame.origin.y == 0;
+    if (!dpind) position = CGPointMake(scale * (position.x + v.frame.origin.x), scale * (position.y + v.frame.origin.y));
+    else        position = CGPointMake(scale * position.x, scale * position.y);
+    if (panGestureRecognizer.state == UIGestureRecognizerStateChanged) {}
+    else if (panGestureRecognizer.state == UIGestureRecognizerStateEnded) velocity = CGPointMake(0, 0);
+    if (auto s = LFL::app->focused) { 
+      LFL::point pos = LFL::Floor(LFL::GetCGPoint(position));
+      pos.y = s->y + s->height - pos.y;
+      int fired = LFL::app->input->MouseMove(pos, LFL::app->focused ? (pos - LFL::app->focused->mouse) : pos);
+      if (fired && _frame_on_mouse_input) [self.view setNeedsDisplay];
+    }
+  }
+    #if 0
     if (auto s = LFL::app->focused) {
       if (panGestureRecognizer.state == UIGestureRecognizerStateChanged) {
         // CGPoint velocity = [panGestureRecognizer translationInView:v];
-        CGPoint velocity = [panGestureRecognizer velocityInView:v];
         if (fabs(velocity.x) > 15 || fabs(velocity.y) > 15) {
           s->gesture_dpad_dx[dpind] = velocity.x;
           s->gesture_dpad_dy[dpind] = velocity.y;
@@ -385,14 +404,15 @@ static const char* const* ios_argv = 0;
       }
     }
   }
+  #endif
 
   - (void)pinchGesture: (UIPinchGestureRecognizer*)pinch {
     if (pinch.state == UIGestureRecognizerStateBegan) {
       pinch_scale = 1.0;
-      pinch_point = [pinch locationInView: window];
+      pinch_point = [pinch locationInView: self.view];
     }
     CGFloat p_scale = 1.0 + (pinch_scale - pinch.scale);
-    LFL::v2 p(pinch_point.x, pinch_point.y), d(p_scale, p_scale);
+    LFL::v2 p(scale * pinch_point.x, scale * pinch_point.y), d(p_scale, p_scale);
     int fired = LFL::app->input->MouseZoom(p, d);
     if (fired && _frame_on_mouse_input) [self.view setNeedsDisplay];
     pinch_scale = p_scale;
@@ -481,8 +501,10 @@ static const char* const* ios_argv = 0;
     if (!dpind) position = CGPointMake(scale * (position.x + v.frame.origin.x), scale * (position.y + v.frame.origin.y));
     else        position = CGPointMake(scale * position.x, scale * position.y);
     if (auto s = LFL::app->focused) {
+#if 0
       s->gesture_dpad_x[dpind] = position.x;
       s->gesture_dpad_y[dpind] = position.y;
+#endif
       int fired = LFL::app->input->MouseClick(1, 1, LFL::point(position.x, s->y + s->height - (int)position.y));
       if (fired && uiapp.frame_on_mouse_input) [self.superview setNeedsDisplay];
     }
@@ -497,9 +519,11 @@ static const char* const* ios_argv = 0;
     if (!dpind) position = CGPointMake(scale * (position.x + v.frame.origin.x), scale * (position.y + v.frame.origin.y));
     else        position = CGPointMake(scale * position.x, scale * position.y);
     if (auto s = LFL::app->focused) {
+#if 0
       s->gesture_dpad_stop[dpind] = 1;
       s->gesture_dpad_x[dpind] = 0;
       s->gesture_dpad_y[dpind] = 0;
+#endif
       int fired = MouseClick(1, 0, (int)position.x, s->y + s->height - (int)position.y);
       if (fired && uiapp.frame_on_mouse_input) [self.superview setNeedsDisplay];
     }
@@ -513,8 +537,14 @@ static const char* const* ios_argv = 0;
     if (!dpind) position = CGPointMake(scale * (position.x + v.frame.origin.x), scale * (position.y + v.frame.origin.y));
     else        position = CGPointMake(scale * position.x, scale * position.y);
     if (auto s = LFL::app->focused) {
+#if 0
       s->gesture_dpad_x[dpind] = position.x;
       s->gesture_dpad_y[dpind] = position.y;
+#endif
+      LFL::point pos = LFL::Floor(LFL::GetCGPoint(position));
+      pos.y = s->y + s->height - pos.y;
+      int fired = LFL::app->input->MouseMove(pos, LFL::app->focused ? (pos - LFL::app->focused->mouse) : pos);
+      if (fired && uiapp.frame_on_mouse_input) [self.superview setNeedsDisplay];
     }
   }
 @end

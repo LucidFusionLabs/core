@@ -384,6 +384,7 @@ unsigned LogAdd(unsigned *, unsigned);
 double Squared(double n);
 v3 Clamp(const v3& x, float floor, float ceil);
 v4 Clamp(const v4& x, float floor, float ceil);
+inline point Floor(const v2 &x) { return point(x.x, x.y); }
 
 template <class X> struct Vec {
   virtual ~Vec() {}

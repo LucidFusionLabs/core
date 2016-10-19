@@ -9,6 +9,13 @@ matrix:
         apt:
           packages:
             - clang-3.6
+            - yasm
+            - automake
+            - libtool
+            - libalut-dev
+            - libglu1-mesa-dev
+            - xorg-dev
+            - autotools-dev
           sources:
             - ubuntu-toolchain-r-test
             - llvm-toolchain-precise-3.6
@@ -17,9 +24,6 @@ before_install:
   - echo $TRAVIS_OS_NAME
   - echo $LANG
   - echo $LC_ALL
-  - if [ $TRAVIS_OS_NAME == linux ]; then sudo apt-get update -qq; fi
-  - if [ $TRAVIS_OS_NAME == linux ]; then sudo apt-get install libglu1-mesa-dev xorg-dev autotools-dev; fi
-  - if [ $TRAVIS_OS_NAME == linux ]; then sudo apt-get install -qq yasm automake libtool libalut-dev; fi
   - if [ $TRAVIS_OS_NAME == linux ]; then wget --no-check-certificate http://www.cmake.org/files/v3.2/cmake-3.2.3-Linux-x86_64.tar.gz; fi
   - if [ $TRAVIS_OS_NAME == linux ]; then tar -xzf cmake-3.2.3-Linux-x86_64.tar.gz; fi
   - if [ $TRAVIS_OS_NAME == linux ]; then sudo cp -fR cmake-3.2.3-Linux-x86_64/* /usr; fi
@@ -30,7 +34,7 @@ script:
   - if [ $TRAVIS_OS_NAME == linux ]; then mkdir linux; cd linux; fi
   - export CC=clang-3.6 CXX=clang++-3.6
   - cmake ..
-  - cd app_tests
+  - cd app/tests
   - make -j4 tests
   - LD_LIBRARY_PATH=./lib ./tests
 

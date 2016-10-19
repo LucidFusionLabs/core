@@ -20,7 +20,7 @@
 
 namespace LFL {
 TEST(LoaderTest, ZLib) {
-  string contents = LocalFile::FileContents("../../../core/www/lfl/assets/img/lbrowser256.png");
+  string contents = LocalFile::FileContents("../../../../core/www/lfl/assets/img/lbrowser256.png");
   string compressed = ZLibWriter::Compress(contents);
   string decompressed = ZLibReader::Decompress(compressed);
   EXPECT_EQ(contents, decompressed);
