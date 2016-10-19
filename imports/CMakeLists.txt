@@ -558,7 +558,8 @@ endif()
 if(LFL_OPENCV)
   ExternalProject_Add(OpenCV SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV
                              PREFIX ${CMAKE_CURRENT_BINARY_DIR}/OpenCV
-                             CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_CURRENT_BINARY_DIR}/OpenCV -DBUILD_TESTS=OFF -DBUILD_PERF_TESTS=OFF)
+                             CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_CURRENT_BINARY_DIR}/OpenCV
+                             -DBUILD_TESTS=OFF -DBUILD_PERF_TESTS=OFF -DWITH_IPP=OFF)
 
   add_library(libopencv_core IMPORTED SHARED GLOBAL)
   add_library(libopencv_imgproc IMPORTED SHARED GLOBAL)
