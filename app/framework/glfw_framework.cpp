@@ -174,8 +174,14 @@ void FrameScheduler::AddMainWaitMouse(Window*) {}
 void FrameScheduler::DelMainWaitMouse(Window*) {}
 void FrameScheduler::AddMainWaitKeyboard(Window*) {}
 void FrameScheduler::DelMainWaitKeyboard(Window*) {}
-void FrameScheduler::AddMainWaitSocket(Window *w, Socket fd, int flag, function<bool()>) { if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, w); }
-void FrameScheduler::DelMainWaitSocket(Window *w, Socket fd) { if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd); }
+void FrameScheduler::AddMainWaitSocket(Window *w, Socket fd, int flag, function<bool()>) {
+  if (fd == InvalidSocket) return;
+  if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, w);
+}
+void FrameScheduler::DelMainWaitSocket(Window *w, Socket fd) {
+  if (fd == InvalidSocket) return;
+  if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd);
+}
 
 unique_ptr<Module> CreateFrameworkModule() {
   ONCE({ if (FLAGS_enable_video) {

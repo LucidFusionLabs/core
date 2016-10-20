@@ -243,7 +243,7 @@ struct InterProcessComm {
   unordered_map<int, MultiProcessBuffer*> ipc_buffer;
   int pid=0, ipc_buffer_id=0;
   void *server_process=0;
-  Connection *conn=0;
+  SocketConnection *conn=0;
   IPC::Seq seq=0;
   bool in_handle_ipc=0;
 

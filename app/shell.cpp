@@ -303,7 +303,7 @@ void Shell::WGet(const vector<string> &a) {
 void Shell::NetworkStats(const vector<string> &a) {
   if (!app->net) return;
   for (int svc_i = 0, svc_l = app->net->service_table.size(); svc_i < svc_l; ++svc_i) {
-    Service *svc = app->net->service_table[svc_i];
+    auto svc = app->net->service_table[svc_i];
     INFO("svc[", svc_i, "] ", svc->name, ": conns=", svc->conn.size(), ", endpoints=", svc->endpoint.size());
   }
 }

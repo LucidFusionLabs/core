@@ -348,10 +348,12 @@ void FrameScheduler::DelMainWaitMouse(Window *w) { GetTyped<WinWindow*>(w->impl)
 void FrameScheduler::AddMainWaitKeyboard(Window *w) { GetTyped<WinWindow*>(w->impl)->frame_on_keyboard_input = true; }
 void FrameScheduler::DelMainWaitKeyboard(Window *w) { GetTyped<WinWindow*>(w->impl)->frame_on_keyboard_input = false; }
 void FrameScheduler::AddMainWaitSocket(Window *w, Socket fd, int flag, function<bool()>) {
+  if (fd == InvalidSocket) return;
   if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, w);
   WSAAsyncSelect(fd, GetTyped<HWND>(w->id), WM_USER, FD_READ | FD_CLOSE);
 }
 void FrameScheduler::DelMainWaitSocket(Window *w, Socket fd) {
+  if (fd == InvalidSocket) return;
   if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd);
   WSAAsyncSelect(fd, GetTyped<HWND>(w->id), WM_USER, 0);
 }

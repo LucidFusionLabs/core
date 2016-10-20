@@ -649,7 +649,7 @@ struct Application : public ::LFApp {
   ThreadPool thread_pool;
   CallbackQueue message_queue;
   FrameScheduler scheduler;
-  unique_ptr<NetworkThread> network_thread;
+  unique_ptr<SocketServicesThread> network_thread;
   unique_ptr<ProcessAPIClient> render_process;
   unique_ptr<ProcessAPIServer> main_process;
   unordered_map<void*, Window*> windows;
@@ -667,7 +667,7 @@ struct Application : public ::LFApp {
   unique_ptr<Fonts> fonts;
   unique_ptr<Shaders> shaders;
   unique_ptr<AssetLoader> asset_loader;
-  unique_ptr<Network> net;
+  unique_ptr<SocketServices> net;
   unique_ptr<Camera> camera;
   unique_ptr<CUDA> cuda;
 
@@ -690,7 +690,7 @@ struct Application : public ::LFApp {
   void CloseWindow(Window*);
   void CreateNewWindow();
   void StartNewWindow(Window*);
-  NetworkThread *CreateNetworkThread(bool detach_existing_module, bool start);
+  SocketServicesThread *CreateNetworkThread(bool detach_existing_module, bool start);
 
   int Create(const char *source_filename);
   int Init();
@@ -712,6 +712,7 @@ struct Application : public ::LFApp {
   void ShowSystemContextMenu(const MenuItemVec &items);
   void ShowSystemFontChooser(const FontDesc &cur_font, const StringVecCB&);
   void ShowSystemFileChooser(bool files, bool dirs, bool multi, const StringVecCB&);
+  void ShowSystemStatusBar(bool);
   int LoadSystemImage(const string &fn);
   bool OpenSystemAppPreferences();
 

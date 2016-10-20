@@ -281,7 +281,7 @@ struct HTTPClientHandler {
   };
 
   struct WGet : public Protocol {
-    Service *svc=0;
+    SocketService *svc=0;
     bool ssl=0;
     string host, path;
     int port=0, redirects=0;
@@ -290,7 +290,7 @@ struct HTTPClientHandler {
     StringCB redirect_cb;
 
     virtual ~WGet() { if (out) INFO("close ", out->Filename()); delete out; }
-    WGet(Service *Svc, bool SSL, const string &Host, int Port, const string &Path, File *Out,
+    WGet(SocketService *Svc, bool SSL, const string &Host, int Port, const string &Path, File *Out,
          const HTTPClient::ResponseCB &CB=HTTPClient::ResponseCB(), const StringCB &RedirCB=StringCB()) :
       Protocol(false), svc(Svc), ssl(SSL), host(Host), path(Path), port(Port), out(Out), cb(CB), redirect_cb(RedirCB) {}
 
@@ -340,7 +340,7 @@ struct HTTPClientHandler {
 
   struct WPost : public WGet {
     string mimetype, postdata;
-    WPost(Service *Svc, bool SSL, const string &Host, int Port, const string &Path, const string &Mimetype, const char *Postdata, int Postlen,
+    WPost(SocketService *Svc, bool SSL, const string &Host, int Port, const string &Path, const string &Mimetype, const char *Postdata, int Postlen,
           HTTPClient::ResponseCB CB=HTTPClient::ResponseCB()) : WGet(Svc, SSL, Host, Port, Path, 0, CB), mimetype(Mimetype), postdata(Postdata,Postlen) {}
     int Connected(Connection *c) {
       return HTTPClient::WriteRequest(c, HTTPServer::Method::POST, host.c_str(), path.c_str(),

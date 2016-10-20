@@ -148,8 +148,13 @@ class QtWindow : public QWindow {
   }
 
   void RequestRender() { QCoreApplication::postEvent(this, new QEvent(QEvent::UpdateRequest)); }
-  void DelMainWaitSocket(Socket fd) {}
+
+  void DelMainWaitSocket(Socket fd) {
+    if (fd == InvalidSocket) return;
+  }
+
   void AddMainWaitSocket(Socket fd) {
+    if (fd == InvalidSocket) return;
     CHECK(!wait_forever_socket);
     wait_forever_socket = new QSocketNotifier(fd, QSocketNotifier::Read, this);
     lfl_qapp->connect(wait_forever_socket, SIGNAL(activated(int)), this, SLOT(ReadInputChannel(int)));

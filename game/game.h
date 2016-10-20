@@ -44,7 +44,7 @@ struct Game {
   struct Network {
     struct Visitor {
       virtual void Visit(Connection *c, Game::ConnectionData *cd) = 0;
-      static void VisitClients(Service *svc, Visitor *visitor);
+      static void VisitClients(SocketService *svc, Visitor *visitor);
     };
 
     struct BroadcastVisitor : public Visitor {
@@ -69,8 +69,8 @@ struct Game {
     virtual void WriteWithRetry(ReliableNetwork*, Connection*, SerializableProto*, unsigned short seq) = 0;
 
     int Write(Connection *c, int method, unsigned short seq, SerializableProto *msg);
-    int Broadcast(Service *svc, SerializableProto *msg);
-    int BroadcastWithRetry(Service *svc, SerializableProto *msg, Connection *skip);
+    int Broadcast(SocketService *svc, SerializableProto *msg);
+    int BroadcastWithRetry(SocketService *svc, SerializableProto *msg, Connection *skip);
   };
 
 #ifdef LFL_ANDROID
@@ -225,7 +225,7 @@ struct GameServer : public Connection::Handler {
   GameBots *bots;
   Time timestep;
   int proto=0;
-  vector<Service*> svc;
+  vector<SocketService*> svc;
   GameTCPServer *tcp_transport=0;
   GameUDPServer *udp_transport=0;
   GPlusServer *gplus_transport=0;
@@ -1017,7 +1017,8 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
   }
 
   void PingResponseCB(Connection *c, const string &reply) {
-    if (ip && ip == c->addr) return;
+    IPV4Endpoint remote = c->RemoteIPV4();
+    if (ip && ip == remote.addr) return;
     const char *p;
     string name, players;
     StringLineIter lines(reply);
@@ -1027,7 +1028,7 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
       if      (k == "name")    name    = v;
       else if (k == "players") players = v;
     }
-    Server s = { c->Name(), StrCat(name, (c->addr & broadcast_ip) == c->addr ? " (local)" : ""), players };
+    Server s = { c->Name(), StrCat(name, (remote.addr & broadcast_ip) == remote.addr ? " (local)" : ""), players };
     master_server_list.push_back(s);
   }
 

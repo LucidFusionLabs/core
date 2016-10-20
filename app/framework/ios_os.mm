@@ -1265,4 +1265,11 @@ void Application::SaveSettings(const StringPairVec &v) {
   [defaults synchronize];
 }
 
+void *OpenURLSession(const string &host, int port) {
+  NSURLSession *session = [NSURLSession sharedSession];
+  NSURLSessionStreamTask *stream = [session streamTaskWithHostName:MakeNSString(host) port:port];
+  [stream resume];
+  return stream;
+}
+
 }; // namespace LFL

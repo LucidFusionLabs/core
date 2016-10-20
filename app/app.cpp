@@ -66,7 +66,7 @@ extern "C" int  MouseClick(int b, int d, int x,  int y)         { return LFL::ap
 extern "C" int  MouseMove (int x, int y, int dx, int dy)        { return LFL::app->input->MouseMove (LFL::point(x, y), LFL::point(dx, dy)); }
 extern "C" void QueueKeyPress  (int b, int m, int d)            { return LFL::app->input->QueueKeyPress  (b, m, d); }
 extern "C" void QueueMouseClick(int b, int d, int x, int y)     { return LFL::app->input->QueueMouseClick(b, d, LFL::point(x, y)); }
-extern "C" void EndpointRead(void *svc, const char *name, const char *buf, int len) { LFL::app->net->EndpointRead(static_cast<LFL::Service*>(svc), name, buf, len); }
+extern "C" void EndpointRead(void *svc, const char *name, const char *buf, int len) { LFL::app->net->EndpointRead(static_cast<LFL::SocketService*>(svc), name, buf, len); }
 
 extern "C" NativeWindow *SetNativeWindowByID(void *id) { return SetNativeWindow(LFL::FindOrNull(LFL::app->windows, id)); }
 extern "C" NativeWindow *SetNativeWindow(NativeWindow *W) {
@@ -365,10 +365,10 @@ void Application::StartNewWindow(Window *new_window) {
   Video::StartWindow(new_window);
 }
 
-NetworkThread *Application::CreateNetworkThread(bool detach, bool start) {
+SocketServicesThread *Application::CreateNetworkThread(bool detach, bool start) {
   CHECK(net);
   if (detach) VectorEraseByValue(&modules, static_cast<Module*>(net.get()));
-  network_thread = make_unique<NetworkThread>(net.get(), !detach);
+  network_thread = make_unique<SocketServicesThread>(net.get(), !detach);
   if (start) network_thread->thread->Start();
   return network_thread.get();
 }
@@ -597,7 +597,7 @@ int Application::Init() {
   }
 
   if (FLAGS_enable_network) {
-    if (LoadModule((net = make_unique<Network>()).get())) return ERRORv(-1, "network init failed");
+    if (LoadModule((net = make_unique<SocketServices>()).get())) return ERRORv(-1, "network init failed");
   }
 
   if (FLAGS_enable_camera) {

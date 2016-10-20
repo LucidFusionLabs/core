@@ -33,7 +33,7 @@ struct SMTPClientConnection : public Connection::Handler {
   SMTPClientConnection(SMTPClient *S, SMTPClient::DeliverableCB CB1, SMTPClient::DeliveredCB CB2)
     : server(S), deliverable_cb(CB1), delivered_cb(CB2) {}
 
-  int Connected(Connection *c) { helo_domain = server->HeloDomain(c->src_addr); return 0; }
+  int Connected(Connection *c) { helo_domain = server->HeloDomain(c->RemoteIPV4().addr); return 0; }
 
   void Close(Connection *c) {
     server->total_disconnected++;
@@ -127,7 +127,7 @@ struct SMTPServerConnection : public Connection::Handler {
   void ClearStateTable() { message.mail_from.clear(); message.rcpt_to.clear(); message.content.clear(); in_data=0; }
 
   int Connected(Connection *c) {
-    my_domain = server->HeloDomain(c->src_addr);
+    my_domain = server->HeloDomain(c->LocalIPV4().addr); 
     string greeting = StrCat("220 ", my_domain, " Simple Mail Transfer Service Ready\r\n");
     return (c->Write(greeting) == greeting.size()) ? 0 : -1;
   }
@@ -196,7 +196,7 @@ struct SMTPServerConnection : public Connection::Handler {
   }
 };
 
-int SMTPServer::Connected(Connection *c) { total_connected++; c->handler = make_unique<SMTPServerConnection>(this); return 0; }
+int SMTPServer::Connected(SocketConnection *c) { total_connected++; c->handler = make_unique<SMTPServerConnection>(this); return 0; }
 
 void SMTPServer::ReceiveMail(Connection *c, const SMTP::Message &mail) {
   INFO("SMTPServer::ReceiveMail FROM=", mail.mail_from, ", TO=", mail.rcpt_to, ", content=", mail.content);

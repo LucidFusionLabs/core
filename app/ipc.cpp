@@ -473,12 +473,12 @@ bool InterProcessComm::StartServerProcess(const string &server_program, const ve
 bool InterProcessComm::OpenSocket(const string &socket_name) {
   static string fd_url = "fd://", np_url = "np://", tcp_url = "tcp://";
   if (PrefixMatch(socket_name, fd_url)) {
-    conn = new Connection(app->net->unix_client.get(), nullptr);
+    conn = new SocketConnection(app->net->unix_client.get(), nullptr);
     conn->state = Connection::Connected;
     conn->socket = atoi(socket_name.c_str() + fd_url.size());
     conn->control_messages = true;
   } else if (PrefixMatch(socket_name, tcp_url)) {
-    conn = new Connection(app->net->unix_client.get(), nullptr);
+    conn = new SocketConnection(app->net->unix_client.get(), nullptr);
     string host, port;
     HTTP::ParseHost(socket_name.c_str() + tcp_url.size(), socket_name.c_str() + socket_name.size(), &host, &port);
     CHECK_NE(-1, (conn->socket = SystemNetwork::OpenSocket(LFL::Protocol::TCP)));

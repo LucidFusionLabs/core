@@ -50,7 +50,7 @@ struct HTTPClient {
   static int WriteRequest(Connection *c, int method, const char *host, const char *path, const char *postmime, const char *postdata, int postlen, bool persist);
 };
 
-struct HTTPServer : public Service {
+struct HTTPServer : public SocketService {
   typedef function<void(Connection*)> ConnectionClosedCB;
   struct Method {
     enum { GET=1, POST=2 };
@@ -79,8 +79,8 @@ struct HTTPServer : public Service {
   };
 
   map<string, Resource*> urlmap;
-  HTTPServer(IPV4::Addr addr, int port, bool SSL) : Service("HTTPServer", Protocol::TCP) { QueueListen(addr, port, SSL); }
-  HTTPServer(                 int port, bool SSL) : Service("HTTPServer", Protocol::TCP) { QueueListen(0,    port, SSL); }
+  HTTPServer(IPV4::Addr addr, int port, bool SSL) : SocketService("HTTPServer", Protocol::TCP) { QueueListen(addr, port, SSL); }
+  HTTPServer(                 int port, bool SSL) : SocketService("HTTPServer", Protocol::TCP) { QueueListen(0,    port, SSL); }
   virtual ~HTTPServer() { ClearURL(); }
 
   int Connected(Connection *c);

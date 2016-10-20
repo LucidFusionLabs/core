@@ -253,6 +253,10 @@ void SystemPanelView::SetTitle(const string &title) {
   [[FromVoid<OSXPanel*>(impl) window] setTitle: [NSString stringWithUTF8String: title.c_str()]];
 }
 
+SystemAdvertisingView::SystemAdvertisingView() {}
+void SystemAdvertisingView::Show() {}
+void SystemAdvertisingView::Hide() {}
+
 void Application::ShowSystemFontChooser(const FontDesc &cur_font, const StringVecCB &choose_cb) {
   static FontChooser *font_chooser = [FontChooser alloc];
   [font_chooser selectFont:cur_font.name.c_str() size:cur_font.size cb:choose_cb];

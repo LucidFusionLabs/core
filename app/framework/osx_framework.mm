@@ -588,6 +588,7 @@ void FrameScheduler::DelMainWaitMouse(Window *w) { [GetTyped<GameView*>(w->id) s
 void FrameScheduler::AddMainWaitKeyboard(Window *w) { [GetTyped<GameView*>(w->id) setFrameOnKeyboardInput:1]; }
 void FrameScheduler::DelMainWaitKeyboard(Window *w) { [GetTyped<GameView*>(w->id) setFrameOnKeyboardInput:0]; }
 void FrameScheduler::AddMainWaitSocket(Window *w, Socket fd, int flag, function<bool()> cb) {
+  if (fd == InvalidSocket) return;
   if (!wait_forever_thread) {
     CHECK_EQ(SocketSet::READABLE, flag);
     [GetTyped<GameView*>(w->id) addMainWaitSocket:fd callback:move(cb)];
@@ -595,6 +596,7 @@ void FrameScheduler::AddMainWaitSocket(Window *w, Socket fd, int flag, function<
 }
 
 void FrameScheduler::DelMainWaitSocket(Window *w, Socket fd) {
+  if (fd == InvalidSocket) return;
   CHECK(w->id.v);
   [GetTyped<GameView*>(w->id) delMainWaitSocket: fd];
 }

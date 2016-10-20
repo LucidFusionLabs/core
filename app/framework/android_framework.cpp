@@ -209,11 +209,13 @@ void FrameScheduler::DelMainWaitMouse(Window*)    { dynamic_cast<AndroidFramewor
 void FrameScheduler::AddMainWaitKeyboard(Window*) { dynamic_cast<AndroidFrameworkModule*>(app->framework.get())->frame_on_keyboard_input = true;  }
 void FrameScheduler::DelMainWaitKeyboard(Window*) { dynamic_cast<AndroidFrameworkModule*>(app->framework.get())->frame_on_keyboard_input = false; }
 void FrameScheduler::AddMainWaitSocket(Window *w, Socket fd, int flag, function<bool()>) {
+  if (fd == InvalidSocket) return;
   if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, w);
   wait_forever_sockets.Add(fd, flag, w);
 }
 
 void FrameScheduler::DelMainWaitSocket(Window*, Socket fd) {
+  if (fd == InvalidSocket) return;
   if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd);
   wait_forever_sockets.Del(fd);
 }

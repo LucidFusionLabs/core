@@ -209,10 +209,12 @@ void FrameScheduler::DelMainWaitMouse(Window *w) {  }
 void FrameScheduler::AddMainWaitKeyboard(Window *w) {  }
 void FrameScheduler::DelMainWaitKeyboard(Window *w) {  }
 void FrameScheduler::AddMainWaitSocket(Window *w, Socket fd, int flag, function<bool()>) {
+  if (fd == InvalidSocket) return;
   if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, w);
   wait_forever_sockets.Add(fd, flag, w);
 }
 void FrameScheduler::DelMainWaitSocket(Window *w, Socket fd) {
+  if (fd == InvalidSocket) return;
   if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd);
   wait_forever_sockets.Del(fd);
 }

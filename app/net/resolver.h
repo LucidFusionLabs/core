@@ -76,7 +76,7 @@ struct Resolver {
   };
 
   struct Nameserver {
-    Connection *c=0;
+    SocketConnection *c=0;
     bool timedout=0;
     unordered_map<unsigned short, Request> request_map;
     void Timedout() { timedout=true; c->SetError(); INFO(c->Name(), ": nameserver timeout"); }

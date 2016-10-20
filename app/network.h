@@ -158,6 +158,28 @@ struct SystemNetwork {
 
 struct TransferredSocket { Socket socket; int offset; };
 
+struct SSLSocket {
+  struct SSLPtr : public VoidPtr { using VoidPtr::VoidPtr; };
+  struct BIOPtr : public VoidPtr { using VoidPtr::VoidPtr; };
+  struct CTXPtr : public VoidPtr { using VoidPtr::VoidPtr; };
+  Socket socket = InvalidSocket;
+  int last_error = 0;
+  bool ready = 0;
+  SSLPtr ssl = 0;
+  BIOPtr bio = 0;
+  string buf;
+  ~SSLSocket();
+  string ErrorString() const;
+  ptrdiff_t Read(char *buf, int readlen);
+  ptrdiff_t Write(const StringPiece &b);
+  Socket Connect(CTXPtr sslctx, const string &hostport);
+  Socket Connect(CTXPtr sslctx, IPV4::Addr addr, int port);
+  Socket Listen(int port, bool reuse);
+  Socket Accept(SSLSocket *out);
+  static CTXPtr Init();
+  static void Free();
+};
+
 struct SocketSet {
   enum { READABLE=1, WRITABLE=2, EXCEPTION=4 };
   virtual ~SocketSet() {}
@@ -273,37 +295,6 @@ struct SocketWakeupThread : public SocketSet {
   void ThreadProc();
 };
 
-struct SSLSocket {
-  struct SSLPtr : public VoidPtr { using VoidPtr::VoidPtr; };
-  struct BIOPtr : public VoidPtr { using VoidPtr::VoidPtr; };
-  struct CTXPtr : public VoidPtr { using VoidPtr::VoidPtr; };
-  Socket socket = InvalidSocket;
-  int last_error = 0;
-  bool ready = 0;
-  SSLPtr ssl = 0;
-  BIOPtr bio = 0;
-  string buf;
-  ~SSLSocket();
-  string ErrorString() const;
-  ptrdiff_t Read(char *buf, int readlen);
-  ptrdiff_t Write(const StringPiece &b);
-  Socket Connect(CTXPtr sslctx, const string &hostport);
-  Socket Connect(CTXPtr sslctx, IPV4::Addr addr, int port);
-  Socket Listen(int port, bool reuse);
-  Socket Accept(SSLSocket *out);
-  static CTXPtr Init();
-  static void Free();
-};
-
-struct Listener {
-  bool ssl;
-  Socket socket = InvalidSocket;
-  Service *svc;
-  SSLSocket bio;
-  typed_ptr self_reference;
-  Listener(Service *s, bool SSL=false) : ssl(SSL), svc(s), self_reference(MakeTyped(this)) {}
-};
-
 struct Connection {
   enum { Connected=1, Connecting=2, Reconnect=3, Handshake=4, Error=5 };
   typedef function<void(Connection*)> CB;
@@ -325,13 +316,11 @@ struct Connection {
     virtual void Close(Connection *c) { if (close_cb) close_cb(c); }
   };
 
-  Service *svc;
-  Socket socket;
+  SocketService *svc;
   Time ct, rt, wt;
   string endpoint_name;
-  IPV4::Addr addr, src_addr=0;
   bool readable=1, writable=0, control_messages=0;
-  int state, port, src_port=0;
+  int state;
   StringBuffer rb, wb;
   typed_ptr self_reference;
   vector<IOVec> packets;
@@ -339,81 +328,114 @@ struct Connection {
   unique_ptr<Handler> handler;
   Connection *next=0;
   Callback *detach;
-  SSLSocket bio;
   void *data=0;
 
+  Connection(SocketService *s=0, int t=Error, Handler *h=0, Callback *Detach=0) : svc(s), ct(Now()), rt(Now()), wt(Now()), state(t), rb(65536), wb(65536), self_reference(MakeTyped(this)), handler(h), detach(Detach) {}
   virtual ~Connection();
-  Connection(Service *s, Handler *h,                                     Callback *Detach=0) : svc(s), socket(-1),   ct(Now()), rt(Now()), wt(Now()), addr(0),    state(Error), port(0),    rb(65536), wb(65536), self_reference(MakeTyped(this)), handler(h), detach(Detach) {}
-  Connection(Service *s, int State, int Sock,                            Callback *Detach=0) : svc(s), socket(Sock), ct(Now()), rt(Now()), wt(Now()), addr(0),    state(State), port(0),    rb(65536), wb(65536), self_reference(MakeTyped(this)),             detach(Detach) {}
-  Connection(Service *s, int State, int Sock, IPV4::Addr Addr, int Port, Callback *Detach=0) : svc(s), socket(Sock), ct(Now()), rt(Now()), wt(Now()), addr(Addr), state(State), port(Port), rb(65536), wb(65536), self_reference(MakeTyped(this)),             detach(Detach) {}
-  Connection(Service *s, int State,           IPV4::Addr Addr, int Port, Callback *Detach=0) : svc(s), socket(-1),   ct(Now()), rt(Now()), wt(Now()), addr(Addr), state(State), port(Port), rb(65536), wb(65536), self_reference(MakeTyped(this)),             detach(Detach) {}
 
-  string Name() const { return !endpoint_name.empty() ? endpoint_name : IPV4::Text(addr, port); }
+  virtual IPV4Endpoint RemoteIPV4() const { return IPV4Endpoint(0, 0); }
+  virtual IPV4Endpoint LocalIPV4() const { return IPV4Endpoint(0, 0); }
+  virtual Socket GetSocket() const { return InvalidSocket; }
+  virtual string Name() const                                             = 0;
+  virtual int Read()                                                      = 0;
+  virtual int ReadPackets()                                               = 0;
+  virtual int Write(const char *buf, int len)                             = 0;
+  virtual int WriteFlush(const char *buf, int len)                        = 0;
+  virtual int WriteVFlush(const iovec *iov, int len)                      = 0;
+  virtual int WriteVFlush(const iovec *iov, int len, int transfer_socket) = 0;
+  virtual int SendTo(const char *buf, int len)                            = 0;
+
   void SetError() { state = Error; ct = Now(); }
   void SetConnected() { state = Connected; ct = Now(); }
   void SetReconnect() { state = Reconnect; ct = Now(); }
   void SetConnecting() { state = Connecting; ct = Now(); }
-  int SetSourceAddress() { return SystemNetwork::GetSockName(socket, &src_addr, &src_port); }
   int Write(const string &buf) { return Write(buf.c_str(), buf.size()); }
-  int Write(const char *buf, int len);
   int WriteFlush();
   int WriteFlush(const string &buf) { return WriteFlush(buf.c_str(), buf.size()); }
-  int WriteFlush(const char *buf, int len);
   int WriteFlush(const char *buf, int len, int transfer_socket);
-  int WriteVFlush(const iovec *iov, int len);
-  int WriteVFlush(const iovec *iov, int len, int transfer_socket);
-  int SendTo(const char *buf, int len);
-  int Read();
   int Reads();
   int ReadPacket();
-  int ReadPackets();
   int Add(const char *buf, int len);
   int AddPacket(const char *buf, int len);
   int ReadFlush(int len);
 };
 
-struct Service {
+struct SocketConnection : public Connection {
+  Socket socket;
+  IPV4::Addr addr, src_addr=0;
+  int port, src_port=0;
+  SSLSocket bio;
+
+  SocketConnection(SocketService *s, Handler *h,                                     Callback *Detach=0) : Connection(s, Error, h, Detach), socket(-1),   addr(0),    port(0)    {}
+  SocketConnection(SocketService *s, int State, int Sock,                            Callback *Detach=0) : Connection(s, State, 0, Detach), socket(Sock), addr(0),    port(0)    {}
+  SocketConnection(SocketService *s, int State, int Sock, IPV4::Addr Addr, int Port, Callback *Detach=0) : Connection(s, State, 0, Detach), socket(Sock), addr(Addr), port(Port) {}
+  SocketConnection(SocketService *s, int State,           IPV4::Addr Addr, int Port, Callback *Detach=0) : Connection(s, State, 0, Detach), socket(-1),   addr(Addr), port(Port) {}
+
+  IPV4Endpoint RemoteIPV4() const override { return IPV4Endpoint(addr, port); }
+  IPV4Endpoint LocalIPV4() const override { return IPV4Endpoint(src_addr, src_port); }
+  Socket GetSocket() const override { return socket; }
+  string Name() const override { return !endpoint_name.empty() ? endpoint_name : IPV4::Text(addr, port); }
+  int Read() override;
+  int ReadPackets() override;
+  int Write(const char *buf, int len) override;
+  int WriteFlush(const char *buf, int len) override;
+  int WriteVFlush(const iovec *iov, int len) override;
+  int WriteVFlush(const iovec *iov, int len, int transfer_socket) override;
+  int SendTo(const char *buf, int len) override;
+  int SetSourceAddress() { return SystemNetwork::GetSockName(socket, &src_addr, &src_port); }
+};
+
+struct SocketListener {
+  bool ssl;
+  Socket socket = InvalidSocket;
+  SocketService *svc;
+  SSLSocket bio;
+  typed_ptr self_reference;
+  SocketListener(SocketService *s, bool SSL=false) : ssl(SSL), svc(s), self_reference(MakeTyped(this)) {}
+};
+
+struct SocketService {
   string name;
   int protocol, reconnect=0;
   bool initialized=0, heartbeats=0, endpoint_read_autoconnect=0;
   void *game_network=0;
-  map<string, unique_ptr<Listener>> listen;
-  map<Socket, unique_ptr<Connection>> conn;
-  map<string, unique_ptr<Connection>> endpoint;
+  map<string, unique_ptr<SocketListener>> listen;
+  map<Socket, unique_ptr<SocketConnection>> conn;
+  map<string, unique_ptr<SocketConnection>> endpoint;
   IPV4EndpointSource *connect_src_pool=0;
-  Connection fake;
-  Service(const string &n, int prot=Protocol::TCP) : name(n), protocol(prot), fake(this, Connection::Connected, 0) {}
+  SocketConnection fake;
+  SocketService(const string &n, int prot=Protocol::TCP) : name(n), protocol(prot), fake(this, Connection::Connected, 0) {}
 
   void QueueListen(IPV4::Addr addr, int port, bool SSL=false) { QueueListen(IPV4Endpoint(addr,port).ToString(), SSL); }
-  void QueueListen(const string &n, bool SSL=false) { listen[n] = make_unique<Listener>(this, SSL); }
-  Listener *GetListener() { return listen.size() ? listen.begin()->second.get() : 0; }
+  void QueueListen(const string &n, bool SSL=false) { listen[n] = make_unique<SocketListener>(this, SSL); }
+  SocketListener *GetListener() { return listen.size() ? listen.begin()->second.get() : 0; }
 
-  int OpenSocket(Connection *c, int protocol, int blocking, IPV4EndpointSource*);
-  Socket Listen(IPV4::Addr addr, int port, Listener*);
-  Connection *Accept(int state, Socket socket, IPV4::Addr addr, int port);
-  Connection *Connect(IPV4::Addr addr, int port, IPV4EndpointSource *src_addr=0, Callback *detach=0);
-  Connection *Connect(IPV4::Addr addr, int port, IPV4::Addr src_addr, int src_port, Callback *detach=0);
-  Connection *Connect(const string &hostport, int default_port=0, Callback *detach=0);
-  Connection *SSLConnect(SSLSocket::CTXPtr sslctx, IPV4::Addr addr, int port, Callback *detach=0);
-  Connection *SSLConnect(SSLSocket::CTXPtr sslctx, const string &hostport, int default_port=0, Callback *detach=0);
-  Connection *AddConnectedSocket(Socket socket, Connection::Handler*);
-  Connection *EndpointConnect(const string &endpoint_name);
+  int OpenSocket(SocketConnection *c, int protocol, int blocking, IPV4EndpointSource*);
+  Socket Listen(IPV4::Addr addr, int port, SocketListener*);
+  SocketConnection *Accept(int state, Socket socket, IPV4::Addr addr, int port);
+  SocketConnection *Connect(IPV4::Addr addr, int port, IPV4EndpointSource *src_addr=0, Callback *detach=0);
+  SocketConnection *Connect(IPV4::Addr addr, int port, IPV4::Addr src_addr, int src_port, Callback *detach=0);
+  SocketConnection *Connect(const string &hostport, int default_port=0, Callback *detach=0);
+  SocketConnection *SSLConnect(SSLSocket::CTXPtr sslctx, IPV4::Addr addr, int port, Callback *detach=0);
+  SocketConnection *SSLConnect(SSLSocket::CTXPtr sslctx, const string &hostport, int default_port=0, Callback *detach=0);
+  SocketConnection *AddConnectedSocket(Socket socket, Connection::Handler*);
+  SocketConnection *EndpointConnect(const string &endpoint_name);
   void EndpointReadCB(string *endpoint_name, string *packet);
   void EndpointRead(const string &endpoint_name, const char *buf, int len);
   void EndpointClose(const string &endpoint_name);
-  void Detach(Connection *c);
+  void Detach(SocketConnection *c);
 
-  virtual void Close(Connection *c);
-  virtual int UDPFilter(Connection *e, const char *buf, int len) { return 0; }
-  virtual int Connected(Connection *c) { return 0; }
+  virtual void Close(SocketConnection *c);
+  virtual int UDPFilter(SocketConnection *e, const char *buf, int len) { return 0; }
+  virtual int Connected(SocketConnection *c) { return 0; }
   virtual int Frame() { return 0; }
 };
 
-struct ServiceEndpointEraseList {
-  vector<pair<Service*, Socket> > sockets;
-  vector<pair<Service*, string> > endpoints;
-  void AddSocket  (Service *s, Socket fd)        { sockets  .emplace_back(s, fd); }
-  void AddEndpoint(Service *s, const string &en) { endpoints.emplace_back(s, en); }
+struct SocketServiceEndpointEraseList {
+  vector<pair<SocketService*, Socket> > sockets;
+  vector<pair<SocketService*, string> > endpoints;
+  void AddSocket  (SocketService *s, Socket fd)        { sockets  .emplace_back(s, fd); }
+  void AddEndpoint(SocketService *s, const string &en) { endpoints.emplace_back(s, en); }
   void Erase() {
     for (auto &r : endpoints) r.first->endpoint.erase(r.second);
     for (auto &r : sockets)   r.first->conn    .erase(r.second);
@@ -422,10 +444,10 @@ struct ServiceEndpointEraseList {
   }
 };
 
-struct UnixClient : public Service { UnixClient() : Service("UnixClient", Protocol::UNIX) {} };
-struct UnixServer : public Service { UnixServer(const string &n) : Service("UnixServer", Protocol::UNIX) { QueueListen(n); } };
+struct UnixClient : public SocketService { UnixClient() : SocketService("UnixClient", Protocol::UNIX) {} };
+struct UnixServer : public SocketService { UnixServer(const string &n) : SocketService("UnixServer", Protocol::UNIX) { QueueListen(n); } };
 
-struct UDPClient : public Service {
+struct UDPClient : public SocketService {
   static const int MTU = 1500;
   enum { Write=1, Sendto=2 };
   typedef function<void(Connection*, const char*, int)> ResponseCB;
@@ -438,62 +460,62 @@ struct UDPClient : public Service {
     void Close(Connection *c) { if (responseCB) responseCB(c, 0, 0); }
     int Read(Connection *c);
   };
-  UDPClient() : Service("UDPClient", Protocol::UDP) { heartbeats=true; }
-  Connection *PersistentConnection(const string &url, const ResponseCB& cb, int default_port) { return PersistentConnection(url, cb, HeartbeatCB(), default_port); }
-  Connection *PersistentConnection(const string &url, const ResponseCB&, const HeartbeatCB&, int default_port);
+  UDPClient() : SocketService("UDPClient", Protocol::UDP) { heartbeats=true; }
+  SocketConnection *PersistentConnection(const string &url, const ResponseCB& cb, int default_port) { return PersistentConnection(url, cb, HeartbeatCB(), default_port); }
+  SocketConnection *PersistentConnection(const string &url, const ResponseCB&, const HeartbeatCB&, int default_port);
 };
 
-struct UDPServer : public Service {
+struct UDPServer : public SocketService {
   virtual ~UDPServer() {}
   Connection::Handler *handler=0;
-  UDPServer(int port) : Service("UDPServer", Protocol::UDP) { QueueListen(0, port); }
-  virtual int Connected(Connection *c) { c->handler = unique_ptr<Connection::Handler>(handler); return 0; }
-  virtual void Close(Connection *c) { c->handler.release(); Service::Close(c); }
+  UDPServer(int port) : SocketService("UDPServer", Protocol::UDP) { QueueListen(0, port); }
+  int Connected(SocketConnection *c) override { c->handler = unique_ptr<Connection::Handler>(handler); return 0; }
+  void Close(SocketConnection *c) override { c->handler.release(); SocketService::Close(c); }
 };
 
-struct TCPClient : public Service { TCPClient() : Service("TCPClient") {} };
-struct TCPServer : public Service {
+struct TCPClient : public SocketService { TCPClient() : SocketService("TCPClient") {} };
+struct TCPServer : public SocketService {
   Connection::Handler *handler=0;
-  TCPServer(int port) : Service("TCPServer") { QueueListen(0, port); }
-  virtual int Connected(Connection *c) { c->handler = unique_ptr<Connection::Handler>(handler); return 0; }
-  virtual void Close(Connection *c) { c->handler.release(); Service::Close(c); }
+  TCPServer(int port) : SocketService("TCPServer") { QueueListen(0, port); }
+  int Connected(SocketConnection *c) override { c->handler = unique_ptr<Connection::Handler>(handler); return 0; }
+  void Close(SocketConnection *c) override { c->handler.release(); SocketService::Close(c); }
 };
 
-struct GPlusClient : public Service {
+struct GPlusClient : public SocketService {
   static const int MTU = 1500;
   enum { Write=1, Sendto=2 };
-  GPlusClient() : Service("GPlusClient", Protocol::GPLUS) { heartbeats=true; }
-  Connection *PersistentConnection(const string &name, UDPClient::ResponseCB cb, UDPClient::HeartbeatCB HCB);
+  GPlusClient() : SocketService("GPlusClient", Protocol::GPLUS) { heartbeats=true; }
+  SocketConnection *PersistentConnection(const string &name, UDPClient::ResponseCB cb, UDPClient::HeartbeatCB HCB);
 };
 
-struct GPlusServer : public Service {
+struct GPlusServer : public SocketService {
   virtual ~GPlusServer() {}
   Connection::Handler *handler=0;
-  GPlusServer() : Service("GPlusServer", Protocol::GPLUS) { endpoint_read_autoconnect=1; }
-  virtual int Connected(Connection *c) { c->handler = unique_ptr<Connection::Handler>(handler); return 0; }
-  virtual void Close(Connection *c) { c->handler.release(); Service::Close(c); }
+  GPlusServer() : SocketService("GPlusServer", Protocol::GPLUS) { endpoint_read_autoconnect=1; }
+  int Connected(SocketConnection *c) override { c->handler = unique_ptr<Connection::Handler>(handler); return 0; }
+  void Close(SocketConnection *c) override { c->handler.release(); SocketService::Close(c); }
 };
 
-struct InProcessServer : public Service {
+struct InProcessServer : public SocketService {
   Connection::Handler *handler=0;
   int next_id=1;
   virtual ~InProcessServer() {}
-  InProcessServer() : Service("InProcessServer", Protocol::InProcess) { endpoint_read_autoconnect=1; }
-  virtual int Connected(Connection *c) { c->handler = unique_ptr<Connection::Handler>(handler); return 0; }
-  virtual void Close(Connection *c) { c->handler.release(); Service::Close(c); }
+  InProcessServer() : SocketService("InProcessServer", Protocol::InProcess) { endpoint_read_autoconnect=1; }
+  int Connected(SocketConnection *c) override { c->handler = unique_ptr<Connection::Handler>(handler); return 0; }
+  void Close(SocketConnection *c) override { c->handler.release(); SocketService::Close(c); }
 };
 
-struct InProcessClient : public Service {
+struct InProcessClient : public SocketService {
   int next_id=1;
   virtual ~InProcessClient() {}
-  InProcessClient() : Service("InProcessClient", Protocol::InProcess) {}
-  Connection *PersistentConnection(InProcessServer*, UDPClient::ResponseCB cb, UDPClient::HeartbeatCB HCB);
+  InProcessClient() : SocketService("InProcessClient", Protocol::InProcess) {}
+  SocketConnection *PersistentConnection(InProcessServer*, UDPClient::ResponseCB cb, UDPClient::HeartbeatCB HCB);
 };
 
-struct Network : public Module {
+struct SocketServices : public Module {
   int select_time=0;
   LFLSocketSet active;
-  vector<Service*> service_table;
+  vector<SocketService*> service_table;
   unique_ptr<UDPClient> udp_client;
   unique_ptr<TCPClient> tcp_client;
   unique_ptr<UnixClient> unix_client;
@@ -502,45 +524,45 @@ struct Network : public Module {
   LazyInitializedPtr<InProcessClient> inprocess_client;
   LazyInitializedPtr<GPlusClient> gplus_client;
   SSLSocket::CTXPtr ssl;
-  Network();
-  virtual ~Network();
+  SocketServices();
+  virtual ~SocketServices();
 
   int Init();
-  int Enable(Service *svc);
-  int Disable(Service *svc);
-  int Shutdown(Service *svc);
-  int Enable(const vector<Service*> &svc);
-  int Disable(const vector<Service*> &svc);
-  int Shutdown(const vector<Service*> &svc);
+  int Enable(SocketService *svc);
+  int Disable(SocketService *svc);
+  int Shutdown(SocketService *svc);
+  int Enable(const vector<SocketService*> &svc);
+  int Disable(const vector<SocketService*> &svc);
+  int Shutdown(const vector<SocketService*> &svc);
   int Frame(unsigned);
-  void AcceptFrame(Service *svc, Listener *listener);
-  void TCPConnectionFrame(Service *svc, Connection *c, ServiceEndpointEraseList *removelist);
-  void UDPConnectionFrame(Service *svc, Connection *c, ServiceEndpointEraseList *removelist, const string &epk);
+  void AcceptFrame(SocketService *svc, SocketListener *listener);
+  void TCPConnectionFrame(SocketService *svc, SocketConnection *c, SocketServiceEndpointEraseList *removelist);
+  void UDPConnectionFrame(SocketService *svc, SocketConnection *c, SocketServiceEndpointEraseList *removelist, const string &epk);
 
-  void ConnClose(Service *svc, Connection *c, ServiceEndpointEraseList *removelist);
-  void ConnCloseDetached(Service *svc, Connection *c);
-  void ConnCloseAll(Service *svc);
+  void ConnClose(SocketService *svc, SocketConnection *c, SocketServiceEndpointEraseList *removelist);
+  void ConnCloseDetached(SocketService *svc, SocketConnection *c);
+  void ConnCloseAll(SocketService *svc);
 
-  void EndpointRead(Service *svc, const char *name, const char *buf, int len);
-  void EndpointClose(Service *svc, Connection *c, ServiceEndpointEraseList *removelist, const string &epk);
-  void EndpointCloseAll(Service *svc);
+  void EndpointRead(SocketService *svc, const char *name, const char *buf, int len);
+  void EndpointClose(SocketService *svc, SocketConnection *c, SocketServiceEndpointEraseList *removelist, const string &epk);
+  void EndpointCloseAll(SocketService *svc);
 
-  void UpdateActive(Connection *c);
+  void UpdateActive(SocketConnection *c);
 };
 
-/// NetworkThread runs the Network Module in a new thread with a multiplexed Callback queue
-struct NetworkThread {
+/// SocketServicesThread runs the SocketServices Module in a new thread with a multiplexed Callback queue
+struct SocketServicesThread {
   struct ConnectionHandler : public Connection::Handler {
     void HandleMessage(Callback *cb);
     int Read(Connection *c);
   };
 
   bool init=0;
-  Network *net=0;
-  Connection *rd=0;
-  unique_ptr<Connection> wr;
+  SocketServices *net=0;
+  SocketConnection *rd=0;
+  unique_ptr<SocketConnection> wr;
   unique_ptr<Thread> thread;
-  NetworkThread(Network *N, bool Init);
+  SocketServicesThread(SocketServices *N, bool Init);
 
   void Write(Callback *x);
   void HandleMessagesLoop();

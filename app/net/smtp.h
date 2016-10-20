@@ -35,28 +35,28 @@ struct SMTP {
   }
 };
 
-struct SMTPClient : public Service {
+struct SMTPClient : public SocketService {
   typedef function<bool(Connection*, const string&, SMTP::Message*)> DeliverableCB;
   typedef function<void(Connection*, const SMTP::Message &, int, const string&)> DeliveredCB;
 
   long long total_connected=0, total_disconnected=0, delivered=0, failed=0;
   map<IPV4::Addr, string> domains; string domain;
-  SMTPClient() : Service("SMTPClient") {}
+  SMTPClient() : SocketService("SMTPClient") {}
 
-  virtual int Connected(Connection *c) { total_connected++; return 0; }
+  int Connected(SocketConnection *c) override { total_connected++; return 0; }
   string HeloDomain(IPV4::Addr addr) const { return domain.empty() ? FindOrDie(domains, addr) : domain; }
   Connection *DeliverTo(IPV4::Addr mx, IPV4EndpointSource*, DeliverableCB deliverableCB, DeliveredCB deliveredCB);
 
   static void DeliverDeferred(Connection *c);
 };
 
-struct SMTPServer : public Service {
+struct SMTPServer : public SocketService {
   long long total_connected=0;
   map<IPV4::Addr, string> domains;
   string domain;
 
-  SMTPServer(const string &n) : Service("SMTPServer"), domain(n) {}
-  virtual int Connected(Connection *c);
+  SMTPServer(const string &n) : SocketService("SMTPServer"), domain(n) {}
+  int Connected(SocketConnection *c) override;
   virtual void ReceiveMail(Connection *c, const SMTP::Message &message);
   string HeloDomain(IPV4::Addr addr) const { return domain.empty() ? FindOrDie(domains, addr) : domain; }
 };

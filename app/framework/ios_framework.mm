@@ -171,15 +171,19 @@ static const char* const* ios_argv = 0;
   - (void)applicationWillEnterForeground:(UIApplication *)application{}
 
   - (void)applicationDidEnterBackground:(UIApplication *)application {
+    INFO("enter bg");
     bgTask = [application beginBackgroundTaskWithName:@"MyTask" expirationHandler:^{
       [application endBackgroundTask:bgTask];
       bgTask = UIBackgroundTaskInvalid;
     }];
-
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
                      [application endBackgroundTask:bgTask];
                      bgTask = UIBackgroundTaskInvalid;
                    });
+  }
+
+  - (void)application:(UIApplication *)application performFetchWithCompletionHandler:(nonnull void (^)(UIBackgroundFetchResult))completionHandler {
+    INFO("fetch");
   }
 
   - (void)glkView:(GLKView *)v drawInRect:(CGRect)rect {
@@ -435,8 +439,11 @@ static const char* const* ios_argv = 0;
 @implementation LFViewController
   {
     LFUIApplication *uiapp;
-    bool overlap_keyboard;
+    bool overlap_keyboard, status_bar_hidden;
   }
+
+  - (BOOL)prefersStatusBarHidden { return status_bar_hidden; }
+  - (void)showStatusBar:(BOOL)v { status_bar_hidden = !v; [self setNeedsStatusBarAppearanceUpdate]; }
 
   - (void)viewWillAppear:(BOOL)animated { 
     [super viewWillAppear:animated];
@@ -622,6 +629,7 @@ void Application::SetVerticalSwipeRecognizer(int touches) { [[LFUIApplication sh
 void Application::SetHorizontalSwipeRecognizer(int touches) { [[LFUIApplication sharedAppDelegate] initHorizontalSwipeGestureRecognizers: touches]; }
 void Application::SetPanRecognizer(bool enabled) { [[LFUIApplication sharedAppDelegate] initPanGestureRecognizers]; }
 void Application::SetPinchRecognizer(bool enabled) { [[LFUIApplication sharedAppDelegate] initPinchGestureRecognizers]; }
+void Application::ShowSystemStatusBar(bool v) { [[LFUIApplication sharedAppDelegate].controller showStatusBar:v]; }
 
 void Window::SetResizeIncrements(float x, float y) {}
 void Window::SetTransparency(float v) {}
@@ -675,6 +683,7 @@ void FrameScheduler::DelMainWaitKeyboard(Window*) {
 }
 
 void FrameScheduler::AddMainWaitSocket(Window *w, Socket fd, int flag, function<bool()> cb) {
+  if (fd == InvalidSocket) return;
   if (!wait_forever_thread) {
     CHECK_EQ(SocketSet::READABLE, flag);
     [[LFUIApplication sharedAppDelegate] addMainWaitSocket:fd callback:move(cb)];
@@ -682,6 +691,7 @@ void FrameScheduler::AddMainWaitSocket(Window *w, Socket fd, int flag, function<
 }
 
 void FrameScheduler::DelMainWaitSocket(Window *w, Socket fd) {
+  if (fd == InvalidSocket) return;
   [[LFUIApplication sharedAppDelegate] delMainWaitSocket: fd];
 }
 

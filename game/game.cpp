@@ -28,7 +28,7 @@ int Game::Team::FromString(const string &s) {
   else                       return 0;
 }
 
-void Game::Network::Visitor::VisitClients(Service *svc, Visitor *visitor) {
+void Game::Network::Visitor::VisitClients(SocketService *svc, Visitor *visitor) {
   if (svc->protocol == Protocol::TCP) {
     for (auto iter = svc->conn.begin(), e = svc->conn.end(); iter != e; ++iter) {
       Connection *c = iter->second.get();
@@ -64,13 +64,13 @@ int Game::Network::Write(Connection *c, int method, unsigned short seq, Serializ
   return Write(c, method, buf.data(), buf.size());
 }
 
-int Game::Network::Broadcast(Service *svc, SerializableProto *msg) {
+int Game::Network::Broadcast(SocketService *svc, SerializableProto *msg) {
   BroadcastVisitor visitor(this, msg);
   Visitor::VisitClients(svc, &visitor);
   return visitor.sent;
 }
 
-int Game::Network::BroadcastWithRetry(Service *svc, SerializableProto *msg, Connection *skip) {
+int Game::Network::BroadcastWithRetry(SocketService *svc, SerializableProto *msg, Connection *skip) {
   BroadcastWithRetryVisitor visitor(this, msg, skip);
   Visitor::VisitClients(svc, &visitor);
   return visitor.sent;
@@ -211,7 +211,8 @@ void GameBots::Clear() {
 }
 
 int GameUDPServer::Hash(Connection *c) {
-  int conn_key[3] = { int(c->addr), secret1, c->port }; 
+  IPV4Endpoint remote = c ? c->RemoteIPV4() : IPV4Endpoint();
+  int conn_key[3] = { int(remote.addr), secret1, remote.port }; 
   return fnv32(conn_key, sizeof(conn_key), secret2);
 }
 

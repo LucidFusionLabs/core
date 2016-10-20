@@ -3,7 +3,7 @@
 [![Build Status](https://travis-ci.org/LucidFusionLabs/core.svg?branch=master)](https://travis-ci.org/LucidFusionLabs/core)
 
 The core API consists of the: `Application`, and `Window` classes,
-the `Audio`, `Video`, `Input`, `Network`, `Camera`, and `CUDA` Modules,
+the `Audio`, `Video`, `Input`, `SocketServices`, `Camera`, and `CUDA` Modules,
 the `Framework`, `Fonts`, `GUI`, `Loader`, `Scene`, `IPC`, and `Crypto` subsystems,
 and runs on OS X, Windows, Linux, iOS, and Android.
 
