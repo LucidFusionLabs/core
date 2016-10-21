@@ -171,19 +171,20 @@ static const char* const* ios_argv = 0;
   - (void)applicationWillEnterForeground:(UIApplication *)application{}
 
   - (void)applicationDidEnterBackground:(UIApplication *)application {
-    INFO("enter bg");
+#if 0
     bgTask = [application beginBackgroundTaskWithName:@"MyTask" expirationHandler:^{
       [application endBackgroundTask:bgTask];
       bgTask = UIBackgroundTaskInvalid;
     }];
+    // now cancel it
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
                      [application endBackgroundTask:bgTask];
                      bgTask = UIBackgroundTaskInvalid;
                    });
+#endif
   }
 
   - (void)application:(UIApplication *)application performFetchWithCompletionHandler:(nonnull void (^)(UIBackgroundFetchResult))completionHandler {
-    INFO("fetch");
   }
 
   - (void)glkView:(GLKView *)v drawInRect:(CGRect)rect {

@@ -21,6 +21,7 @@
 namespace LFL {
   
 struct HTTP {
+  static void SplitHostAndPort(const string &in, int default_port, string *host, int *port);
   static bool ParseHost(const char *host, const char *host_end, string *hostO, string *portO);
   static bool ResolveHost(const char *host, const char *host_end, IPV4::Addr *ipv4_addr, int *tcp_port, bool ssl, int defport=0);
   static bool ResolveEndpoint(const string &host, const string &port, IPV4::Addr *ipv4_addr, int *tcp_port, bool ssl, int defport=0);

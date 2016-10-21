@@ -747,6 +747,8 @@ struct Application : public ::LFApp {
   void SetVolume(int v);
   void PlaySoundEffect(SoundAsset*, const v3 &pos=v3(), const v3 &vel=v3());
   void PlayBackgroundMusic(SoundAsset*);
+  Connection *ConnectTCP(const string &hostport, int default_port, Callback *connected_cb,
+                         bool background_services = false);
 
   template <class... Args> void RunInMainThread(Args&&... args) {
     message_queue.Write(new Callback(forward<Args>(args)...));

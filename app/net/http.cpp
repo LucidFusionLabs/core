@@ -20,6 +20,13 @@
 #include "core/app/net/resolver.h"
 
 namespace LFL {
+void HTTP::SplitHostAndPort(const string &in, int default_port, string *host, int *port) {
+  string port_text;
+  LFL::Split(in, LFL::isint<':'>, host, &port_text);
+  int port_val = atoi(port_text);
+  *port = port_val ? port_val : default_port;
+}
+
 bool HTTP::ParseHost(const char *host, const char *host_end, string *hostO, string *portO) {
   const char *colon = strstr(host, ":"), *port = 0;
   if (!host_end) host_end = host + strlen(host);

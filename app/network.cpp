@@ -499,6 +499,10 @@ int Connection::WriteFlush() {
 
 /* SocketConnection */
 
+void SocketConnection::Close() {
+  app->net->ConnCloseDetached(app->net->tcp_client.get(), this);
+}
+
 int SocketConnection::Read() {
   int readlen = rb.Remaining(), len = 0;
   if (readlen <= 0) return ERRORv(-1, Name(), ": read queue full, rl=", rb.size());
@@ -655,6 +659,10 @@ int SocketConnection::WriteVFlush(const iovec *iov, int len, int transfer_socket
 }
 
 int SocketConnection::SendTo(const char *buf, int len) { return SystemNetwork::SendTo(socket, addr, port, buf, len); }
+void SocketConnection::RemoveFromMainWait(Window *w) { app->scheduler.DelMainWaitSocket(w, socket); }
+void SocketConnection::AddToMainWait(Window *w, function<bool()> readable_cb) {
+  app->scheduler.AddMainWaitSocket(w, socket, SocketSet::READABLE, move(readable_cb));
+}
 
 /* SocketService */
 

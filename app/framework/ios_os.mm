@@ -1015,6 +1015,82 @@ static std::vector<UIImage*> app_images;
 @end
 
 namespace LFL {
+struct NSURLSessionStreamConnection : public Connection {
+  static NSURLSession *session;
+  NSURLSessionStreamTask *stream=0;
+  Callback connected_cb;
+  function<bool()> readable_cb;
+  bool connected=0, done=0;
+  string buf;
+
+  virtual ~NSURLSessionStreamConnection() { if (stream) [stream release]; }
+  NSURLSessionStreamConnection(const string &hostport, int default_port, Callback s_cb) : connected_cb(move(s_cb)) {
+    int port;
+    string host;
+    LFL::HTTP::SplitHostAndPort(hostport, default_port, &host, &port);
+    endpoint_name = StrCat(host, ":", port);
+    INFO(endpoint_name, ": connecting NSURLSessionStreamTask");
+    if (!session) {
+      NSURLSessionConfiguration* config = [NSURLSessionConfiguration defaultSessionConfiguration];
+      NSString *appid = [[[NSBundle mainBundle] infoDictionary] objectForKey:@"CFBundleIdentifier"];
+      CHECK(config);
+      config.shouldUseExtendedBackgroundIdleMode = TRUE;
+      config.sharedContainerIdentifier = appid;
+      session = [NSURLSession sessionWithConfiguration:config delegate:[LFUIApplication sharedAppDelegate] delegateQueue:nil];
+      CHECK(session);
+      [session retain];
+    }
+    stream = [session streamTaskWithHostName:LFL::MakeNSString(host) port:port];
+    CHECK(stream);
+    [stream retain];
+    [stream resume];
+    ReadableCB(true, false, false);
+  }
+
+  void AddToMainWait(Window*, function<bool()> r_cb) override { readable_cb = move(r_cb); }
+  void RemoveFromMainWait(Window*)                   override { readable_cb = function<bool()>(); }
+
+  void Close() override { delete this; }
+  int Read() override { return done ? -1 : 0; }
+  int WriteFlush(const char *buf, int len) override {
+    [stream writeData:LFL::MakeNSData(buf, len) timeout:0 completionHandler:^(NSError *error){
+      if (!connected) app->RunInMainThread([=]() { if (!connected && (connected=1)) ConnectedCB(); });
+      if (error) app->RunInMainThread([=](){ if (!done && (done=1)) { if (readable_cb()) app->scheduler.Wakeup(app->focused); } });
+    }];
+    return len;
+  }
+
+  void ConnectedCB() {
+    INFO(endpoint_name, ": connected NSURLSessionStreamTask");
+    state = Connection::Connected;
+    if (handler) handler->Connected(this);
+    if (connected_cb) connected_cb();
+  }
+
+  void ReadableCB(bool init, bool error, bool eof) {
+    CHECK(!done);
+    if (error) done = true;
+    if (!init) {
+      if (!connected && (connected=1)) ConnectedCB();
+      if (!error) rb.Add(buf.data(), buf.size());
+      if (readable_cb()) app->scheduler.Wakeup(app->focused);
+    }
+    buf.clear();
+    if (done) return;
+    if (eof) {
+      done = true;
+      if (readable_cb()) app->scheduler.Wakeup(app->focused);
+      return;
+    }
+    [stream readDataOfMinLength:1 maxLength:65536 timeout:0 completionHandler:^(NSData *data, BOOL atEOF, NSError *error){
+      if (!error) buf.append(static_cast<const char *>(data.bytes), data.length);
+      app->RunInMainThread(bind(&NSURLSessionStreamConnection::ReadableCB, this, false, error != nil, atEOF));
+    }];
+  }
+};
+
+NSURLSession* NSURLSessionStreamConnection::session = 0;
+
 SystemAlertView::~SystemAlertView() { if (auto alert = FromVoid<IOSAlert*>(impl)) [alert release]; }
 SystemAlertView::SystemAlertView(AlertItemVec items) : impl([[IOSAlert alloc] init: move(items)]) {}
 void SystemAlertView::Show(const string &arg) {
@@ -1265,11 +1341,10 @@ void Application::SaveSettings(const StringPairVec &v) {
   [defaults synchronize];
 }
 
-void *OpenURLSession(const string &host, int port) {
-  NSURLSession *session = [NSURLSession sharedSession];
-  NSURLSessionStreamTask *stream = [session streamTaskWithHostName:MakeNSString(host) port:port];
-  [stream resume];
-  return stream;
+Connection *Application::ConnectTCP(const string &hostport, int default_port, Callback *connected_cb, bool background_services) {
+  INFO("Application::ConnectTCP ", hostport, " (default_port = ", default_port, ") background_services = ", background_services); 
+  if (background_services) return new NSURLSessionStreamConnection(hostport, default_port, connected_cb ? move(*connected_cb) : Callback());
+  else return app->net->tcp_client->Connect(hostport, default_port, connected_cb);
 }
 
 }; // namespace LFL

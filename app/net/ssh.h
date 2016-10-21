@@ -36,7 +36,7 @@ struct SSHClient {
   struct Params {
     struct Forward { int port; string target_host; int target_port; };
     string hostport, user, termvar, startup_command;
-    bool compress, agent_forwarding, close_on_disconnect;
+    bool compress, agent_forwarding, close_on_disconnect, background_services;
     vector<Forward> forward_local, forward_remote;
   };
 
@@ -54,6 +54,7 @@ struct SSHClient {
   typedef function<bool(shared_ptr<Identity>*)> LoadIdentityCB;
   typedef function<bool(string*)> LoadPasswordCB;
   static Connection *Open(Params params, const ResponseCB &cb, Callback *detach=0, Callback *success=0);
+  static Connection *CreateSSHHandler(Connection *c, Params p, const SSHClient::ResponseCB &cb, Callback *success=0);
 
   static void SetCredentialCB(Connection *c, FingerprintCB, LoadIdentityCB, LoadPasswordCB);
   static int SetTerminalWindowSize(Connection *c, int w, int h);

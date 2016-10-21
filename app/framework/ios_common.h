@@ -28,7 +28,7 @@
   - (CGRect)getKeyboardToolbarFrame;
 @end
 
-@interface LFUIApplication : NSObject<UIApplicationDelegate, GLKViewDelegate, UITextFieldDelegate, ObjcWindow> {}
+@interface LFUIApplication : NSObject<UIApplicationDelegate, GLKViewDelegate, UITextFieldDelegate, NSURLSessionDelegate, ObjcWindow> {}
   @property (nonatomic, retain) UIWindow *window;
   @property (nonatomic, retain) LFViewController *controller;
   @property (nonatomic, retain) GLKView *view;

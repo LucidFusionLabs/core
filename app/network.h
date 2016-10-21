@@ -333,17 +333,21 @@ struct Connection {
   Connection(SocketService *s=0, int t=Error, Handler *h=0, Callback *Detach=0) : svc(s), ct(Now()), rt(Now()), wt(Now()), state(t), rb(65536), wb(65536), self_reference(MakeTyped(this)), handler(h), detach(Detach) {}
   virtual ~Connection();
 
+  virtual void Close()                                              = 0;
+  virtual int  Read()                                               = 0;
+  virtual int  WriteFlush(const char *buf, int len)                 = 0;
+  virtual void AddToMainWait(Window*, function<bool()> readable_cb) = 0;
+  virtual void RemoveFromMainWait(Window*)                          = 0;
+
+  virtual string Name() const { return endpoint_name; }
   virtual IPV4Endpoint RemoteIPV4() const { return IPV4Endpoint(0, 0); }
   virtual IPV4Endpoint LocalIPV4() const { return IPV4Endpoint(0, 0); }
   virtual Socket GetSocket() const { return InvalidSocket; }
-  virtual string Name() const                                             = 0;
-  virtual int Read()                                                      = 0;
-  virtual int ReadPackets()                                               = 0;
-  virtual int Write(const char *buf, int len)                             = 0;
-  virtual int WriteFlush(const char *buf, int len)                        = 0;
-  virtual int WriteVFlush(const iovec *iov, int len)                      = 0;
-  virtual int WriteVFlush(const iovec *iov, int len, int transfer_socket) = 0;
-  virtual int SendTo(const char *buf, int len)                            = 0;
+  virtual int ReadPackets() { int ret = 1; while(ret > 0) ret = ReadPacket(); return ret; }
+  virtual int Write(const char *buf, int len) { return WriteFlush(buf, len); }
+  virtual int WriteVFlush(const iovec *iov, int len) { string b; for (auto i=iov, e=i+len; i!=e; ++i) b.append(static_cast<const char *>(i->iov_base), i->iov_len); return WriteFlush(b.data(), b.size()); }
+  virtual int WriteVFlush(const iovec *iov, int len, int xfer_socket) { return xfer_socket == InvalidSocket ? WriteVFlush(iov, len) : -1; }
+  virtual int SendTo(const char *buf, int len) { return -1; } 
 
   void SetError() { state = Error; ct = Now(); }
   void SetConnected() { state = Connected; ct = Now(); }
@@ -375,6 +379,7 @@ struct SocketConnection : public Connection {
   IPV4Endpoint LocalIPV4() const override { return IPV4Endpoint(src_addr, src_port); }
   Socket GetSocket() const override { return socket; }
   string Name() const override { return !endpoint_name.empty() ? endpoint_name : IPV4::Text(addr, port); }
+  void Close() override;
   int Read() override;
   int ReadPackets() override;
   int Write(const char *buf, int len) override;
@@ -383,6 +388,8 @@ struct SocketConnection : public Connection {
   int WriteVFlush(const iovec *iov, int len, int transfer_socket) override;
   int SendTo(const char *buf, int len) override;
   int SetSourceAddress() { return SystemNetwork::GetSockName(socket, &src_addr, &src_port); }
+  void AddToMainWait(Window*, function<bool()> readable_cb) override;
+  void RemoveFromMainWait(Window*) override;
 };
 
 struct SocketListener {

@@ -216,7 +216,7 @@ int GameUDPServer::Hash(Connection *c) {
   return fnv32(conn_key, sizeof(conn_key), secret2);
 }
 
-int GameUDPServer::UDPFilter(Connection *c, const char *content, int content_len) {
+int GameUDPServer::UDPFilter(SocketConnection *c, const char *content, int content_len) {
   if (content_len < GameProtocol::Header::size) return -1;
 
   Serializable::ConstStream in(content, content_len);

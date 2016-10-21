@@ -61,7 +61,9 @@ void Application::OpenSystemBrowser(const string &url_text) {
   ShellExecute(NULL, "open", url_text.c_str(), NULL, NULL, SW_SHOWNORMAL);
 }
 
-void Application::ShowAds() {}
-void Application::HideAds() {}
+Connection *Application::ConnectTCP(const string &hostport, int default_port, Callback *connected_cb, bool background_services) {
+  INFO("Application::ConnectTCP ", hostport, " (default_port = ", default_port, ") background_services = false"); 
+  return app->net->tcp_client->Connect(hostport, default_port, connected_cb);
+}
 
 }; // namespace LFL

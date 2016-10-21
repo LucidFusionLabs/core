@@ -43,6 +43,8 @@ string GetNSDocumentDirectory();
 
 inline string GetNSString(NSString *x) { return x ? string([x UTF8String]) : string(); }
 inline NSString *MakeNSString(const string &x) { return [[[NSString alloc] initWithBytes:x.data() length:x.size() encoding:NSUTF8StringEncoding] autorelease]; }
+inline NSData *MakeNSData(const string &x) { return [NSData dataWithBytes:x.data() length:x.size()]; }
+inline NSData *MakeNSData(const void *b, int l) { return [NSData dataWithBytes:b length:l]; }
 inline CGPoint MakeCGPoint(const point &p) { return CGPointMake(p.x, p.y); }
 inline CGPoint MakeCGPoint(const v2 &p) { return CGPointMake(p.x, p.y); }
 inline v2 GetCGPoint(CGPoint p) { return v2(p.x, p.y); }

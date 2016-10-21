@@ -205,7 +205,7 @@ struct GameUDPServer : public UDPServer {
   GameUDPServer(int port) : UDPServer(port), secret1(rand()), secret2(rand()) {}
 
   int Hash(Connection *c);
-  int UDPFilter(Connection *c, const char *content, int content_len);
+  int UDPFilter(SocketConnection *c, const char *content, int content_len) override;
 };
 
 struct GameGPlusServer : public GPlusServer {};

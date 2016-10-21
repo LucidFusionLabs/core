@@ -67,8 +67,8 @@ struct SSHClientConnection : public Connection::Handler {
     dont_compress(params.compress ? 0 : SSH::Compression::None-1) {}
   virtual ~SSHClientConnection() { ClearPassword(); FreeBigNumContext(ctx); FreeBigNum(K); Crypto::CipherFree(encrypt); Crypto::CipherFree(decrypt); }
 
-  void Close(Connection *c) { cb(c, StringPiece()); }
-  int Connected(Connection *c) {
+  void Close(Connection *c) override { cb(c, StringPiece()); }
+  int Connected(Connection *c) override {
     if (state != INIT) return -1;
     string version_text = StrCat(V_C, "\r\n");
     if (c->WriteFlush(version_text) != version_text.size()) return ERRORv(-1, c->Name(), ": write");
@@ -76,7 +76,7 @@ struct SSHClientConnection : public Connection::Handler {
     return 0;
   }
 
-  int Read(Connection *c) {
+  int Read(Connection *c) override {
     if (state == INIT) {
       int processed = 0;
       StringLineIter lines(c->rb.buf, StringLineIter::Flag::BlankLines);
@@ -709,8 +709,11 @@ struct SSHClientConnection : public Connection::Handler {
 };
 
 Connection *SSHClient::Open(Params p, const SSHClient::ResponseCB &cb, Callback *detach, Callback *success) { 
-  Connection *c = app->net->tcp_client->Connect(p.hostport, 22, detach);
-  if (!c) return 0;
+  Connection *c = app->ConnectTCP(p.hostport, 22, detach, p.background_services);
+  return c ? SSHClient::CreateSSHHandler(c, move(p), cb, success) : 0;
+}
+
+Connection *SSHClient::CreateSSHHandler(Connection *c, Params p, const SSHClient::ResponseCB &cb, Callback *success) {
   c->handler = make_unique<SSHClientConnection>(move(p), cb, success ? *success : Callback());
   return c;
 }
