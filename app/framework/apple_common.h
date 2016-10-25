@@ -48,6 +48,7 @@ inline NSData *MakeNSData(const void *b, int l) { return [NSData dataWithBytes:b
 inline CGPoint MakeCGPoint(const point &p) { return CGPointMake(p.x, p.y); }
 inline CGPoint MakeCGPoint(const v2 &p) { return CGPointMake(p.x, p.y); }
 inline v2 GetCGPoint(CGPoint p) { return v2(p.x, p.y); }
+inline Box GetCGRect(CGRect r) { return Box(r.origin.x, r.origin.y, r.size.width, r.size.height); }
 NSArray *MakeNSStringArray(const vector<string>&);
 
 }; // namespace LFL

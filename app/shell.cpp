@@ -113,7 +113,7 @@ void Shell::consolecolor(const vector<string>&) {
   parent->console->style.font.SetFont(app->fonts->Get(FLAGS_font, "", 9, Color::black));
 }
 
-void Shell::savedir(const vector<string>&) { INFO(LFAppSaveDir()); }
+void Shell::savedir(const vector<string>&) { INFO(GetLFAppSaveDir()); }
 
 void Shell::savesettings(const vector<string> &a) {
   if (a.empty()) return INFO("usage: savesettings <fields>");

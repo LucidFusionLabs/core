@@ -75,32 +75,29 @@ static const char* const* ios_argv = 0;
 
 @implementation LFUIApplication
   {
-    CGFloat scale, pinch_scale;
-    CGPoint pinch_point;
-    CGRect keyboard_frame;
     bool want_extra_scale;
-    int current_orientation, target_fps;
-    UIBackgroundTaskIdentifier bgTask;
+    int target_fps;
+    UIBackgroundTaskIdentifier bg_task;
   }
-  @synthesize window, controller, view, lview, rview, text_field;
 
   + (LFUIApplication *)sharedAppDelegate { return (LFUIApplication *)[[UIApplication sharedApplication] delegate]; }
 
   - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
     _resign_textfield_on_return = YES;
     _main_wait_fh = [[NSMutableDictionary alloc] init];
-    scale = [[UIScreen mainScreen] scale];
+    _scale = [[UIScreen mainScreen] scale];
     CGRect wbounds = [[UIScreen mainScreen] bounds];
 
     MyAppCreate(LFL::ios_argc, LFL::ios_argv);
     self.window = [[[UIWindow alloc] initWithFrame:wbounds] autorelease];
-    if (_title) {
+      
+    if (_show_title) {
       _title_bar = [[UINavigationBar alloc] initWithFrame:CGRectMake(0, 0, CGRectGetWidth(wbounds), 44)];
       [_title_bar setTintColor:[UIColor whiteColor]];
       UINavigationItem *item = [[UINavigationItem alloc] init];
       item.title = LFL::MakeNSString(LFL::app->focused ? LFL::app->focused->caption : LFL::app->name);
       [_title_bar setItems:@[item]];
-      [window addSubview: _title_bar];
+      [self.window addSubview: _title_bar];
 
       int title_height = _title_bar.bounds.size.height;
       wbounds.origin.y    += title_height;
@@ -119,15 +116,16 @@ static const char* const* ios_argv = 0;
     [context release];
 
     self.controller = [[[LFViewController alloc] initWithNibName:nil bundle:nil] autorelease];
+    self.controller.view = self.view; 
     self.controller.delegate = self.controller;
-    [self.controller setView:self.view]; 
     self.controller.resumeOnDidBecomeActive = NO;
     // self.controller.wantsFullScreenLayout = YES;
-    _top_controller = self.controller;
+    self.top_controller = self.controller;
+    self.root_controller = self.controller;
 
     [UIApplication sharedApplication].idleTimerDisabled = YES;
     self.window.rootViewController = self.controller;
-    [self.window addSubview:self.view];
+    [self.controller initNotifications];
 
     // left touch view
     CGRect lrect = CGRectMake(0, 0, wbounds.size.width, wbounds.size.height/2);
@@ -142,7 +140,6 @@ static const char* const* ios_argv = 0;
     // self.rview.backgroundColor = [UIColor blueColor];
     // self.rview.alpha = 0.3f;
     [self.view addSubview:self.rview];
-    [self initNotifications];
 
     // text view for keyboard display
     self.text_field = [[[MyTextField alloc] initWithFrame: CGRectZero] autorelease];
@@ -155,15 +152,21 @@ static const char* const* ios_argv = 0;
     [[NSFileManager defaultManager] changeCurrentDirectoryPath: [[NSBundle mainBundle] resourcePath]];
     NSLog(@"iOSMain argc=%d", LFL::app->argc);
     MyAppMain();
-    INFOf("didFinishLaunchingWithOptions, views: %p, %p, %p, csf=%f", self.view, self.lview, self.rview, scale);
+    INFOf("didFinishLaunchingWithOptions, views: %p, %p, %p, csf=%f", self.view, self.lview, self.rview, self.scale);
 
     [self.window makeKeyAndVisible];
+    // INFO("after window makeKeyAndVisible");
+    return YES;
+  }
+
+  - (BOOL)application:(UIApplication *)application openURL:(NSURL *)url sourceApplication:(NSString *)sourceApplication annotation:(id)annotation {
+    INFO("openURL ", LFL::GetNSString([url absoluteString]));
     return YES;
   }
 
   - (void)applicationWillTerminate:(UIApplication *)application {
-    [self shutdownNotifications];
-    [self shutdownGestureRecognizers];
+    [self.controller shutdownNotifications];
+    [self.controller shutdownGestureRecognizers];
   }
 
   - (void)applicationWillResignActive:(UIApplication*)application {}
@@ -172,26 +175,27 @@ static const char* const* ios_argv = 0;
 
   - (void)applicationDidEnterBackground:(UIApplication *)application {
 #if 0
-    bgTask = [application beginBackgroundTaskWithName:@"MyTask" expirationHandler:^{
-      [application endBackgroundTask:bgTask];
-      bgTask = UIBackgroundTaskInvalid;
+    bg_task = [application beginBackgroundTaskWithName:@"MyTask" expirationHandler:^{
+      [application endBackgroundTask:bg_task];
+      bg_task = UIBackgroundTaskInvalid;
     }];
     // now cancel it
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-                     [application endBackgroundTask:bgTask];
-                     bgTask = UIBackgroundTaskInvalid;
+                     [application endBackgroundTask:bg_task];
+                     bg_task = UIBackgroundTaskInvalid;
                    });
 #endif
   }
 
   - (void)application:(UIApplication *)application performFetchWithCompletionHandler:(nonnull void (^)(UIBackgroundFetchResult))completionHandler {
+    completionHandler(UIBackgroundFetchResultNoData);
   }
 
   - (void)glkView:(GLKView *)v drawInRect:(CGRect)rect {
     LFL::Window *screen = LFL::app->focused;
     if (!_screen_width || !_screen_height || !screen) return;
     if (screen->y != _screen_y || screen->width != _screen_width || screen->height != _screen_height)
-      WindowReshaped(0, _screen_y, _screen_width, _screen_height);
+      LFL::app->focused->Reshaped(LFL::Box(0, _screen_y, _screen_width, _screen_height));
 
     LFAppFrame(true); 
   }
@@ -203,8 +207,8 @@ static const char* const* ios_argv = 0;
   }
 
   - (CGRect)getFrame { return self.view.frame; }
-  - (CGFloat)getScale { return (want_extra_scale ? scale : 1); }
-  - (int)updateScale: (bool)v { want_extra_scale=v; [self updateGLKViewScale]; return v ? scale : 1; }
+  - (CGFloat)getScale { return (want_extra_scale ? _scale : 1); }
+  - (int)updateScale: (bool)v { want_extra_scale=v; [self updateGLKViewScale]; return v ? _scale : 1; }
   - (void)downScale: (bool)v { _downscale=v; [self updateGLKViewScale]; }
   - (void)updateGLKViewScale { self.view.contentScaleFactor = _downscale ? 1 : [self getScale]; }
   - (int)updateGLKMultisample: (bool)v { 
@@ -212,39 +216,11 @@ static const char* const* ios_argv = 0;
     return v ? 4 : 0;
   }
 
-  - (void)initNotifications {
-    [[UIDevice currentDevice] beginGeneratingDeviceOrientationNotifications]; 
-    NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
-    INFOf("init notifications %p", center);
-    [center addObserver:self selector:@selector(orientationChanged:) name:@"UIDeviceOrientationDidChangeNotification" object:nil];
-    [center addObserver:self selector:@selector(keyboardWillShow:)   name:@"UIKeyboardWillShowNotification"           object:nil];
-    [center addObserver:self selector:@selector(keyboardWillHide:)   name:@"UIKeyboardWillHideNotification"           object:nil];
-  }
-
-  - (void)shutdownNotifications {
-    INFOf("%s", "shutdown notifications");
-    [[UIDevice currentDevice] endGeneratingDeviceOrientationNotifications];
-    [[NSNotificationCenter defaultCenter] removeObserver:self]; 
-  }
-
-  - (CGRect) getKeyboardFrame { return keyboard_frame; }
   - (bool)isKeyboardFirstResponder { return [self.text_field isFirstResponder]; }
   - (void)hideKeyboard { [self.text_field resignFirstResponder]; }
   - (void)showKeyboard {
     if ([self.text_field isFirstResponder]) [self.text_field resignFirstResponder];
     [self.text_field becomeFirstResponder];
-  }
-
-  - (void)keyboardWillHide:(NSNotification *)notification {
-    keyboard_frame = CGRectMake(0, 0, 0, 0);
-    [self.controller updateToolbarFrame];
-  }
-
-  - (void)keyboardWillShow:(NSNotification *)notification {
-    NSDictionary *userInfo = [notification userInfo];
-    CGRect rect = [[userInfo objectForKey:UIKeyboardFrameEndUserInfoKey] CGRectValue];
-    keyboard_frame = [self.window convertRect:rect toView:nil];
-    [self.controller updateToolbarFrame];
   }
 
   - (BOOL)textField: (UITextField *)textField shouldChangeCharactersInRange:(NSRange)range replacementString:(NSString *)string {
@@ -265,17 +241,147 @@ static const char* const* ios_argv = 0;
 
   - (void)handleKey: (int)k {
     int fired = 0;
-    fired += KeyPress(k, 0, 1);
-    fired += KeyPress(k, 0, 0);
+    fired += LFL::app->input->KeyPress(k, 0, 1);
+    fired += LFL::app->input->KeyPress(k, 0, 0);
     if (fired && _frame_on_keyboard_input) [self.view setNeedsDisplay];
   }
 
-  - (int)getOrientation { return current_orientation; }
+  - (void)addMainWaitSocket:(int)fd callback:(std::function<bool()>)cb {
+    [_main_wait_fh
+      setObject: [[[ObjcFileHandleCallback alloc] initWithCB:move(cb) forWindow:self fileDescriptor:fd] autorelease]
+      forKey:    [NSNumber numberWithInt: fd]];
+  }
+
+  - (void)delMainWaitSocket: (int)fd {
+    [_main_wait_fh removeObjectForKey: [NSNumber numberWithInt: fd]];
+  }
+
+  - (void)objcWindowSelect {}
+  - (void)objcWindowFrame { [self.view setNeedsDisplay]; }
+@end
+
+@implementation LFViewController
+  {
+    LFUIApplication *uiapp;
+    bool showing_keyboard, overlap_keyboard, interface_rotation, status_bar_hidden;
+    int current_orientation;
+    CGRect keyboard_frame;
+    CGFloat pinch_scale;
+    CGPoint pinch_point;
+  }
+
+  - (BOOL)prefersStatusBarHidden { return status_bar_hidden; }
+  - (CGRect)getKeyboardFrame { return keyboard_frame; }
+  - (CGRect)getKeyboardToolbarFrame {
+    CGRect kbd = [self getKeyboardFrame];
+		CGRect kbdtb = CGRectMake(kbd.origin.x, kbd.origin.y, kbd.size.width,
+															kbd.size.height + (!showing_keyboard ? [IOSToolbar getBottomHeight] : 0));
+    // INFO("getKeyboardToolbarFrame: ", LFL::GetCGRect(kbdtb).DebugString(), " keyboardFrame: ", LFL::GetCGRect(kbd).DebugString());
+    return kbdtb;
+  }
+
+  - (void)showStatusBar:(BOOL)v {
+    status_bar_hidden = !v;
+    [self setNeedsStatusBarAppearanceUpdate]; 
+  }
+
+  - (void)setOverlapKeyboard:(bool)v { overlap_keyboard = v; }
+
+  - (void)glkViewControllerUpdate:(GLKViewController *)controller {}
+
+  - (void)viewWillAppear:(BOOL)animated { 
+    [super viewWillAppear:animated];
+    [self setPaused:YES];
+    uiapp = [LFUIApplication sharedAppDelegate];
+  }
+
+  - (void)viewDidLoad {
+    [super viewDidLoad];
+  }
+
+  - (void)viewDidAppear:(BOOL)animated {
+    [super viewDidAppear:animated];
+    if (uiapp.top_controller != uiapp.root_controller)
+      [uiapp.root_controller presentViewController:uiapp.top_controller animated:YES completion:nil];
+  }
+
+  - (void)viewWillLayoutSubviews {
+    [super viewWillLayoutSubviews];
+  }
+  
+  - (void)viewDidLayoutSubviews {
+    CGFloat s = [uiapp getScale];
+    CGRect bounds = self.view.bounds;
+    int y = overlap_keyboard ? 0 : (s * [self getKeyboardToolbarFrame].size.height);
+    uiapp.screen_y      = y;
+    uiapp.screen_width  = s * bounds.size.width;
+    uiapp.screen_height = s * bounds.size.height - y;
+    [self.view setNeedsDisplay];
+    [super viewDidLayoutSubviews];
+  }
+
+  - (void)willRotateToInterfaceOrientation:(UIInterfaceOrientation)toInterfaceOrientation duration:(NSTimeInterval)duration {
+    // INFO("willRotateToInterfaceOrientation: orientation: ", int(toInterfaceOrientation), " ", LFL::GetCGRect(self.view.frame).DebugString());
+    interface_rotation = true;
+  }
+
+  - (void)didRotateFromInterfaceOrientation:(UIInterfaceOrientation)fromInterfaceOrientation {
+                                  CGRect frame = self.view.frame;
+    // LFL::string view_hierarchy = LFL::GetNSString([uiapp.window recursiveDescription] );
+    // INFO("didRotateFromInterfaceOrientation: orientation: ", int(fromInterfaceOrientation), " ", LFL::GetCGRect(self.view.frame).DebugString());
+    interface_rotation = false;
+  }
+
+  - (void)initNotifications {
+    [[UIDevice currentDevice] beginGeneratingDeviceOrientationNotifications]; 
+    NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
+    INFOf("init notifications %p", center);
+    [center addObserver:self selector:@selector(orientationChanged:)      name:@"UIDeviceOrientationDidChangeNotification" object:nil];
+    [center addObserver:self selector:@selector(keyboardWillChangeFrame:) name:@"UIKeyboardWillChangeFrameNotification"    object:nil];
+  }
+
+  - (void)shutdownNotifications {
+    INFOf("%s", "shutdown notifications");
+    [[UIDevice currentDevice] endGeneratingDeviceOrientationNotifications];
+    [[NSNotificationCenter defaultCenter] removeObserver:self]; 
+  }
+
   - (void)orientationChanged: (id)sender {
     UIDeviceOrientation new_orientation = [[UIDevice currentDevice] orientation];
     bool landscape = UIDeviceOrientationIsLandscape(new_orientation);
     INFOf("notification of new orientation: %d -> %d landscape=%d", current_orientation, new_orientation, landscape);
     current_orientation = new_orientation;
+  }
+
+  - (void)keyboardWillChangeFrame:(NSNotification *)notification {
+    CGRect endFrame = [notification.userInfo[UIKeyboardFrameEndUserInfoKey] CGRectValue];
+    UIWindow *window = [[[UIApplication sharedApplication] windows] firstObject];
+		endFrame = [window convertRect:endFrame fromWindow:nil];
+    if (CGRectContainsRect(window.frame, endFrame)) [self kbWillShow: [uiapp.window convertRect:endFrame toView:self.view]];
+    else                                            [self kbWillHide];
+  }
+
+  - (void)kbWillShow:(CGRect)rect {
+		if (interface_rotation) return;
+		showing_keyboard = true;
+    keyboard_frame = rect;
+    // INFO("kbWillShow: ", LFL::GetCGRect(keyboard_frame).DebugString());
+    [self.view setNeedsLayout];
+  }
+
+  - (void)kbWillHide {
+		if (interface_rotation) return;
+		showing_keyboard = false;
+    keyboard_frame = CGRectMake(0, 0, 0, 0);
+    // INFO("kbWillHide: ", LFL::GetCGRect(keyboard_frame).DebugString());
+    [self.view setNeedsLayout];
+  }
+
+  - (void)shutdownGestureRecognizers {
+    UIWindow *win = [[[UIApplication sharedApplication] windows] objectAtIndex:0];
+    NSArray *gestures = [win gestureRecognizers];
+    for (int i = 0; i < [gestures count]; i++)
+      [win removeGestureRecognizer:[gestures objectAtIndex:i]];
   }
 
   - (void)initVerticalSwipeGestureRecognizers:(int)touches {
@@ -335,19 +441,12 @@ static const char* const* ios_argv = 0;
     [pinch release];
   }
 
-  - (void)shutdownGestureRecognizers {
-    UIWindow *win = [[[UIApplication sharedApplication] windows] objectAtIndex:0];
-    NSArray *gestures = [win gestureRecognizers];
-    for (int i = 0; i < [gestures count]; i++)
-      [win removeGestureRecognizer:[gestures objectAtIndex:i]];
-  }
-
   - (void)swipeUp:    (UISwipeGestureRecognizer*)sender { [self swipe:LFL::point(0,  1) withSender:sender]; }
   - (void)swipeDown:  (UISwipeGestureRecognizer*)sender { [self swipe:LFL::point(0, -1) withSender:sender]; }
   - (void)swipeLeft:  (UISwipeGestureRecognizer*)sender { [self swipe:LFL::point(-1, 0) withSender:sender]; }
   - (void)swipeRight: (UISwipeGestureRecognizer*)sender { [self swipe:LFL::point( 1, 0) withSender:sender]; }
   - (void)swipe:(LFL::point)p withSender:(UISwipeGestureRecognizer*)sender {
-    if (LFL::app->input->MouseSwipe(p, p) && _frame_on_mouse_input) [self.view setNeedsDisplay];
+    if (LFL::app->input->MouseSwipe(p, p) && uiapp.frame_on_mouse_input) [self.view setNeedsDisplay];
   }
 
   - (void)tapGesture: (UITapGestureRecognizer *)tapGestureRecognizer {
@@ -360,8 +459,8 @@ static const char* const* ios_argv = 0;
       s->gesture_dpad_x[dpind] = position.x;
       s->gesture_dpad_y[dpind] = position.y;
 #endif
-      int fired = MouseClick(1, 1, (int)position.x, s->y + s->height - (int)position.y);
-      if (fired && _frame_on_mouse_input) [self.view setNeedsDisplay];
+      int fired = LFL::app->input->MouseClick(1, 1, LFL::point(position.x, s->y + s->height - position.y));
+      if (fired && uiapp.frame_on_mouse_input) [self.view setNeedsDisplay];
     }
   }
 
@@ -371,15 +470,15 @@ static const char* const* ios_argv = 0;
     CGPoint position = [panGestureRecognizer locationOfTouch:0 inView:v];
     CGPoint velocity = [panGestureRecognizer velocityInView:v];
     int dpind = v.frame.origin.y == 0;
-    if (!dpind) position = CGPointMake(scale * (position.x + v.frame.origin.x), scale * (position.y + v.frame.origin.y));
-    else        position = CGPointMake(scale * position.x, scale * position.y);
+    if (!dpind) position = CGPointMake(uiapp.scale * (position.x + v.frame.origin.x), uiapp.scale * (position.y + v.frame.origin.y));
+    else        position = CGPointMake(uiapp.scale * position.x, uiapp.scale * position.y);
     if (panGestureRecognizer.state == UIGestureRecognizerStateChanged) {}
     else if (panGestureRecognizer.state == UIGestureRecognizerStateEnded) velocity = CGPointMake(0, 0);
     if (auto s = LFL::app->focused) { 
       LFL::point pos = LFL::Floor(LFL::GetCGPoint(position));
       pos.y = s->y + s->height - pos.y;
       int fired = LFL::app->input->MouseMove(pos, LFL::app->focused ? (pos - LFL::app->focused->mouse) : pos);
-      if (fired && _frame_on_mouse_input) [self.view setNeedsDisplay];
+      if (fired && uiapp.frame_on_mouse_input) [self.view setNeedsDisplay];
     }
   }
     #if 0
@@ -417,76 +516,10 @@ static const char* const* ios_argv = 0;
       pinch_point = [pinch locationInView: self.view];
     }
     CGFloat p_scale = 1.0 + (pinch_scale - pinch.scale);
-    LFL::v2 p(scale * pinch_point.x, scale * pinch_point.y), d(p_scale, p_scale);
+    LFL::v2 p(uiapp.scale * pinch_point.x, uiapp.scale * pinch_point.y), d(p_scale, p_scale);
     int fired = LFL::app->input->MouseZoom(p, d);
-    if (fired && _frame_on_mouse_input) [self.view setNeedsDisplay];
+    if (fired && uiapp.frame_on_mouse_input) [self.view setNeedsDisplay];
     pinch_scale = p_scale;
-  }
-
-  - (void)addMainWaitSocket:(int)fd callback:(std::function<bool()>)cb {
-    [_main_wait_fh
-      setObject: [[[ObjcFileHandleCallback alloc] initWithCB:move(cb) forWindow:self fileDescriptor:fd] autorelease]
-      forKey:    [NSNumber numberWithInt: fd]];
-  }
-
-  - (void)delMainWaitSocket: (int)fd {
-    [_main_wait_fh removeObjectForKey: [NSNumber numberWithInt: fd]];
-  }
-
-  - (void)objcWindowSelect {}
-  - (void)objcWindowFrame { [self.view setNeedsDisplay]; }
-@end
-
-@implementation LFViewController
-  {
-    LFUIApplication *uiapp;
-    bool overlap_keyboard, status_bar_hidden;
-  }
-
-  - (BOOL)prefersStatusBarHidden { return status_bar_hidden; }
-  - (void)showStatusBar:(BOOL)v { status_bar_hidden = !v; [self setNeedsStatusBarAppearanceUpdate]; }
-
-  - (void)viewWillAppear:(BOOL)animated { 
-    [super viewWillAppear:animated];
-    [self setPaused:YES];
-    uiapp = [LFUIApplication sharedAppDelegate];
-  }
-
-  - (void)viewDidLoad {
-    [super viewDidLoad];
-  }
-
-  - (void)viewDidAppear:(BOOL)animated {
-    [super viewDidAppear:animated];
-  }
-
-  - (void)viewWillLayoutSubviews {
-    [super viewWillLayoutSubviews];
-  }
-  
-  - (void)viewDidLayoutSubviews {
-    CGFloat s = [uiapp getScale];
-    CGRect bounds = self.view.bounds;
-    int y = overlap_keyboard ? 0 : (s * [self getKeyboardToolbarFrame].size.height);
-    uiapp.screen_y      = y;
-    uiapp.screen_width  = s * bounds.size.width;
-    uiapp.screen_height = s * bounds.size.height - y;
-    [uiapp.view setNeedsDisplay];
-    [super viewDidLayoutSubviews];
-  }
-
-  - (void)glkViewControllerUpdate:(GLKViewController *)controller {}
-  - (BOOL)shouldAutorotate { return _autorotate; }
-  - (void)setOverlapKeyboard:(bool)v { overlap_keyboard = v; }
-
-  - (CGRect)getKeyboardToolbarFrame {
-    CGRect kbd = [[LFUIApplication sharedAppDelegate] getKeyboardFrame];
-    return CGRectMake(kbd.origin.x, kbd.origin.y, kbd.size.width, kbd.size.height + [IOSToolbar getBottomHeight]);
-  }
-
-  - (void)updateToolbarFrame {
-    [IOSToolbar updateFrame];
-    [self.view setNeedsLayout];
   }
 @end
 
@@ -532,7 +565,7 @@ static const char* const* ios_argv = 0;
       s->gesture_dpad_x[dpind] = 0;
       s->gesture_dpad_y[dpind] = 0;
 #endif
-      int fired = MouseClick(1, 0, (int)position.x, s->y + s->height - (int)position.y);
+      int fired = LFL::app->input->MouseClick(1, 0, LFL::point(position.x, s->y + s->height - position.y));
       if (fired && uiapp.frame_on_mouse_input) [self.superview setNeedsDisplay];
     }
   }
@@ -620,16 +653,16 @@ void Application::ToggleTouchKeyboard() {
   else OpenTouchKeyboard();
 }
 
-void Application::SetAutoRotateOrientation(bool v) { [LFUIApplication sharedAppDelegate].controller.autorotate = v; }
+void Application::SetAutoRotateOrientation(bool v) {}
 int Application::SetMultisample(bool v) { return [[LFUIApplication sharedAppDelegate] updateGLKMultisample:v]; }
 int Application::SetExtraScale(bool v) { return [[LFUIApplication sharedAppDelegate] updateScale:v]; }
 void Application::SetDownScale(bool v) { [[LFUIApplication sharedAppDelegate] downScale:v]; }
-void Application::SetTitleBar(bool v) { [LFUIApplication sharedAppDelegate].title = true; }
+void Application::SetTitleBar(bool v) { [LFUIApplication sharedAppDelegate].show_title = v; }
 void Application::SetKeepScreenOn(bool v) {}
-void Application::SetVerticalSwipeRecognizer(int touches) { [[LFUIApplication sharedAppDelegate] initVerticalSwipeGestureRecognizers: touches]; }
-void Application::SetHorizontalSwipeRecognizer(int touches) { [[LFUIApplication sharedAppDelegate] initHorizontalSwipeGestureRecognizers: touches]; }
-void Application::SetPanRecognizer(bool enabled) { [[LFUIApplication sharedAppDelegate] initPanGestureRecognizers]; }
-void Application::SetPinchRecognizer(bool enabled) { [[LFUIApplication sharedAppDelegate] initPinchGestureRecognizers]; }
+void Application::SetVerticalSwipeRecognizer(int touches) { [[LFUIApplication sharedAppDelegate].controller initVerticalSwipeGestureRecognizers: touches]; }
+void Application::SetHorizontalSwipeRecognizer(int touches) { [[LFUIApplication sharedAppDelegate].controller initHorizontalSwipeGestureRecognizers: touches]; }
+void Application::SetPanRecognizer(bool enabled) { [[LFUIApplication sharedAppDelegate].controller initPanGestureRecognizers]; }
+void Application::SetPinchRecognizer(bool enabled) { [[LFUIApplication sharedAppDelegate].controller initPinchGestureRecognizers]; }
 void Application::ShowSystemStatusBar(bool v) { [[LFUIApplication sharedAppDelegate].controller showStatusBar:v]; }
 
 void Window::SetResizeIncrements(float x, float y) {}

@@ -61,10 +61,10 @@ void Application::SetClipboardText(const string &s) {}
 }; // namespace LFL
 struct LFLWxWidgetCanvas : public wxGLCanvas {
   wxGLContext *context=0;
-  NativeWindow *screen=0;
+  LFAppWindow *screen=0;
   bool frame_on_keyboard_input=0, frame_on_mouse_input=0;
   virtual ~LFLWxWidgetCanvas() { delete context; }
-  LFLWxWidgetCanvas(NativeWindow *s, wxFrame *parent, int *args) :
+  LFLWxWidgetCanvas(LFAppWindow *s, wxFrame *parent, int *args) :
     wxGLCanvas(parent, wxID_ANY, args, wxDefaultPosition, wxDefaultSize, wxFULL_REPAINT_ON_RESIZE),
     context((wxGLContext*)s->gl), screen(s) {}
   void OnPaint(wxPaintEvent& event) {
@@ -74,7 +74,7 @@ struct LFLWxWidgetCanvas : public wxGLCanvas {
     else exit(0);
   }
   void OnMouseMove(wxMouseEvent& event) {
-    SetNativeWindow(screen);
+    SetLFAppWindow(screen);
     LFL::point p = GetMousePosition(event);
     int fired = LFL::app->input.MouseMove(p, p - LFL::screen->mouse);
     if (fired && frame_on_mouse_input) Refresh();
@@ -82,14 +82,14 @@ struct LFLWxWidgetCanvas : public wxGLCanvas {
   void OnMouseDown(wxMouseEvent& event) { OnMouseClick(1, true,  GetMousePosition(event)); }
   void OnMouseUp  (wxMouseEvent& event) { OnMouseClick(1, false, GetMousePosition(event)); }
   void OnMouseClick(int button, bool down, const LFL::point &p) {
-    SetNativeWindow(screen);
+    SetLFAppWindow(screen);
     int fired = LFL::app->input.MouseClick(button, down, p);
     if (fired && frame_on_mouse_input) Refresh();
   }
   void OnKeyDown(wxKeyEvent& event) { OnKeyEvent(GetKeyCode(event), true); }
   void OnKeyUp  (wxKeyEvent& event) { OnKeyEvent(GetKeyCode(event), false); }
   void OnKeyEvent(int key, bool down) {
-    SetNativeWindow(screen);
+    SetLFAppWindow(screen);
     int fired = key ? KeyPress(key, 0, down) : 0;
     if (fired && frame_on_keyboard_input) Refresh();
   }

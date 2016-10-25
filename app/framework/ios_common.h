@@ -23,9 +23,11 @@
 @end
 
 @interface LFViewController : GLKViewController<GLKViewControllerDelegate, UIActionSheetDelegate> {}
-  @property BOOL autorotate;
-  - (void)updateToolbarFrame;
+  - (CGRect)getKeyboardFrame;
   - (CGRect)getKeyboardToolbarFrame;
+  - (void)initNotifications;
+  - (void)shutdownNotifications;
+  - (void)shutdownGestureRecognizers;
 @end
 
 @interface LFUIApplication : NSObject<UIApplicationDelegate, GLKViewDelegate, UITextFieldDelegate, NSURLSessionDelegate, ObjcWindow> {}
@@ -36,13 +38,13 @@
   @property (nonatomic, retain) MyTextField *text_field;
   @property (nonatomic, retain) UINavigationBar *title_bar;
   @property (nonatomic, retain) NSMutableDictionary *main_wait_fh;
-  @property (nonatomic, assign) UIViewController *top_controller;
-  @property BOOL resign_textfield_on_return, frame_on_keyboard_input, frame_on_mouse_input, downscale, title;
+  @property (nonatomic, assign) UIViewController *root_controller, *top_controller;
+  @property BOOL resign_textfield_on_return, frame_on_keyboard_input, frame_on_mouse_input, downscale, show_title;
   @property int screen_y, screen_width, screen_height;
+  @property CGFloat scale;
   + (LFUIApplication *) sharedAppDelegate;
   - (CGFloat)getScale;
   - (CGRect)getFrame;
-  - (CGRect)getKeyboardFrame;
   - (bool)isKeyboardFirstResponder;
   - (void)hideKeyboard;
   - (void)showKeyboard;
@@ -51,7 +53,6 @@
 @interface IOSToolbar : NSObject
   @property (nonatomic, retain) UIToolbar *toolbar;
   + (int)getBottomHeight;
-  + (void)updateFrame;
 @end
 
 namespace LFL {

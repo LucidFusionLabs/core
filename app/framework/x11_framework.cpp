@@ -93,15 +93,15 @@ struct X11FrameworkModule : public Module {
     XEvent xev;
     while (XPending(display)) {
       XNextEvent(display, &xev);
-      if (app->windows.size() > 1) SetNativeWindowByID(Void(xev.xany.window));
+      if (app->windows.size() > 1) SetLFAppWindowByID(Void(xev.xany.window));
       switch (xev.type) {
-        case XKeyPress:       if (KeyPress(GetKeyCodeFromXEvent(display, xev), 0, 1)) app->EventDrivenFrame(0); break;
-        case KeyRelease:      if (KeyPress(GetKeyCodeFromXEvent(display, xev), 0, 0)) app->EventDrivenFrame(0); break;
-        case ButtonPress:     if (screen && MouseClick(xev.xbutton.button, 1, xev.xbutton.x, screen->height-xev.xbutton.y)) app->EventDrivenFrame(0); break;
-        case ButtonRelease:   if (screen && MouseClick(xev.xbutton.button, 0, xev.xbutton.x, screen->height-xev.xbutton.y)) app->EventDrivenFrame(0); break;
+        case XKeyPress:       if (app->input->KeyPress(GetKeyCodeFromXEvent(display, xev), 0, 1)) app->EventDrivenFrame(0); break;
+        case KeyRelease:      if (app->input->KeyPress(GetKeyCodeFromXEvent(display, xev), 0, 0)) app->EventDrivenFrame(0); break;
+        case ButtonPress:     if (screen && app->input->MouseClick(xev.xbutton.button, 1, point(xev.xbutton.x, screen->height-xev.xbutton.y))) app->EventDrivenFrame(0); break;
+        case ButtonRelease:   if (screen && app->input->MouseClick(xev.xbutton.button, 0, point(xev.xbutton.x, screen->height-xev.xbutton.y))) app->EventDrivenFrame(0); break;
         case MotionNotify:    if (screen) { point p(xev.xmotion.x, screen->height-xev.xmotion.y); if (app->input->MouseMove(p, p - screen->mouse)) app->EventDrivenFrame(0); } break;
         case ConfigureNotify: if (screen && (xev.xconfigure.width != screen->width || xev.xconfigure.height != screen->height)) { screen->Reshaped(Box(xev.xconfigure.width, xev.xconfigure.height)); app->EventDrivenFrame(0); } break;
-        case ClientMessage:   if (xev.xclient.data.l[0] == delete_win) WindowClosed(); break;
+        case ClientMessage:   if (xev.xclient.data.l[0] == delete_win) LFL::app->CloseWindow(screen); break;
         case Expose:          app->EventDrivenFrame(0);
         default:              continue;
       }
@@ -119,7 +119,7 @@ void Application::CloseWindow(Window *W) {
   if (windows.empty()) run = false;
   if (window_closed_cb) window_closed_cb(W);
   focused = nullptr;
-  if (windows.size() == 1) SetNativeWindow(windows.begin()->second);
+  if (windows.size() == 1) SetLFAppWindow(windows.begin()->second);
 }
 
 void Application::MakeCurrentWindow(Window *W) {

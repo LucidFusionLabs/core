@@ -27,7 +27,7 @@
 @implementation GameView
   {
     LFApp *app;
-    NativeWindow *screen;
+    LFAppWindow *screen;
 
     NSWindow *window;
     NSOpenGLContext  *context;
@@ -76,7 +76,7 @@
   // - (void)windowDidBecomeMain:(NSNotification *)notification {}
   - (void)windowDidResignMain:(NSNotification *)notification { [self clearKeyModifiers]; }
   - (void)setWindow:(NSWindow*)w { window = w; }
-  - (void)setScreen:(NativeWindow*)s { screen = s; }
+  - (void)setScreen:(LFAppWindow*)s { screen = s; }
   - (void)setFrameSize:(NSSize)s { [super setFrameSize:s]; needs_reshape=YES; [self update]; }
   - (void)setFrameOnMouseInput:(bool)v { frame_on_mouse_input = v; }
   - (void)setFrameOnKeyboardInput:(bool)v { frame_on_keyboard_input = v; }
@@ -91,7 +91,7 @@
     [super lockFocus];
     CGLLockContext([context CGLContextObj]);
     if ([context view] != self) [context setView:self];
-    SetNativeWindow(screen);
+    SetLFAppWindow(screen);
     if (needs_reshape) { [self reshape]; needs_reshape=NO; }
   }
 
@@ -125,7 +125,7 @@
   }
 
   - (NSOpenGLContext *)createGLContext {
-    NSOpenGLContext *prev_context = LFL::GetTyped<NSOpenGLContext*>(GetNativeWindow()->gl);
+    NSOpenGLContext *prev_context = LFL::GetTyped<NSOpenGLContext*>(GetLFAppWindow()->gl);
     NSOpenGLContext *ret = [[NSOpenGLContext alloc] initWithFormat:pixel_format shareContext:prev_context];
     [ret setView:self];
     return ret;
@@ -187,7 +187,7 @@
   - (void)reshape {
     if (!initialized) return;
     [context update];
-    SetNativeWindow(screen);
+    SetLFAppWindow(screen);
     float screen_w = [self frame].size.width, screen_h = [self frame].size.height;
     WindowReshaped(0, 0, int(screen_w), int(screen_h));
   }
@@ -195,7 +195,7 @@
   - (BOOL)windowShouldClose:(id)sender { return should_close; }
   - (void)windowWillClose:(NSNotification *)notification { 
     [self stopThread];
-    SetNativeWindow(screen);
+    SetLFAppWindow(screen);
     if (WindowClosed()) LFAppAtExit();
   }
 
@@ -209,14 +209,14 @@
     [_main_wait_fh removeObjectForKey: [NSNumber numberWithInt: fd]];
   }
 
-  - (void)objcWindowSelect { SetNativeWindow(screen); }
+  - (void)objcWindowSelect { SetLFAppWindow(screen); }
   - (void)objcWindowFrame { [self getFrameForTime:nil]; } 
 
   - (void)callbackRun:(id)sender { [(ObjcCallback*)[sender representedObject] run]; }
   - (void)mouseDown:(NSEvent*)e { [self mouseClick:e down:1]; }
   - (void)mouseUp:  (NSEvent*)e { [self mouseClick:e down:0]; }
   - (void)mouseClick:(NSEvent*)e down:(bool)d {
-    SetNativeWindow(screen);
+    SetLFAppWindow(screen);
     NSPoint p = [e locationInWindow];
     int fired = MouseClick(1+ctrl_down, d, p.x, p.y);
     if (fired && frame_on_mouse_input) [self setNeedsDisplay:YES]; 
@@ -226,7 +226,7 @@
   - (void)mouseDragged:(NSEvent*)e { [self mouseMove:e drag:1]; }
   - (void)mouseMoved:  (NSEvent*)e { [self mouseMove:e drag:0]; }
   - (void)mouseMove: (NSEvent*)e drag:(bool)drag {
-    SetNativeWindow(screen);
+    SetLFAppWindow(screen);
     if (screen->cursor_grabbed) MouseMove(prev_mouse_pos.x, prev_mouse_pos.y, [e deltaX], -[e deltaY]);
     else {
       NSPoint p=[e locationInWindow], d=NSMakePoint(p.x-prev_mouse_pos.x, p.y-prev_mouse_pos.y);
@@ -252,7 +252,7 @@
   - (void)keyDown:(NSEvent *)theEvent { [self keyPress:theEvent down:1]; }
   - (void)keyUp:  (NSEvent *)theEvent { [self keyPress:theEvent down:0]; }
   - (void)keyPress:(NSEvent *)theEvent down:(bool)d {
-    SetNativeWindow(screen);
+    SetLFAppWindow(screen);
     int c = getKeyCode([theEvent keyCode]);
     int fired = c ? KeyPress(c, 0, d) : 0;
     if (fired && frame_on_keyboard_input) [self setNeedsDisplay:YES]; 
@@ -342,7 +342,7 @@
     INFOf("OSXFramework::Main argc=%d ret=%d\n", LFL::app->argc, ret);
   }
 
-  - (GameView*)createWindow: (int)w height:(int)h nativeWindow:(NativeWindow*)s {
+  - (GameView*)createWindow: (int)w height:(int)h nativeWindow:(LFAppWindow*)s {
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, w, h)
                                          styleMask:NSClosableWindowMask|NSMiniaturizableWindowMask|NSResizableWindowMask|NSTitledWindowMask
                                          backing:NSBackingStoreBuffered defer:NO];
@@ -466,7 +466,7 @@ void Application::CloseWindow(Window *W) {
   focused = 0;
 }
 
-void Application::LoseFocus() { [GetTyped<GameView*>(GetNativeWindow()->id) clearKeyModifiers]; }
+void Application::LoseFocus() { [GetTyped<GameView*>(GetLFAppWindow()->id) clearKeyModifiers]; }
 
 void Application::ReleaseMouseFocus() { 
   CGDisplayShowCursor(kCGDirectMainDisplay);
@@ -542,7 +542,7 @@ bool Window::Reshape(int w, int h) {
 }
 
 bool Video::CreateWindow(Window *W) { 
-  [GetTyped<GameView*>(GetNativeWindow()->id) clearKeyModifiers];
+  [GetTyped<GameView*>(GetLFAppWindow()->id) clearKeyModifiers];
   W->id = MakeTyped([static_cast<AppDelegate*>([NSApp delegate])
                     createWindow:W->width height:W->height nativeWindow:W]);
   if (W->id.v) app->windows[W->id.v] = W;

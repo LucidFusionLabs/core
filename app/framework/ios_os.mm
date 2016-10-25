@@ -123,7 +123,6 @@ static std::vector<UIImage*> app_images;
 
 @implementation IOSToolbar
   {
-    int toolbar_height;
     std::unordered_map<std::string, void*> toolbar_titles;
     std::unordered_map<void*, LFL::Callback> toolbar_cb;
   }
@@ -144,18 +143,16 @@ static std::vector<UIImage*> app_images;
       toolbar_cb[item] = kv[i].cb;
       [item release];
     }
-    toolbar_height = 44;
-    _toolbar = [[UIToolbar alloc] initWithFrame: [self getToolbarFrame]];
+    int tbh = 44;
+    auto uiapp = [LFUIApplication sharedAppDelegate];
+    CGRect bounds = [uiapp.view bounds], kbb = [uiapp.controller getKeyboardFrame];
+    CGRect tbb = CGRectMake(0, bounds.size.height - kbb.size.height - tbh, bounds.size.width, tbh);
+    _toolbar = [[UIToolbar alloc] initWithFrame: tbb];
     // [_toolbar setBarStyle:UIBarStyleBlackTranslucent];
     [_toolbar setItems:items];
     [items release];
     [spacer release];
     return self;
-  }
-
-  - (CGRect)getToolbarFrame {
-    CGRect bounds = [[UIScreen mainScreen] bounds], kbd = [[LFUIApplication sharedAppDelegate] getKeyboardFrame];
-    return CGRectMake(0, bounds.size.height - kbd.size.height - toolbar_height, bounds.size.width, toolbar_height);
   }
 
   - (void)toggleButtonNamed: (const std::string&) n {
@@ -182,26 +179,14 @@ static std::vector<UIImage*> app_images;
   }
 
   - (void)show: (bool)show_or_hide {
-    if (show_or_hide) {
-      show_bottom.push_back(self);
-      [[LFUIApplication sharedAppDelegate].window addSubview: _toolbar];
-    } else {
-      LFL::VectorEraseByValue(&show_bottom, self);
-      [_toolbar removeFromSuperview];
-    }
+    [LFUIApplication sharedAppDelegate].text_field.inputAccessoryView = show_or_hide ? _toolbar : nil;
   }
 
   + (int)getBottomHeight {
-    int ret = 0;
-    for (auto t : show_bottom) ret += t->toolbar_height;
-    return ret;
+    auto uiapp = [LFUIApplication sharedAppDelegate];
+    if (!uiapp.text_field.inputAccessoryView) return 0;
+    return uiapp.text_field.inputAccessoryView.frame.size.height;
   }
-
-  + (void)updateFrame {
-    for (auto t : show_bottom) t->_toolbar.frame = [t getToolbarFrame];
-  }
-
-  static std::vector<IOSToolbar*> show_bottom, show_top;
 @end
 
 @interface IOSPicker : UIPickerView<UIPickerViewDelegate>
@@ -334,6 +319,7 @@ static std::vector<UIImage*> app_images;
     }
 
     self.title = LFL::MakeNSString(title);
+
     if (_style != "indent") self.tableView.separatorInset = UIEdgeInsetsZero;
     [self.tableView setSeparatorStyle:UITableViewCellSeparatorStyleSingleLine];
     [self.tableView setSeparatorColor:[UIColor grayColor]];
@@ -818,7 +804,7 @@ static std::vector<UIImage*> app_images;
 
   - (void)viewWillAppear:   (BOOL)animated { if (_toolbar) [_toolbar show: true];  }
   - (void)viewWillDisappear:(BOOL)animated { if (_toolbar) [_toolbar show: false]; }
-  
+
   - (void)textFieldDidChange:(IOSTextField*)sender {
     _lfl_self->changed = true;
     [sender textFieldDidChange: sender];
@@ -967,17 +953,22 @@ static std::vector<UIImage*> app_images;
   }
 @end
 
-@interface IOSNavigation : NSObject<UINavigationControllerDelegate>
-  @property (nonatomic, retain) UINavigationController *controller;
+@interface IOSNavigation : UINavigationController<UINavigationControllerDelegate>
 @end
 
 @implementation IOSNavigation
-  - (id)init {
-    self = [super init];
-    _controller = [[UINavigationController alloc] initWithNavigationBarClass:nil toolbarClass:nil];
-    [_controller setToolbarHidden:YES animated:YES];
-    return self;
+  - (void) viewDidLoad {
+    [super viewDidLoad];
+    INFO("IOSNavigation viewDidLoad: frame=", LFL::GetCGRect(self.view.frame).DebugString());
   }
+ 
+  - (void) viewDidAppear:(BOOL)animated {
+    [super viewDidAppear:animated];
+    INFO("IOSNavigation viewDidAppear: frame=", LFL::GetCGRect(self.view.frame).DebugString());
+  }
+
+  - (BOOL)shouldAutorotate { return self.topViewController.shouldAutorotate; }
+  - (NSUInteger)supportedInterfaceOrientations { return self.topViewController.supportedInterfaceOrientations; }
 @end
 
 @interface IOSKeychain : NSObject
@@ -1184,25 +1175,31 @@ SystemTextView::SystemTextView(const string &title, const string &text) :
        initWithBytes:text.data() length:text.size() encoding:NSASCIIStringEncoding] autorelease]]) {}
 
 SystemNavigationView::~SystemNavigationView() { if (auto nav = FromVoid<IOSNavigation*>(impl)) [nav release]; }
-SystemNavigationView::SystemNavigationView() : impl([[IOSNavigation alloc] init]) {}
+SystemNavigationView::SystemNavigationView() : impl([[IOSNavigation alloc] initWithNavigationBarClass:nil toolbarClass:nil]) {
+  auto nav = FromVoid<IOSNavigation*>(impl);
+  [nav setToolbarHidden:YES animated:YES];
+}
+
 void SystemNavigationView::Show(bool show_or_hide) {
   auto nav = FromVoid<IOSNavigation*>(impl);
   LFUIApplication *uiapp = [LFUIApplication sharedAppDelegate];
   if ((shown = show_or_hide)) {
     if (root->show_cb) root->show_cb();
-    uiapp.top_controller = nav.controller;
-    [uiapp.controller presentViewController: nav.controller animated:YES completion:nil];
+    INFO("LFViewController.presentViewController IOSNavigation frame=", LFL::GetCGRect(uiapp.controller.view.frame).DebugString());
+    uiapp.top_controller = nav;
+    [uiapp.controller presentViewController:nav animated:YES completion:nil];
   } else {
-    uiapp.top_controller = uiapp.controller;
+    INFO("LFViewController.dismissViewController ", GetNSString(NSStringFromClass([uiapp.controller class])), " frame=", LFL::GetCGRect(uiapp.controller.view.frame).DebugString());
+    uiapp.top_controller = uiapp.root_controller;
     [uiapp.controller dismissViewControllerAnimated:YES completion:nil];
-    if ([uiapp isKeyboardFirstResponder]) [uiapp showKeyboard];
-    else                                  [uiapp hideKeyboard];
+    // if ([uiapp isKeyboardFirstResponder]) [uiapp showKeyboard];
+    // else                                  [uiapp hideKeyboard];
   }
 }
 
 SystemTableView *SystemNavigationView::Back() {
   for (UIViewController *c in
-       [FromVoid<IOSNavigation*>(impl).controller.viewControllers reverseObjectEnumerator]) {
+       [FromVoid<IOSNavigation*>(impl).viewControllers reverseObjectEnumerator]) {
     if ([c isKindOfClass:[IOSTable class]])
       if (auto lself = static_cast<IOSTable*>(c).lfl_self) return lself;
   } 
@@ -1212,28 +1209,28 @@ SystemTableView *SystemNavigationView::Back() {
 void SystemNavigationView::PushTableView(SystemTableView *t) {
   if (!root) root = t;
   if (t->show_cb) t->show_cb();
-  [FromVoid<IOSNavigation*>(impl).controller pushViewController: FromVoid<IOSTable*>(t->impl) animated: YES];
+  [FromVoid<IOSNavigation*>(impl) pushViewController: FromVoid<IOSTable*>(t->impl) animated: YES];
 }
 
 void SystemNavigationView::PushTextView(SystemTextView *t) {
   if (t->show_cb) t->show_cb();
-  [FromVoid<IOSNavigation*>(impl).controller pushViewController: FromVoid<IOSTextView*>(t->impl) animated: YES];
+  [FromVoid<IOSNavigation*>(impl) pushViewController: FromVoid<IOSTextView*>(t->impl) animated: YES];
 }
 
 void SystemNavigationView::PopToRoot() {
-  if (root) [FromVoid<IOSNavigation*>(impl).controller popToRootViewControllerAnimated: YES];
+  if (root) [FromVoid<IOSNavigation*>(impl) popToRootViewControllerAnimated: YES];
 }
 
 void SystemNavigationView::PopAll() {
   if (root && !(root=0)) {
-    [FromVoid<IOSNavigation*>(impl).controller popToRootViewControllerAnimated: NO];
-    [FromVoid<IOSNavigation*>(impl).controller setViewControllers:@[] animated:NO];
+    [FromVoid<IOSNavigation*>(impl) popToRootViewControllerAnimated: NO];
+    [FromVoid<IOSNavigation*>(impl) setViewControllers:@[] animated:NO];
   }
 }
 
 void SystemNavigationView::PopView(int n) {
   for (int i = 0; i != n; ++i)
-    [FromVoid<IOSNavigation*>(impl).controller popViewControllerAnimated: (i == n - 1)];
+    [FromVoid<IOSNavigation*>(impl) popViewControllerAnimated: (i == n - 1)];
 }
 
 SystemAdvertisingView::SystemAdvertisingView() {}

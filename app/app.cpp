@@ -40,36 +40,21 @@
 #include <android/log.h>
 #endif
 
-extern "C" void BreakHook() {}
-extern "C" void ShellRun(const char *text) { return LFL::app->focused->shell->Run(text); }
-extern "C" NativeWindow *GetNativeWindow() { return LFL::app->focused; }
-extern "C" LFApp        *GetLFApp()        { return LFL::app; }
-extern "C" int LFAppMain()                 { return LFL::app->Main(); }
-extern "C" int LFAppMainLoop()             { return LFL::app->MainLoop(); }
-extern "C" int LFAppFrame(bool handle_ev)  { return LFL::app->EventDrivenFrame(handle_ev); }
-extern "C" void LFAppTimerDrivenFrame()    { LFL::app->TimerDrivenFrame(true); }
-extern "C" void LFAppWakeup()              { return LFL::app->scheduler.Wakeup(LFL::app->focused); }
-extern "C" void LFAppResetGL()             { return LFL::app->ResetGL(); }
-extern "C" const char *LFAppSaveDir()      { return LFL::app->savedir.c_str(); }
-extern "C" void LFAppAtExit()              { delete LFL::app; }
-extern "C" void LFAppShutdown()                   { LFL::app->run=0; LFAppWakeup(); }
-extern "C" void WindowReshaped(int x, int y, int w, int h)      { LFL::app->focused->Reshaped(LFL::Box(x, y, w, h)); }
-extern "C" void WindowMinimized()                               { LFL::app->focused->Minimized(); }
-extern "C" void WindowUnMinimized()                             { LFL::app->focused->UnMinimized(); }
-extern "C" bool WindowClosed()                                  { LFL::app->CloseWindow(LFL::app->focused); return LFL::app->windows.empty(); }
-extern "C" void QueueWindowReshaped(int x, int y, int w, int h) { LFL::app->RunInMainThread(LFL::bind(&LFL::Window::Reshaped,    LFL::app->focused, LFL::Box(x, y, w, h))); }
-extern "C" void QueueWindowMinimized()                          { LFL::app->RunInMainThread(LFL::bind(&LFL::Window::Minimized,   LFL::app->focused)); }
-extern "C" void QueueWindowUnMinimized()                        { LFL::app->RunInMainThread(LFL::bind(&LFL::Window::UnMinimized, LFL::app->focused)); }
-extern "C" void QueueWindowClosed()                             { LFL::app->RunInMainThread(LFL::bind([=](){ LFL::app->CloseWindow(LFL::app->focused); })); }
-extern "C" int  KeyPress  (int b, int m, int d)                 { return LFL::app->input->KeyPress  (b, m, d); }
-extern "C" int  MouseClick(int b, int d, int x,  int y)         { return LFL::app->input->MouseClick(b, d, LFL::point(x, y)); }
-extern "C" int  MouseMove (int x, int y, int dx, int dy)        { return LFL::app->input->MouseMove (LFL::point(x, y), LFL::point(dx, dy)); }
-extern "C" void QueueKeyPress  (int b, int m, int d)            { return LFL::app->input->QueueKeyPress  (b, m, d); }
-extern "C" void QueueMouseClick(int b, int d, int x, int y)     { return LFL::app->input->QueueMouseClick(b, d, LFL::point(x, y)); }
-extern "C" void EndpointRead(void *svc, const char *name, const char *buf, int len) { LFL::app->net->EndpointRead(static_cast<LFL::SocketService*>(svc), name, buf, len); }
+extern "C" LFApp*       GetLFApp()                 { return LFL::app; }
+extern "C" LFAppWindow* GetLFAppWindow()           { return LFL::app->focused; }
+extern "C" const char*  GetLFAppSaveDir()          { return LFL::app->savedir.c_str(); }
+extern "C" int          LFAppMain()                { return LFL::app->Main(); }
+extern "C" int          LFAppMainLoop()            { return LFL::app->MainLoop(); }
+extern "C" int          LFAppFrame(bool handle_ev) { return LFL::app->EventDrivenFrame(handle_ev); }
+extern "C" void         LFAppTimerDrivenFrame()    { LFL::app->TimerDrivenFrame(true); }
+extern "C" void         LFAppWakeup()              { return LFL::app->scheduler.Wakeup(LFL::app->focused); }
+extern "C" void         LFAppResetGL()             { return LFL::app->ResetGL(); }
+extern "C" void         LFAppAtExit()              { delete LFL::app; }
+extern "C" void         LFAppShutdown()            { LFL::app->run=0; LFAppWakeup(); }
+extern "C" void         BreakHook()                {}
 
-extern "C" NativeWindow *SetNativeWindowByID(void *id) { return SetNativeWindow(LFL::FindOrNull(LFL::app->windows, id)); }
-extern "C" NativeWindow *SetNativeWindow(NativeWindow *W) {
+extern "C" LFAppWindow *SetLFAppWindowByID(void *id) { return SetLFAppWindow(LFL::FindOrNull(LFL::app->windows, id)); }
+extern "C" LFAppWindow *SetLFAppWindow(LFAppWindow *W) {
   CHECK(W);
   if (W == LFL::app->focused) return W;
   LFL::app->MakeCurrentWindow((LFL::app->focused = static_cast<LFL::Window*>(W)));

@@ -559,7 +559,7 @@ struct LuaContext {
 
 struct CUDA : public Module { int Init(); };
 
-struct Window : public ::NativeWindow {
+struct Window : public ::LFAppWindow {
   typedef function<int(Window*, unsigned, int)> FrameCB;
 
   GraphicsDevice *gd=0;

@@ -254,7 +254,7 @@ struct LFApp {
   long long frames_ran;
 };
 
-struct NativeWindow {
+struct LFAppWindow {
   typed_ptr id, gl, surface, glew_context, impl, user1, user2, user3;
   int x, y, width, height, target_fps;
   bool started, minimized, cursor_grabbed, frame_init, animating;
@@ -272,9 +272,9 @@ struct CameraState {
 void MyAppCreate(int argc, const char* const* argv);
 int MyAppMain();
 
-NativeWindow *GetNativeWindow();
-NativeWindow *SetNativeWindow(NativeWindow*);
-NativeWindow *SetNativeWindowByID(void*);
+LFAppWindow *GetLFAppWindow();
+LFAppWindow *SetLFAppWindow(LFAppWindow*);
+LFAppWindow *SetLFAppWindowByID(void*);
 LFApp *GetLFApp();
 
 int LFAppMain();
@@ -290,22 +290,7 @@ void LFAppShutdown();
 void LFAppAtExit();
 void SetLFAppMainThread();
 unsigned LFAppNextRandSeed();
-void WindowReshaped(int x, int y, int w, int h);
-void WindowMinimized(); 
-void WindowUnMinimized(); 
-bool WindowClosed();
-int KeyPress(int button, int mod, int down);
-int MouseClick(int button, int down, int x, int y);
-int MouseMove(int x, int y, int dx, int dy);
-void QueueWindowReshaped(int x, int y, int w, int h);
-void QueueWindowMinimized(); 
-void QueueWindowUnMinimized(); 
-void QueueWindowClosed();
-void QueueKeyPress(int button, int mod, int down);
-void QueueMouseClick(int button, int down, int x, int y);
-void EndpointRead(void*, const char *name, const char *buf, int len);
-void ShellRun(const char *text);
-const char *LFAppSaveDir();
+const char *GetLFAppSaveDir();
 void BreakHook();
 
 #ifdef __cplusplus

@@ -86,7 +86,7 @@ struct GLFWFrameworkModule : public Module {
   }
 
   static bool LoadScreen(GLFWwindow *W) {
-    if (!SetNativeWindowByID(W)) return 0;
+    if (!SetLFAppWindowByID(W)) return 0;
     return 1;
   }
 
