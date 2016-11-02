@@ -123,46 +123,62 @@ static std::vector<UIImage*> app_images;
 
 @implementation IOSToolbar
   {
-    std::unordered_map<std::string, void*> toolbar_titles;
-    std::unordered_map<void*, LFL::Callback> toolbar_cb;
+    std::unordered_map<std::string, int> toolbar_titles;
+    LFL::MenuItemVec data;
   }
 
-  - (id)init: (const LFL::MenuItemVec&) kv {
+  - (id)init: (LFL::MenuItemVec)kv {
     self = [super init];
+    data = move(kv);
+    for (auto b = data.begin(), e = data.end(), i = b; i != e; ++i) toolbar_titles[i->shortcut] = i - b;
+    _toolbar = [self createUIToolbar: [self getToolbarFrame]];
+    _toolbar2 = [self createUIToolbar: [self getToolbarFrame]];
+    return self;
+  }
+
+  - (UIToolbar*)createUIToolbar:(CGRect)rect {
     NSMutableArray *items = [[NSMutableArray alloc] init];
     UIBarButtonItem *spacer = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil];
-    for (int i=0, l=kv.size(); i<l; i++) {
+    for (int i=0, l=data.size(); i<l; i++) {
       if (i) [items addObject: spacer];
-      NSString *K = [NSString stringWithUTF8String: kv[i].shortcut.c_str()];
+      NSString *K = [NSString stringWithUTF8String: data[i].shortcut.c_str()];
       UIBarButtonItem *item =
         [[UIBarButtonItem alloc] initWithTitle:(([K length] && LFL::isascii([K characterAtIndex:0])) ? [NSString stringWithFormat:@"%@", K] : [NSString stringWithFormat:@"%@\U0000FE0E", K])
         style:UIBarButtonItemStylePlain target:self action:@selector(onClick:)];
-      [item setTag:(kv[i].name == "toggle")];
+      [item setTag:i];
       [items addObject:item];
-      toolbar_titles[kv[i].shortcut] = item;
-      toolbar_cb[item] = kv[i].cb;
       [item release];
     }
+
+    UIToolbar *tb = [[UIToolbar alloc] initWithFrame: rect];
+    // [tb setBarStyle:UIBarStyleBlackTranslucent];
+    tb.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleTopMargin;
+    [tb setItems:items];
+    [items release];
+    [spacer release];
+    return tb;
+  }
+
+  - (CGRect)getToolbarFrame {
     int tbh = 44;
     auto uiapp = [LFUIApplication sharedAppDelegate];
     CGRect bounds = [uiapp.view bounds], kbb = [uiapp.controller getKeyboardFrame];
-    CGRect tbb = CGRectMake(0, bounds.size.height - kbb.size.height - tbh, bounds.size.width, tbh);
-    _toolbar = [[UIToolbar alloc] initWithFrame: tbb];
-    // [_toolbar setBarStyle:UIBarStyleBlackTranslucent];
-    [_toolbar setItems:items];
-    [items release];
-    [spacer release];
-    return self;
+    return CGRectMake(0, bounds.size.height - kbb.size.height - tbh, bounds.size.width, tbh);
   }
 
   - (void)toggleButtonNamed: (const std::string&) n {
     auto it = toolbar_titles.find(n);
-    if (it != toolbar_titles.end()) [self toggleButton: (id)(UIBarButtonItem*)it->second];
+    if (it != toolbar_titles.end()) [self toggleButton: it->second];
   }
 
-  - (void)toggleButton:(id)sender {
-    if (![sender isKindOfClass:[UIBarButtonItem class]]) FATALf("unknown sender: %p", sender);
-    UIBarButtonItem *item = (UIBarButtonItem*)sender;
+  - (void)toggleButton:(int)ind {
+    [IOSToolbar toggleButton:ind onToolbar:_toolbar];
+    [IOSToolbar toggleButton:ind onToolbar:_toolbar2];
+  }
+
+  + (void)toggleButton:(int)ind onToolbar:(UIToolbar*)tb {
+    CHECK_RANGE(ind*2, 0, [tb.items count]);
+    UIBarButtonItem *item = (UIBarButtonItem*)[tb.items objectAtIndex:ind*2];
     if (item.style != UIBarButtonItemStyleDone) { item.style = UIBarButtonItemStyleDone;     item.tintColor = [UIColor colorWithRed:0.8 green:0.8 blue:0.8 alpha:.8]; }
     else                                        { item.style = UIBarButtonItemStyleBordered; item.tintColor = nil; }
   }
@@ -170,22 +186,29 @@ static std::vector<UIImage*> app_images;
   - (void)onClick:(id)sender {
     if (![sender isKindOfClass:[UIBarButtonItem class]]) FATALf("unknown sender: %p", sender);
     UIBarButtonItem *item = (UIBarButtonItem*)sender;
-    auto it = toolbar_cb.find(item);
-    if (it != toolbar_cb.end()) {
-      it->second();
-      if (item.tag) [self toggleButton:item];
-    }
+    CHECK_RANGE(item.tag, 0, data.size());
+    auto &b = data[item.tag];
+    b.cb();
+    if (b.name == "toggle") [self toggleButton: item.tag];
     [[LFUIApplication sharedAppDelegate].controller resignFirstResponder];
   }
 
   - (void)show: (bool)show_or_hide {
-    [LFUIApplication sharedAppDelegate].text_field.inputAccessoryView = show_or_hide ? _toolbar : nil;
+    auto uiapp = [LFUIApplication sharedAppDelegate];
+    uiapp.controller.input_accessory_toolbar = show_or_hide ? _toolbar : nil;
+    uiapp.text_field.inputAccessoryView = show_or_hide ? _toolbar2 : nil;
+    [uiapp.text_field reloadInputViews];
+    [_toolbar removeFromSuperview];
+    if (show_or_hide) {
+      uiapp.controller.input_accessory_toolbar.hidden = uiapp.controller.showing_keyboard;
+      [uiapp.view addSubview: _toolbar];
+    }
   }
 
   + (int)getBottomHeight {
     auto uiapp = [LFUIApplication sharedAppDelegate];
-    if (!uiapp.text_field.inputAccessoryView) return 0;
-    return uiapp.text_field.inputAccessoryView.frame.size.height;
+    if (!uiapp.controller.input_accessory_toolbar) return 0;
+    return uiapp.controller.input_accessory_toolbar.frame.size.height;
   }
 @end
 
@@ -802,8 +825,8 @@ static std::vector<UIImage*> app_images;
     }
   }
 
-  - (void)viewWillAppear:   (BOOL)animated { if (_toolbar) [_toolbar show: true];  }
-  - (void)viewWillDisappear:(BOOL)animated { if (_toolbar) [_toolbar show: false]; }
+  - (void)viewWillAppear:   (BOOL)animated { [super viewWillAppear:    animated]; if (_toolbar) [_toolbar show: true];  }
+  - (void)viewWillDisappear:(BOOL)animated { [super viewWillDisappear: animated]; if (_toolbar) [_toolbar show: false]; }
 
   - (void)textFieldDidChange:(IOSTextField*)sender {
     _lfl_self->changed = true;
@@ -1177,7 +1200,7 @@ SystemTextView::SystemTextView(const string &title, const string &text) :
 SystemNavigationView::~SystemNavigationView() { if (auto nav = FromVoid<IOSNavigation*>(impl)) [nav release]; }
 SystemNavigationView::SystemNavigationView() : impl([[IOSNavigation alloc] initWithNavigationBarClass:nil toolbarClass:nil]) {
   auto nav = FromVoid<IOSNavigation*>(impl);
-  [nav setToolbarHidden:YES animated:YES];
+  [nav setToolbarHidden:YES animated:NO];
 }
 
 void SystemNavigationView::Show(bool show_or_hide) {

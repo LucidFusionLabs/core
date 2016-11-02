@@ -22,7 +22,9 @@
 @interface MyTextField : UITextField {}
 @end
 
-@interface LFViewController : GLKViewController<GLKViewControllerDelegate, UIActionSheetDelegate> {}
+@interface LFViewController : UIViewController<UIActionSheetDelegate> {}
+  @property (nonatomic, retain) UIToolbar *input_accessory_toolbar;
+  @property BOOL showing_keyboard;
   - (CGRect)getKeyboardFrame;
   - (CGRect)getKeyboardToolbarFrame;
   - (void)initNotifications;
@@ -30,9 +32,13 @@
   - (void)shutdownGestureRecognizers;
 @end
 
+@interface LFGLKViewController : GLKViewController<GLKViewControllerDelegate> {}
+@end
+
 @interface LFUIApplication : NSObject<UIApplicationDelegate, GLKViewDelegate, UITextFieldDelegate, NSURLSessionDelegate, ObjcWindow> {}
   @property (nonatomic, retain) UIWindow *window;
   @property (nonatomic, retain) LFViewController *controller;
+  @property (nonatomic, retain) LFGLKViewController *glk_controller;
   @property (nonatomic, retain) GLKView *view;
   @property (nonatomic, retain) UIView *lview, *rview;
   @property (nonatomic, retain) MyTextField *text_field;
@@ -43,6 +49,8 @@
   @property int screen_y, screen_width, screen_height;
   @property CGFloat scale;
   + (LFUIApplication *) sharedAppDelegate;
+  + (CGSize)currentWindowSize;
+  + (CGSize)sizeInOrientation:(UIInterfaceOrientation)orientation;
   - (CGFloat)getScale;
   - (CGRect)getFrame;
   - (bool)isKeyboardFirstResponder;
@@ -51,7 +59,7 @@
 @end
 
 @interface IOSToolbar : NSObject
-  @property (nonatomic, retain) UIToolbar *toolbar;
+  @property (nonatomic, retain) UIToolbar *toolbar, *toolbar2;
   + (int)getBottomHeight;
 @end
 
