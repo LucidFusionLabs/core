@@ -32,14 +32,14 @@
   - (void)shutdownGestureRecognizers;
 @end
 
-@interface LFGLKViewController : GLKViewController<GLKViewControllerDelegate> {}
+@interface LFGLKViewController : GLKViewController<GLKViewControllerDelegate, GLKViewDelegate> {}
 @end
 
-@interface LFUIApplication : NSObject<UIApplicationDelegate, GLKViewDelegate, UITextFieldDelegate, NSURLSessionDelegate, ObjcWindow> {}
+@interface LFUIApplication : NSObject<UIApplicationDelegate, UITextFieldDelegate, NSURLSessionDelegate, ObjcWindow> {}
   @property (nonatomic, retain) UIWindow *window;
   @property (nonatomic, retain) LFViewController *controller;
   @property (nonatomic, retain) LFGLKViewController *glk_controller;
-  @property (nonatomic, retain) GLKView *view;
+  @property (nonatomic, retain) GLKView *glk_view;
   @property (nonatomic, retain) UIView *lview, *rview;
   @property (nonatomic, retain) MyTextField *text_field;
   @property (nonatomic, retain) UINavigationBar *title_bar;

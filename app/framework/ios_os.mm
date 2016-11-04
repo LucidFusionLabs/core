@@ -162,7 +162,7 @@ static std::vector<UIImage*> app_images;
   - (CGRect)getToolbarFrame {
     int tbh = 44;
     auto uiapp = [LFUIApplication sharedAppDelegate];
-    CGRect bounds = [uiapp.view bounds], kbb = [uiapp.controller getKeyboardFrame];
+    CGRect bounds = [uiapp.glk_view bounds], kbb = [uiapp.controller getKeyboardFrame];
     return CGRectMake(0, bounds.size.height - kbb.size.height - tbh, bounds.size.width, tbh);
   }
 
@@ -179,8 +179,8 @@ static std::vector<UIImage*> app_images;
   + (void)toggleButton:(int)ind onToolbar:(UIToolbar*)tb {
     CHECK_RANGE(ind*2, 0, [tb.items count]);
     UIBarButtonItem *item = (UIBarButtonItem*)[tb.items objectAtIndex:ind*2];
-    if (item.style != UIBarButtonItemStyleDone) { item.style = UIBarButtonItemStyleDone;     item.tintColor = [UIColor colorWithRed:0.8 green:0.8 blue:0.8 alpha:.8]; }
-    else                                        { item.style = UIBarButtonItemStyleBordered; item.tintColor = nil; }
+    if (item.style != UIBarButtonItemStyleDone) { item.tintColor = [UIColor colorWithRed:0.8 green:0.8 blue:0.8 alpha:.8]; }
+    else                                        { item.tintColor = nil; }
   }
 
   - (void)onClick:(id)sender {
@@ -201,7 +201,7 @@ static std::vector<UIImage*> app_images;
     [_toolbar removeFromSuperview];
     if (show_or_hide) {
       uiapp.controller.input_accessory_toolbar.hidden = uiapp.controller.showing_keyboard;
-      [uiapp.view addSubview: _toolbar];
+      [uiapp.glk_view addSubview: _toolbar];
     }
   }
 
@@ -596,7 +596,6 @@ static std::vector<UIImage*> app_images;
         IOSSegmentedControl *segmented_control = [[IOSSegmentedControl alloc] initWithItems:itemArray];
         segmented_control.frame = cell.frame;
         segmented_control.autoresizingMask = UIViewAutoresizingFlexibleWidth;
-        segmented_control.segmentedControlStyle = UISegmentedControlStylePlain;
         segmented_control.selectedSegmentIndex = 0; 
         if (compiled_item.depends.size()) 
           segmented_control.changed = [self makeChangedCB: compiled_item];
@@ -728,12 +727,14 @@ static std::vector<UIImage*> app_images;
   - (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section {
     CHECK_LT(section, data.size());
     UIView *headerView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, tableView.frame.size.width, 44)];
+    headerView.autoresizingMask = UIViewAutoresizingFlexibleWidth;
 
     if (int image = data[section].image) {
       UIImageView *image_view = [[UIImageView alloc] initWithImage: app_images[image - 1]];
       data[section].header_height = 44 + image_view.frame.size.height;
       image_view.contentMode = UIViewContentModeCenter;
       image_view.center = CGPointMake(headerView.frame.size.width/2, image_view.frame.size.height/2);
+      image_view.autoresizingMask = UIViewAutoresizingFlexibleRightMargin | UIViewAutoresizingFlexibleLeftMargin;
       headerView.frame = CGRectMake(0, 0, tableView.frame.size.width, data[section].header_height);
       [headerView addSubview: image_view];
       [image_view release];
@@ -744,6 +745,7 @@ static std::vector<UIImage*> app_images;
         CGRectMake(50, headerView.frame.size.height-1-21-11, headerView.frame.size.width-100, 21)];
       label.text = LFL::MakeNSString(data[section].header);
       label.textAlignment = NSTextAlignmentCenter;
+      label.autoresizingMask = UIViewAutoresizingFlexibleRightMargin | UIViewAutoresizingFlexibleLeftMargin;
       [headerView addSubview:label];
       [label release];
     }
@@ -754,6 +756,7 @@ static std::vector<UIImage*> app_images;
       [button setTitle:@"Add" forState:UIControlStateNormal];
       [button sizeToFit];
       [button setFrame:CGRectMake(11, 11, button.frame.size.width, 21)];
+      button.autoresizingMask = UIViewAutoresizingFlexibleRightMargin;
       [headerView addSubview:button];
     }
 
@@ -763,6 +766,7 @@ static std::vector<UIImage*> app_images;
       [button setTitle:@"Edit" forState:UIControlStateNormal];
       [button sizeToFit];
       [button setFrame:CGRectMake(tableView.frame.size.width - button.frame.size.width - 11, 11, button.frame.size.width, 21)];
+      button.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin;
       [headerView addSubview:button];
     }
     return headerView;
@@ -818,7 +822,7 @@ static std::vector<UIImage*> app_images;
     auto uiapp = [LFUIApplication sharedAppDelegate];
     if (show_or_hide) {
       if (_modal_nav) [uiapp.top_controller presentViewController:self.modal_nav animated:YES completion:nil];
-      else            [uiapp.view addSubview: self.tableView];
+      else            [uiapp.glk_view addSubview: self.tableView];
     } else {
       if (_modal_nav) [uiapp.top_controller dismissViewControllerAnimated:YES completion:nil];
       else            [self.tableView removeFromSuperview];
@@ -1263,7 +1267,7 @@ void SystemAdvertisingView::Hide() {}
 void Application::ShowSystemFontChooser(const FontDesc &cur_font, const StringVecCB &cb) {
   static IOSFontPicker *font_chooser = [[IOSFontPicker alloc] init];
   [font_chooser selectFont:cur_font.name size:cur_font.size cb:cb];
-  [[LFUIApplication sharedAppDelegate].view addSubview: font_chooser];
+  [[LFUIApplication sharedAppDelegate].glk_view addSubview: font_chooser];
 }
 
 void Application::OpenSystemBrowser(const string &url_text) {
@@ -1274,8 +1278,6 @@ void Application::OpenSystemBrowser(const string &url_text) {
 }
 
 bool Application::OpenSystemAppPreferences() {
-  bool can_open_settings = &UIApplicationOpenSettingsURLString != NULL;
-  if (!can_open_settings) return false;
   NSURL *url = [NSURL URLWithString:UIApplicationOpenSettingsURLString];
   [[UIApplication sharedApplication] openURL:url];
   return true;
@@ -1362,8 +1364,9 @@ void Application::SaveSettings(const StringPairVec &v) {
 }
 
 Connection *Application::ConnectTCP(const string &hostport, int default_port, Callback *connected_cb, bool background_services) {
-  INFO("Application::ConnectTCP ", hostport, " (default_port = ", default_port, ") background_services = ", background_services); 
-  if (background_services) return new NSURLSessionStreamConnection(hostport, default_port, connected_cb ? move(*connected_cb) : Callback());
+  static bool ios9_or_later = kCFCoreFoundationVersionNumber >= kCFCoreFoundationVersionNumber_iOS_9_0;
+  INFO("Application::ConnectTCP ", hostport, " (default_port = ", default_port, ") background_services = ", background_services, " ios_9=", ios9_or_later);
+  if (background_services && ios9_or_later) return new NSURLSessionStreamConnection(hostport, default_port, connected_cb ? move(*connected_cb) : Callback());
   else return app->net->tcp_client->Connect(hostport, default_port, connected_cb);
 }
 

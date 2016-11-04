@@ -26,9 +26,7 @@
 
 @implementation GameView
   {
-    LFApp *app;
-    LFAppWindow *screen;
-
+    LFL::Window *screen;
     NSWindow *window;
     NSOpenGLContext  *context;
     NSOpenGLPixelFormat *pixel_format;
@@ -57,7 +55,6 @@
     [super initWithFrame:frame];
     _main_wait_fh = [[NSMutableDictionary alloc] init];
     pixel_format = [format retain];
-    app = GetLFApp();
     use_timer = should_close = 1;
     return self;
   }
@@ -76,7 +73,7 @@
   // - (void)windowDidBecomeMain:(NSNotification *)notification {}
   - (void)windowDidResignMain:(NSNotification *)notification { [self clearKeyModifiers]; }
   - (void)setWindow:(NSWindow*)w { window = w; }
-  - (void)setScreen:(LFAppWindow*)s { screen = s; }
+  - (void)setScreen:(LFL::Window*)s { screen = s; }
   - (void)setFrameSize:(NSSize)s { [super setFrameSize:s]; needs_reshape=YES; [self update]; }
   - (void)setFrameOnMouseInput:(bool)v { frame_on_mouse_input = v; }
   - (void)setFrameOnKeyboardInput:(bool)v { frame_on_keyboard_input = v; }
@@ -180,7 +177,7 @@
     static bool first_callback = 1;
     if (first_callback && !(first_callback = 0)) SetLFAppMainThread();
     if (!initialized) return;
-    if (app->run) LFAppFrame(true);
+    if (LFL::app->run) LFAppFrame(true);
     else [[NSApplication sharedApplication] terminate:self];
   }
    
@@ -189,14 +186,15 @@
     [context update];
     SetLFAppWindow(screen);
     float screen_w = [self frame].size.width, screen_h = [self frame].size.height;
-    WindowReshaped(0, 0, int(screen_w), int(screen_h));
+    screen->Reshaped(LFL::Box(0, 0, int(screen_w), int(screen_h)));
   }
 
   - (BOOL)windowShouldClose:(id)sender { return should_close; }
   - (void)windowWillClose:(NSNotification *)notification { 
     [self stopThread];
     SetLFAppWindow(screen);
-    if (WindowClosed()) LFAppAtExit();
+    LFL::app->CloseWindow(screen);
+    if (LFL::app->windows.empty()) LFAppAtExit();
   }
 
   - (void)addMainWaitSocket:(int)fd callback:(std::function<bool()>)cb {
@@ -218,7 +216,7 @@
   - (void)mouseClick:(NSEvent*)e down:(bool)d {
     SetLFAppWindow(screen);
     NSPoint p = [e locationInWindow];
-    int fired = MouseClick(1+ctrl_down, d, p.x, p.y);
+    int fired = LFL::app->input->MouseClick(1+ctrl_down, d, LFL::point(p.x, p.y));
     if (fired && frame_on_mouse_input) [self setNeedsDisplay:YES]; 
     prev_mouse_pos = p;
   }
@@ -227,10 +225,11 @@
   - (void)mouseMoved:  (NSEvent*)e { [self mouseMove:e drag:0]; }
   - (void)mouseMove: (NSEvent*)e drag:(bool)drag {
     SetLFAppWindow(screen);
-    if (screen->cursor_grabbed) MouseMove(prev_mouse_pos.x, prev_mouse_pos.y, [e deltaX], -[e deltaY]);
-    else {
+    if (screen->cursor_grabbed) {
+      LFL::app->input->MouseMove(LFL::point(prev_mouse_pos.x, prev_mouse_pos.y), LFL::point([e deltaX], -[e deltaY]));
+    } else {
       NSPoint p=[e locationInWindow], d=NSMakePoint(p.x-prev_mouse_pos.x, p.y-prev_mouse_pos.y);
-      int fired = MouseMove(p.x, p.y, d.x, d.y);
+      int fired = LFL::app->input->MouseMove(LFL::point(p.x, p.y), LFL::point(d.x, d.y));
       if (fired && frame_on_mouse_input) [self setNeedsDisplay:YES]; 
       prev_mouse_pos = p;
     }
@@ -254,22 +253,22 @@
   - (void)keyPress:(NSEvent *)theEvent down:(bool)d {
     SetLFAppWindow(screen);
     int c = getKeyCode([theEvent keyCode]);
-    int fired = c ? KeyPress(c, 0, d) : 0;
+    int fired = c ? LFL::app->input->KeyPress(c, 0, d) : 0;
     if (fired && frame_on_keyboard_input) [self setNeedsDisplay:YES]; 
   }
 
   - (void)flagsChanged:(NSEvent *)theEvent {
     int flags = [theEvent modifierFlags];
     bool cmd = flags & NSCommandKeyMask, ctrl = flags & NSControlKeyMask, shift = flags & NSShiftKeyMask;
-    if (cmd   != cmd_down)   { KeyPress(0x82, 0, cmd);   cmd_down   = cmd;   }
-    if (ctrl  != ctrl_down)  { KeyPress(0x86, 0, ctrl);  ctrl_down  = ctrl;  }
-    if (shift != shift_down) { KeyPress(0x83, 0, shift); shift_down = shift; }
+    if (cmd   != cmd_down)   { LFL::app->input->KeyPress(0x82, 0, cmd);   cmd_down   = cmd;   }
+    if (ctrl  != ctrl_down)  { LFL::app->input->KeyPress(0x86, 0, ctrl);  ctrl_down  = ctrl;  }
+    if (shift != shift_down) { LFL::app->input->KeyPress(0x83, 0, shift); shift_down = shift; }
   }
 
   - (void)clearKeyModifiers {
-    if (cmd_down)   { KeyPress(0x82, 0, 0); cmd_down   = 0; }
-    if (ctrl_down)  { KeyPress(0x86, 0, 0); ctrl_down  = 0; }
-    if (shift_down) { KeyPress(0x83, 0, 0); shift_down = 0; }
+    if (cmd_down)   { LFL::app->input->KeyPress(0x82, 0, 0); cmd_down   = 0; }
+    if (ctrl_down)  { LFL::app->input->KeyPress(0x86, 0, 0); ctrl_down  = 0; }
+    if (shift_down) { LFL::app->input->KeyPress(0x83, 0, 0); shift_down = 0; }
   }
 
   static int getKeyCode(int c) {
@@ -342,7 +341,7 @@
     INFOf("OSXFramework::Main argc=%d ret=%d\n", LFL::app->argc, ret);
   }
 
-  - (GameView*)createWindow: (int)w height:(int)h nativeWindow:(LFAppWindow*)s {
+  - (GameView*)createWindow: (int)w height:(int)h nativeWindow:(LFL::Window*)s {
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, w, h)
                                          styleMask:NSClosableWindowMask|NSMiniaturizableWindowMask|NSResizableWindowMask|NSTitledWindowMask
                                          backing:NSBackingStoreBuffered defer:NO];

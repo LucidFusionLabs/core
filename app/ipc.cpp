@@ -715,17 +715,17 @@ int ProcessAPIServer::HandleSetViewportRequest(int seq, const IPC::SetViewportRe
 }
 
 int ProcessAPIServer::HandleKeyPressRequest(int seq, const IPC::KeyPressRequest *req, Void) {
-  KeyPress(req->button(), 0, req->down());
+  app->input->KeyPress(req->button(), 0, req->down());
   return IPC::Done;
 }
 
 int ProcessAPIServer::HandleMouseClickRequest(int seq, const IPC::MouseClickRequest *req, Void) {
-  MouseClick(req->button(), req->down(), req->x(), req->y());
+  app->input->MouseClick(req->button(), req->down(), point(req->x(), req->y()));
   return IPC::Done;
 }
 
 int ProcessAPIServer::HandleMouseMoveRequest(int seq, const IPC::MouseMoveRequest *req, Void) {
-  MouseMove(req->x(), req->y(), req->dx(), req->y());
+  app->input->MouseMove(point(req->x(), req->y()), point(req->dx(), req->y()));
   return IPC::Done;
 }
 

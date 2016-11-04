@@ -120,20 +120,21 @@ static const char* const* ios_argv = 0;
 
     EAGLContext *context = [[EAGLContext alloc] initWithAPI:kEAGLRenderingAPIOpenGLES2];
     [EAGLContext setCurrentContext:context];
-    self.view = [[[GLKView alloc] initWithFrame:wbounds] autorelease];
-    self.view.context = context;
-    self.view.delegate = self;
-    self.view.enableSetNeedsDisplay = TRUE;
-    self.view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight |
-      UIViewAutoresizingFlexibleBottomMargin | UIViewAutoresizingFlexibleLeftMargin |
-      UIViewAutoresizingFlexibleRightMargin | UIViewAutoresizingFlexibleTopMargin;
-    [context release];
 
     self.glk_controller = [[[LFGLKViewController alloc] initWithNibName:nil bundle:nil] autorelease];
-    self.glk_controller.view = self.view; 
     self.glk_controller.delegate = self.glk_controller;
     self.glk_controller.resumeOnDidBecomeActive = NO;
     // self.glk_controller.wantsFullScreenLayout = YES;
+
+    self.glk_view = [[[GLKView alloc] initWithFrame:wbounds] autorelease];
+    self.glk_view.context = context;
+    self.glk_view.delegate = self.glk_controller;
+    self.glk_view.enableSetNeedsDisplay = TRUE;
+    self.glk_view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight |
+      UIViewAutoresizingFlexibleBottomMargin | UIViewAutoresizingFlexibleLeftMargin |
+      UIViewAutoresizingFlexibleRightMargin | UIViewAutoresizingFlexibleTopMargin;
+    [context release];
+    self.glk_controller.view = self.glk_view;
 
     self.controller = [[[LFViewController alloc] initWithNibName:nil bundle:nil] autorelease];
     self.top_controller = self.controller;
@@ -150,14 +151,14 @@ static const char* const* ios_argv = 0;
     self.lview = [[[MyTouchView alloc] initWithFrame:lrect] autorelease];
     // self.lview.backgroundColor = [UIColor greenColor];
     // self.lview.alpha = 0.3f;
-    [self.view addSubview:self.lview];
+    [self.glk_view addSubview:self.lview];
     
     // right touch view
     CGRect rrect = CGRectMake(0, wbounds.size.height/2, wbounds.size.width, wbounds.size.height/2);
     self.rview = [[[MyTouchView alloc] initWithFrame:rrect] autorelease];
     // self.rview.backgroundColor = [UIColor blueColor];
     // self.rview.alpha = 0.3f;
-    [self.view addSubview:self.rview];
+    [self.glk_view addSubview:self.rview];
 
     // text view for keyboard display
     self.text_field = [[[MyTextField alloc] initWithFrame: CGRectZero] autorelease];
@@ -165,12 +166,12 @@ static const char* const* ios_argv = 0;
     self.text_field.text = [NSString stringWithFormat:@"default"];
     self.text_field.autocorrectionType = UITextAutocorrectionTypeNo;
     self.text_field.autocapitalizationType = UITextAutocapitalizationTypeNone;
-    [self.window addSubview:self.text_field];
+    [self.controller.view addSubview:self.text_field];
 
     [[NSFileManager defaultManager] changeCurrentDirectoryPath: [[NSBundle mainBundle] resourcePath]];
     NSLog(@"iOSMain argc=%d", LFL::app->argc);
     MyAppMain();
-    INFOf("didFinishLaunchingWithOptions, views: %p, %p, %p, csf=%f", self.view, self.lview, self.rview, self.scale);
+    INFOf("didFinishLaunchingWithOptions, views: %p, %p, %p, csf=%f", self.glk_view, self.lview, self.rview, self.scale);
 
     [self.window makeKeyAndVisible];
     // INFO("after window makeKeyAndVisible");
@@ -209,16 +210,7 @@ static const char* const* ios_argv = 0;
     completionHandler(UIBackgroundFetchResultNoData);
   }
 
-  - (void)glkView:(GLKView *)v drawInRect:(CGRect)rect {
-    LFL::Window *screen = LFL::app->focused;
-    if (!_screen_width || !_screen_height || !screen) return;
-    if (screen->y != _screen_y || screen->width != _screen_width || screen->height != _screen_height)
-      LFL::app->focused->Reshaped(LFL::Box(0, _screen_y, _screen_width, _screen_height));
-
-    LFAppFrame(true); 
-  }
-
-  - (CGRect)getFrame { return self.view.frame; }
+  - (CGRect)getFrame { return self.glk_view.frame; }
   - (CGFloat)getScale { return (want_extra_scale ? _scale : 1); }
   - (bool)isKeyboardFirstResponder { return [self.text_field isFirstResponder]; }
 
@@ -230,13 +222,16 @@ static const char* const* ios_argv = 0;
 
   - (int)updateScale: (bool)v { want_extra_scale=v; [self updateGLKViewScale]; return v ? _scale : 1; }
   - (void)downScale: (bool)v { _downscale=v; [self updateGLKViewScale]; }
-  - (void)updateGLKViewScale { self.view.contentScaleFactor = _downscale ? 1 : [self getScale]; }
+  - (void)updateGLKViewScale { self.glk_view.contentScaleFactor = _downscale ? 1 : [self getScale]; }
   - (int)updateGLKMultisample: (bool)v { 
-    self.view.drawableMultisample = v ? GLKViewDrawableMultisample4X : GLKViewDrawableMultisampleNone;
+    self.glk_view.drawableMultisample = v ? GLKViewDrawableMultisample4X : GLKViewDrawableMultisampleNone;
     return v ? 4 : 0;
   }
 
-  - (void)hideKeyboard { [self.text_field resignFirstResponder]; }
+  - (void)hideKeyboard {
+    [self.controller.view endEditing:YES];
+    // [self.text_field resignFirstResponder];
+  }
   - (void)showKeyboard {
     if ([self.text_field isFirstResponder]) [self.text_field resignFirstResponder];
     [self.text_field becomeFirstResponder];
@@ -262,7 +257,7 @@ static const char* const* ios_argv = 0;
     int fired = 0;
     fired += LFL::app->input->KeyPress(k, 0, 1);
     fired += LFL::app->input->KeyPress(k, 0, 0);
-    if (fired && _frame_on_keyboard_input) [self.view setNeedsDisplay];
+    if (fired && _frame_on_keyboard_input) [self.glk_view setNeedsDisplay];
   }
 
   - (void)addMainWaitSocket:(int)fd callback:(std::function<bool()>)cb {
@@ -276,15 +271,13 @@ static const char* const* ios_argv = 0;
   }
 
   - (void)objcWindowSelect {}
-  - (void)objcWindowFrame { [self.view setNeedsDisplay]; }
+  - (void)objcWindowFrame { [self.glk_view setNeedsDisplay]; }
 @end
 
 @implementation LFGLKViewController
   {
     LFUIApplication *uiapp;
   }
-
-  - (void)glkViewControllerUpdate:(GLKViewController *)controller {}
 
   - (void)viewWillAppear:(BOOL)animated { 
     [super viewWillAppear:animated];
@@ -293,8 +286,27 @@ static const char* const* ios_argv = 0;
   }
   
   - (void)viewDidLayoutSubviews {
+    CGFloat s = [uiapp getScale];
+    CGRect bounds = self.view.bounds;
+    bool overlap_keyboard = false;
+    int kb_h = [uiapp.controller getKeyboardToolbarFrame].size.height, y = overlap_keyboard ? 0 : (s * kb_h);
+    uiapp.screen_y      = y;
+    uiapp.screen_width  = s * bounds.size.width;
+    uiapp.screen_height = s * bounds.size.height - y;
+    // INFO("LFGLKViewController viewDidLayoutSubviews kb_h=", kb_h, " y=", y, " h=", uiapp.screen_height, " bounds.h=", bounds.size.height, " scale=", float(s));
     [self.view setNeedsDisplay];
     [super viewDidLayoutSubviews];
+  }
+
+  - (void)glkViewControllerUpdate:(GLKViewController *)controller {}
+
+  - (void)glkView:(GLKView *)v drawInRect:(CGRect)rect {
+    LFL::Window *screen = LFL::app->focused;
+    if (!uiapp.screen_width || !uiapp.screen_height || !screen) return;
+    if (screen->y != uiapp.screen_y || screen->width != uiapp.screen_width || screen->height != uiapp.screen_height)
+      LFL::app->focused->Reshaped(LFL::Box(0, uiapp.screen_y, uiapp.screen_width, uiapp.screen_height));
+
+    LFAppFrame(true);
   }
 @end
 
@@ -314,9 +326,9 @@ static const char* const* ios_argv = 0;
 
   - (CGRect)getKeyboardFrame { return keyboard_frame; }
   - (CGRect)getKeyboardToolbarFrame {
+    int bottom_height = !_showing_keyboard ? [IOSToolbar getBottomHeight] : 0;
     CGRect kbd = [self getKeyboardFrame];
-		CGRect kbdtb = CGRectMake(kbd.origin.x, kbd.origin.y, kbd.size.width,
-															kbd.size.height + (!_showing_keyboard ? [IOSToolbar getBottomHeight] : 0));
+    CGRect kbdtb = CGRectMake(kbd.origin.x, kbd.origin.y, kbd.size.width, kbd.size.height + bottom_height);
     // INFO("getKeyboardToolbarFrame: ", LFL::GetCGRect(kbdtb).DebugString(), " keyboardFrame: ", LFL::GetCGRect(kbd).DebugString());
     return kbdtb;
   }
@@ -338,6 +350,7 @@ static const char* const* ios_argv = 0;
 
   - (void)viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
+    current_orientation = next_orientation = [UIApplication sharedApplication].statusBarOrientation;
     if (uiapp.top_controller != uiapp.root_controller)
       [uiapp.root_controller presentViewController:uiapp.top_controller animated:YES completion:nil];
   }
@@ -347,12 +360,6 @@ static const char* const* ios_argv = 0;
   }
 
   - (void)viewDidLayoutSubviews {
-    CGFloat s = [uiapp getScale];
-    CGRect bounds = self.view.bounds;
-    int y = overlap_keyboard ? 0 : (s * [self getKeyboardToolbarFrame].size.height);
-    uiapp.screen_y      = y;
-    uiapp.screen_width  = s * bounds.size.width;
-    uiapp.screen_height = s * bounds.size.height - y;
     [super viewDidLayoutSubviews];
   }
 
@@ -389,10 +396,9 @@ static const char* const* ios_argv = 0;
     UIViewAnimationCurve curve    = UIViewAnimationCurve([notification.userInfo[UIKeyboardAnimationCurveUserInfoKey] integerValue]);
     CGRect               endFrame = [notification.userInfo[UIKeyboardFrameEndUserInfoKey] CGRectValue];
 
-    endFrame = [window convertRect:endFrame fromWindow:nil];
-    bool show_or_hide = CGRectIntersectsRect(window.frame, endFrame); // CGRectContainsRect(window.frame, endFrame);
-    if (show_or_hide) [self kbWillShowOrHide:YES withRect:[uiapp.window convertRect:endFrame toView:self.view] andDuration:duration andCurve:curve];
-    else              [self kbWillShowOrHide:NO  withRect:CGRectMake(0,0,0,0)                                  andDuration:duration andCurve:curve];
+    bool show_or_hide = CGRectContainsRect(window.frame, endFrame); // CGRectIntersectsRect(window.frame, endFrame);
+    if (show_or_hide) [self kbWillShowOrHide:YES withRect:[self.view convertRect:endFrame fromView:nil] andDuration:duration andCurve:curve];
+    else              [self kbWillShowOrHide:NO  withRect:CGRectMake(0,0,0,0)                                 andDuration:duration andCurve:curve];
   }
 
   - (void)kbWillShowOrHide:(BOOL)show_or_hide withRect:(CGRect)rect andDuration:(NSTimeInterval)interval andCurve:(UIViewAnimationCurve)curve {
@@ -400,8 +406,9 @@ static const char* const* ios_argv = 0;
     if (_input_accessory_toolbar) _input_accessory_toolbar.hidden = show_or_hide;
     _showing_keyboard = show_or_hide;
     keyboard_frame = rect;
-    [uiapp.top_controller.view setNeedsLayout];
-    INFO("kbWillShowOrHide: ", bool(show_or_hide), " ", LFL::GetCGRect(keyboard_frame).DebugString());
+    if (uiapp.top_controller != uiapp.root_controller) [uiapp.top_controller.view setNeedsLayout];
+    [uiapp.glk_view setNeedsLayout];
+    // INFO("kbWillShowOrHide: ", bool(show_or_hide), " ", LFL::GetCGRect(keyboard_frame).DebugString(), " scale=", uiapp.scale);
   }
 
   - (void)shutdownGestureRecognizers {
@@ -457,14 +464,14 @@ static const char* const* ios_argv = 0;
 
   - (void)initTapGestureRecognizers {
     UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(tapGesture:)];
-    [[LFUIApplication sharedAppDelegate].view addGestureRecognizer:tap];
+    [[LFUIApplication sharedAppDelegate].glk_view addGestureRecognizer:tap];
     [tap release];
   }
 
   - (void)initPinchGestureRecognizers {
     UIWindow *win = [[[UIApplication sharedApplication] windows] objectAtIndex:0];
     UIPinchGestureRecognizer *pinch = [[UIPinchGestureRecognizer alloc] initWithTarget:self action:@selector(pinchGesture:)];
-    [[LFUIApplication sharedAppDelegate].view addGestureRecognizer:pinch];
+    [[LFUIApplication sharedAppDelegate].glk_view addGestureRecognizer:pinch];
     [pinch release];
   }
 
@@ -630,7 +637,7 @@ struct iOSFrameworkModule : public Module {
     INFO("iOSFrameworkModule::Init()");
     if (auto s = app->focused) {
       CHECK(!s->id.v);
-      s->id = LFL::MakeTyped([[LFUIApplication sharedAppDelegate] view]);
+      s->id = LFL::MakeTyped([[LFUIApplication sharedAppDelegate] glk_view]);
       CHECK(s->id.v);
       app->windows[s->id.v] = s;
     }
@@ -639,7 +646,7 @@ struct iOSFrameworkModule : public Module {
     CGRect rect = [uiapp getFrame];
     int w = rect.size.width * scale, h = rect.size.height * scale;
     if (auto s = app->focused) Assign(&s->width, &s->height, w, h);
-    INFOf("iOSFrameworkModule::Init %d %d vs %d %d", w, h, [uiapp view].drawableWidth, [uiapp view].drawableHeight);
+    INFOf("iOSFrameworkModule::Init %d %d vs %d %d", w, h, [uiapp glk_view].drawableWidth, [uiapp glk_view].drawableHeight);
     return 0;
   }
 };
