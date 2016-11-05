@@ -166,7 +166,7 @@ static const char* const* ios_argv = 0;
     self.text_field.text = [NSString stringWithFormat:@"default"];
     self.text_field.autocorrectionType = UITextAutocorrectionTypeNo;
     self.text_field.autocapitalizationType = UITextAutocapitalizationTypeNone;
-    [self.controller.view addSubview:self.text_field];
+    [self.window addSubview:self.text_field];
 
     [[NSFileManager defaultManager] changeCurrentDirectoryPath: [[NSBundle mainBundle] resourcePath]];
     NSLog(@"iOSMain argc=%d", LFL::app->argc);
@@ -406,9 +406,16 @@ static const char* const* ios_argv = 0;
     if (_input_accessory_toolbar) _input_accessory_toolbar.hidden = show_or_hide;
     _showing_keyboard = show_or_hide;
     keyboard_frame = rect;
-    if (uiapp.top_controller != uiapp.root_controller) [uiapp.top_controller.view setNeedsLayout];
+    bool presented_controller = uiapp.top_controller != uiapp.root_controller;
+    if (presented_controller) [uiapp.top_controller.view setNeedsLayout];
     [uiapp.glk_view setNeedsLayout];
-    // INFO("kbWillShowOrHide: ", bool(show_or_hide), " ", LFL::GetCGRect(keyboard_frame).DebugString(), " scale=", uiapp.scale);
+#if 0
+    [UIView animateWithDuration:interval animations:^{
+      if (presented_controller) [uiapp.top_controller.view layoutIfNeeded];
+      [uiapp.glk_view layoutIfNeeded];
+    }];
+    INFO("kbWillShowOrHide: ", bool(show_or_hide), " ", LFL::GetCGRect(keyboard_frame).DebugString(), " scale=", uiapp.scale);
+#endif
   }
 
   - (void)shutdownGestureRecognizers {

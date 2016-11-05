@@ -425,9 +425,9 @@ struct PickerItem {
 };
 
 struct TableItemChild {
-  struct Dep { int section, row; string val; bool hidden; int left_icon, right_icon; string key; Callback cb; };
-  enum { None=0, Label=1, Separator=2, Command=3, Button=4, Toggle=5, Selector=6, Picker=7,
-    Dropdown=8, FixedDropdown=9, TextInput=10, NumberInput=11, PasswordInput=12, FontPicker=13 }; 
+  struct Dep { int section, row; string val; bool hidden; int left_icon, right_icon, type; string key; Callback cb; };
+  enum { None=0, Label=1, Separator=2, Command=3, Button=4, Toggle=5, Selector=6, Picker=7, DropdownKey=8,
+    DropdownValue=9, FixedDropdown=10, TextInput=11, NumberInput=12, PasswordInput=13, FontPicker=14 }; 
   typedef unordered_map<string, vector<Dep>> Depends;
   string key;
   int type;

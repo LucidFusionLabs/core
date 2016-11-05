@@ -51,4 +51,8 @@ inline v2 GetCGPoint(CGPoint p) { return v2(p.x, p.y); }
 inline Box GetCGRect(CGRect r) { return Box(r.origin.x, r.origin.y, r.size.width, r.size.height); }
 NSArray *MakeNSStringArray(const vector<string>&);
 
+template<typename T> inline T* objc_dynamic_cast(id from) {
+  return ([from isKindOfClass:[T class]]) ? static_cast<T*>(from) : nil;
+}
+
 }; // namespace LFL
