@@ -33,7 +33,7 @@ if(LFL_OSX)
   target_include_directories(app_osx_os PUBLIC ${LFL_APP_INCLUDE})
   target_compile_definitions(app_osx_os PUBLIC ${LFL_APP_DEF})
   target_compile_options(app_osx_os PUBLIC -fobjc-abi-version=2 -fobjc-legacy-dispatch)
-  target_link_libraries(app_osx_os "-framework Cocoa" "-framework CoreVideo" "-framework QTKit"
+  target_link_libraries(app_osx_os "-framework Cocoa" "-framework QuartzCore" "-framework CoreVideo" "-framework QTKit"
                         -lz -lbz2 -liconv)
 
   add_library(app_osx_framework STATIC osx_framework.mm)

@@ -24,7 +24,7 @@ struct RFBClient {
   typedef function<bool(string*)> LoadPasswordCB;
   typedef function<void(Connection*, const Box&, int pf, const StringPiece &data)> UpdateCB;
   typedef function<void(Connection*, const Box&, point copyfrom)> CopyCB; 
-  struct Params { string hostport, user; };
+  struct Params { string hostport; };
   static Connection *Open(Params params, LoadPasswordCB pcb, UpdateCB fcb, CopyCB ccb,
                           Callback *detach=0, Callback *success=0);
   static int SendChallengeResponse(Connection *c, string pw);

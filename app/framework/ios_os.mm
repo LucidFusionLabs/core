@@ -1253,14 +1253,11 @@ void SystemNavigationView::Show(bool show_or_hide) {
     INFO("LFViewController.dismissViewController ", GetNSString(NSStringFromClass([uiapp.controller class])), " frame=", LFL::GetCGRect(uiapp.controller.view.frame).DebugString());
     uiapp.top_controller = uiapp.root_controller;
     [uiapp.controller dismissViewControllerAnimated:YES completion:nil];
-    // if ([uiapp isKeyboardFirstResponder]) [uiapp showKeyboard];
-    // else                                  [uiapp hideKeyboard];
   }
 }
 
 SystemTableView *SystemNavigationView::Back() {
-  for (UIViewController *c in
-       [FromVoid<IOSNavigation*>(impl).viewControllers reverseObjectEnumerator]) {
+  for (UIViewController *c in [FromVoid<IOSNavigation*>(impl).viewControllers reverseObjectEnumerator]) {
     if ([c isKindOfClass:[IOSTable class]])
       if (auto lself = static_cast<IOSTable*>(c).lfl_self) return lself;
   } 
@@ -1351,51 +1348,7 @@ int Application::LoadSystemImage(const string &n) {
   return app_images.size();
 }
 
-string Application::GetVersion() {
-  NSDictionary *info = [[NSBundle mainBundle] infoDictionary];
-  NSString *version = [info objectForKey:@"CFBundleVersion"];
-  return version ? GetNSString(version) : "";
-}
-
-String16 Application::GetLocalizedString16(const char *key) { return String16(); }
-string Application::GetLocalizedString(const char *key) {
-  NSString *localized = 
-    [[NSBundle mainBundle] localizedStringForKey: [NSString stringWithUTF8String: key] value:nil table:nil];
-  if (!localized) return StrCat("<missing localized: ", key, ">");
-  else            return [localized UTF8String];
-}
-
-String16 Application::GetLocalizedInteger16(int number) { return String16(); }
-string Application::GetLocalizedInteger(int number) {
-  static NSNumberFormatter *formatter=0;
-  static dispatch_once_t onceToken;
-  dispatch_once(&onceToken, ^{
-    formatter = [[NSNumberFormatter alloc] init];
-    [formatter setNumberStyle:NSNumberFormatterDecimalStyle];
-    [formatter setMaximumFractionDigits:0];
-    [formatter setMinimumIntegerDigits:1];
-    [formatter setLocale:[NSLocale autoupdatingCurrentLocale]];
-  });
-  return [[formatter stringFromNumber: [NSNumber numberWithLong:number]] UTF8String];
-}
-
-void Application::LoadDefaultSettings(const StringPairVec &v) {
-  NSMutableDictionary *defaults = [[NSMutableDictionary alloc] init];
-  for (auto &i : v) [defaults setValue:MakeNSString(i.second) forKey:MakeNSString(i.first)];
-  [[NSUserDefaults standardUserDefaults] registerDefaults:defaults];
-  [defaults release];
-}
-
 string Application::GetSystemDeviceName() { return GetNSString([[UIDevice currentDevice] name]); }
-string Application::GetSetting(const string &key) {
-  return GetNSString([[NSUserDefaults standardUserDefaults] stringForKey:MakeNSString(key)]);
-}
-
-void Application::SaveSettings(const StringPairVec &v) {
-  NSUserDefaults* defaults = [NSUserDefaults standardUserDefaults];
-  for (auto &i : v) [defaults setObject:MakeNSString(i.second) forKey:MakeNSString(i.first)];
-  [defaults synchronize];
-}
 
 Connection *Application::ConnectTCP(const string &hostport, int default_port, Callback *connected_cb, bool background_services) {
   static bool ios9_or_later = kCFCoreFoundationVersionNumber >= kCFCoreFoundationVersionNumber_iOS_9_0;

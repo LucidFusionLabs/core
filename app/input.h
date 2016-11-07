@@ -117,7 +117,7 @@ struct KeyboardController {
 struct TextboxController : public KeyboardController {
   int HandleSpecialKey(InputEvent::Id event);
   virtual int SendKeyEvent(InputEvent::Id event, bool down);
-  virtual void Input(const string &s) { for (int i=0; i<s.size(); i++) Input(s[i]); }
+  virtual void InputString(const string &s) { for (int i=0; i<s.size(); i++) Input(s[i]); }
   virtual void Input(char key) {}
   virtual void Enter      () {}
   virtual void Erase      () {}

@@ -170,6 +170,7 @@ elseif(LFL_OSX)
       COMMAND if [ -f ${info_plist} ]; then cat ${info_plist} | grep -A1 CFBundleSignature   | tail -1 | cut -f2 -d\\> | cut -f1 -d \\< | tr -d '\\n' | tee -a ${pkgname}.app/Contents/PkgInfo\; fi
       COMMAND if [ -f ${CMAKE_CURRENT_SOURCE_DIR}/assets/icon.icns ]; then cp ${CMAKE_CURRENT_SOURCE_DIR}/assets/icon.icns ${res}\; fi
       COMMAND if [ -d ${CMAKE_CURRENT_SOURCE_DIR}/assets ]; then cp -r ${CMAKE_CURRENT_SOURCE_DIR}/assets ${res}\; else mkdir ${res}/assets\; fi
+      COMMAND for d in ${CMAKE_CURRENT_SOURCE_DIR}/drawable-\*\; do if [ -d $$d ]; then cp -R $$d ${res}\; fi\; done
       COMMAND if [ ${copy_lfl_app_asset_files} ]; then cp ${LFL_APP_ASSET_FILES} ${res}/assets\; fi
       COMMAND cp ${target} ${pkgname}.app/Contents/MacOS
       COMMAND if [ ${copy_lfl_app_lib_files} ]; then cp ${LFL_APP_LIB_FILES} ${lib}\; fi

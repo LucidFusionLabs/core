@@ -196,7 +196,7 @@ int TextboxController::SendKeyEvent(InputEvent::Id event, bool down) {
 
   if (toggle_bind.key == event && !toggle_once) return 0;
 
-  if (event == app->input->paste_bind.key) { Input(app->GetClipboardText()); return 1; }
+  if (event == app->input->paste_bind.key) { InputString(app->GetClipboardText()); return 1; }
   if (HandleSpecialKey(event)) return 1;
 
   if (cmd_down) return 0;

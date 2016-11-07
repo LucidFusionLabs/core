@@ -497,15 +497,21 @@ string Application::GetClipboardText() {
   return [v UTF8String];
 }
 
+void Application::ToggleTouchKeyboard() {}
 void Application::OpenTouchKeyboard() {}
+void Application::CloseTouchKeyboard() {}
+void Application::CloseTouchKeyboardAfterReturn(bool v) {}
 void Application::SetTouchKeyboardTiled(bool v) {}
 int Application::SetExtraScale(bool v) { return false; }
 void Application::SetDownScale(bool v) {}
+void Application::SetTitleBar(bool v) {}
+void Application::SetKeepScreenOn(bool v) {}
 void Application::SetAutoRotateOrientation(bool v) {}
 void Application::SetVerticalSwipeRecognizer(int touches) {}
 void Application::SetHorizontalSwipeRecognizer(int touches) {}
 void Application::SetPanRecognizer(bool enabled) {}
 void Application::SetPinchRecognizer(bool enabled) {}
+void Application::ShowSystemStatusBar(bool v) {}
 
 void Window::SetCaption(const string &v) { 
   [GetTyped<GameView*>(id) window].title = [NSString stringWithUTF8String:v.c_str()];

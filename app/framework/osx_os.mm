@@ -17,9 +17,12 @@
  */
 
 #import <Cocoa/Cocoa.h>
+#import <QuartzCore/QuartzCore.h>
 #include "core/app/app.h"
 #include "core/app/framework/apple_common.h"
 #include "core/app/framework/osx_common.h"
+
+static std::vector<NSImage*> app_images;
 
 @interface OSXAlert : NSObject<NSTextFieldDelegate>
   @property (nonatomic, retain) NSAlert     *alert;
@@ -124,10 +127,19 @@
   }
 @end
 
-@interface FontChooser : NSObject
+@interface OSXToolbar : NSObject
+  @property (nonatomic, retain) NSToolbar *toolbar;
+  + (int)getBottomHeight;
 @end
 
-@implementation FontChooser
+@implementation OSXToolbar
+  + (int)getBottomHeight { return 0; }
+@end
+
+@interface OSXFontChooser : NSObject
+@end
+
+@implementation OSXFontChooser
   {
     NSFont *font;
     LFL::StringVecCB font_change_cb;
@@ -147,6 +159,112 @@
     font = [sender convertFont:font];
     float size = [[[font fontDescriptor] objectForKey:NSFontSizeAttribute] floatValue];
     font_change_cb(LFL::StringVec{ [[font fontName] UTF8String], LFL::StrCat(size) });
+  }
+@end
+
+@interface OSXNavigation : NSResponder
+  @property (nonatomic, retain) NSViewController *rootViewController;
+  @property (nonatomic, retain) NSMutableArray *viewControllers;
+@end
+
+@implementation OSXNavigation
+  {
+    CATransition *transition;
+  }
+
+  - (id)init { 
+    self = [super init];
+    self.viewControllers = [[NSMutableArray alloc] init];
+    transition = [CATransition animation];
+    [transition setType:kCATransitionPush];
+    [transition setSubtype:kCATransitionFromRight];
+    NSDictionary *animations = [NSDictionary dictionaryWithObject:transition forKey:@"subviews"];
+    NSView *contentView = LFL::GetTyped<GameView*>(LFL::app->focused->id).window.contentView;
+    [contentView setAnimations:animations];
+    return self;
+  }
+
+  - (void)pushViewController:(NSViewController*)vc animated:(BOOL)anim {
+    [self popView];
+    [self.viewControllers addObject: vc];
+    [self pushView];
+  }
+
+  - (NSViewController*)popViewControllerAnimated:(BOOL)anim {
+    int count = [self.viewControllers count];
+    if (!count) return nil;
+    [transition setSubtype:kCATransitionFromLeft];
+    NSViewController *topViewController = [self.viewControllers objectAtIndex: count-1];
+    [self popView];
+    [self.viewControllers removeLastObject];
+    [self pushView];
+    return topViewController;
+  }
+
+  - (void)pushView {
+    int count = [self.viewControllers count];
+    CHECK(count);
+    NSViewController *topViewController = [self.viewControllers objectAtIndex: count-1];
+    NSView *contentView = LFL::GetTyped<GameView*>(LFL::app->focused->id).window.contentView;
+    [[contentView animator] addSubview:topViewController.view];
+    [topViewController.view setFrameOrigin:CGPointMake(0, 0)];
+  }
+
+  - (void)popView {
+    int count = [self.viewControllers count];
+    if (!count) return;
+    NSViewController *topViewController = [self.viewControllers objectAtIndex: count-1];
+    [topViewController.view removeFromSuperview];
+  }
+@end
+
+@interface OSXTable : NSViewController<NSTableViewDataSource, NSTableViewDelegate>
+  @property (nonatomic, retain) NSTableView *tableView;
+  @property (nonatomic, assign) LFL::SystemTableView *lfl_self;
+@end
+
+@implementation OSXTable
+  - (void)loadView {
+    NSView *contentView = LFL::GetTyped<GameView*>(LFL::app->focused->id).window.contentView;
+    self.view = [[NSView alloc] initWithFrame: contentView.frame];
+    [self.view addSubview:self.tableView];
+  }
+
+  - (id)init: (LFL::SystemTableView*)lself withTitle:(const std::string&)title andStyle:(const std::string&)style { 
+    self = [super init];
+    NSView *contentView = LFL::GetTyped<GameView*>(LFL::app->focused->id).window.contentView;
+    self.tableView = [[NSTableView alloc] initWithFrame: contentView.frame];
+    [self.tableView setDelegate:self];
+    [self.tableView setDataSource:self];
+
+    NSTableColumn * column1 = [[NSTableColumn alloc] initWithIdentifier:@"Col1"];
+    NSTableColumn * column2 = [[NSTableColumn alloc] initWithIdentifier:@"Col2"];
+    [column1 setWidth:252];
+    [column2 setWidth:198];
+    [self.tableView addTableColumn:column1];
+    [self.tableView addTableColumn:column2];
+    [column1 release];
+    [column2 release];
+    return self;
+  }
+
+  - (NSInteger)numberOfRowsInTableView:(NSTableView *)tableView { return 0; }
+  - (id)tableView:(NSTableView *)tableView objectValueForTableColumn:(NSTableColumn *)tableColumn row:(NSInteger)row {
+    return nil; 
+  }
+@end
+
+@interface OSXTextView : NSViewController<NSTextViewDelegate>
+  @property (nonatomic, retain) NSTextView *textView;
+  @property (nonatomic, retain) NSString *text;
+@end
+
+@implementation OSXTextView
+  - (id)initWithTitle:(NSString*)title andText:(NSString*)t {
+    self = [super init];
+    self.title = title;
+    self.text = t;
+    return self;
   }
 @end
 
@@ -211,6 +329,7 @@ SystemMenuView::SystemMenuView(const string &title_text, MenuItemVec items) {
   [item release];
 }
 
+void SystemMenuView::Show() {}
 unique_ptr<SystemMenuView> SystemMenuView::CreateEditMenu(MenuItemVec items) {
   NSMenuItem *item; 
   NSMenu *menu = [[NSMenu alloc] initWithTitle:@"Edit"];
@@ -253,12 +372,96 @@ void SystemPanelView::SetTitle(const string &title) {
   [[FromVoid<OSXPanel*>(impl) window] setTitle: [NSString stringWithUTF8String: title.c_str()]];
 }
 
+SystemToolbarView::~SystemToolbarView() {}
+SystemToolbarView::SystemToolbarView(MenuItemVec items) : impl(0) {}
+void SystemToolbarView::Show(bool show_or_hide) {}
+void SystemToolbarView::ToggleButton(const string &n) {}
+
+SystemTableView::~SystemTableView() { if (auto table = FromVoid<OSXTable*>(impl)) [table release]; }
+SystemTableView::SystemTableView(const string &title, const string &style, TableItemVec items, int second_col) :
+  impl([[OSXTable alloc] init:this withTitle:title andStyle:style]) {}
+
+void SystemTableView::DelNavigationButton(int align) {}
+void SystemTableView::AddNavigationButton(int align, const TableItem &item) {}
+void SystemTableView::AddToolbar(SystemToolbarView *t) {
+}
+
+void SystemTableView::Show(bool show_or_hide) {
+}
+
+void SystemTableView::AddRow(int section, TableItem item) {}
+string SystemTableView::GetKey(int section, int row) { return ""; }
+int SystemTableView::GetTag(int section, int row) { return 0; }
+void SystemTableView::SetTag(int section, int row, int val) {}
+void SystemTableView::SetValue(int section, int row, const string &val) {}
+void SystemTableView::SetHidden(int section, int row, bool val) {}
+void SystemTableView::SetTitle(const string &title) {}
+PickerItem *SystemTableView::GetPicker(int section, int row) { return 0; }
+StringPairVec SystemTableView::GetSectionText(int section) { return StringPairVec(); }
+void SystemTableView::SetEditableSection(int section, int start_row, LFL::IntIntCB cb) {
+}
+
+void SystemTableView::SelectRow(int section, int row) {
+} 
+
+void SystemTableView::BeginUpdates() {}
+void SystemTableView::EndUpdates() {}
+void SystemTableView::SetDropdown(int section, int row, int val) {}
+void SystemTableView::SetSectionValues(int section, const StringVec &item) {}
+void SystemTableView::ReplaceSection(int section, const string &h, int image, int flag, TableItemVec item, Callback add_button) {}
+
+SystemTextView::~SystemTextView() { if (auto view = FromVoid<OSXTextView*>(impl)) [view release]; }
+SystemTextView::SystemTextView(const string &title, File *f) : SystemTextView(title, f ? f->Contents() : "") {}
+SystemTextView::SystemTextView(const string &title, const string &text) :
+  impl([[OSXTextView alloc] initWithTitle:MakeNSString(title) andText:[[[NSString alloc]
+       initWithBytes:text.data() length:text.size() encoding:NSASCIIStringEncoding] autorelease]]) {}
+
+SystemNavigationView::~SystemNavigationView() { if (auto nav = FromVoid<OSXNavigation*>(impl)) [nav release]; }
+SystemNavigationView::SystemNavigationView() : impl([[OSXNavigation alloc] init]) {}
+void SystemNavigationView::Show(bool show_or_hide) {
+  auto nav = FromVoid<OSXNavigation*>(impl);
+  NSWindow *window = [GetTyped<GameView*>(app->focused->id) window];
+  if ((shown = show_or_hide)) {
+    if (root->show_cb) root->show_cb();
+    // [window.windowController presentViewController:nav animator:nil];
+  } else {
+    // [window.windowController dismissViewController:nav];
+  }
+}
+
+SystemTableView *SystemNavigationView::Back() {
+  for (NSViewController *c in [FromVoid<OSXNavigation*>(impl).viewControllers reverseObjectEnumerator]) {
+    if ([c isKindOfClass:[OSXTable class]])
+      if (auto lself = static_cast<OSXTable*>(c).lfl_self) return lself;
+  } 
+  return nullptr;
+}
+
+void SystemNavigationView::PushTableView(SystemTableView *t) {
+  if (!root) root = t;
+  if (t->show_cb) t->show_cb();
+  [FromVoid<OSXNavigation*>(impl) pushViewController: FromVoid<OSXTable*>(t->impl) animated: YES];
+}
+
+void SystemNavigationView::PushTextView(SystemTextView *t) {
+  if (t->show_cb) t->show_cb();
+  [FromVoid<OSXNavigation*>(impl) pushViewController: FromVoid<OSXTextView*>(t->impl) animated: YES];
+}
+
+void SystemNavigationView::PopToRoot() {}
+void SystemNavigationView::PopAll() {}
+
+void SystemNavigationView::PopView(int n) {
+  for (int i = 0; i != n; ++i)
+    [FromVoid<OSXNavigation*>(impl) popViewControllerAnimated: (i == n - 1)];
+}
+
 SystemAdvertisingView::SystemAdvertisingView() {}
 void SystemAdvertisingView::Show() {}
 void SystemAdvertisingView::Hide() {}
 
 void Application::ShowSystemFontChooser(const FontDesc &cur_font, const StringVecCB &choose_cb) {
-  static FontChooser *font_chooser = [FontChooser alloc];
+  static OSXFontChooser *font_chooser = [OSXFontChooser alloc];
   [font_chooser selectFont:cur_font.name.c_str() size:cur_font.size cb:choose_cb];
 }
 
@@ -305,6 +508,13 @@ void Application::ShowSystemContextMenu(const MenuItemVec &items) {
 void Application::OpenSystemBrowser(const string &url_text) {
   CFURLRef url = CFURLCreateWithBytes(0, MakeUnsigned(url_text.c_str()), url_text.size(), kCFStringEncodingASCII, 0);
   if (url) { LSOpenCFURLRef(url, 0); CFRelease(url); }
+}
+
+int Application::LoadSystemImage(const string &n) {
+  NSImage *image = [[NSImage alloc] initWithContentsOfFile: MakeNSString(StrCat(app->assetdir, "../", n)) ];
+  if (!image) return 0;
+  app_images.push_back(image);
+  return app_images.size();
 }
 
 string Application::GetSystemDeviceName() {
