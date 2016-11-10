@@ -189,8 +189,9 @@ struct SSHClient {
     Channel(int L=0, int R=0) : local_id(L), remote_id(R) {}
   };
 
-  typedef function<void(Connection*, const StringPiece&)> ResponseCB;
   typedef function<bool(int, const StringPiece&)> FingerprintCB;
+  typedef function<void(Connection*, const StringPiece&)> ResponseCB;
+  typedef function<void(shared_ptr<Identity>)> IdentityCB;
   typedef function<bool(shared_ptr<Identity>*)> LoadIdentityCB;
   typedef function<bool(string*)> LoadPasswordCB;
   static Connection *Open(Params params, const ResponseCB &cb, Callback *detach=0, Callback *success=0);

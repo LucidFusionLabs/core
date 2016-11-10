@@ -79,8 +79,10 @@ void Application::SetClipboardText(const string &s) {}
 
 void Application::OpenTouchKeyboard() {}
 void Application::ToggleTouchKeyboard() {}
+void Application::CloseTouchKeyboardAfterReturn(bool v) {}
 void Application::SetTouchKeyboardTiled(bool v) {}
 void Application::SetAutoRotateOrientation(bool v) {}
+void Application::ShowSystemStatusBar(bool v) {}
 
 void Window::SetCaption(const string &v) {}
 void Window::SetResizeIncrements(float x, float y) {}

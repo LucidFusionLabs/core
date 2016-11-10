@@ -491,9 +491,10 @@ int Application::Create(const char *source_filename) {
   }
 
 #ifdef LFL_DEBUG
-  if (FLAGS_logfile.empty() && !FLAGS_logfile_.override) FLAGS_logfile = StrCat(savedir, name, ".txt");
+  if (FLAGS_logfile.empty() && !FLAGS_logfile_.override) FLAGS_logfile = "\x01";
 #endif
   if (!FLAGS_logfile.empty()) {
+    if (FLAGS_logfile == "\x01") FLAGS_logfile = StrCat(savedir, name, ".txt");
     logfile = fopen(FLAGS_logfile.c_str(), "a");
     if (logfile) SystemNetwork::SetSocketCloseOnExec(fileno(logfile), 1);
   }

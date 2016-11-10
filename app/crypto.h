@@ -50,7 +50,10 @@ int ECPointDataSize(ECGroup, ECPoint, BigNumContext);
 void ECPointGetData(ECGroup, ECPoint, char *out, int len, BigNumContext);
 void ECPointSetData(ECGroup, ECPoint out, const StringPiece &data);
 
-struct Ed25519Pair { string pubkey, privkey; };
+struct Ed25519Pair {
+  string pubkey, privkey; 
+  operator bool() const { return privkey.size(); }
+};
 
 struct RSAKey   : public VoidPtr { using VoidPtr::VoidPtr; };
 struct DSAKey   : public VoidPtr { using VoidPtr::VoidPtr; };

@@ -497,7 +497,7 @@ static std::vector<UIImage*> app_images;
 
   - (CGRect)getCellFrame {
     if (_second_col) return CGRectMake(_second_col, 0, self.tableView.frame.size.width - _second_col - 30, 44);
-    else             return CGRectMake(0, 0, 150, 44);
+    else             return CGRectMake(0, 0, 200, 44);
   }
   
   - (void)clearNavigationButton:(int)align {
@@ -696,6 +696,7 @@ static std::vector<UIImage*> app_images;
       } else if (type == LFL::TableItem::Label) {
         UILabel *label = [[UILabel alloc] initWithFrame: [self getCellFrame]];
         label.text = LFL::MakeNSString(*v);
+        label.adjustsFontSizeToFitWidth = TRUE;
         cell.textLabel.text = LFL::MakeNSString(*k);
         if (_second_col) [cell.contentView addSubview: label];
         else {

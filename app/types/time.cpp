@@ -148,6 +148,16 @@ int localhttptime(const tm *tm, char *buf, int size) {
 #endif
 }
 
+string localhttpdate(Time t) { char buf[128] = {0}; localhttpdate(Time2time_t(t), buf, sizeof(buf)); return buf; }
+int localhttpdate(char *buf, int size) { return localhttpdate(time(0), buf, size); }
+int localhttpdate(time_t t, char *buf, int size) { tm tm; localtm(t, &tm); return localhttpdate(&tm, buf, size); }
+int localhttpdate(const tm *tm, char *buf, int size) { return snprintf(buf, size, "%s, %d %s %d", dayname(tm->tm_wday), tm->tm_mday, monthname(tm->tm_mon), 1900+tm->tm_year); }
+
+string localhttptod(Time t) { char buf[128] = {0}; localhttptod(Time2time_t(t), buf, sizeof(buf)); return buf; }
+int localhttptod(char *buf, int size) { return localhttptod(time(0), buf, size); }
+int localhttptod(time_t t, char *buf, int size) { tm tm; localtm(t, &tm); return localhttptod(&tm, buf, size); }
+int localhttptod(const tm *tm, char *buf, int size) { return snprintf(buf, size, "%02d:%02d:%02d", tm->tm_hour, tm->tm_min, tm->tm_sec); }
+
 string localsmtptime(Time t) { char buf[128] = {0}; localsmtptime(Time2time_t(t), buf, sizeof(buf)); return buf; }
 int localsmtptime(char *buf, int size) { return localsmtptime(time(0), buf, size); }
 int localsmtptime(time_t t, char *buf, int size) { tm tm; localtm(t, &tm); return localsmtptime(&tm, buf, size); }

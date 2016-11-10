@@ -14,13 +14,14 @@ if(LFL_IOS)
   target_include_directories(app_ios_os PUBLIC ${LFL_APP_INCLUDE})
   target_compile_definitions(app_ios_os PUBLIC ${LFL_APP_DEF})
   target_compile_options(app_ios_os PUBLIC -fobjc-abi-version=2 -fobjc-legacy-dispatch)
-  target_link_libraries(app_ios_os -liconv -lz "-framework Foundation" "-framework CoreText"
-                        "-framework CoreGraphics" "-framework OpenGLES" "-framework UIKit"
-                        "-framework QuartzCore" "-framework GLKit" "-framework Security"
-                        "-framework AVFoundation")
+  set_property(GLOBAL PROPERTY LFL_APP_FRAMEWORK_OS_LIB -liconv -lz "-framework Foundation"
+               "-framework CoreText" "-framework CoreGraphics" "-framework OpenGLES" "-framework UIKit"
+               "-framework QuartzCore" "-framework GLKit" "-framework Security" "-framework AVFoundation")
   if(NOT LFL_IOS_SIM)
-    target_link_libraries(app_ios_os "-framework CoreVideo" "-framework CoreMedia")
+    set_property(GLOBAL APPEND PROPERTY LFL_APP_FRAMEWORK_OS_LIB "-framework CoreVideo" "-framework CoreMedia")
   endif()
+  get_property(LFL_APP_FRAMEWORK_OS_LIB GLOBAL PROPERTY LFL_APP_FRAMEWORK_OS_LIB)
+  target_link_libraries(app_ios_os ${LFL_APP_FRAMEWORK_OS_LIB})
 
   add_library(app_ios_framework STATIC ios_framework.mm)
   target_include_directories(app_ios_framework PUBLIC ${LFL_APP_INCLUDE})
@@ -33,8 +34,10 @@ if(LFL_OSX)
   target_include_directories(app_osx_os PUBLIC ${LFL_APP_INCLUDE})
   target_compile_definitions(app_osx_os PUBLIC ${LFL_APP_DEF})
   target_compile_options(app_osx_os PUBLIC -fobjc-abi-version=2 -fobjc-legacy-dispatch)
-  target_link_libraries(app_osx_os "-framework Cocoa" "-framework QuartzCore" "-framework CoreVideo" "-framework QTKit"
-                        -lz -lbz2 -liconv)
+  set_property(GLOBAL PROPERTY LFL_APP_FRAMEWORK_OS_LIB "-framework Cocoa" "-framework QuartzCore"
+               "-framework CoreVideo" "-framework QTKit" "-framework Security" -lz -lbz2 -liconv)
+  get_property(LFL_APP_FRAMEWORK_OS_LIB GLOBAL PROPERTY LFL_APP_FRAMEWORK_OS_LIB)
+  target_link_libraries(app_osx_os ${LFL_APP_FRAMEWORK_OS_LIB})
 
   add_library(app_osx_framework STATIC osx_framework.mm)
   target_include_directories(app_osx_framework PUBLIC ${LFL_APP_INCLUDE})

@@ -45,7 +45,7 @@ bool Crypto::GenerateKey(const string &algo, int bits, const string &pw, const s
     if (privkeyout) *privkeyout = RSAPEMPrivateKey(key, pw);
     RSAKeyFree(key);
   } else if (algo == "Ed25519") {
-    std::mt19937 rand_eng;
+    std::mt19937 rand_eng(std::random_device{}());
     Ed25519Pair key;
     if (1 != Ed25519GeneratePair(&key, rand_eng)) return ERRORv(false, "gen ed25519 key");
     if (pubkeyout)  *pubkeyout  = Ed25519OpenSSHPublicKey(key, comment);
