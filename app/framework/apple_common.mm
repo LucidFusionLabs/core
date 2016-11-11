@@ -43,7 +43,132 @@
   }
 @end
 
+@interface AppleURLSessions : NSObject<NSURLSessionDelegate, NSURLSessionTaskDelegate, NSURLSessionStreamDelegate> {}
+@end
+
+@implementation AppleURLSessions
+  {
+    std::unordered_map<void*, LFL::NSURLSessionStreamConnection*> task_map;
+  }
+
+  - (void)addTask:(void*)task withConnection:(LFL::NSURLSessionStreamConnection*)conn {
+    task_map[task] = conn;
+  }
+
+  - (void)URLSession:(NSURLSession *)session didBecomeInvalidWithError:(NSError *)error {
+    INFOf("AppleURLSessions::URLSession: %p didBecomeInvalidWithError: %s", session,
+          LFL::GetNSString([error localizedDescription]).c_str());
+  }
+
+  - (void)URLSessionDidFinishEventsForBackgroundURLSession:(NSURLSession *)session {
+    INFOf("AppleURLSessions::URLSessionDidFinishEventsForBackgroundURLSession %p", session);
+  }
+
+  - (void)URLSession:(NSURLSession *)session task:(NSURLSessionTask *)task didCompleteWithError:(NSError *)error {
+    // INFOf("AppleURLSessions::URLSession: task: %p didCompleteWithError: %s", task, LFL::GetNSString([error localizedDescription]).c_str());
+    LFL::app->RunInMainThread([=](){
+      auto it = task_map.find(task);
+      CHECK_NE(task_map.end(), it);
+      delete it->second;
+      task_map.erase(it);
+    });
+  }
+
+#if 0
+  - (void)URLSession:(NSURLSession *)session readClosedForStreamTask:(NSURLSessionStreamTask *)stream {
+    INFOf("AppleURLSessions::URLSession readClosedForStreamTask: %p", stream);
+  }
+
+  - (void)URLSession:(NSURLSession *)session writeClosedForStreamTask:(NSURLSessionStreamTask *)stream {
+    INFOf("AppleURLSessions::URLSession writeClosedForStreamTask: %p", stream);
+  }
+#endif
+@end
+
 namespace LFL {
+static AppleURLSessions *apple_url_sessions = 0;
+NSURLSession* NSURLSessionStreamConnection::session = 0;
+
+NSURLSessionStreamConnection::~NSURLSessionStreamConnection() {
+  INFO(endpoint_name, ": deleting NSURLSessionStreamTask");
+}
+
+void NSURLSessionStreamConnection::Close() {
+  INFO(endpoint_name, ": Close()");
+  if (stream) {
+    [stream closeWrite];
+    [stream closeRead];
+    [stream cancel];
+    [stream release];
+    stream = 0;
+  }
+}
+
+NSURLSessionStreamConnection::NSURLSessionStreamConnection(const string &hostport, int default_port,
+                                                           Connection::CB s_cb) : connected_cb(move(s_cb)) {
+  if (!session) {
+    apple_url_sessions = [[AppleURLSessions alloc] init];
+    NSURLSessionConfiguration* config = [NSURLSessionConfiguration defaultSessionConfiguration];
+    NSString *appid = [[[NSBundle mainBundle] infoDictionary] objectForKey:@"CFBundleIdentifier"];
+    CHECK(config);
+    config.shouldUseExtendedBackgroundIdleMode = TRUE;
+    config.sharedContainerIdentifier = appid;
+    session = [NSURLSession sessionWithConfiguration:config delegate:apple_url_sessions delegateQueue:nil];
+    CHECK(session);
+    [session retain];
+  }
+  int port;
+  string host;
+  LFL::HTTP::SplitHostAndPort(hostport, default_port, &host, &port);
+  endpoint_name = StrCat(host, ":", port);
+  stream = [session streamTaskWithHostName:LFL::MakeNSString(host) port:port];
+  INFOf("%s: connecting NSURLSessionStreamTask: %p", endpoint_name.c_str(), stream);
+  CHECK(stream);
+  [stream retain];
+  [stream resume];
+  app->RunInMainThread([=](){ [apple_url_sessions addTask: stream withConnection: this]; });
+  ReadableCB(true, false, false);
+}
+
+int NSURLSessionStreamConnection::WriteFlush(const char *buf, int len) {
+  [stream writeData:LFL::MakeNSData(buf, len) timeout:0 completionHandler:^(NSError *error){
+    if (!stream) return;
+    if (!connected) app->RunInMainThread([=]() { if (!connected && (connected=1)) ConnectedCB(); });
+    if (error) app->RunInMainThread([=](){ if (!done && (done=1)) { if (readable_cb()) app->scheduler.Wakeup(app->focused); } });
+  }];
+  return len;
+}
+
+void NSURLSessionStreamConnection::ConnectedCB() {
+  INFO(endpoint_name, ": connected NSURLSessionStreamTask");
+  state = Connection::Connected;
+  if (handler) handler->Connected(this);
+  if (connected_cb) connected_cb(this);
+}
+
+void NSURLSessionStreamConnection::ReadableCB(bool init, bool error, bool eof) {
+  if (!stream) return;
+  CHECK(!done);
+  if (error) done = true;
+  if (!init) {
+    if (!connected && (connected=1)) ConnectedCB();
+    if (!error) rb.Add(buf.data(), buf.size());
+    if (readable_cb()) app->scheduler.Wakeup(app->focused);
+  }
+  buf.clear();
+  if (done) return;
+  if (eof) {
+    done = true;
+    if (readable_cb()) app->scheduler.Wakeup(app->focused);
+    return;
+  }
+  [stream readDataOfMinLength:1 maxLength:65536 timeout:0 completionHandler:^(NSData *data, BOOL atEOF, NSError *error){
+    if (!stream) return;
+    if (!error) buf.append(static_cast<const char *>(data.bytes), data.length);
+    app->RunInMainThread(bind(&NSURLSessionStreamConnection::ReadableCB, this, false, error != nil, atEOF));
+  }];
+}
+
 void NSLogString(const string &text) { NSLog(@"%@", MakeNSString(text)); }
 
 string GetNSDocumentDirectory() {

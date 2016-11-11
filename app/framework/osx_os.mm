@@ -301,10 +301,13 @@ void SystemAlertView::Show(const string &arg) {
 }
 
 void SystemAlertView::ShowCB(const string &title, const string &msg, const string &arg, StringCB confirm_cb) {
-  [FromVoid<OSXAlert*>(impl).alert setMessageText: MakeNSString(title)];
-  [FromVoid<OSXAlert*>(impl).alert setInformativeText: MakeNSString(msg)];
-  string ret = RunModal(arg);
-  if (confirm_cb) confirm_cb(move(ret));
+  auto alert = FromVoid<OSXAlert*>(impl);
+  alert.confirm_cb = move(confirm_cb);
+  [alert.alert setMessageText: MakeNSString(title)];
+  [alert.alert setInformativeText: MakeNSString(msg)];
+  [alert.alert beginSheetModalForWindow:[GetTyped<GameView*>(app->focused->id) window] modalDelegate:alert
+    didEndSelector:@selector(alertDidEnd:returnCode:contextInfo:) contextInfo:nil];
+  [GetTyped<GameView*>(app->focused->id) clearKeyModifiers];
 }
 
 string SystemAlertView::RunModal(const string &arg) {
@@ -524,9 +527,15 @@ string Application::GetSystemDeviceName() {
   return ret;
 }
 
-Connection *Application::ConnectTCP(const string &hostport, int default_port, Callback *connected_cb, bool background_services) {
+Connection *Application::ConnectTCP(const string &hostport, int default_port, Connection::CB *connected_cb, bool background_services) {
+#if 1
+  INFO("Application::ConnectTCP ", hostport, " (default_port = ", default_port, ") background_services = ", background_services);
+  if (background_services) return new NSURLSessionStreamConnection(hostport, default_port, connected_cb ? move(*connected_cb) : Connection::CB());
+  else return app->net->tcp_client->Connect(hostport, default_port, connected_cb);
+#else
   INFO("Application::ConnectTCP ", hostport, " (default_port = ", default_port, ") background_services = false"); 
   return app->net->tcp_client->Connect(hostport, default_port, connected_cb);
+#endif
 }
 
 }; // namespace LFL

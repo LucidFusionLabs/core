@@ -55,4 +55,27 @@ template<typename T> inline T* objc_dynamic_cast(id from) {
   return ([from isKindOfClass:[T class]]) ? static_cast<T*>(from) : nil;
 }
 
+struct NSURLSessionStreamConnection : public Connection {
+  static NSURLSession *session;
+  NSURLSessionStreamTask *stream=0;
+  Connection::CB connected_cb;
+  function<bool()> readable_cb;
+  bool connected=0, done=0;
+  int outstanding_read=0, outstanding_write=0;
+  string buf;
+
+  virtual ~NSURLSessionStreamConnection();
+  NSURLSessionStreamConnection(const string &hostport, int default_port, Connection::CB s_cb);
+
+  void AddToMainWait(Window*, function<bool()> r_cb) override { readable_cb = move(r_cb); }
+  void RemoveFromMainWait(Window*)                   override { readable_cb = function<bool()>(); }
+
+  void Close() override;
+  int Read() override { return done ? -1 : 0; }
+  int WriteFlush(const char *buf, int len) override;
+
+  void ConnectedCB();
+  void ReadableCB(bool init, bool error, bool eof);
+};
+
 }; // namespace LFL

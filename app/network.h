@@ -327,10 +327,10 @@ struct Connection {
   deque<TransferredSocket> transferred_socket;
   unique_ptr<Handler> handler;
   Connection *next=0;
-  Callback *detach;
+  CB *detach;
   void *data=0;
 
-  Connection(SocketService *s=0, int t=Error, Handler *h=0, Callback *Detach=0) : svc(s), ct(Now()), rt(Now()), wt(Now()), state(t), rb(65536), wb(65536), self_reference(MakeTyped(this)), handler(h), detach(Detach) {}
+  Connection(SocketService *s=0, int t=Error, Handler *h=0, CB *Detach=0) : svc(s), ct(Now()), rt(Now()), wt(Now()), state(t), rb(65536), wb(65536), self_reference(MakeTyped(this)), handler(h), detach(Detach) {}
   virtual ~Connection();
 
   virtual void Close()                                              = 0;
@@ -370,10 +370,10 @@ struct SocketConnection : public Connection {
   int port, src_port=0;
   SSLSocket bio;
 
-  SocketConnection(SocketService *s, Handler *h,                                     Callback *Detach=0) : Connection(s, Error, h, Detach), socket(-1),   addr(0),    port(0)    {}
-  SocketConnection(SocketService *s, int State, int Sock,                            Callback *Detach=0) : Connection(s, State, 0, Detach), socket(Sock), addr(0),    port(0)    {}
-  SocketConnection(SocketService *s, int State, int Sock, IPV4::Addr Addr, int Port, Callback *Detach=0) : Connection(s, State, 0, Detach), socket(Sock), addr(Addr), port(Port) {}
-  SocketConnection(SocketService *s, int State,           IPV4::Addr Addr, int Port, Callback *Detach=0) : Connection(s, State, 0, Detach), socket(-1),   addr(Addr), port(Port) {}
+  SocketConnection(SocketService *s, Handler *h,                                     CB *Detach=0) : Connection(s, Error, h, Detach), socket(-1),   addr(0),    port(0)    {}
+  SocketConnection(SocketService *s, int State, int Sock,                            CB *Detach=0) : Connection(s, State, 0, Detach), socket(Sock), addr(0),    port(0)    {}
+  SocketConnection(SocketService *s, int State, int Sock, IPV4::Addr Addr, int Port, CB *Detach=0) : Connection(s, State, 0, Detach), socket(Sock), addr(Addr), port(Port) {}
+  SocketConnection(SocketService *s, int State,           IPV4::Addr Addr, int Port, CB *Detach=0) : Connection(s, State, 0, Detach), socket(-1),   addr(Addr), port(Port) {}
 
   IPV4Endpoint RemoteIPV4() const override { return IPV4Endpoint(addr, port); }
   IPV4Endpoint LocalIPV4() const override { return IPV4Endpoint(src_addr, src_port); }
@@ -420,11 +420,11 @@ struct SocketService {
   int OpenSocket(SocketConnection *c, int protocol, int blocking, IPV4EndpointSource*);
   Socket Listen(IPV4::Addr addr, int port, SocketListener*);
   SocketConnection *Accept(int state, Socket socket, IPV4::Addr addr, int port);
-  SocketConnection *Connect(IPV4::Addr addr, int port, IPV4EndpointSource *src_addr=0, Callback *detach=0);
-  SocketConnection *Connect(IPV4::Addr addr, int port, IPV4::Addr src_addr, int src_port, Callback *detach=0);
-  SocketConnection *Connect(const string &hostport, int default_port=0, Callback *detach=0);
-  SocketConnection *SSLConnect(SSLSocket::CTXPtr sslctx, IPV4::Addr addr, int port, Callback *detach=0);
-  SocketConnection *SSLConnect(SSLSocket::CTXPtr sslctx, const string &hostport, int default_port=0, Callback *detach=0);
+  SocketConnection *Connect(IPV4::Addr addr, int port, IPV4EndpointSource *src_addr=0, Connection::CB *detach=0);
+  SocketConnection *Connect(IPV4::Addr addr, int port, IPV4::Addr src_addr, int src_port, Connection::CB *detach=0);
+  SocketConnection *Connect(const string &hostport, int default_port=0, Connection::CB *detach=0);
+  SocketConnection *SSLConnect(SSLSocket::CTXPtr sslctx, IPV4::Addr addr, int port, Connection::CB *detach=0);
+  SocketConnection *SSLConnect(SSLSocket::CTXPtr sslctx, const string &hostport, int default_port=0, Connection::CB *detach=0);
   SocketConnection *AddConnectedSocket(Socket socket, Connection::Handler*);
   SocketConnection *EndpointConnect(const string &endpoint_name);
   void EndpointReadCB(string *endpoint_name, string *packet);

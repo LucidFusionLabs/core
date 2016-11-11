@@ -321,14 +321,19 @@ namespace SSH {
   struct MSG_CHANNEL_OPEN_TCPIP : public Serializable {
     static const int ID = 90;
     StringPiece channel_type, src_host, dst_host;
-    int sender_channel, initial_win_size, maximum_packet_size, src_port, dst_port;
+    int sender_channel=0, initial_win_size=0, maximum_packet_size=0, src_port=0, dst_port=0;
+    MSG_CHANNEL_OPEN_TCPIP() : Serializable(ID) {}
     MSG_CHANNEL_OPEN_TCPIP(const StringPiece &CT, int SC, int IWS, int MPS, const StringPiece &DH, int DP, const StringPiece &SH, int SP) :
       Serializable(ID), channel_type(CT), src_host(SH), dst_host(DH), sender_channel(SC), initial_win_size(IWS), maximum_packet_size(MPS), src_port(SP), dst_port(DP) {}
 
     int HeaderSize() const { return 8*4; }
     int Size() const { return HeaderSize() + channel_type.size() + src_host.size() + dst_host.size(); }
     void Out(Serializable::Stream *o) const { o->BString(channel_type); o->Htonl(sender_channel); o->Htonl(initial_win_size); o->Htonl(maximum_packet_size); o->BString(dst_host); o->Htonl(dst_port); o->BString(src_host); o->Htonl(src_port); }
-    int In(const Serializable::Stream *i) { return i->Result(); }
+    int In(const Serializable::Stream *i) {
+      // Skip MSG_CHANNEL_OPEN prefix
+      i->ReadString(&dst_host); i->Ntohl(&dst_port); i->ReadString(&src_host); i->Ntohl(&src_port);
+      return i->Result(); 
+    }
   };
 
   struct MSG_CHANNEL_OPEN_CONFIRMATION : public Serializable {
@@ -504,12 +509,13 @@ struct SSHClientConnection : public Connection::Handler {
   SSHClient::FingerprintCB host_fingerprint_cb;
   SSHClient::LoadIdentityCB load_identity_cb;
   SSHClient::LoadPasswordCB load_password_cb;
+  SSHClient::RemoteForwardCB remote_forward_cb;
   Callback success_cb;
   shared_ptr<SSHClient::Identity> identity;
   string V_C, V_S, KEXINIT_C, KEXINIT_S, H_text, session_id, integrity_c2s, integrity_s2c, decrypt_buf, pw;
   int state=0, packet_len=0, packet_MAC_len=0, MAC_len_c=0, MAC_len_s=0, encrypt_block_size=0, decrypt_block_size=0, server_version=0;
   unsigned sequence_number_c2s=0, sequence_number_s2c=0, password_prompts=0, userauth_fail=0;
-  bool guessed_c=0, guessed_s=0, guessed_right_c=0, guessed_right_s=0, accepted_hostkey=0, loaded_pw=0;
+  bool guessed_c=0, guessed_s=0, guessed_right_c=0, guessed_right_s=0, accepted_hostkey=0, loaded_pw=0, wrote_pw=0;
   unsigned char padding=0, packet_id=0;
   Serializable::ConstStream packet_s;
   std::mt19937 rand_eng;
@@ -528,6 +534,7 @@ struct SSHClientConnection : public Connection::Handler {
   int next_channel_id=1, dont_compress, compress_id_c2s, compress_id_s2c;
   int kex_method=0, hostkey_type=0, mac_prefix_c2s=0, mac_prefix_s2c=0;
   int initial_window_size=1048576, max_packet_size=32768, term_width=80, term_height=25;
+  unordered_map<int, const SSHClient::Params::Forward*> forward_remote;
   unique_ptr<ZLibReader> zreader;
   unique_ptr<ZLibWriter> zwriter;
 
@@ -807,10 +814,11 @@ struct SSHClientConnection : public Connection::Handler {
         case SSH::MSG_USERAUTH_FAILURE::ID: {
           SSH::MSG_USERAUTH_FAILURE msg;
           if (msg.In(&packet_s)) return ERRORv(-1, c->Name(), ": read MSG_USERAUTH_FAILURE");
-          SSHTrace(c->Name(), ": MSG_USERAUTH_FAILURE: auth_left='", msg.auth_left.str(), "'");
+          SSHTrace(c->Name(), ": MSG_USERAUTH_FAILURE: auth_left='", msg.auth_left.str(), "' loaded_pw=",
+                   loaded_pw, " userauth_fail=", userauth_fail);
 
           if (!loaded_pw) ClearPassword();
-          if (!userauth_fail++) { cb(c, "Password:"); if ((password_prompts=1)) LoadPassword(c); }
+          if (!userauth_fail++ && !wrote_pw) { cb(c, "Password:"); if ((password_prompts=1)) LoadPassword(c); }
           else return ERRORv(-1, c->Name(), ": authorization failed");
         } break;
 
@@ -847,16 +855,26 @@ struct SSHClientConnection : public Connection::Handler {
           SSH::MSG_CHANNEL_OPEN msg;
           if (msg.In(&packet_s)) return ERRORv(-1, c->Name(), ": read MSG_CHANNEL_OPEN");
           SSHTrace(c->Name(), ": MSG_CHANNEL_OPEN type=", msg.channel_type.str());
-          if (msg.channel_type.str() == "auth-agent@openssh.com" && params.agent_forwarding) {
-            chan = &channels[next_channel_id];
-            chan->local_id = next_channel_id++;
-            chan->remote_id = msg.sender_channel;
-            chan->window_c = msg.initial_win_size;
-            chan->window_s = initial_window_size;
+          string channel_type = msg.channel_type.str();
+          if (channel_type == "auth-agent@openssh.com" && params.agent_forwarding) {
+            chan = AcceptChannel(msg);
             chan->agent_channel = true;
             if (!WriteCipher(c, SSH::MSG_CHANNEL_OPEN_CONFIRMATION(chan->remote_id, chan->local_id, chan->window_s, max_packet_size))) return ERRORv(-1, c->Name(), ": write");
+          } else if (channel_type == "forwarded-tcpip") {
+            SSH::MSG_CHANNEL_OPEN_TCPIP open_tcpip;
+            unordered_map<int, const SSHClient::Params::Forward*>::iterator it;
+            if (open_tcpip.In(&packet_s) || !remote_forward_cb ||
+                (it = forward_remote.find(open_tcpip.dst_port)) == forward_remote.end()) {
+              ERROR("unknown port open ", open_tcpip.dst_port);
+              if (!WriteCipher(c, SSH::MSG_CHANNEL_OPEN_FAILURE(chan->remote_id, 0, "", ""))) return ERRORv(-1, c->Name(), ": write");
+            } else {
+              chan = AcceptChannel(msg);
+              remote_forward_cb(chan, it->second->target_host, it->second->target_port,
+                                open_tcpip.src_host.str(), open_tcpip.src_port);
+              if (!WriteCipher(c, SSH::MSG_CHANNEL_OPEN_CONFIRMATION(chan->remote_id, chan->local_id, chan->window_s, max_packet_size))) return ERRORv(-1, c->Name(), ": write");
+            }
           } else {
-            ERROR("unknown channel open", msg.channel_type.str());
+            ERROR("unknown channel open ", msg.channel_type.str());
             if (!WriteCipher(c, SSH::MSG_CHANNEL_OPEN_FAILURE(chan->remote_id, 0, "", ""))) return ERRORv(-1, c->Name(), ": write");
           }
         } break;
@@ -873,6 +891,11 @@ struct SSHClientConnection : public Connection::Handler {
           if (chan == session_channel) {
             if (params.agent_forwarding) {
               if (!WriteCipher(c, SSH::MSG_CHANNEL_REQUEST(chan->remote_id, "auth-agent-req@openssh.com", "", true))) return ERRORv(-1, c->Name(), ": write");
+            }
+
+            for (auto &forward : params.forward_remote) {
+              if (!WriteCipher(c, SSH::MSG_GLOBAL_REQUEST_TCPIP("", forward.port))) return ERRORv(-1, c->Name(), ": write");
+              forward_remote[forward.port] = &forward;
             }
 
             if (!WriteCipher(c, SSH::MSG_CHANNEL_REQUEST
@@ -1120,6 +1143,7 @@ struct SSHClientConnection : public Connection::Handler {
 
   bool WritePassword(Connection *c) {
     cb(c, "\r\n");
+    wrote_pw = true;
     bool success = false;
     if (userauth_fail) {
       success = WriteCipher(c, SSH::MSG_USERAUTH_REQUEST(params.user, "ssh-connection", "password", "", pw, ""));
@@ -1138,15 +1162,15 @@ struct SSHClientConnection : public Connection::Handler {
     if ((loaded_pw = bool(load_password_cb)) && load_password_cb(&pw)) WritePassword(c);
   }
 
+  void SetCredentialCB(SSHClient::FingerprintCB F, SSHClient::LoadIdentityCB LI,
+                       SSHClient::LoadPasswordCB LP)
+  { host_fingerprint_cb=move(F); load_identity_cb=move(LI); load_password_cb=move(LP); }
+
   bool AcceptHostKeyAndBeginAuthRequest(Connection *c) {
     accepted_hostkey = true;
     return WriteCipher(c, SSH::MSG_SERVICE_REQUEST("ssh-userauth"));
   }
-
-  void SetCredentialCB(SSHClient::FingerprintCB F, SSHClient::LoadIdentityCB LI,
-                       SSHClient::LoadPasswordCB LP)
-    { host_fingerprint_cb=move(F); load_identity_cb=move(LI); load_password_cb=move(LP); }
-
+  
   int SetTerminalWindowSize(Connection *c, int w, int h) {
     term_width = w;
     term_height = h;
@@ -1155,6 +1179,16 @@ struct SSHClientConnection : public Connection::Handler {
                                                  point(term_width*8, term_height*12),
                                                  "", "", false))) return ERRORv(-1, c->Name(), ": write");
     return 0;
+  }
+
+  SSHClient::Channel *AcceptChannel(const SSH::MSG_CHANNEL_OPEN &msg) {
+    auto chan = &channels[next_channel_id];
+    chan->local_id = next_channel_id++;
+    chan->remote_id = msg.sender_channel;
+    chan->window_c = msg.initial_win_size;
+    chan->window_s = initial_window_size;
+    chan->opened = true;
+    return chan;
   }
 
   SSHClient::Channel *OpenTCPChannel(Connection *c, const StringPiece &sh, int sp,
@@ -1178,7 +1212,7 @@ struct SSHClientConnection : public Connection::Handler {
   }
 };
 
-Connection *SSHClient::Open(Params p, const SSHClient::ResponseCB &cb, Callback *detach, Callback *success) { 
+Connection *SSHClient::Open(Params p, const SSHClient::ResponseCB &cb, Connection::CB *detach, Callback *success) { 
   Connection *c = app->ConnectTCP(p.hostport, 22, detach, p.background_services);
   return c ? SSHClient::CreateSSHHandler(c, move(p), cb, success) : 0;
 }
@@ -1194,7 +1228,8 @@ bool SSHClient::WritePassword        (Connection *c,             const StringPie
 bool SSHClient::WriteToChannel       (Connection *c, Channel *x, const StringPiece &b) { return dynamic_cast<SSHClientConnection*>(c->handler.get())->WriteToChannel(c, x, b); }
 bool SSHClient::CloseChannel         (Connection *c, Channel *x)                       { return dynamic_cast<SSHClientConnection*>(c->handler.get())->CloseChannel(c, x); }
 int  SSHClient::SetTerminalWindowSize(Connection *c, int w, int h)                     { return dynamic_cast<SSHClientConnection*>(c->handler.get())->SetTerminalWindowSize(c, w, h); }
-void SSHClient::SetCredentialCB      (Connection *c, FingerprintCB F, LoadIdentityCB LI, LoadPasswordCB LP) { dynamic_cast<SSHClientConnection*>(c->handler.get())->SetCredentialCB(F, LI, LP); }
+void SSHClient::SetCredentialCB      (Connection *c, FingerprintCB F, LoadIdentityCB LI, LoadPasswordCB LP) { dynamic_cast<SSHClientConnection*>(c->handler.get())->SetCredentialCB(move(F), move(LI), move(LP)); }
+void SSHClient::SetRemoteForwardCB   (Connection *c, RemoteForwardCB F)                                     { dynamic_cast<SSHClientConnection*>(c->handler.get())->remote_forward_cb = move(F); }
 
 bool SSHClient::ParsePortForward(const string &text, vector<SSHClient::Params::Forward> *out) {
   vector<string> v;

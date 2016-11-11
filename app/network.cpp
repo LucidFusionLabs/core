@@ -718,12 +718,12 @@ SocketConnection *SocketService::Accept(int state, Socket socket, IPV4::Addr add
   return c;
 }
 
-SocketConnection *SocketService::Connect(IPV4::Addr addr, int port, IPV4::Addr src_addr, int src_port, Callback *detach) {
+SocketConnection *SocketService::Connect(IPV4::Addr addr, int port, IPV4::Addr src_addr, int src_port, Connection::CB *detach) {
   SingleIPV4Endpoint src_pool(src_addr, src_port);
   return Connect(addr, port, &src_pool, detach);
 }
 
-SocketConnection *SocketService::Connect(IPV4::Addr addr, int port, IPV4EndpointSource *src_pool, Callback *detach) {
+SocketConnection *SocketService::Connect(IPV4::Addr addr, int port, IPV4EndpointSource *src_pool, Connection::CB *detach) {
   auto c = new SocketConnection(this, Connection::Connecting, addr, port, detach);
   if (SocketService::OpenSocket(c, protocol, 0, src_pool ? src_pool : connect_src_pool))
   { ERROR(c->Name(), ": connecting: ", SystemNetwork::LastError()); delete c; return 0; }
@@ -753,14 +753,14 @@ SocketConnection *SocketService::Connect(IPV4::Addr addr, int port, IPV4Endpoint
   return c;
 }
 
-SocketConnection *SocketService::Connect(const string &hostport, int default_port, Callback *detach) {
+SocketConnection *SocketService::Connect(const string &hostport, int default_port, Connection::CB *detach) {
   int port;
   IPV4::Addr addr;
   if (!HTTP::ResolveHost(hostport.c_str(), 0, &addr, &port, 0, default_port)) return ERRORv(nullptr, "resolve ", hostport, " failed");
   return Connect(addr, port, NULL, detach);
 }
 
-SocketConnection *SocketService::SSLConnect(SSLSocket::CTXPtr sslctx, const string &hostport, int default_port, Callback *detach) {
+SocketConnection *SocketService::SSLConnect(SSLSocket::CTXPtr sslctx, const string &hostport, int default_port, Connection::CB *detach) {
   if (!sslctx) sslctx = app->net->ssl;
   if (!sslctx) return ERRORv(nullptr, "no ssl: ", -1);
 
@@ -779,7 +779,7 @@ SocketConnection *SocketService::SSLConnect(SSLSocket::CTXPtr sslctx, const stri
   return c;
 }
 
-SocketConnection *SocketService::SSLConnect(SSLSocket::CTXPtr sslctx, IPV4::Addr addr, int port, Callback *detach) {
+SocketConnection *SocketService::SSLConnect(SSLSocket::CTXPtr sslctx, IPV4::Addr addr, int port, Connection::CB *detach) {
   if (!sslctx) sslctx = app->net->ssl;
   if (!sslctx) return ERRORv(nullptr, "no ssl: ", -1);
 
@@ -850,7 +850,7 @@ void SocketService::Detach(SocketConnection *c) {
   INFO(c->Name(), ": detached from ", name);
   SocketService::Close(c);
   c->readable = c->writable = 0;
-  app->RunInMainThread([=]() { (*c->detach)(); });
+  app->RunInMainThread([=]() { (*c->detach)(c); });
   app->scheduler.Wakeup(app->focused);
 }
 

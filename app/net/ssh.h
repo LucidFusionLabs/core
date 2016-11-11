@@ -194,10 +194,12 @@ struct SSHClient {
   typedef function<void(shared_ptr<Identity>)> IdentityCB;
   typedef function<bool(shared_ptr<Identity>*)> LoadIdentityCB;
   typedef function<bool(string*)> LoadPasswordCB;
-  static Connection *Open(Params params, const ResponseCB &cb, Callback *detach=0, Callback *success=0);
+  typedef function<void(Channel*, const string&, int, const string&, int)> RemoteForwardCB;
+  static Connection *Open(Params params, const ResponseCB &cb, Connection::CB *detach=0, Callback *success=0);
   static Connection *CreateSSHHandler(Connection *c, Params p, const SSHClient::ResponseCB &cb, Callback *success=0);
 
   static void SetCredentialCB(Connection *c, FingerprintCB, LoadIdentityCB, LoadPasswordCB);
+  static void SetRemoteForwardCB(Connection *c, RemoteForwardCB F);
   static bool ParsePortForward(const string &text, vector<Params::Forward> *out);
   static int SetTerminalWindowSize(Connection *c, int w, int h);
   static bool AcceptHostKeyAndBeginAuthRequest(Connection *c);

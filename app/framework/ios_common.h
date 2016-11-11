@@ -35,7 +35,7 @@
 @interface LFGLKViewController : GLKViewController<GLKViewControllerDelegate, GLKViewDelegate> {}
 @end
 
-@interface LFUIApplication : NSObject<UIApplicationDelegate, UITextFieldDelegate, NSURLSessionDelegate, ObjcWindow> {}
+@interface LFUIApplication : NSObject<UIApplicationDelegate, UITextFieldDelegate, ObjcWindow> {}
   @property (nonatomic, retain) UIWindow *window;
   @property (nonatomic, retain) LFViewController *controller;
   @property (nonatomic, retain) LFGLKViewController *glk_controller;
