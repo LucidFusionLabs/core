@@ -126,6 +126,13 @@ int logfiledaytime(const tm *tm, char *buf, int size) {
   return snprintf(buf, size, "%04d-%02d-%02d_%02d:%02d", 1900+tm->tm_year, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min);
 }
 
+string logfiletime(Time t) { char buf[128] = {0}; logfiletime(Time2time_t(t), buf, sizeof(buf)); return buf; }
+int logfiletime(char *buf, int size) { return logfiletime(time(0), buf, size); }
+int logfiletime(time_t t, char *buf, int size) { tm tm; localtm(t, &tm); return logfiletime(&tm, buf, size); }
+int logfiletime(const tm *tm, char *buf, int size) {
+  return snprintf(buf, size, "%04d-%02d-%02d_%02d.%02d.%02d", 1900+tm->tm_year, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec);
+}
+
 int httptime(char *buf, int size) { return httptime(time(0), buf, size); }
 int httptime(time_t t, char *buf, int size) { tm tm; GMTtm(t, &tm); return httptime(&tm, buf, size); }
 int httptime(const tm *tm, char *buf, int size) {

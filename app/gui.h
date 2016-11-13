@@ -69,12 +69,12 @@ struct Widget {
     virtual ~Interface() { if (del_hitbox) DelHitBox(); }
     Interface(GUI *g) : gui(g) {}
 
-    void AddClickBox(const Box  &b, const MouseControllerCallback &cb) {                   hitbox.push_back(gui->mouse.AddClickBox(b, cb)); }
-    void AddHoverBox(const Box  &b, const MouseControllerCallback &cb) {                   hitbox.push_back(gui->mouse.AddHoverBox(b, cb)); }
-    void AddDragBox (const Box  &b, const MouseControllerCallback &cb) {                   hitbox.push_back(gui->mouse.AddDragBox (b, cb)); }
-    void AddClickBox(const Box3 &t, const MouseControllerCallback &cb) { for (auto &b : t) hitbox.push_back(gui->mouse.AddClickBox(b, cb)); }
-    void AddHoverBox(const Box3 &t, const MouseControllerCallback &cb) { for (auto &b : t) hitbox.push_back(gui->mouse.AddHoverBox(b, cb)); }
-    void AddDragBox (const Box3 &t, const MouseControllerCallback &cb) { for (auto &b : t) hitbox.push_back(gui->mouse.AddDragBox (b, cb)); }
+    void AddClickBox(const Box  &b, MouseControllerCallback cb) {                   hitbox.push_back(gui->mouse.AddClickBox(b, move(cb))); }
+    void AddHoverBox(const Box  &b, MouseControllerCallback cb) {                   hitbox.push_back(gui->mouse.AddHoverBox(b, move(cb))); }
+    void AddDragBox (const Box  &b, MouseControllerCallback cb) {                   hitbox.push_back(gui->mouse.AddDragBox (b, move(cb))); }
+    void AddClickBox(const Box3 &t, MouseControllerCallback cb) { for (auto &b : t) hitbox.push_back(gui->mouse.AddClickBox(b, move(cb))); }
+    void AddHoverBox(const Box3 &t, MouseControllerCallback cb) { for (auto &b : t) hitbox.push_back(gui->mouse.AddHoverBox(b, move(cb))); }
+    void AddDragBox (const Box3 &t, MouseControllerCallback cb) { for (auto &b : t) hitbox.push_back(gui->mouse.AddDragBox (b, move(cb))); }
     void DelHitBox() { for (auto &i : hitbox) gui->mouse.hit.Erase(i); hitbox.clear(); }
     MouseController::HitBox &GetHitBox(int i=0) const { return gui->mouse.hit[hitbox[i]]; }
     Box GetHitBoxBox(int i=0) const { return Box::Add(GetHitBox(i).box, gui->box.TopLeft()); }
@@ -174,7 +174,7 @@ struct TextBox : public GUI, public TextboxController {
     string val;
     Line *line=0;
     shared_ptr<Texture> image;
-    Control(Line *P, GUI *G, const Box3 &b, const string&, const MouseControllerCallback&);
+    Control(Line *P, GUI *G, const Box3 &b, string, MouseControllerCallback);
     virtual ~Control() { if (line->parent->hover_control == this) line->parent->hover_control = 0; }
     void Hover(int, int, int, int down) { line->parent->hover_control = down ? this : 0; }
   };
@@ -357,6 +357,7 @@ struct TextBox : public GUI, public TextboxController {
   virtual void DrawCursor(point p);
   virtual void UpdateToken(Line*, int word_offset, int word_len, int update_type, const TokenProcessor<DrawableBox>*);
   virtual void UpdateLongToken(Line *BL, int beg_offset, Line *EL, int end_offset, const string &text, int update_type);
+  virtual shared_ptr<Control> AddUrlBox(Line *BL, int beg_offset, Line *EL, int end_offset, string v, Callback cb);
 
   void AddHistory  (const string &cmd);
   int  ReadHistory (const string &dir, const string &name);

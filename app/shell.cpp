@@ -25,6 +25,7 @@ namespace LFL {
 DEFINE_bool(shell_debug, false, "Print shell commands");
 
 Shell::Shell(Window *W) : parent(W) {
+  if (!parent) return;
   command.emplace_back("quit",         bind(&Shell::quit,          this, _1));
   command.emplace_back("console",      bind(&Shell::console,       this, _1));
   command.emplace_back("cmds",         bind(&Shell::cmds,          this, _1));

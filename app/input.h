@@ -172,7 +172,7 @@ struct MouseController {
     int evtype, val=0;
     bool active=1, deleted=0, run_only_if_first=0;
     MouseControllerCallback CB;
-    HitBox(int ET=0, const Box &b=Box(), const MouseControllerCallback &cb=MouseControllerCallback()) : box(b), evtype(ET), CB(cb) {}
+    HitBox(int ET=0, const Box &b=Box(), MouseControllerCallback cb=MouseControllerCallback()) : box(b), evtype(ET), CB(move(cb)) {}
   };
 
   GUI *parent_gui;
@@ -183,12 +183,12 @@ struct MouseController {
   MouseController(GUI *P=0) : parent_gui(P) {}
   virtual ~MouseController() { Clear(); }
   virtual void Clear() { hit.Clear(); }
-  virtual int AddClickBox     (const Box &w, const MouseControllerCallback &cb) { return hit.Insert(HitBox(Event::Click,      w, cb)); }
-  virtual int AddRightClickBox(const Box &w, const MouseControllerCallback &cb) { return hit.Insert(HitBox(Event::RightClick, w, cb)); }
-  virtual int AddZoomBox      (const Box &w, const MouseControllerCallback &cb) { return hit.Insert(HitBox(Event::Zoom,       w, cb)); }
-  virtual int AddWheelBox     (const Box &w, const MouseControllerCallback &cb) { return hit.Insert(HitBox(Event::Wheel,      w, cb)); }
-  virtual int AddHoverBox     (const Box &w, const MouseControllerCallback &cb) { return hit.Insert(HitBox(Event::Hover,      w, cb)); }
-  virtual int AddDragBox      (const Box &w, const MouseControllerCallback &cb) { return hit.Insert(HitBox(Event::Drag,       w, cb)); }
+  virtual int AddClickBox     (const Box &w, MouseControllerCallback cb) { return hit.Insert(HitBox(Event::Click,      w, move(cb))); }
+  virtual int AddRightClickBox(const Box &w, MouseControllerCallback cb) { return hit.Insert(HitBox(Event::RightClick, w, move(cb))); }
+  virtual int AddZoomBox      (const Box &w, MouseControllerCallback cb) { return hit.Insert(HitBox(Event::Zoom,       w, move(cb))); }
+  virtual int AddWheelBox     (const Box &w, MouseControllerCallback cb) { return hit.Insert(HitBox(Event::Wheel,      w, move(cb))); }
+  virtual int AddHoverBox     (const Box &w, MouseControllerCallback cb) { return hit.Insert(HitBox(Event::Hover,      w, move(cb))); }
+  virtual int AddDragBox      (const Box &w, MouseControllerCallback cb) { return hit.Insert(HitBox(Event::Drag,       w, move(cb))); }
   virtual int SendMouseEvent(InputEvent::Id, const point &p, const point &d, int down, int flag);
   virtual int SendWheelEvent(InputEvent::Id, const v2    &p, const v2    &d) { return 0; }
 };

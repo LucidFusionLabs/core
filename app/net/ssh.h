@@ -195,9 +195,28 @@ struct SSHClient {
   typedef function<bool(shared_ptr<Identity>*)> LoadIdentityCB;
   typedef function<bool(string*)> LoadPasswordCB;
   typedef function<void(Channel*, const string&, int, const string&, int)> RemoteForwardCB;
-  static Connection *Open(Params params, const ResponseCB &cb, Connection::CB *detach=0, Callback *success=0);
-  static Connection *CreateSSHHandler(Connection *c, Params p, const SSHClient::ResponseCB &cb, Callback *success=0);
 
+  struct Handler : public Connection::Handler {
+    enum { INIT=0, FIRST_KEXINIT=1, FIRST_KEXREPLY=2, FIRST_NEWKEYS=3, KEXINIT=4, KEXREPLY=5, NEWKEYS=6 };
+    Params params;
+    ResponseCB cb;
+    FingerprintCB host_fingerprint_cb;
+    LoadIdentityCB load_identity_cb;
+    LoadPasswordCB load_password_cb;
+    RemoteForwardCB remote_forward_cb;
+    Callback success_cb;
+    shared_ptr<Identity> identity;
+    string V_C, V_S, KEXINIT_C, KEXINIT_S, H_text, session_id, integrity_c2s, integrity_s2c, decrypt_buf, pw;
+    int state=0, packet_len=0, packet_MAC_len=0, MAC_len_c=0, MAC_len_s=0, encrypt_block_size=0, decrypt_block_size=0, server_version=0;
+    unsigned sequence_number_c2s=0, sequence_number_s2c=0, password_prompts=0, userauth_fail=0;
+    bool guessed_c=0, guessed_s=0, guessed_right_c=0, guessed_right_s=0, accepted_hostkey=0, loaded_pw=0, wrote_pw=0;
+    unsigned char padding=0, packet_id=0;
+    Handler(Params p, ResponseCB CB, Callback s) : params(move(p)), cb(move(CB)), success_cb(move(s)), V_C("SSH-2.0-LFL_1.0") {}
+    virtual ~Handler() {}
+  };
+
+  static Connection *Open(Params params, const ResponseCB &cb, Connection::CB *detach=0, Callback *success=0);
+  static Connection *CreateSSHHandler(Connection *c, Params p, const ResponseCB &cb, Callback *success=0);
   static void SetCredentialCB(Connection *c, FingerprintCB, LoadIdentityCB, LoadPasswordCB);
   static void SetRemoteForwardCB(Connection *c, RemoteForwardCB F);
   static bool ParsePortForward(const string &text, vector<Params::Forward> *out);
@@ -207,7 +226,7 @@ struct SSHClient {
   static bool WritePassword(Connection *c, const StringPiece &b);
   static bool WriteToChannel(Connection *c, Channel *chan, const StringPiece &b);
   static Channel *OpenTCPChannel(Connection *c, const StringPiece &sh, int sp,
-                                 const StringPiece &dh, int dp, SSHClient::Channel::CB cb);
+                                 const StringPiece &dh, int dp, Channel::CB cb);
   static bool CloseChannel(Connection *c, Channel *chan);
 };
 

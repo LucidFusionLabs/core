@@ -254,9 +254,9 @@ const Drawable::Attr *TextBox::Style::GetAttr(int attr) const {
   return &last_attr;
 }
 
-TextBox::Control::Control(TextBox::Line *P, GUI *G, const Box3 &b, const string &v, const MouseControllerCallback &cb) :
-  Interface(G), box(b), val(v), line(P) {
-  AddClickBox(b, cb);
+TextBox::Control::Control(TextBox::Line *P, GUI *G, const Box3 &b, string v, MouseControllerCallback cb) :
+  Interface(G), box(b), val(move(v)), line(P) {
+  AddClickBox(b, move(cb));
   AddHoverBox(b, MouseController::CoordCB(bind(&Control::Hover, this, _1, _2, _3, _4)));
   del_hitbox = true;
 }
@@ -561,7 +561,7 @@ void TextBox::UpdateToken(Line *L, int word_offset, int word_len, int update_typ
 
 void TextBox::UpdateLongToken(Line *BL, int beg_offset, Line *EL, int end_offset, const string &text, int update_type) {
   StringPiece textp(text);
-  int offset = 0, url_offset = -1, fh = style.font->Height();
+  int offset = 0, url_offset = -1;
   for (; textp.len>1 && MatchingParens(*textp.buf, *textp.rbegin()); offset++, textp.buf++, textp.len -= 2) {}
   if (int punct = LengthChar(textp.buf, ispunct, textp.len)) { offset += punct; textp.buf += punct; }
   if      (textp.len > 7 && PrefixMatch(textp.buf, "http://"))  url_offset = offset + 7;
@@ -569,17 +569,21 @@ void TextBox::UpdateLongToken(Line *BL, int beg_offset, Line *EL, int end_offset
   if (url_offset >= 0) {
     if (update_type < 0) BL->data->controls.erase(beg_offset);
     else {
-      LinesFrameBuffer *fb = GetFrameBuffer();
-      int fb_h = fb->h, adjust_y = BL->data->outside_scroll_region ? -fb_h : 0;
-      Box gb = Box(BL->data->glyphs[beg_offset].box).SetY(BL->p.y - fh + adjust_y);
-      Box ge = Box(EL->data->glyphs[end_offset].box).SetY(EL->p.y - fh + adjust_y);
-      Box3 box(Box(fb->w, fb_h), gb.Position(), ge.Position() + point(ge.w, 0), fh, fh);
       string url = offset ? textp.str() : text;
-      auto i = Insert(BL->data->controls, beg_offset, make_shared<Control>
-                      (BL, this, box, url, MouseControllerCallback([=](){ app->OpenSystemBrowser(url); })));
-      if (new_link_cb) new_link_cb(i->second);
+      auto control = AddUrlBox(BL, beg_offset, EL, end_offset, url, [=](){ app->OpenSystemBrowser(url); });
+      if (new_link_cb) new_link_cb(control);
     }
   }
+}
+
+shared_ptr<TextBox::Control> TextBox::AddUrlBox(Line *BL, int beg_offset, Line *EL, int end_offset, string val, Callback cb) {
+  LinesFrameBuffer *fb = GetFrameBuffer();
+  int fb_h = fb->h, fh = style.font->Height(), adjust_y = BL->data->outside_scroll_region ? -fb_h : 0;
+  Box gb = Box(BL->data->glyphs[beg_offset].box).SetY(BL->p.y - fh + adjust_y);
+  Box ge = Box(EL->data->glyphs[end_offset].box).SetY(EL->p.y - fh + adjust_y);
+  Box3 box(Box(fb->w, fb_h), gb.Position(), ge.Position() + point(ge.w, 0), fh, fh);
+  return Insert(BL->data->controls, beg_offset, make_shared<Control>
+                (BL, this, box, move(val), MouseControllerCallback(move(cb))))->second;
 }
 
 point TiledTextBox::PaintCB(Line *l, point lp, const Box &b) {

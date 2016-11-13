@@ -502,21 +502,7 @@ namespace SSH {
   };
 }; // namespace SSH
 
-struct SSHClientConnection : public Connection::Handler {
-  enum { INIT=0, FIRST_KEXINIT=1, FIRST_KEXREPLY=2, FIRST_NEWKEYS=3, KEXINIT=4, KEXREPLY=5, NEWKEYS=6 };
-  SSHClient::Params params;
-  SSHClient::ResponseCB cb;
-  SSHClient::FingerprintCB host_fingerprint_cb;
-  SSHClient::LoadIdentityCB load_identity_cb;
-  SSHClient::LoadPasswordCB load_password_cb;
-  SSHClient::RemoteForwardCB remote_forward_cb;
-  Callback success_cb;
-  shared_ptr<SSHClient::Identity> identity;
-  string V_C, V_S, KEXINIT_C, KEXINIT_S, H_text, session_id, integrity_c2s, integrity_s2c, decrypt_buf, pw;
-  int state=0, packet_len=0, packet_MAC_len=0, MAC_len_c=0, MAC_len_s=0, encrypt_block_size=0, decrypt_block_size=0, server_version=0;
-  unsigned sequence_number_c2s=0, sequence_number_s2c=0, password_prompts=0, userauth_fail=0;
-  bool guessed_c=0, guessed_s=0, guessed_right_c=0, guessed_right_s=0, accepted_hostkey=0, loaded_pw=0, wrote_pw=0;
-  unsigned char padding=0, packet_id=0;
+struct SSHClientConnection : public SSHClient::Handler {
   Serializable::ConstStream packet_s;
   std::mt19937 rand_eng;
   unordered_map<int, SSHClient::Channel> channels;
@@ -538,11 +524,14 @@ struct SSHClientConnection : public Connection::Handler {
   unique_ptr<ZLibReader> zreader;
   unique_ptr<ZLibWriter> zwriter;
 
-  SSHClientConnection(SSHClient::Params p, const SSHClient::ResponseCB &CB, const Callback &s) :
-    params(move(p)), cb(CB), success_cb(s), V_C("SSH-2.0-LFL_1.0"), rand_eng(std::random_device{}()),
-    ctx(NewBigNumContext()), K(NewBigNum()), encrypt(Crypto::CipherInit()), decrypt(Crypto::CipherInit()),
+  SSHClientConnection(SSHClient::Params p, SSHClient::ResponseCB CB, Callback s) :
+    SSHClient::Handler(move(p), move(CB), move(s)),
+    rand_eng(std::random_device{}()), ctx(NewBigNumContext()), K(NewBigNum()),
+    encrypt(Crypto::CipherInit()), decrypt(Crypto::CipherInit()),
     dont_compress(params.compress ? 0 : SSH::Compression::None-1) {}
-  virtual ~SSHClientConnection() { ClearPassword(); FreeBigNumContext(ctx); FreeBigNum(K); Crypto::CipherFree(encrypt); Crypto::CipherFree(decrypt); }
+
+  virtual ~SSHClientConnection() { ClearPassword(); FreeBigNumContext(ctx); FreeBigNum(K);
+    Crypto::CipherFree(encrypt); Crypto::CipherFree(decrypt); }
 
   void Close(Connection *c) override { cb(c, StringPiece()); }
   int Connected(Connection *c) override {
