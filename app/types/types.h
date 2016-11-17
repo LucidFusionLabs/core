@@ -26,6 +26,7 @@ inline       char *MakeSigned(      unsigned char *x) { return reinterpret_cast<
 inline const char *MakeSigned(const unsigned char *x) { return reinterpret_cast<const char*>(x); }
 inline       char *MakeSigned(      char *x) { return x; }
 inline const char *MakeSigned(const char *x) { return x; }
+template <class X> void ReturnVoid(const X&) {}
 template <class X> X *NullPointer() { return nullptr; }
 template <class X> X *CheckPointer(X *x) { CHECK(x); return x; }
 template <class X> X *CheckNullAssign(X **x, X *v) { CHECK_EQ(nullptr, *x); return (*x = v); }

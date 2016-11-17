@@ -142,6 +142,12 @@ elseif(LFL_OSX)
       COMMAND install_name_tool -change lib/libopencv_core.3.1.dylib @loader_path/../Libraries/libopencv_core.3.1.dylib ${bin}
       COMMAND install_name_tool -change lib/libopencv_imgproc.3.1.dylib @loader_path/../Libraries/libopencv_imgproc.3.1.dylib ${bin}
       COMMAND codesign -f -s \"${LFL_OSX_CERT}\" ${pkgname}.app/Contents/MacOS/${target})
+
+    add_custom_target(${target}_run WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} DEPENDS ${target}
+      COMMAND ${pkgname}.app/Contents/MacOS/${target})
+
+    add_custom_target(${target}_debug WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} DEPENDS ${target}
+      COMMAND lldb -f ${pkgname}.app/Contents/MacOS/${target} -o run)
   endfunction()
 
   function(lfl_post_build_start target binname pkgname)

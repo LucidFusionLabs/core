@@ -215,6 +215,19 @@ macro(list_append_kv _list _key _val)
   endif()
 endmacro()
 
+macro(list_add_def _list _def)
+  if(${_def})
+    set(${_list} ${${_list}} -D${_def})
+  endif(${_def})
+endmacro()
+
+macro(list_add_lib _deflist _inclist _def _inc)
+  if(${_def})
+    set(${_deflist} ${${_deflist}} -D${_def})
+    set(${_inclist} ${${_inclist}} ${_inc})
+  endif(${_def})
+endmacro()
+
 # proto vars
 if(LFL_PROTOBUF)
   set(PROTOBUF_INCLUDE_DIR ${LFL_SOURCE_DIR}/core/imports/protobuf/src)

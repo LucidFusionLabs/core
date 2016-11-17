@@ -6,16 +6,11 @@ set(LFL_APP_INCLUDE ${LFL_SOURCE_DIR} ${LFL_CORE_BINARY_DIR})
 set(LFL_APP_LIB lfl_app app_browser app_layers app_font ${LFL_APP_REGEX})
 
 macro(add_app_def _def)
-  if(${_def})
-    set(LFL_APP_DEF ${LFL_APP_DEF} -D${_def})
-  endif(${_def})
+  list_add_def(LFL_APP_DEF ${_def})
 endmacro()
 
 macro(add_app_lib _def _inc)
-  if(${_def})
-    set(LFL_APP_DEF ${LFL_APP_DEF} -D${_def})
-    set(LFL_APP_INCLUDE ${LFL_APP_INCLUDE} ${_inc})
-  endif(${_def})
+  list_add_lib(LFL_APP_DEF LFL_APP_INCLUDE ${_def} ${_inc})
 endmacro()
 
 add_app_def(LFL32)

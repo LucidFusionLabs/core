@@ -125,11 +125,13 @@ static std::vector<UIImage*> app_images;
   {
     std::unordered_map<std::string, int> toolbar_titles;
     LFL::MenuItemVec data;
+    std::vector<bool> toggled;
   }
 
   - (id)init: (LFL::MenuItemVec)kv {
     self = [super init];
     data = move(kv);
+    toggled.resize(data.size());
     for (auto b = data.begin(), e = data.end(), i = b; i != e; ++i) toolbar_titles[i->shortcut] = i - b;
     _toolbar = [self createUIToolbar: [self getToolbarFrame]];
     _toolbar2 = [self createUIToolbar: [self getToolbarFrame]];
@@ -172,15 +174,16 @@ static std::vector<UIImage*> app_images;
   }
 
   - (void)toggleButton:(int)ind {
-    [IOSToolbar toggleButton:ind onToolbar:_toolbar];
-    [IOSToolbar toggleButton:ind onToolbar:_toolbar2];
+    CHECK_RANGE(ind, 0, toggled.size());
+    bool is_on = toggled[ind] = !toggled[ind];
+    [self toggleButton:ind onToolbar:_toolbar  isToggled:is_on];
+    [self toggleButton:ind onToolbar:_toolbar2 isToggled:is_on];
   }
 
-  + (void)toggleButton:(int)ind onToolbar:(UIToolbar*)tb {
+  - (void)toggleButton:(int)ind onToolbar:(UIToolbar*)tb isToggled:(bool)is_on {
     CHECK_RANGE(ind*2, 0, [tb.items count]);
     UIBarButtonItem *item = (UIBarButtonItem*)[tb.items objectAtIndex:ind*2];
-    if (item.style != UIBarButtonItemStyleDone) { item.tintColor = [UIColor colorWithRed:0.8 green:0.8 blue:0.8 alpha:.8]; }
-    else                                        { item.tintColor = nil; }
+    item.tintColor = is_on ? [UIColor colorWithRed:0.8 green:0.8 blue:0.8 alpha:.8] : nil;
   }
 
   - (void)onClick:(id)sender {
@@ -350,25 +353,15 @@ static std::vector<UIImage*> app_images;
 
 @implementation IOSTable
   {
-    int section_index;
     std::vector<LFL::Table> data;
     std::vector<IOSTable*> dropdowns;
   }
 
-  - (void)load:(LFL::SystemTableView*)lself withTitle:(const std::string&)title withStyle:(const std::string&)sty items:(const std::vector<LFL::TableItem>&)item {
+  - (void)load:(LFL::SystemTableView*)lself withTitle:(const std::string&)title withStyle:(const std::string&)sty items:(std::vector<LFL::Table>)item {
     _lfl_self = lself;
     _style = sty;
     _editable_section = _editable_start_row = -1;
-    data.emplace_back();
-    for (auto &i : item) {
-      if (i.type == LFL::TableItem::Separator) {
-        data.emplace_back(i.key);
-        section_index++;
-      } else {
-        data[section_index].item.emplace_back(i);
-      }
-    }
-
+    data = move(item);
     self.title = LFL::MakeNSString(title);
 
     if (_style != "indent") self.tableView.separatorInset = UIEdgeInsetsZero;
@@ -400,11 +393,11 @@ static std::vector<UIImage*> app_images;
     [self.tableView insertRowsAtIndexPaths:@[path] withRowAnimation:UITableViewRowAnimationNone];
   }
 
-  - (void)replaceSection:(int)section items:(const std::vector<LFL::TableItem>&)item header:(const std::string&)h image:(int)im flag:(int)f addbutton:(LFL::Callback)addb {
+  - (void)replaceSection:(int)section items:(std::vector<LFL::TableItem>)item header:(const std::string&)h image:(int)im flag:(int)f addbutton:(LFL::Callback)addb {
     if (section == data.size()) data.emplace_back();
     CHECK_LT(section, data.size());
     data[section] = LFL::Table(h, im, f, move(addb));
-    for (auto &i : item) data[section].item.emplace_back(i);
+    data[section].item = move(item);
     [self.tableView reloadSections:[NSIndexSet indexSetWithIndex: section]
       withRowAnimation:UITableViewRowAnimationNone];
   }
@@ -528,7 +521,7 @@ static std::vector<UIImage*> app_images;
           item->type == LFL::TableItem::FixedDropdown) {
         item->ref = dropdowns.size();
         auto dropdown_table = [[IOSTable alloc] initWithStyle: UITableViewStyleGrouped];
-        [dropdown_table load:nullptr withTitle:item->key withStyle:"dropdown" items:item->MoveChildren()];
+        [dropdown_table load:nullptr withTitle:item->key withStyle:"dropdown" items:LFL::Table::Convert(item->MoveChildren())];
         [dropdown_table loadNavigationButton:
           LFL::TableItem("Back", LFL::TableItem::Button, "", "", 0, 0, 0, [=](){ [dropdown_table show: false]; })
           withAlign: LFL::HAlign::Left];
@@ -1111,7 +1104,7 @@ SystemTableView::~SystemTableView() { if (auto table = FromVoid<IOSTable*>(impl)
 SystemTableView::SystemTableView(const string &title, const string &style, TableItemVec items, int second_col) {
   auto table = [[IOSTable alloc] initWithStyle: UITableViewStyleGrouped];
   if (second_col) table.second_col = second_col;
-  [table load:this withTitle:title withStyle:style items:move(items)];
+  [table load:this withTitle:title withStyle:style items:Table::Convert(move(items))];
   impl = table;
 }
 

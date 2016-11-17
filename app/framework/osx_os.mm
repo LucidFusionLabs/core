@@ -165,6 +165,7 @@ static std::vector<NSImage*> app_images;
 @interface OSXNavigation : NSResponder
   @property (nonatomic, retain) NSViewController *rootViewController;
   @property (nonatomic, retain) NSMutableArray *viewControllers;
+  @property (nonatomic, retain) NSView *view;
 @end
 
 @implementation OSXNavigation
@@ -174,13 +175,14 @@ static std::vector<NSImage*> app_images;
 
   - (id)init { 
     self = [super init];
+    NSView *contentView = LFL::GetTyped<GameView*>(LFL::app->focused->id).window.contentView;
+    self.view = [[NSView alloc] initWithFrame: contentView.frame];
     self.viewControllers = [[NSMutableArray alloc] init];
     transition = [CATransition animation];
     [transition setType:kCATransitionPush];
     [transition setSubtype:kCATransitionFromRight];
     NSDictionary *animations = [NSDictionary dictionaryWithObject:transition forKey:@"subviews"];
-    NSView *contentView = LFL::GetTyped<GameView*>(LFL::app->focused->id).window.contentView;
-    [contentView setAnimations:animations];
+    [self.view setAnimations:animations];
     return self;
   }
 
@@ -205,8 +207,7 @@ static std::vector<NSImage*> app_images;
     int count = [self.viewControllers count];
     CHECK(count);
     NSViewController *topViewController = [self.viewControllers objectAtIndex: count-1];
-    NSView *contentView = LFL::GetTyped<GameView*>(LFL::app->focused->id).window.contentView;
-    [[contentView animator] addSubview:topViewController.view];
+    [[self.view animator] addSubview:topViewController.view];
     [topViewController.view setFrameOrigin:CGPointMake(0, 0)];
   }
 
@@ -220,37 +221,100 @@ static std::vector<NSImage*> app_images;
 
 @interface OSXTable : NSViewController<NSTableViewDataSource, NSTableViewDelegate>
   @property (nonatomic, retain) NSTableView *tableView;
+  @property (nonatomic, retain) NSScrollView *tableContainer;
   @property (nonatomic, assign) LFL::SystemTableView *lfl_self;
+  @property (nonatomic, assign) LFL::IntIntCB delete_row_cb;
+  @property (nonatomic)         std::string style;
+  @property (nonatomic)         int editable_section, editable_start_row, selected_section, selected_row,
+                                    second_col;
 @end
 
 @implementation OSXTable
-  - (void)loadView {
-    NSView *contentView = LFL::GetTyped<GameView*>(LFL::app->focused->id).window.contentView;
-    self.view = [[NSView alloc] initWithFrame: contentView.frame];
-    [self.view addSubview:self.tableView];
+  {
+    std::vector<LFL::Table> data;
+    std::vector<OSXTable*> dropdowns;
   }
 
-  - (id)init: (LFL::SystemTableView*)lself withTitle:(const std::string&)title andStyle:(const std::string&)style { 
+  - (id)init: (LFL::SystemTableView*)lself withTitle:(const std::string&)title andStyle:(const std::string&)style items:(std::vector<LFL::Table>)item { 
     self = [super init];
+    _lfl_self = lself;
+    _style = style;
+    _editable_section = _editable_start_row = -1;
+    data = move(item);
+    self.title = LFL::MakeNSString(title);
+
     NSView *contentView = LFL::GetTyped<GameView*>(LFL::app->focused->id).window.contentView;
+    self.tableContainer = [[NSScrollView alloc] initWithFrame: contentView.frame];
     self.tableView = [[NSTableView alloc] initWithFrame: contentView.frame];
     [self.tableView setDelegate:self];
     [self.tableView setDataSource:self];
+    [self.tableView setHeaderView:nil];
+    [self.tableContainer setDocumentView:self.tableView];
+    [self.tableContainer setHasVerticalScroller:YES];
 
-    NSTableColumn * column1 = [[NSTableColumn alloc] initWithIdentifier:@"Col1"];
-    NSTableColumn * column2 = [[NSTableColumn alloc] initWithIdentifier:@"Col2"];
-    [column1 setWidth:252];
-    [column2 setWidth:198];
-    [self.tableView addTableColumn:column1];
-    [self.tableView addTableColumn:column2];
-    [column1 release];
-    [column2 release];
+    NSTableColumn *column = [[NSTableColumn alloc] initWithIdentifier:@"Column"];
+    [column setWidth: self.tableView.frame.size.width];
+    [self.tableView addTableColumn:column];
+    [column release];
     return self;
   }
 
-  - (NSInteger)numberOfRowsInTableView:(NSTableView *)tableView { return 0; }
+  - (void)replaceSection:(int)section items:(std::vector<LFL::TableItem>)item header:(const std::string&)h image:(int)im flag:(int)f addbutton:(LFL::Callback)addb {
+    if (section == data.size()) data.emplace_back();
+    CHECK_LT(section, data.size());
+    data[section] = LFL::Table(h, im, f, move(addb));
+    data[section].item = move(item);
+    if (0 && section == 0) {
+      [self.tableView reloadDataForRowIndexes: [NSIndexSet indexSetWithIndexesInRange:NSMakeRange(0, data[section].item.size())]
+        columnIndexes: [NSIndexSet indexSetWithIndexesInRange:NSMakeRange(0, 1)]];
+    } else [self.tableView reloadData];
+  }
+
+  - (void)loadView { self.view = self.tableContainer; }
+  - (NSInteger)numberOfRowsInTableView:(NSTableView *)tableView { return data.size() ? data[0].item.size() : 0; }
+
+#if 0
   - (id)tableView:(NSTableView *)tableView objectValueForTableColumn:(NSTableColumn *)tableColumn row:(NSInteger)row {
-    return nil; 
+    return [NSString stringWithFormat:@"%ld", row];
+  }
+#endif
+
+  - (CGFloat)tableView:(NSTableView *)tableView heightOfRow:(NSInteger)row {
+    return 30;
+  }
+
+  - (NSView *)tableView:(NSTableView *)tableView viewForTableColumn:(NSTableColumn *)tableColumn row:(NSInteger)row {
+    int section=0;
+    CHECK_RANGE(section, 0, data.size());
+    CHECK_RANGE(row, 0, data[section].item.size());
+    auto &compiled_item = data[section].item[row];
+    int type = compiled_item.type;
+
+    NSString *identifier = [tableColumn identifier];
+    NSTableCellView *cellView = [tableView makeViewWithIdentifier:identifier owner:self];
+    if (cellView == nil) {
+      cellView = [[[NSTableCellView alloc] initWithFrame:CGRectMake(0, 0, 200, 30)] autorelease];
+      cellView.identifier = identifier;
+
+      if (type != LFL::TableItem::Button) {
+        if (int icon = compiled_item.left_icon) {
+          CHECK_LE(icon, app_images.size());
+          cellView.imageView = [NSImageView imageViewWithImage: app_images[icon - 1]];
+          cellView.imageView.frame = CGRectMake(0, 0, 30, 30);
+          [cellView addSubview:cellView.imageView];
+        }
+      }
+
+      cellView.textField = [[[NSTextField alloc] initWithFrame:CGRectMake(100, 0, 100, 30)] autorelease];
+      [cellView addSubview:cellView.textField];
+      cellView.textField.identifier = identifier;
+      cellView.textField.bordered = NO;
+      cellView.textField.drawsBackground = NO;
+      cellView.textField.stringValue = LFL::MakeNSString(data[0].item[row].key);
+
+      [cellView setNeedsDisplay:YES];
+    }
+    return cellView;
   }
 @end
 
@@ -382,7 +446,7 @@ void SystemToolbarView::ToggleButton(const string &n) {}
 
 SystemTableView::~SystemTableView() { if (auto table = FromVoid<OSXTable*>(impl)) [table release]; }
 SystemTableView::SystemTableView(const string &title, const string &style, TableItemVec items, int second_col) :
-  impl([[OSXTable alloc] init:this withTitle:title andStyle:style]) {}
+  impl([[OSXTable alloc] init:this withTitle:title andStyle:style items:Table::Convert(move(items))]) {}
 
 void SystemTableView::DelNavigationButton(int align) {}
 void SystemTableView::AddNavigationButton(int align, const TableItem &item) {}
@@ -390,6 +454,13 @@ void SystemTableView::AddToolbar(SystemToolbarView *t) {
 }
 
 void SystemTableView::Show(bool show_or_hide) {
+  auto table = FromVoid<OSXTable*>(impl);
+  NSView *contentView = LFL::GetTyped<GameView*>(LFL::app->focused->id).window.contentView;
+  if (show_or_hide) {
+    [[contentView animator] addSubview:table.tableContainer];
+    [table.tableContainer setFrameOrigin:CGPointMake(0, 0)];
+  } else 
+    [table.tableContainer removeFromSuperview];
 }
 
 void SystemTableView::AddRow(int section, TableItem item) {}
@@ -411,7 +482,8 @@ void SystemTableView::BeginUpdates() {}
 void SystemTableView::EndUpdates() {}
 void SystemTableView::SetDropdown(int section, int row, int val) {}
 void SystemTableView::SetSectionValues(int section, const StringVec &item) {}
-void SystemTableView::ReplaceSection(int section, const string &h, int image, int flag, TableItemVec item, Callback add_button) {}
+void SystemTableView::ReplaceSection(int section, const string &h, int image, int flag, TableItemVec item, Callback add_button)
+{ [FromVoid<OSXTable*>(impl) replaceSection:section items:move(item) header:h image:image flag:flag addbutton:move(add_button)]; }
 
 SystemTextView::~SystemTextView() { if (auto view = FromVoid<OSXTextView*>(impl)) [view release]; }
 SystemTextView::SystemTextView(const string &title, File *f) : SystemTextView(title, f ? f->Contents() : "") {}
@@ -423,13 +495,12 @@ SystemNavigationView::~SystemNavigationView() { if (auto nav = FromVoid<OSXNavig
 SystemNavigationView::SystemNavigationView() : impl([[OSXNavigation alloc] init]) {}
 void SystemNavigationView::Show(bool show_or_hide) {
   auto nav = FromVoid<OSXNavigation*>(impl);
-  NSWindow *window = [GetTyped<GameView*>(app->focused->id) window];
+  NSView *contentView = LFL::GetTyped<GameView*>(LFL::app->focused->id).window.contentView;
   if ((shown = show_or_hide)) {
-    if (root->show_cb) root->show_cb();
-    // [window.windowController presentViewController:nav animator:nil];
-  } else {
-    // [window.windowController dismissViewController:nav];
-  }
+    [[contentView animator] addSubview:nav.view];
+    [nav.view setFrameOrigin:CGPointMake(0, 0)];
+  } else 
+    [nav.view removeFromSuperview];
 }
 
 SystemTableView *SystemNavigationView::Back() {

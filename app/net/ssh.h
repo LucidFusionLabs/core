@@ -220,8 +220,9 @@ struct SSHClient {
   static void SetCredentialCB(Connection *c, FingerprintCB, LoadIdentityCB, LoadPasswordCB);
   static void SetRemoteForwardCB(Connection *c, RemoteForwardCB F);
   static bool ParsePortForward(const string &text, vector<Params::Forward> *out);
-  static int SetTerminalWindowSize(Connection *c, int w, int h);
   static bool AcceptHostKeyAndBeginAuthRequest(Connection *c);
+  static int SendAuthenticationRequest(Connection *c, shared_ptr<Identity>);
+  static int SetTerminalWindowSize(Connection *c, int w, int h);
   static int WriteChannelData(Connection *c, const StringPiece &b);
   static bool WritePassword(Connection *c, const StringPiece &b);
   static bool WriteToChannel(Connection *c, Channel *chan, const StringPiece &b);

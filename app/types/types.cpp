@@ -154,4 +154,14 @@ void RingSampler::Handle::CopyFrom(const RingSampler::Handle *src) {
   for (int i=0; i<B; i++) Write(0.0);
 }
 
+vector<Table> Table::Convert(vector<TableItem> in) {
+  vector<Table> ret;
+  ret.emplace_back();
+  for (auto &i : in) {
+    if (i.type == LFL::TableItem::Separator) ret.emplace_back(i.key);
+    else                                     ret.back().item.emplace_back(move(i));
+  }
+  return ret;
+}
+
 }; // namespace LFL
