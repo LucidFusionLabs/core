@@ -257,7 +257,9 @@ const Drawable::Attr *TextBox::Style::GetAttr(int attr) const {
 TextBox::Control::Control(TextBox::Line *P, GUI *G, const Box3 &b, string v, MouseControllerCallback cb) :
   Interface(G), box(b), val(move(v)), line(P) {
   AddClickBox(b, move(cb));
+#ifndef LFL_MOBILE
   AddHoverBox(b, MouseController::CoordCB(bind(&Control::Hover, this, _1, _2, _3, _4)));
+#endif
   del_hitbox = true;
 }
 

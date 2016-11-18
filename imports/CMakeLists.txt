@@ -797,3 +797,13 @@ if(LFL_CMAKEDAEMON)
   set_property(TARGET cmakedaemon PROPERTY IMPORTED_LOCATION
                ${CMAKE_CURRENT_BINARY_DIR}/cmake-daemon/bin/cmake)
 endif()
+
+if(LFL_STOCKFISH)
+  ExternalProject_Add(stockfish LOG_BUILD ON BUILD_IN_SOURCE ON CONFIGURE_COMMAND "" INSTALL_COMMAND ""
+                      PREFIX ${CMAKE_CURRENT_BINARY_DIR}/Stockfish
+                      DOWNLOAD_COMMAND rm -rf Stockfish
+                      COMMAND cp -R ${CMAKE_CURRENT_SOURCE_DIR}/Stockfish/src Stockfish
+                      BUILD_COMMAND make build ARCH=x86-64 COMP=clang)
+  ExternalProject_Get_Property(stockfish SOURCE_DIR)
+  set(STOCKFISH_BIN ${SOURCE_DIR}/stockfish PARENT_SCOPE)
+endif()

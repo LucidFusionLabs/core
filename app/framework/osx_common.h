@@ -16,9 +16,16 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-@interface GameView : NSView<NSWindowDelegate, ObjcWindow>
+@interface GameView : NSView
   @property (nonatomic, retain) NSMutableDictionary *main_wait_fh;
+  @property (nonatomic, assign) LFL::Window *screen;
+  @property (nonatomic, assign) BOOL frame_on_keyboard_input, frame_on_mouse_input, should_close;
+
   + (NSOpenGLPixelFormat*)defaultPixelFormat;
   - (void)clearKeyModifiers;
   - (void)update;
+@end
+
+@interface GameContainerView : NSView<NSWindowDelegate, ObjcWindow>
+  @property (nonatomic, retain) GameView *gameView;
 @end

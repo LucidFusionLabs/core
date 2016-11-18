@@ -114,3 +114,6 @@
 [submodule "imports/hockeyapp"]
 	path = imports/hockeyapp
 	url = https://github.com/LucidFusionLabs/hockeyapp
+[submodule "imports/Stockfish"]
+	path = imports/Stockfish
+	url = https://github.com/official-stockfish/Stockfish

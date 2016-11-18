@@ -26,9 +26,7 @@
 
 @implementation GameView
   {
-    LFL::Window *screen;
-    NSWindow *window;
-    NSOpenGLContext  *context;
+    NSOpenGLContext *context;
     NSOpenGLPixelFormat *pixel_format;
 
     NSTimer *runloop_timer, *trigger_timer;
@@ -39,7 +37,6 @@
     BOOL initialized, needs_reshape, needs_frame;
     BOOL use_timer, use_display_link, video_thread_init;
     BOOL cmd_down, ctrl_down, shift_down;
-    BOOL frame_on_keyboard_input, frame_on_mouse_input, should_close;
   };
 
   - (void)dealloc {
@@ -55,7 +52,7 @@
     [super initWithFrame:frame];
     _main_wait_fh = [[NSMutableDictionary alloc] init];
     pixel_format = [format retain];
-    use_timer = should_close = 1;
+    use_timer = _should_close = 1;
     return self;
   }
 
@@ -68,15 +65,8 @@
   - (BOOL)isOpaque { return YES; }
   - (BOOL)acceptsFirstResponder { return YES; }
   - (BOOL)isInitialized { return initialized; }
-  // - (void)windowDidBecomeKey:(NSNotification *)notification {}
-  // - (void)windowDidResignKey:(NSNotification *)notification {}
-  // - (void)windowDidBecomeMain:(NSNotification *)notification {}
-  - (void)windowDidResignMain:(NSNotification *)notification { [self clearKeyModifiers]; }
-  - (void)setWindow:(NSWindow*)w { window = w; }
-  - (void)setScreen:(LFL::Window*)s { screen = s; }
   - (void)setFrameSize:(NSSize)s { [super setFrameSize:s]; needs_reshape=YES; [self update]; }
-  - (void)setFrameOnMouseInput:(bool)v { frame_on_mouse_input = v; }
-  - (void)setFrameOnKeyboardInput:(bool)v { frame_on_keyboard_input = v; }
+
   - (void)viewDidChangeBackingProperties {
     float ms = [[NSScreen mainScreen] backingScaleFactor];
     self.layer.contentsScale = [[self window] backingScaleFactor];
@@ -88,7 +78,7 @@
     [super lockFocus];
     CGLLockContext([context CGLContextObj]);
     if ([context view] != self) [context setView:self];
-    SetLFAppWindow(screen);
+    SetLFAppWindow(_screen);
     if (needs_reshape) { [self reshape]; needs_reshape=NO; }
   }
 
@@ -115,7 +105,7 @@
   - (NSOpenGLContext *)openGLContext {
     if (context == nil) {
       context = [self createGLContext];
-      screen->gl = LFL::MakeTyped(context);
+      _screen->gl = LFL::MakeTyped(context);
       needs_reshape = YES;
     }
     return context;
@@ -133,7 +123,7 @@
     if (!LFL::FLAGS_enable_video) {
       if (first) INFOf("OSXModule impl = %s", "PassThru");
       exit(LFAppMainLoop());
-    } else if (screen->target_fps == 0) {
+    } else if (_screen->target_fps == 0) {
       if (first) INFOf("OSXModule impl = %s", "MainWait");
       [self setNeedsDisplay:YES];
     } else if (use_display_link) {
@@ -141,7 +131,7 @@
       CVDisplayLinkStart(displayLink);
     } else if (use_timer) {
       if (first) INFOf("OSXModule impl = %s", "NSTimer");
-      runloop_timer = [NSTimer timerWithTimeInterval: 1.0/screen->target_fps
+      runloop_timer = [NSTimer timerWithTimeInterval: 1.0/_screen->target_fps
           target:self selector:@selector(runloopTimerFired:) userInfo:nil repeats:YES];
       [[NSRunLoop currentRunLoop] addTimer:runloop_timer forMode:NSDefaultRunLoopMode];
       // [[NSRunLoop currentRunLoop] addTimer:runloop_timer forMode:NSEventTrackingRunLoopMode];
@@ -184,22 +174,15 @@
   - (void)reshape {
     if (!initialized) return;
     [context update];
-    SetLFAppWindow(screen);
+    SetLFAppWindow(_screen);
     float screen_w = [self frame].size.width, screen_h = [self frame].size.height;
-    screen->Reshaped(LFL::Box(0, 0, int(screen_w), int(screen_h)));
-  }
-
-  - (BOOL)windowShouldClose:(id)sender { return should_close; }
-  - (void)windowWillClose:(NSNotification *)notification { 
-    [self stopThread];
-    SetLFAppWindow(screen);
-    LFL::app->CloseWindow(screen);
-    if (LFL::app->windows.empty()) LFAppAtExit();
+    _screen->Reshaped(LFL::Box(0, 0, int(screen_w), int(screen_h)));
   }
 
   - (void)addMainWaitSocket:(int)fd callback:(std::function<bool()>)cb {
     [_main_wait_fh
-      setObject: [[[ObjcFileHandleCallback alloc] initWithCB:move(cb) forWindow:self fileDescriptor:fd] autorelease]
+      setObject: [[[ObjcFileHandleCallback alloc] initWithCB:move(cb) forWindow:self.window.contentView
+        fileDescriptor:fd] autorelease]
       forKey:    [NSNumber numberWithInt: fd]];
   }
 
@@ -207,30 +190,27 @@
     [_main_wait_fh removeObjectForKey: [NSNumber numberWithInt: fd]];
   }
 
-  - (void)objcWindowSelect { SetLFAppWindow(screen); }
-  - (void)objcWindowFrame { [self getFrameForTime:nil]; } 
-
   - (void)callbackRun:(id)sender { [(ObjcCallback*)[sender representedObject] run]; }
   - (void)mouseDown:(NSEvent*)e { [self mouseClick:e down:1]; }
   - (void)mouseUp:  (NSEvent*)e { [self mouseClick:e down:0]; }
   - (void)mouseClick:(NSEvent*)e down:(bool)d {
-    SetLFAppWindow(screen);
+    SetLFAppWindow(_screen);
     NSPoint p = [e locationInWindow];
     int fired = LFL::app->input->MouseClick(1+ctrl_down, d, LFL::point(p.x, p.y));
-    if (fired && frame_on_mouse_input) [self setNeedsDisplay:YES]; 
+    if (fired && _frame_on_mouse_input) [self setNeedsDisplay:YES]; 
     prev_mouse_pos = p;
   }
 
   - (void)mouseDragged:(NSEvent*)e { [self mouseMove:e drag:1]; }
   - (void)mouseMoved:  (NSEvent*)e { [self mouseMove:e drag:0]; }
   - (void)mouseMove: (NSEvent*)e drag:(bool)drag {
-    SetLFAppWindow(screen);
-    if (screen->cursor_grabbed) {
+    SetLFAppWindow(_screen);
+    if (_screen->cursor_grabbed) {
       LFL::app->input->MouseMove(LFL::point(prev_mouse_pos.x, prev_mouse_pos.y), LFL::point([e deltaX], -[e deltaY]));
     } else {
       NSPoint p=[e locationInWindow], d=NSMakePoint(p.x-prev_mouse_pos.x, p.y-prev_mouse_pos.y);
       int fired = LFL::app->input->MouseMove(LFL::point(p.x, p.y), LFL::point(d.x, d.y));
-      if (fired && frame_on_mouse_input) [self setNeedsDisplay:YES]; 
+      if (fired && _frame_on_mouse_input) [self setNeedsDisplay:YES]; 
       prev_mouse_pos = p;
     }
   }
@@ -239,22 +219,22 @@
     CGFloat p_scale = [event magnification] + 1.0;
     LFL::v2 d(p_scale, p_scale);
     int fired = LFL::app->input->MouseZoom(LFL::app->focused ? LFL::app->focused->mouse : LFL::point(), d);
-    if (fired && frame_on_mouse_input) [self setNeedsDisplay:YES]; 
+    if (fired && _frame_on_mouse_input) [self setNeedsDisplay:YES]; 
   }
 
   - (void)swipeWithEvent:(NSEvent*)event {
     LFL::v2 d([event deltaX], [event deltaY]);
     int fired = LFL::app->input->MouseWheel(d, d);
-    if (fired && frame_on_mouse_input) [self setNeedsDisplay:YES]; 
+    if (fired && _frame_on_mouse_input) [self setNeedsDisplay:YES]; 
   }
 
   - (void)keyDown:(NSEvent *)theEvent { [self keyPress:theEvent down:1]; }
   - (void)keyUp:  (NSEvent *)theEvent { [self keyPress:theEvent down:0]; }
   - (void)keyPress:(NSEvent *)theEvent down:(bool)d {
-    SetLFAppWindow(screen);
+    SetLFAppWindow(_screen);
     int c = getKeyCode([theEvent keyCode]);
     int fired = c ? LFL::app->input->KeyPress(c, 0, d) : 0;
-    if (fired && frame_on_keyboard_input) [self setNeedsDisplay:YES]; 
+    if (fired && _frame_on_keyboard_input) [self setNeedsDisplay:YES]; 
   }
 
   - (void)flagsChanged:(NSEvent *)theEvent {
@@ -328,6 +308,24 @@
   }
 @end
 
+@implementation GameContainerView
+  // - (void)windowDidBecomeKey:(NSNotification *)notification {}
+  // - (void)windowDidResignKey:(NSNotification *)notification {}
+  // - (void)windowDidBecomeMain:(NSNotification *)notification {}
+  - (void)windowDidResignMain:(NSNotification *)notification { [_gameView clearKeyModifiers]; }
+
+  - (BOOL)windowShouldClose:(id)sender { return _gameView.should_close; }
+  - (void)windowWillClose:(NSNotification *)notification { 
+    [_gameView stopThread];
+    SetLFAppWindow(_gameView.screen);
+    LFL::app->CloseWindow(_gameView.screen);
+    if (LFL::app->windows.empty()) LFAppAtExit();
+  }
+
+  - (void)objcWindowSelect { SetLFAppWindow(_gameView.screen); }
+  - (void)objcWindowFrame { [_gameView getFrameForTime:nil]; } 
+@end
+
 // AppDelegate
 @interface AppDelegate : NSObject <NSApplicationDelegate>
 @end
@@ -345,12 +343,20 @@
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, w, h)
                                          styleMask:NSClosableWindowMask|NSMiniaturizableWindowMask|NSResizableWindowMask|NSTitledWindowMask
                                          backing:NSBackingStoreBuffered defer:NO];
-    GameView *view = [[[GameView alloc] initWithFrame:window.frame pixelFormat:GameView.defaultPixelFormat] autorelease];
-    [view setScreen:s];
-    [view setWindow:window];
+
+    GameContainerView *container_view = [[[GameContainerView alloc] initWithFrame:window.frame] autorelease];
+    container_view.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+    [container_view setAutoresizesSubviews:YES];
+    [window setContentView:container_view];
+    [window setDelegate:container_view];
+
+    GameView *view = [[[GameView alloc] initWithFrame:container_view.frame pixelFormat:GameView.defaultPixelFormat] autorelease];
+    view.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+    view.screen = s;
     [[view openGLContext] setView:view];
-    [window setContentView:view];
-    [window setDelegate:view];
+    [container_view addSubview: view];
+    container_view.gameView = view;
+
     [window center];
     [window makeKeyAndOrderFront:nil];
     [window setMinSize:NSMakeSize(256, 256)];
@@ -588,10 +594,10 @@ void FrameScheduler::UpdateWindowTargetFPS(Window *w) {
   [GetTyped<GameView*>(w->id) startThread:false];
 }
 
-void FrameScheduler::AddMainWaitMouse(Window *w) { [GetTyped<GameView*>(w->id) setFrameOnMouseInput:1]; }
-void FrameScheduler::DelMainWaitMouse(Window *w) { [GetTyped<GameView*>(w->id) setFrameOnMouseInput:0]; }
-void FrameScheduler::AddMainWaitKeyboard(Window *w) { [GetTyped<GameView*>(w->id) setFrameOnKeyboardInput:1]; }
-void FrameScheduler::DelMainWaitKeyboard(Window *w) { [GetTyped<GameView*>(w->id) setFrameOnKeyboardInput:0]; }
+void FrameScheduler::AddMainWaitMouse(Window *w) { GetTyped<GameView*>(w->id).frame_on_mouse_input = 1; }
+void FrameScheduler::DelMainWaitMouse(Window *w) { GetTyped<GameView*>(w->id).frame_on_mouse_input = 0; }
+void FrameScheduler::AddMainWaitKeyboard(Window *w) { GetTyped<GameView*>(w->id).frame_on_keyboard_input = 1; }
+void FrameScheduler::DelMainWaitKeyboard(Window *w) { GetTyped<GameView*>(w->id).frame_on_keyboard_input = 0; }
 void FrameScheduler::AddMainWaitSocket(Window *w, Socket fd, int flag, function<bool()> cb) {
   if (fd == InvalidSocket) return;
   if (!wait_forever_thread) {
