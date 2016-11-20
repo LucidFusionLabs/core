@@ -163,10 +163,11 @@ static std::vector<NSImage*> app_images;
 @end
 
 @interface OSXNavigation : NSResponder
-  @property (nonatomic, copy) NSViewController *rootViewController;
+  @property (nonatomic, copy)   NSViewController *rootViewController;
   @property (nonatomic, retain) NSMutableArray *viewControllers;
-  @property (nonatomic, retain) NSView *view;
-  @property (nonatomic, retain) NSBox *headerView;
+  @property (nonatomic, retain) NSView *view, *headerView;
+  @property (nonatomic, retain) NSTextField *headerTitle;
+  @property (nonatomic, retain) NSButton *headerBackButton;
   @property (nonatomic)         int header_height;
 @end
 
@@ -180,12 +181,26 @@ static std::vector<NSImage*> app_images;
     _header_height = 30;
     NSView *contentView = LFL::GetTyped<GameView*>(LFL::app->focused->id).window.contentView;
     _view = [[NSView alloc] initWithFrame: contentView.frame];
+    _view.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
     _viewControllers = [[NSMutableArray alloc] init];
     CGRect frame = _view.frame;
 
-    _headerView = [[NSBox alloc] initWithFrame:
+    _headerView = [[NSView alloc] initWithFrame:
       CGRectMake(0, frame.size.height - _header_height, frame.size.width, _header_height)];
     _headerView.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+
+    _headerTitle = [[NSTextField alloc] initWithFrame: CGRectMake(0, 0, frame.size.width, _header_height)];
+    _headerTitle.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+    _headerTitle.alignment = NSCenterTextAlignment;
+    _headerTitle.editable = NO;
+    _headerTitle.selectable = NO;
+    [_headerView addSubview: _headerTitle];
+
+    _headerBackButton = [[NSButton alloc] initWithFrame: CGRectMake(0, 0, _header_height*2, _header_height)];
+    _headerBackButton.hidden = YES;
+    _headerBackButton.target = self;
+    _headerBackButton.action = @selector(backButtonClicked:);
+    [_headerView addSubview: _headerBackButton];
     [_view addSubview: _headerView];
 
     transition = [CATransition animation];
@@ -221,8 +236,13 @@ static std::vector<NSImage*> app_images;
     CGRect frame = _view.frame;
     frame.size.height -= _header_height;
     topViewController.view.frame = frame;
-    _headerView.title = topViewController.title;
-    [_headerView setNeedsDisplay:YES];
+
+    _headerTitle.stringValue = topViewController.title;
+    _headerBackButton.hidden = count == 1;
+    if (count > 1) {
+      NSViewController *backViewController = [_viewControllers objectAtIndex: count-2];
+      _headerBackButton.title = backViewController.title;
+    }
   }
 
   - (void)popView {
@@ -231,9 +251,12 @@ static std::vector<NSImage*> app_images;
     NSViewController *topViewController = [_viewControllers objectAtIndex: count-1];
     [topViewController.view removeFromSuperview];
   }
+
+  - (void)backButtonClicked:(id)sender { [self popViewControllerAnimated: YES]; }
 @end
 
 @interface OSXTableCellView : NSTableCellView
+  @property (nonatomic, retain) NSTextField *textValue;
 @end
 
 @implementation OSXTableCellView 
@@ -241,7 +264,7 @@ static std::vector<NSImage*> app_images;
 
 @interface OSXTable : NSViewController<NSTableViewDataSource, NSTableViewDelegate>
   @property (nonatomic, retain) NSTableView *tableView;
-  @property (nonatomic, copy) NSScrollView *tableContainer;
+  @property (nonatomic, copy)   NSScrollView *tableContainer;
   @property (nonatomic, assign) LFL::SystemTableView *lfl_self;
   @property (nonatomic, assign) LFL::IntIntCB delete_row_cb;
   @property (nonatomic)         std::string style;
@@ -263,17 +286,24 @@ static std::vector<NSImage*> app_images;
     _editable_section = _editable_start_row = -1;
     _row_height = 30;
     data = move(item);
-    for (auto &i : data) data_rows += i.item.size();
+    int count = 0;
+    for (auto &i : data) {
+      i.start_row = data_rows + count++;
+      data_rows += i.item.size();
+    }
     self.title = LFL::MakeNSString(title);
 
     NSView *contentView = LFL::GetTyped<GameView*>(LFL::app->focused->id).window.contentView;
     _tableContainer = [[NSScrollView alloc] initWithFrame: contentView.frame];
     self.view = [_tableContainer autorelease];
+    self.view.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
 
     _tableView = [[NSTableView alloc] initWithFrame: contentView.frame];
     [_tableView setDelegate:self];
     [_tableView setDataSource:self];
     [_tableView setHeaderView:nil];
+    _tableView.gridStyleMask = NSTableViewSolidHorizontalGridLineMask;
+    [_tableView setSelectionHighlightStyle:NSTableViewSelectionHighlightStyleNone];
     [_tableContainer setDocumentView:_tableView];
     [_tableContainer setHasVerticalScroller:YES];
 
@@ -285,27 +315,49 @@ static std::vector<NSImage*> app_images;
   }
 
   - (void)replaceSection:(int)section items:(std::vector<LFL::TableItem>)item header:(const std::string&)h image:(int)im flag:(int)f addbutton:(LFL::Callback)addb {
-    if (section == data.size()) data.emplace_back();
+    bool added = section == data.size();
+    if (added) data.emplace_back();
     CHECK_LT(section, data.size());
-    data_rows += item.size() - data[section].item.size();
+    int item_size = item.size();
+    data_rows += item_size - data[section].item.size();
     data[section] = LFL::Table(h, im, f, move(addb));
     data[section].item = move(item);
-
-    if (0 && section == 0) {
-      [_tableView reloadDataForRowIndexes: [NSIndexSet indexSetWithIndexesInRange:NSMakeRange(0, data[section].item.size())]
-        columnIndexes: [NSIndexSet indexSetWithIndexesInRange:NSMakeRange(0, 1)]];
-    } else [_tableView reloadData];
+    if (added) data.back().start_row = data_rows + data.size() - item_size - 1;
+#if 0
+    [_tableView reloadDataForRowIndexes: [NSIndexSet indexSetWithIndexesInRange:NSMakeRange(0, data[section].item.size())]
+      columnIndexes: [NSIndexSet indexSetWithIndexesInRange:NSMakeRange(0, 1)]];
+#else
+    [_tableView reloadData];
+#endif
   }
 
   - (void)checkExists:(int)section row:(int)r {
-    if (section == data.size()) data.emplace_back();
+    if (section == data.size()) { data.emplace_back(); data.back().start_row = data_rows + data.size(); }
     CHECK_LT(section, data.size());
     CHECK_LT(r, data[section].item.size());
   }
 
   // - (void)loadView { self.view = _tableContainer; }
-  - (NSInteger)numberOfRowsInTableView:(NSTableView *)tableView { return data.size() ? data[0].item.size() : 0; }
-  - (CGFloat)tableView:(NSTableView *)tableView heightOfRow:(NSInteger)row { return _row_height; }
+  - (NSInteger)numberOfRowsInTableView:(NSTableView *)tableView { return data_rows + data.size(); }
+
+  - (CGFloat)tableView:(NSTableView *)tableView heightOfRow:(NSInteger)collapsed_row {
+    int section = -1, row = -1;
+    [self findSectionAndRowIndex: collapsed_row outSection: &section outRow: &row];
+    if (section < 0 || section >= data.size() || row < 0 || row >= data[section].item.size()) return _row_height;
+    const auto &ci = data[section].item[row];
+    if (ci.gui_loaded &&
+             (ci.type == LFL::TableItem::Picker || ci.type == LFL::TableItem::FontPicker)) return ci.height;
+    else return _row_height; 
+  }
+
+  - (void)findSectionAndRowIndex:(int)collapsed_row outSection:(int*)out_section outRow:(int*)out_row {
+    auto it = LFL::lower_bound(data.begin(), data.end(), LFL::Table(collapsed_row),
+                               LFL::MemberLessThanCompare<LFL::Table, int, &LFL::Table::start_row>());
+    if (it != data.end() && it->start_row == collapsed_row) { *out_section = it - data.begin(); return; }
+    CHECK_NE(data.begin(), it);
+    *out_section = (it != data.end() ? (it - data.begin()) : data.size()) - 1;
+    *out_row = collapsed_row - data[*out_section].start_row - 1;
+  }
 
 #if 0
   - (id)tableView:(NSTableView *)tableView objectValueForTableColumn:(NSTableColumn *)tableColumn row:(NSInteger)row {
@@ -313,14 +365,19 @@ static std::vector<NSImage*> app_images;
   }
 #endif
 
-  - (NSView *)tableView:(NSTableView *)tableView viewForTableColumn:(NSTableColumn *)tableColumn row:(NSInteger)row {
+  - (NSView *)tableView:(NSTableView *)tableView viewForTableColumn:(NSTableColumn *)tableColumn row:(NSInteger)collapsed_row {
+    if (!data.size()) return nil;
     NSString *identifier = [tableColumn identifier];
     OSXTableCellView *cellView = [tableView makeViewWithIdentifier:identifier owner:self];
     if (cellView == nil) {
-      int section = 0;
+      int section = -1, row = -1;
+      [self findSectionAndRowIndex: collapsed_row outSection: &section outRow: &row];
+      if (row < 0) return (cellView = [self headerForSection: section]);
+
       [self checkExists:section row:row];
       auto &compiled_item = data[section].item[row];
       int type = compiled_item.type, icon = 0;
+      const LFL::string *v = &compiled_item.val;
 
       cellView = [[[OSXTableCellView alloc] initWithFrame:CGRectMake(0, 0, 200, _row_height)] autorelease];
       cellView.identifier = identifier;
@@ -334,24 +391,47 @@ static std::vector<NSImage*> app_images;
 
       cellView.textField = [[[NSTextField alloc] initWithFrame:
         CGRectMake(icon ? _row_height : 0, 0, 100, _row_height)] autorelease];
-      [cellView addSubview:cellView.textField];
-      cellView.textField.identifier = identifier;
       cellView.textField.bordered = NO;
       cellView.textField.drawsBackground = NO;
       cellView.textField.editable = NO;
       cellView.textField.selectable = NO;
       cellView.textField.stringValue = LFL::MakeNSString(data[0].item[row].key);
-    }
+      [cellView addSubview:cellView.textField];
 
-    // [cellView setNeedsDisplay:YES];
+      bool textinput=0, numinput=0, pwinput=0;
+      if ((textinput = type == LFL::TableItem::TextInput) || (numinput = type == LFL::TableItem::NumberInput)
+          || (pwinput = type == LFL::TableItem::PasswordInput)) {
+        cellView.textValue = [[[NSTextField alloc] initWithFrame:
+          CGRectMake(tableView.frame.size.width - 100, 0, 100, _row_height)] autorelease];
+        cellView.textValue.bordered = NO;
+        cellView.textValue.drawsBackground = NO;
+        cellView.textValue.editable = YES;
+        cellView.textValue.selectable = YES;
+        cellView.textValue.alignment = NSRightTextAlignment;
+        if (v->size() && ((*v)[0] == 1 || (*v)[0] == 2)) cellView.textValue.placeholderString = LFL::MakeNSString(v->substr(1));
+        else if (v->size())                              cellView.textValue.stringValue       = LFL::MakeNSString(*v);
+        [cellView addSubview:cellView.textValue];
+      
+      } else if (type == LFL::TableItem::Selector) {
+      } else if (type == LFL::TableItem::Picker || type == LFL::TableItem::FontPicker) {
+      } else if (type == LFL::TableItem::Button) {
+      }
+    }
     return cellView;
   }
 
-  - (BOOL)tableView:(NSTableView *)tableView shouldSelectRow:(NSInteger)row {
-    int section = 0;
+  - (OSXTableCellView *)headerForSection:(int)section {
+    return nil;
+  }
+
+  - (BOOL)tableView:(NSTableView *)tableView shouldSelectRow:(NSInteger)collapsed_row {
+    int section = -1, row = -1;
+    [self findSectionAndRowIndex: collapsed_row outSection: &section outRow: &row];
+    if (row < 0) NO;
     [self checkExists:section row:row];
     _selected_section = section;
     _selected_row = row;
+
     auto &compiled_item = data[section].item[row];
     if (compiled_item.type == LFL::TableItem::Command || compiled_item.type == LFL::TableItem::Button) {
       compiled_item.cb();

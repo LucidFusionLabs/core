@@ -462,9 +462,10 @@ struct TableItem : public TableItemChild {
 
 struct Table {
   string header;
-  int image, flag, header_height=0;
+  int image=0, flag=0, header_height=0, start_row=0;
   Callback add_cb;
   vector<TableItem> item;
+  Table(int sr) : start_row(sr) {}
   Table(string h="", int i=0, int f=0, Callback c=Callback()) : header(move(h)), image(i), flag(f), add_cb(move(c)) {}
   static vector<Table> Convert(vector<TableItem> in);
 };

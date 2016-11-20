@@ -35,6 +35,10 @@ template <class X, class Y> void Assign(X *x, Y *y, const X &v1, const Y &v2) { 
 template <class X> X CheckNotNull(X x, const char *file, int line) { if (!x) FATAL("CheckNotNull: ", file, ":", line); return x; }
 #define CheckNotNull(x) ::LFL::CheckNotNull((x), __FILE__, __LINE__)
 
+template <typename X, typename Y, Y (X::*Z)> struct MemberLessThanCompare {
+  bool operator()(const X &a, const X &b) { return a.*Z < b.*Z; }
+};
+
 struct VoidPtr : public void_ptr {
   VoidPtr(void *V=0) { v=V; }
   operator bool() const { return v; }
