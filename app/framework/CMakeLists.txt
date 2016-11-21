@@ -2,11 +2,13 @@
 
 lfl_add_target(app_null_framework STATIC_LIBRARY SOURCES null_framework.cpp)
 lfl_add_target(app_null_os STATIC_LIBRARY SOURCES null_os.cpp)
+lfl_add_target(app_null_toolkit STATIC_LIBRARY SOURCES null_toolkit.cpp)
 lfl_add_target(app_null_crashreporting STATIC_LIBRARY SOURCES null_crashreporting.cpp)
 
 if(LFL_ANDROID)
   lfl_add_target(app_android_os STATIC_LIBRARY SOURCES android_os.cpp LINK_LIBRARIES -llog -lz)
   lfl_add_target(app_android_framework STATIC_LIBRARY SOURCES android_framework.cpp)
+  lfl_add_target(app_android_toolkit STATIC_LIBRARY SOURCES android_toolkit.cpp)
 endif()
 
 if(LFL_IOS)
@@ -27,6 +29,11 @@ if(LFL_IOS)
   target_include_directories(app_ios_framework PUBLIC ${LFL_APP_INCLUDE})
   target_compile_definitions(app_ios_framework PUBLIC ${LFL_APP_DEF})
   target_compile_options(app_ios_framework PUBLIC -fobjc-abi-version=2 -fobjc-legacy-dispatch)
+
+  add_library(app_ios_toolkit STATIC ios_toolkit.mm)
+  target_include_directories(app_ios_toolkit PUBLIC ${LFL_APP_INCLUDE})
+  target_compile_definitions(app_ios_toolkit PUBLIC ${LFL_APP_DEF})
+  target_compile_options(app_ios_toolkit PUBLIC -fobjc-abi-version=2 -fobjc-legacy-dispatch)
 endif()
 
 if(LFL_OSX)
@@ -43,6 +50,11 @@ if(LFL_OSX)
   target_include_directories(app_osx_framework PUBLIC ${LFL_APP_INCLUDE})
   target_compile_definitions(app_osx_framework PUBLIC ${LFL_APP_DEF})
   target_compile_options(app_osx_framework PUBLIC -fobjc-abi-version=2 -fobjc-legacy-dispatch)
+
+  add_library(app_osx_toolkit STATIC osx_toolkit.mm)
+  target_include_directories(app_osx_toolkit PUBLIC ${LFL_APP_INCLUDE})
+  target_compile_definitions(app_osx_toolkit PUBLIC ${LFL_APP_DEF})
+  target_compile_options(app_osx_toolkit PUBLIC -fobjc-abi-version=2 -fobjc-legacy-dispatch)
 endif()
 
 if(LFL_CRITTERCISM AND (LFL_IOS OR LFL_OSX))
@@ -70,12 +82,15 @@ if(LFL_WINDOWS)
   lfl_add_target(app_windows_os STATIC_LIBRARY SOURCES windows_os.cpp
                  LINK_LIBRARIES Ws2_32.lib Dnsapi.lib opengl32.lib glu32.lib strmiids.lib zlib)
   lfl_add_target(app_windows_framework STATIC_LIBRARY SOURCES windows_framework.cpp)
+  lfl_add_target(app_windows_toolkit STATIC_LIBRARY SOURCES windows_toolkit.cpp)
 endif()
 
 if(LFL_QT)
   lfl_enable_qt()
   set(CMAKE_AUTOMOC ON)
   lfl_add_target(app_qt_framework STATIC_LIBRARY SOURCES qt_framework.cpp
+                 INCLUDE_DIRECTORIES ${QT_INCLUDE} ${CMAKE_CURRENT_BINARY_DIR} LINK_LIBRARIES ${QT_LIB})
+  lfl_add_target(app_qt_toolkit STATIC_LIBRARY SOURCES qt_toolkit.cpp
                  INCLUDE_DIRECTORIES ${QT_INCLUDE} ${CMAKE_CURRENT_BINARY_DIR} LINK_LIBRARIES ${QT_LIB})
   set(CMAKE_AUTOMOC OFF)
 endif()

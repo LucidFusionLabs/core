@@ -20,43 +20,6 @@
 #include <commdlg.h>
 
 namespace LFL {
-SystemMenuView::~SystemMenuView() {}
-SystemMenuView::SystemMenuView(const string &title_text, const vector<MenuItem>&items) {
-  WinWindow *win = GetTyped<WinWindow*>(screen->impl);
-  if (!win->menu) { win->menu = CreateMenu(); win->context_menu = CreatePopupMenu(); }
-  HMENU hAddMenu = CreatePopupMenu();
-  for (auto &i : items) {
-    if (i.name == "<separator>") AppendMenu(hAddMenu, MF_MENUBARBREAK, 0, NULL);
-    else AppendMenu(hAddMenu, MF_STRING, win->start_msg_id + win->menu_cmds.size(), i.name.c_str());
-    win->menu_cmds.push_back(i.cmd);
-  }
-  AppendMenu(win->menu, MF_STRING | MF_POPUP, (UINT)hAddMenu, title.c_str());
-  AppendMenu(win->context_menu, MF_STRING | MF_POPUP, (UINT)hAddMenu, title.c_str());
-  if (win->menubar) SetMenu(GetTyped<HWND>(screen->id), win->menu);
-}
-
-unique_ptr<SystemMenuView> SystemMenuView::CreateEditMenu(const vector<MenuItem>&items) { return nullptr; }
-
-void Application::ShowSystemFontChooser(const FontDesc &cur_font, const string &choose_cmd) {
-  LOGFONT lf;
-  memzero(lf);
-  HDC hdc = GetDC(NULL);
-  lf.lfHeight = -MulDiv(cur_font.size, GetDeviceCaps(hdc, LOGPIXELSY), 72);
-  lf.lfWeight = (cur_font.flag & FontDesc::Bold) ? FW_BOLD : FW_NORMAL;
-  lf.lfItalic = cur_font.flag & FontDesc::Italic;
-  strncpy(lf.lfFaceName, cur_font.name.c_str(), sizeof(lf.lfFaceName)-1);
-  ReleaseDC(NULL, hdc);
-  CHOOSEFONT cf;
-  memzero(cf);
-  cf.lpLogFont = &lf;
-  cf.lStructSize = sizeof(cf);
-  cf.hwndOwner = GetTyped<HWND>(screen->id);
-  cf.Flags = CF_SCREENFONTS | CF_INITTOLOGFONTSTRUCT;
-  if (!ChooseFont(&cf)) return;
-  int flag = FontDesc::Mono | (lf.lfWeight > FW_NORMAL ? FontDesc::Bold : 0) | (lf.lfItalic ? FontDesc::Italic : 0);
-  screen->shell->Run(StrCat(choose_cmd, " ", lf.lfFaceName, " ", cf.iPointSize/10, " ", flag));
-}
-
 void Application::OpenSystemBrowser(const string &url_text) {
   ShellExecute(NULL, "open", url_text.c_str(), NULL, NULL, SW_SHOWNORMAL);
 }

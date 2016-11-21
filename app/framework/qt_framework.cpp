@@ -57,6 +57,7 @@ const int Key::F11        = Qt::Key_F11;
 const int Key::F12        = Qt::Key_F12;
 const int Key::Home       = Qt::Key_Home;
 const int Key::End        = Qt::Key_End;
+const int Key::Insert     = Qt::Key_Insert;
 
 struct QtFrameworkModule : public Module {
   int Free() {
@@ -114,7 +115,7 @@ class QtWindow : public QWindow {
   void keyEvent       (QKeyEvent *ev, bool down) {
     if (!init) return;
     ev->accept();
-    int key = GetKeyCode(ev), fired = key ? KeyPress(key, 0, down) : 0;
+    int key = GetKeyCode(ev), fired = key ? app->input->KeyPress(key, 0, down) : 0;
     if (fired && frame_on_keyboard_input) RequestRender();
   }
 
@@ -229,8 +230,21 @@ int Video::Swap() {
 void Application::LoseFocus() {}
 void Application::GrabMouseFocus()    { auto screen=app->focused; GetTyped<QtWindow*>(screen->impl)->grabbed=1; GetTyped<QWindow*>(screen->id)->setCursor(Qt::BlankCursor); screen->grab_mode.On();  screen->cursor_grabbed=true;  }
 void Application::ReleaseMouseFocus() { auto screen=app->focused; GetTyped<QtWindow*>(screen->impl)->grabbed=0; GetTyped<QWindow*>(screen->id)->unsetCursor();              screen->grab_mode.Off(); screen->cursor_grabbed=false; }
+void Application::ToggleTouchKeyboard() {}
 void Application::OpenTouchKeyboard() {}
+void Application::CloseTouchKeyboard() {}
+void Application::CloseTouchKeyboardAfterReturn(bool v) {}
 void Application::SetTouchKeyboardTiled(bool v) {}
+int Application::SetExtraScale(bool v) { return false; }
+void Application::SetDownScale(bool v) {}
+void Application::SetTitleBar(bool v) {}
+void Application::SetKeepScreenOn(bool v) {}
+void Application::SetAutoRotateOrientation(bool v) {}
+void Application::SetPanRecognizer(bool enabled) {}
+void Application::SetPinchRecognizer(bool enabled) {}
+void Application::SetVerticalSwipeRecognizer(int touches) {}
+void Application::SetHorizontalSwipeRecognizer(int touches) {}
+void Application::ShowSystemStatusBar(bool v) {}
 
 string Application::GetClipboardText() { QByteArray v = QApplication::clipboard()->text().toUtf8(); return string(v.constData(), v.size()); }
 void Application::SetClipboardText(const string &s) { QApplication::clipboard()->setText(QString::fromUtf8(s.data(), s.size())); }

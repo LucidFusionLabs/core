@@ -466,7 +466,7 @@ struct Table {
   Callback add_cb;
   vector<TableItem> item;
   Table(int sr) : start_row(sr) {}
-  Table(string h="", int i=0, int f=0, Callback c=Callback()) : header(move(h)), image(i), flag(f), add_cb(move(c)) {}
+  Table(string h="", int i=0, int f=0, Callback c=Callback(), int sr=0) : header(move(h)), image(i), flag(f), start_row(sr), add_cb(move(c)) {}
   static vector<Table> Convert(vector<TableItem> in);
 };
 
