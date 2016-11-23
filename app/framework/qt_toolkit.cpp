@@ -16,12 +16,90 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <QtOpenGL>
+#include <QApplication>
+#include <QInputDialog>
+#include <QMessageBox>
+#include <QTableView>
+#include <QTableWidget>
+#include "qt_common.h"
+
 namespace LFL {
-SystemAlertView::~SystemAlertView() {}
-SystemAlertView::SystemAlertView(AlertItemVec items) {}
-void SystemAlertView::Show(const string &arg) {}
-void SystemAlertView::ShowCB(const string &title, const string &msg, const string &arg, StringCB confirm_cb) {}
-string SystemAlertView::RunModal(const string &arg) { return string(); }
+struct QtAlert {
+  string style;
+  bool add_text = 0;
+  StringCB cancel_cb, confirm_cb;
+  unique_ptr<QInputDialog> alert;
+  unique_ptr<QMessageBox> msg;
+
+  QtAlert(AlertItemVec kv) {
+    CHECK_EQ(4, kv.size());
+    CHECK_EQ("style", kv[0].first);
+    cancel_cb  = move(kv[2].cb);
+    confirm_cb = move(kv[3].cb);
+    style      = move(kv[0].second);
+    if ((add_text = (style == "textinput" || style == "pwinput"))) {
+      alert = make_unique<QInputDialog>();
+      alert->setWindowTitle(MakeQString(kv[1].first));
+      alert->setLabelText(MakeQString(kv[1].second));
+      alert->setCancelButtonText(MakeQString(kv[2].first));
+      alert->setOkButtonText(MakeQString(kv[3].first));
+      alert->setModal(false);
+    } else {
+      msg = make_unique<QMessageBox>();
+      msg->setAttribute(Qt::WA_DeleteOnClose);
+      msg->setText(MakeQString(kv[1].first));
+      msg->setInformativeText(MakeQString(kv[1].second));
+      msg->setModal(false);
+    }
+  }
+
+  void Update(string t, string m, StringCB cb) { 
+    if (add_text) {
+      alert->setWindowTitle(MakeQString(t));
+      alert->setLabelText(MakeQString(m));
+    } else { 
+    }
+    confirm_cb = move(cb);
+  }
+};
+
+struct QtTable {
+  unique_ptr<QTableView> table;
+  unique_ptr<QStandardItemModel> model;
+  LFL::SystemTableView *lfl_self;
+  LFL::IntIntCB delete_row_cb;
+  std::string style;
+  bool modal_nav=0;
+  int editable_section=-1, editable_start_row=-1, selected_section=0, selected_row=0, second_col=0, row_height=30, data_rows=0;
+  vector<Table> data;
+  vector<unique_ptr<QtTable>> dropdowns;
+
+  QtTable(SystemTableView *lself, const string &title, string s, vector<Table> item) :
+    table(make_unique<QTableView>()), model(make_unique<QStandardItemModel>()),
+    lfl_self(lself), style(move(s)), data(move(item)) {
+    modal_nav = (style == "modal" || style == "dropdown");
+    table->setWindowTitle(MakeQString(title));
+    table->setModel(model.get());
+  }
+};
+
+SystemAlertView::~SystemAlertView() { if (auto alert = FromVoid<QtAlert*>(impl)) delete alert; }
+SystemAlertView::SystemAlertView(AlertItemVec items) : impl(new QtAlert(move(items))) {}
+void SystemAlertView::ShowCB(const string &title, const string &msg, const string &arg, StringCB confirm_cb)
+{ FromVoid<QtAlert*>(impl)->Update(title, msg, move(confirm_cb)); Show(arg); }
+void SystemAlertView::Show(const string &arg) { RunModal(arg); }
+string SystemAlertView::RunModal(const string &arg) {
+  app->ReleaseMouseFocus();
+  auto alert = FromVoid<QtAlert*>(impl);
+  if (alert->add_text) {
+    alert->alert->setTextValue(MakeQString(arg));
+    alert->alert->open();
+  } else {
+    alert->msg->open();
+  }
+  return string(); 
+}
 
 SystemMenuView::~SystemMenuView() {}
 SystemMenuView::SystemMenuView(const string &title_text, MenuItemVec items) {}
@@ -38,42 +116,33 @@ SystemToolbarView::SystemToolbarView(MenuItemVec items) : impl(0) {}
 void SystemToolbarView::Show(bool show_or_hide) {}
 void SystemToolbarView::ToggleButton(const string &n) {}
 
-SystemTableView::~SystemTableView() {}
+SystemTableView::~SystemTableView() { if (auto table = FromVoid<QtTable*>(impl)) delete table; }
 SystemTableView::SystemTableView(const string &title, const string &style, TableItemVec items, int second_col) :
-  impl(new vector<Table>()) {
-  int section_index = 0;
-  auto data = FromVoid<vector<Table>*>(impl);
-  data->emplace_back();
-  for (auto &i : items) {
-    if (i.type == LFL::TableItem::Separator) {
-      data->emplace_back(i.key);
-      section_index++;
-    } else {
-      (*data)[section_index].item.emplace_back(i);
-    }
-  }
-}
+  impl(new QtTable(this, title, style, Table::Convert(move(items)))) {}
 
 StringPairVec SystemTableView::GetSectionText(int section) {
   StringPairVec ret;
-  auto data = FromVoid<vector<Table>*>(impl);
-  CHECK_RANGE(section, 0, data->size());
-  for (auto &i : (*data)[section].item) ret.emplace_back(i.key, i.val);
   return ret;
 }
 
 void SystemTableView::SetSectionValues(int section, const StringVec &item) {
-  auto data = FromVoid<vector<Table>*>(impl);
-  if (section == data->size()) data->emplace_back();
-  CHECK_LT(section, data->size());
-  CHECK_EQ(item.size(), (*data)[section].item.size());
-  for (int i=0, l=(*data)[section].item.size(); i != l; ++i) (*data)[section].item[i].val = item[i];
 }
 
 void SystemTableView::DelNavigationButton(int align) {}
 void SystemTableView::AddNavigationButton(int align, const TableItem &item) {}
 void SystemTableView::AddToolbar(SystemToolbarView *t) {}
-void SystemTableView::Show(bool show_or_hide) {}
+
+void SystemTableView::Show(bool show_or_hide) {
+  auto w = GetTyped<QtWindowInterface*>(app->focused->id);
+  auto table = FromVoid<QtTable*>(impl);
+  if (show_or_hide) {
+    w->layout->addWidget(table->table.get());
+    w->layout->setCurrentWidget(table->table.get());
+  }
+  //if (show_or_hide) table->table->show();
+  //else              table->table->hide();
+}
+
 void SystemTableView::AddRow(int section, TableItem item) {}
 string SystemTableView::GetKey(int section, int row) { return ""; }
 int SystemTableView::GetTag(int section, int row) { return 0; }

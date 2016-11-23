@@ -7,7 +7,7 @@ if(LFL_IOS)
                  COMPILE_OPTIONS -fobjc-abi-version=2 -fobjc-legacy-dispatch)
 endif()
 
-if(LFL_OSX AND LFL64)
+if(0)
   add_library(app_qtkit_camera STATIC qtkit_camera.mm)
   target_include_directories(app_qtkit_camera PUBLIC ${LFL_APP_INCLUDE})
   target_compile_definitions(app_qtkit_camera PUBLIC ${LFL_APP_DEF})

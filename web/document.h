@@ -52,9 +52,10 @@ struct DocumentParser {
       Parser::Complete(self);
     }
 
-    void WGetResponseCB(Connection*, const char *h, const string &ct, const char *cb, int cl) {
-      if      (!h && (!cb || !cl)) Complete(this);
-      else if (!h)                 style_target->Parse(string(cb, cl));
+    int WGetResponseCB(Connection*, const char *h, const string &ct, const char *cb, int cl) {
+      if (!h && (!cb || !cl)) { Complete(this); return 1; }
+      else if (!h) style_target->Parse(string(cb, cl));
+      return 0;
     }
   };
 
@@ -151,10 +152,11 @@ struct DocumentParser {
       Parser(p, url), target(t), loadasset_cb(bind(&ImageParser::LoadAssetResponseCB, this, _1)),
       loadtex_cb(bind(&ImageParser::LoadTextureResponseCB, this, _1, _2)) {}
 
-    void WGetResponseCB(Connection*, const char *h, const string &ct, const char *cb, int cl) {
+    int WGetResponseCB(Connection*, const char *h, const string &ct, const char *cb, int cl) {
       if      (h)                  content_length = cl;
-      if      (!h && (!cb || !cl)) WGetComplete(ct);
+      if      (!h && (!cb || !cl)) { WGetComplete(ct); return 1; }
       else if (!h)                 content.append(cb, cl);
+      return 0;
     }
 
     void WGetComplete(const string &content_type) {

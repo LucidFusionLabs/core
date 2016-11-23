@@ -996,8 +996,8 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
     master_server_list.clear(); master_server_selected=-1;
   }
 
-  void MasterGetResponseCB(Connection *c, const char *h, const string &ct, const char *cb, int cl) {
-    if (!cb || !cl) return;
+  int MasterGetResponseCB(Connection *c, const char *h, const string &ct, const char *cb, int cl) {
+    if (!cb || !cl) return 0;
     const char *p;
     string servers(cb, cl);
     StringLineIter lines(servers);
@@ -1005,6 +1005,7 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
       if (!(p = strchr(l.c_str(), ':'))) continue;
       SystemNetwork::SendTo(pinger.GetListener()->socket, IPV4::Parse(string(l.c_str(), p-l.c_str())), atoi(p+1), "ping\n", 5);
     }
+    return 0;
   }
 
   void Close(Connection *c) { c->handler.release(); }

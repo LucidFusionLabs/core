@@ -792,7 +792,7 @@ int ProcessAPIServer::SwapTreeQuery::AllocateBufferResponse(const IPC::AllocateB
 }
 
 void ProcessAPIServer::WGet(const string &url, const HTTPClient::ResponseCB &c, const StringCB &rc) {
-  if (!SendIPC(conn, seq++, -1, WGetRequest, fb.CreateString(url))) return c(0, 0, "", 0, 0);
+  if (!SendIPC(conn, seq++, -1, WGetRequest, fb.CreateString(url))) { c(0, 0, "", 0, 0); return; }
   WGetQuery *q = new WGetQuery(this, seq-1, WGetIPC::CB(), c, rc);
   q->ipc_cb = bind(&ProcessAPIServer::WGetQuery::WGetResponse, q, _1, _2);
   ExpectWGetResponse(q);

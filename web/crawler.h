@@ -145,7 +145,7 @@ struct Crawler {
     delete buf;
   }
 
-  void WGetResponseCB(Connection *c, const char *headers, const string &ct,
+  int WGetResponseCB(Connection *c, const char *headers, const string &ct,
                       const char *content, int len, FetchBuffer *buf)
   {
     if (headers) { /* headers only = init */
@@ -159,7 +159,9 @@ struct Crawler {
       if (buf->content_length && buf->content_length != buf->content.size()) success = false;
       if (success) Crawled(buf);
       Close(buf);
+      return 1;
     }
+    return 0;
   }
 };
 

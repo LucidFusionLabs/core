@@ -255,7 +255,7 @@ struct HTTPClientHandler {
         chunked_encoding = te.str() == "chunked";
         content_type = ct.str();
 
-        Headers(c, status_line, h);
+        if (Headers(c, status_line, h)) { c->handler.reset(); return -1; }
         cur = headers_end+2;
       }
       for (;;) {
@@ -275,7 +275,7 @@ struct HTTPClientHandler {
           if (rb_left < chunk_left && full_chunk_cb) break;
         }
 
-        if (rb_left) Content(c, StringPiece(cur, rb_left));
+        if (rb_left) if (Content(c, StringPiece(cur, rb_left))) { c->handler.reset(); return -1; }
         cur += rb_left;
         current_chunk_read += rb_left;
         if (current_chunk_read == current_chunk_length) current_chunk_read = current_chunk_length = 0;
@@ -283,8 +283,8 @@ struct HTTPClientHandler {
       if (cur != c->rb.begin()) c->ReadFlush(cur - c->rb.begin());
       return 0;
     }
-    virtual void Headers(Connection *c, const StringPiece &sl, const StringPiece &h) {}
-    virtual void Content(Connection *c, const StringPiece &b) {}
+    virtual int Headers(Connection *c, const StringPiece &sl, const StringPiece &h) { return 0; }
+    virtual int Content(Connection *c, const StringPiece &b) { return 0; }
   };
 
   struct WGet : public Protocol {
@@ -305,27 +305,27 @@ struct HTTPClientHandler {
       return HTTP::ResolveURL(url.c_str(), &ssl, 0, &port, &host, &path, 0, prot);
     }
 
-    void Close(Connection *c) { if (cb) cb(c, 0, content_type, 0, 0); }
-    int Connected(Connection *c) {
+    void Close(Connection *c) override { if (cb) cb(c, 0, content_type, 0, 0); }
+    int Connected(Connection *c) override {
       return HTTPClient::WriteRequest(c, HTTPServer::Method::GET, host.c_str(), path.c_str(), 0, 0, 0, false);
     }
 
-    void Headers(Connection *c, const StringPiece &sl, const StringPiece &h) { 
+    int Headers(Connection *c, const StringPiece &sl, const StringPiece &h) override { 
       if (result_code == 301 && redirects++ < 5) {
         StringPiece loc;
         HTTP::GrepHeaders(h.begin(), h.end(), 1, "Location", &loc);
         string location = loc.str();
         if (!location.empty()) {
           if (redirect_cb) redirect_cb(location);
-          else { c->handler = nullptr; return ResolveHost(); }
+          else { return -1; c->handler = nullptr; ResolveHost(); return 0; }
         }
       }
-      if (cb) cb(c, h.data(), content_type, 0, read_content_length);
+      return cb ? cb(c, h.data(), content_type, 0, read_content_length) : 0;
     }
 
-    void Content(Connection *c, const StringPiece &b) {
+    int Content(Connection *c, const StringPiece &b) override {
       if (out) { if (out->Write(b.buf, b.len) != b.len) ERROR("write ", out->Filename()); }
-      if (cb) cb(c, 0, content_type, b.buf, b.len);
+      return cb ? cb(c, 0, content_type, b.buf, b.len) : 0;
     }
 
     void ResolveHost() {
@@ -359,11 +359,13 @@ struct HTTPClientHandler {
     HTTPClient::ResponseCB responseCB;
     PersistentConnection(HTTPClient::ResponseCB RCB) : Protocol(true), responseCB(RCB) {}
 
-    void Close(Connection *c) { if (responseCB) responseCB(c, 0, content_type, 0, 0); }
-    void Content(Connection *c, const StringPiece &b) {
+    void Close(Connection *c) override { if (responseCB) responseCB(c, 0, content_type, 0, 0); }
+    int Content(Connection *c, const StringPiece &b) override {
+      int ret = 0;
       if (!read_content_length) FATAL("chunked transfer encoding not supported");
-      if (responseCB) responseCB(c, 0, content_type, b.buf, b.len);
+      if (responseCB) ret = responseCB(c, 0, content_type, b.buf, b.len);
       Protocol::Reset();
+      return ret;
     }
   };
 };

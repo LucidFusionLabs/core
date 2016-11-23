@@ -40,19 +40,7 @@ void SystemToolbarView::ToggleButton(const string &n) {}
 
 SystemTableView::~SystemTableView() {}
 SystemTableView::SystemTableView(const string &title, const string &style, TableItemVec items, int second_col) :
-  impl(new vector<Table>()) {
-  int section_index = 0;
-  auto data = FromVoid<vector<Table>*>(impl);
-  data->emplace_back();
-  for (auto &i : items) {
-    if (i.type == LFL::TableItem::Separator) {
-      data->emplace_back(i.key);
-      section_index++;
-    } else {
-      (*data)[section_index].item.emplace_back(i);
-    }
-  }
-}
+  impl(new vector<Table>(Table::Convert(move(items)))) {}
 
 StringPairVec SystemTableView::GetSectionText(int section) {
   StringPairVec ret;

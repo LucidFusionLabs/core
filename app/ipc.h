@@ -393,7 +393,7 @@ struct ProcessAPIClient : public ProcessAPI {
   IPC_SERVER_CALL(WGet, Void) {
     using WGetIPC::WGetIPC;
     void WGetRedirectCB(const string &to) { return SendResponse(to.c_str(), 0, 0, true); }
-    void WGetResponseCB(Connection *c, const char *h, const string &ct, const char *b, int l) { return SendResponse(h,b,l); }
+    int WGetResponseCB(Connection *c, const char *h, const string &ct, const char *b, int l) { SendResponse(h,b,l); return 0; }
     void SendResponse(const char *h, const char *b, int l, bool redir=false);
   };
   IPC_SERVER_CALL(SetTitle, Void) {};

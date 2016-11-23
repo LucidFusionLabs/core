@@ -18,10 +18,11 @@
 
 #include <QtOpenGL>
 #include <QApplication>
+#include "qt_common.h"
 
 namespace LFL {
-QApplication *lfl_qapp;
-static bool lfl_qt_init = false;
+QApplication *qapp;
+static bool qapp_init = false;
 
 const int Key::Escape     = Qt::Key_Escape;
 const int Key::Return     = Qt::Key_Return;
@@ -61,17 +62,17 @@ const int Key::Insert     = Qt::Key_Insert;
 
 struct QtFrameworkModule : public Module {
   int Free() {
-    delete lfl_qapp;
-    lfl_qapp = nullptr;
+    delete qapp;
+    qapp = nullptr;
     return 0;
   };
 };
 
-class QtWindow : public QWindow {
+class QtWindow : public QWindow, public QtWindowInterface {
   Q_OBJECT
   public:
-  QSocketNotifier *wait_forever_socket=0;
-  bool init=0, grabbed=0, frame_on_mouse_input=0, frame_on_keyboard_input=0, reenable_wait_forever_socket=0;
+  unordered_map<Socket, unique_ptr<QSocketNotifier>> main_wait_socket;
+  bool init=0, grabbed=0, frame_on_mouse_input=0, frame_on_keyboard_input=0;
   LFL::Window *lfl_window=0;
   point mouse_p;
 
@@ -84,20 +85,19 @@ class QtWindow : public QWindow {
     lfl_window->gl = MakeTyped(glc);
     LFL::app->MakeCurrentWindow(lfl_window);
     dynamic_cast<QOpenGLFunctions*>(lfl_window->gd)->initializeOpenGLFunctions();
-    if (lfl_qt_init) LFL::app->StartNewWindow(lfl_window);
+    if (qapp_init) LFL::app->StartNewWindow(lfl_window);
   }
 
   bool event(QEvent *event) {
     if (event->type() != QEvent::UpdateRequest) return QWindow::event(event);
     if (!init && (init = 1)) MyInit();
-    if (!lfl_qt_init && (lfl_qt_init = true)) {
+    if (!qapp_init && (qapp_init = true)) {
       MyAppMain();
-      if (!LFL::app->run) { lfl_qapp->exit(); return true; }
+      if (!LFL::app->run) { qapp->exit(); return true; }
     }
     if (!LFL::app->focused || LFL::app->focused->impl.v != this) LFL::app->MakeCurrentWindow(lfl_window);
     app->EventDrivenFrame(true);
-    if (!app->run) { lfl_qapp->exit(); return true; }
-    if (reenable_wait_forever_socket && !(reenable_wait_forever_socket=0)) wait_forever_socket->setEnabled(true);
+    if (!app->run) { qapp->exit(); return true; }
     if (LFL::app->focused->target_fps) RequestRender();
     return QWindow::event(event);
   }
@@ -149,16 +149,13 @@ class QtWindow : public QWindow {
   }
 
   void RequestRender() { QCoreApplication::postEvent(this, new QEvent(QEvent::UpdateRequest)); }
-
-  void DelMainWaitSocket(Socket fd) {
-    if (fd == InvalidSocket) return;
-  }
-
-  void AddMainWaitSocket(Socket fd) {
-    if (fd == InvalidSocket) return;
-    CHECK(!wait_forever_socket);
-    wait_forever_socket = new QSocketNotifier(fd, QSocketNotifier::Read, this);
-    lfl_qapp->connect(wait_forever_socket, SIGNAL(activated(int)), this, SLOT(ReadInputChannel(int)));
+  void DelMainWaitSocket(Socket fd) { main_wait_socket.erase(fd); }
+  void AddMainWaitSocket(Socket fd, function<bool()> readable) {
+    auto notifier = make_unique<QSocketNotifier>(fd, QSocketNotifier::Read, this);
+    qapp->connect(notifier.get(), &QSocketNotifier::activated, [=](Socket fd){
+      if (readable && readable()) RequestRender();
+    });
+    main_wait_socket[fd] = move(notifier);
   }
 
   static unsigned GetKeyCode(QKeyEvent *ev) { int k = ev->key(); return k < 256 && isalpha(k) ? ::tolower(k) : k; }
@@ -169,13 +166,6 @@ class QtWindow : public QWindow {
     else if (b == Qt::RightButton) return 2;
     return 0;
   }
-
-  public slots:
-  void ReadInputChannel(int fd) {
-    reenable_wait_forever_socket = true; 
-    wait_forever_socket->setEnabled(false);
-    RequestRender(); 
-  }
 };
 
 #include "app/framework/qt_framework.moc"
@@ -183,21 +173,30 @@ class QtWindow : public QWindow {
 bool Video::CreateWindow(Window *W) {
   CHECK(!W->id.v && W->gd);
   QtWindow *my_qwin = new QtWindow();
-  QWindow *qwin = my_qwin;
+  QtWindowInterface *my_qwin_interface = my_qwin;
   my_qwin->lfl_window = W;
+  my_qwin->opengl_window = my_qwin;
 
   QSurfaceFormat format;
   format.setSamples(16);
-  qwin->setFormat(format);
-  qwin->setSurfaceType(QWindow::OpenGLSurface);
-  qwin->setWidth(W->width);
-  qwin->setHeight(W->height);
-  qwin->show();
-  my_qwin->RequestRender();
+  my_qwin->setFormat(format);
+  my_qwin->setSurfaceType(QWindow::OpenGLSurface);
 
   W->started = true;
-  W->id = MakeTyped(qwin);
+  W->id = MakeTyped(my_qwin_interface);
   W->impl = MakeTyped(my_qwin);
+
+  my_qwin->container = QWidget::createWindowContainer(my_qwin);
+  my_qwin->container->setFocusPolicy(Qt::TabFocus);
+  my_qwin->layout = new QStackedLayout();
+  my_qwin->window = new QWidget();
+  my_qwin->window->setLayout(my_qwin->layout);
+  my_qwin->layout->addWidget(my_qwin->container);
+  my_qwin->window->resize(W->width, W->height);
+  my_qwin->window->show();
+  my_qwin->container->setFocus();
+  my_qwin->RequestRender();
+
   app->windows[W->id.v] = W;
   return true;
 }
@@ -211,25 +210,25 @@ void Application::CloseWindow(Window *W) {
 
 void Application::MakeCurrentWindow(Window *W) {
   focused = W; 
-  GetTyped<QOpenGLContext*>(focused->gl)->makeCurrent(GetTyped<QWindow*>(focused->id));
+  GetTyped<QOpenGLContext*>(focused->gl)->makeCurrent(GetTyped<QtWindowInterface*>(focused->id)->opengl_window);
 }
 
-void Window::SetCaption(const string &v) { GetTyped<QWindow*>(id)->setTitle(QString::fromUtf8(v.data(), v.size())); }
-void Window::SetResizeIncrements(float x, float y) { GetTyped<QWindow*>(id)->setSizeIncrement(QSize(x, y)); }
-void Window::SetTransparency(float v) { GetTyped<QWindow*>(id)->setOpacity(1-v); }
-bool Window::Reshape(int w, int h) { GetTyped<QWindow*>(id)->resize(w, h); app->MakeCurrentWindow(this); return true; }
+void Window::SetCaption(const string &v) { GetTyped<QtWindowInterface*>(id)->window->setWindowTitle(MakeQString(v)); }
+void Window::SetResizeIncrements(float x, float y) { GetTyped<QtWindowInterface*>(id)->window->windowHandle()->setSizeIncrement(QSize(x, y)); }
+void Window::SetTransparency(float v) { GetTyped<QtWindowInterface*>(id)->window->windowHandle()->setOpacity(1-v); }
+bool Window::Reshape(int w, int h) { GetTyped<QtWindow*>(impl)->window->resize(w, h); app->MakeCurrentWindow(this); return true; }
 void Video::StartWindow(Window*) {}
 
 int Video::Swap() {
   Window *screen = app->focused;
-  GetTyped<QOpenGLContext*>(screen->gl)->swapBuffers(GetTyped<QWindow*>(screen->id));
+  GetTyped<QOpenGLContext*>(screen->gl)->swapBuffers(GetTyped<QtWindowInterface*>(screen->id)->opengl_window);
   screen->gd->CheckForError(__FILE__, __LINE__);
   return 0;
 }
 
 void Application::LoseFocus() {}
-void Application::GrabMouseFocus()    { auto screen=app->focused; GetTyped<QtWindow*>(screen->impl)->grabbed=1; GetTyped<QWindow*>(screen->id)->setCursor(Qt::BlankCursor); screen->grab_mode.On();  screen->cursor_grabbed=true;  }
-void Application::ReleaseMouseFocus() { auto screen=app->focused; GetTyped<QtWindow*>(screen->impl)->grabbed=0; GetTyped<QWindow*>(screen->id)->unsetCursor();              screen->grab_mode.Off(); screen->cursor_grabbed=false; }
+void Application::GrabMouseFocus()    { auto screen=app->focused; GetTyped<QtWindow*>(screen->impl)->grabbed=1; GetTyped<QtWindowInterface*>(screen->id)->window->windowHandle()->setCursor(Qt::BlankCursor); screen->grab_mode.On();  screen->cursor_grabbed=true;  }
+void Application::ReleaseMouseFocus() { auto screen=app->focused; GetTyped<QtWindow*>(screen->impl)->grabbed=0; GetTyped<QtWindowInterface*>(screen->id)->window->windowHandle()->unsetCursor();              screen->grab_mode.Off(); screen->cursor_grabbed=false; }
 void Application::ToggleTouchKeyboard() {}
 void Application::OpenTouchKeyboard() {}
 void Application::CloseTouchKeyboard() {}
@@ -246,8 +245,8 @@ void Application::SetVerticalSwipeRecognizer(int touches) {}
 void Application::SetHorizontalSwipeRecognizer(int touches) {}
 void Application::ShowSystemStatusBar(bool v) {}
 
-string Application::GetClipboardText() { QByteArray v = QApplication::clipboard()->text().toUtf8(); return string(v.constData(), v.size()); }
-void Application::SetClipboardText(const string &s) { QApplication::clipboard()->setText(QString::fromUtf8(s.data(), s.size())); }
+string Application::GetClipboardText() { return GetQString(QApplication::clipboard()->text()); }
+void Application::SetClipboardText(const string &s) { QApplication::clipboard()->setText(MakeQString(s)); }
 
 bool FrameScheduler::DoMainWait() { return false; }
 void FrameScheduler::Setup() { rate_limit = synchronize_waits = wait_forever_thread = monolithic_frame = run_main_loop = 0; }
@@ -259,34 +258,25 @@ void FrameScheduler::AddMainWaitMouse(Window *w) { if (w) GetTyped<QtWindow*>(w-
 void FrameScheduler::DelMainWaitMouse(Window *w) { if (w) GetTyped<QtWindow*>(w->impl)->frame_on_mouse_input = false; }
 void FrameScheduler::AddMainWaitKeyboard(Window *w) { if (w) GetTyped<QtWindow*>(w->impl)->frame_on_keyboard_input = true; }
 void FrameScheduler::DelMainWaitKeyboard(Window *w) { if (w) GetTyped<QtWindow*>(w->impl)->frame_on_keyboard_input = false; }
-void FrameScheduler::AddMainWaitSocket(Window *w, Socket fd, int flag, function<bool()>) {
+
+void FrameScheduler::AddMainWaitSocket(Window *w, Socket fd, int flag, function<bool()> f) {
+  if (fd == InvalidSocket) return;
   if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, w);
-  if (w) GetTyped<QtWindow*>(w->impl)->AddMainWaitSocket(fd);
-}
-void FrameScheduler::DelMainWaitSocket(Window *w, Socket fd) {
-  if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd);
-  if (w) GetTyped<QtWindow*>(w->impl)->DelMainWaitSocket(fd);
+  else if (w) GetTyped<QtWindow*>(w->impl)->AddMainWaitSocket(fd, move(f));
 }
 
-#if 0
-#include <QMessageBox>
-void Dialog::MessageBox(const string &n) {
-  app->ReleaseMouseFocus();
-  QMessageBox *msg = new QMessageBox();
-  msg->setAttribute(Qt::WA_DeleteOnClose);
-  msg->setText("MesssageBox");
-  msg->setInformativeText(n.c_str());
-  msg->setModal(false);
-  msg->open();
+void FrameScheduler::DelMainWaitSocket(Window *w, Socket fd) {
+  if (fd == InvalidSocket) return;
+  if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd);
+  else if (w) GetTyped<QtWindow*>(w->impl)->DelMainWaitSocket(fd);
 }
-#endif
 
 extern "C" int main(int argc, const char *argv[]) {
   MyAppCreate(argc, argv);
-  lfl_qapp = new QApplication(argc, const_cast<char**>(argv));
+  LFL::qapp = new QApplication(argc, const_cast<char**>(argv));
   LFL::app->focused->gd = LFL::CreateGraphicsDevice(LFL::app->focused, 2).release();
   Video::CreateWindow(LFL::app->focused);
-  return lfl_qapp->exec();
+  return LFL::qapp->exec();
 }
 
 unique_ptr<Module> CreateFrameworkModule() { return make_unique<QtFrameworkModule>(); }

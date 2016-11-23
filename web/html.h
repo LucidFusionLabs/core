@@ -247,7 +247,7 @@ struct HTMLParser {
     } return false;
   }
 
-  void WGetCB(Connection *c, const char *h, const string &ct, const char *b, int l) {
+  int WGetCB(Connection *c, const char *h, const string &ct, const char *b, int l) {
     if (h) {
       int charset_ind = ct.find("charset=");
       if (charset_ind != string::npos) charset = ct.substr(charset_ind + 8);
@@ -277,6 +277,7 @@ struct HTMLParser {
       }
       WGetContentEnd(c);
     }
+    return 0;
   }
 
   static bool RowContainer(int n) { return n == Tag::table || TableSection(n); }

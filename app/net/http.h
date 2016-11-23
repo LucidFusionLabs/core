@@ -44,7 +44,7 @@ struct HTTP {
 };
 
 struct HTTPClient {
-  typedef function<void(Connection*, const char*, const string&, const char*, int)> ResponseCB;
+  typedef function<int(Connection*, const char*, const string&, const char*, int)> ResponseCB;
   static bool WGet(const string &url, File *out=0, const ResponseCB &responseCB=ResponseCB(), const StringCB &redirectCB=StringCB());
   static bool WPost(const string &url, const string &mimetype, const char *postdata, int postlen, ResponseCB=ResponseCB());
   static Connection *PersistentConnection(const string &url, string *hostOut, string *pathOut, ResponseCB responseCB);
