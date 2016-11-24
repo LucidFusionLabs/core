@@ -293,16 +293,20 @@ macro(lfl_enable_qt)
   set(QT_LIB ${Qt5WebKitWidgets_LIBRARIES} ${Qt5WebKit_LIBRARIES} ${Qt5OpenGL_LIBRARIES})
 endmacro()
 
-macro(lfl_set_os_toolkit _prefix)
-  set(${_prefix}_GRAPHICS ${LFL_APP_GRAPHICS})
-  set(${_prefix}_FRAMEWORK ${LFL_APP_FRAMEWORK})
-  set(${_prefix}_TOOLKIT ${LFL_APP_TOOLKIT})
-endmacro()
-
 macro(lfl_set_qt_toolkit _prefix)
   set(${_prefix}_GRAPHICS app_qt_graphics)
   set(${_prefix}_FRAMEWORK app_qt_framework)
   set(${_prefix}_TOOLKIT app_qt_toolkit)
+endmacro()
+
+macro(lfl_set_os_toolkit _prefix)
+  if(LFL_LINUX)
+    lfl_set_qt_toolkit(${_prefix})
+  else()
+    set(${_prefix}_GRAPHICS ${LFL_APP_GRAPHICS})
+    set(${_prefix}_FRAMEWORK ${LFL_APP_FRAMEWORK})
+    set(${_prefix}_TOOLKIT ${LFL_APP_TOOLKIT})
+  endif()
 endmacro()
 
 # app
