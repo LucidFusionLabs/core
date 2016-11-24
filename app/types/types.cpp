@@ -164,4 +164,13 @@ vector<Table> Table::Convert(vector<TableItem> in) {
   return ret;
 }
 
+void Table::FindSectionOffset(const vector<Table> &data, int collapsed_row, int *section_out, int *row_out) {
+  auto it = lower_bound(data.begin(), data.end(), Table(collapsed_row),
+                        MemberLessThanCompare<Table, int, &Table::start_row>());
+  if (it != data.end() && it->start_row == collapsed_row) { *section_out = it - data.begin(); return; }
+  CHECK_NE(data.begin(), it);
+  *section_out = (it != data.end() ? (it - data.begin()) : data.size()) - 1;
+  *row_out = collapsed_row - data[*section_out].start_row - 1;
+}
+
 }; // namespace LFL

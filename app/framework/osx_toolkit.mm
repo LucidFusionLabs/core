@@ -297,12 +297,14 @@ static std::vector<NSImage*> app_images;
 
   - (id)init: (LFL::SystemTableView*)lself withTitle:(const std::string&)title andStyle:(const std::string&)style items:(std::vector<LFL::Table>)item { 
     self = [super init];
+    self.title = LFL::MakeNSString(title);
     _lfl_self = lself;
     _style = style;
     _modal_nav = (_style == "modal" || _style == "dropdown");
     _editable_section = _editable_start_row = -1;
     _row_height = 30;
     data = move(item);
+
     int count = 0;
     NSMutableIndexSet *hide_indices = [[[NSMutableIndexSet alloc] init] autorelease];
     for (auto &i : data) {
@@ -310,7 +312,6 @@ static std::vector<NSImage*> app_images;
       data_rows += i.item.size();
       [OSXTable addHiddenIndices:i to:hide_indices];
     }
-    self.title = LFL::MakeNSString(title);
 
     NSView *contentView = LFL::GetTyped<GameView*>(LFL::app->focused->id).window.contentView;
     _tableContainer = [[NSScrollView alloc] initWithFrame: contentView.frame];
@@ -422,21 +423,12 @@ static std::vector<NSImage*> app_images;
 
   - (CGFloat)tableView:(NSTableView *)tableView heightOfRow:(NSInteger)collapsed_row {
     int section = -1, row = -1;
-    [self findSectionAndRowIndex: collapsed_row outSection: &section outRow: &row];
+    LFL::Table::FindSectionOffset(data, collapsed_row, &section, &row);
     if (section < 0 || section >= data.size() || row < 0 || row >= data[section].item.size()) return _row_height;
     const auto &ci = data[section].item[row];
     if (ci.gui_loaded &&
         (ci.type == LFL::TableItem::Picker || ci.type == LFL::TableItem::FontPicker)) return ci.height;
     else return _row_height; 
-  }
-
-  - (void)findSectionAndRowIndex:(int)collapsed_row outSection:(int*)out_section outRow:(int*)out_row {
-    auto it = LFL::lower_bound(data.begin(), data.end(), LFL::Table(collapsed_row),
-                               LFL::MemberLessThanCompare<LFL::Table, int, &LFL::Table::start_row>());
-    if (it != data.end() && it->start_row == collapsed_row) { *out_section = it - data.begin(); return; }
-    CHECK_NE(data.begin(), it);
-    *out_section = (it != data.end() ? (it - data.begin()) : data.size()) - 1;
-    *out_row = collapsed_row - data[*out_section].start_row - 1;
   }
 
 #if 0
@@ -451,7 +443,7 @@ static std::vector<NSImage*> app_images;
     OSXTableCellView *cellView = [tableView makeViewWithIdentifier:identifier owner:self];
     if (cellView == nil) {
       int section = -1, row = -1;
-      [self findSectionAndRowIndex: collapsed_row outSection: &section outRow: &row];
+      LFL::Table::FindSectionOffset(data, collapsed_row, &section, &row);
       if (row < 0) return (cellView = [self headerForSection: section]);
 
       [self checkExists:section row:row];
@@ -517,7 +509,7 @@ static std::vector<NSImage*> app_images;
 
   - (BOOL)tableView:(NSTableView *)tableView shouldSelectRow:(NSInteger)collapsed_row {
     int section = -1, row = -1;
-    [self findSectionAndRowIndex: collapsed_row outSection: &section outRow: &row];
+    LFL::Table::FindSectionOffset(data, collapsed_row, &section, &row);
     if (row < 0) return NO;
     [self checkExists:section row:row];
     _selected_section = section;

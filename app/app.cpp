@@ -551,17 +551,10 @@ int Application::Init() {
       if (!focused->gd) focused->gd = CreateGraphicsDevice(focused, opengles_version).release();
       shaders = make_unique<Shaders>();
       focused->gd->Init(focused->Box());
-    } else { windows[focused->id.v] = focused; }
-
 #ifdef LFL_WINDOWS
-    if (FLAGS_enable_video && splash_color) {
-      focused->gd->ClearColor(*splash_color);
-      focused->gd->Clear();
-      focused->gd->Flush();
-      Video::Swap();
-      focused->gd->ClearColor(focused->gd->clear_color);
-    }
+      if (splash_color) DrawSplash();
 #endif
+    } else { windows[focused->id.v] = focused; }
   }
 
   if (FLAGS_enable_audio) {
@@ -673,6 +666,14 @@ int Application::MainLoop() {
   }
   INFO("MainLoop: End, run=", run);
   return 0;
+}
+
+void Application::DrawSplash() {
+  focused->gd->ClearColor(*splash_color);
+  focused->gd->Clear();
+  focused->gd->Flush();
+  Video::Swap();
+  focused->gd->ClearColor(focused->gd->clear_color);
 }
 
 void Application::ResetGL() {

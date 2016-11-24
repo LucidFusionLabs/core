@@ -468,6 +468,7 @@ struct Table {
   Table(int sr) : start_row(sr) {}
   Table(string h="", int i=0, int f=0, Callback c=Callback(), int sr=0) : header(move(h)), image(i), flag(f), start_row(sr), add_cb(move(c)) {}
   static vector<Table> Convert(vector<TableItem> in);
+  static void FindSectionOffset(const vector<Table> &in, int collapsed_row, int *section_out, int *row_out);
 };
 
 typedef vector<MenuItem>  MenuItemVec;
@@ -702,6 +703,7 @@ struct Application : public ::LFApp {
   int TimerDrivenFrame(bool got_wakeup);
   int Main();
   int MainLoop();
+  void DrawSplash();
   void ResetGL();
 
   void LoseFocus();
