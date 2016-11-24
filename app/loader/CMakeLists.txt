@@ -19,7 +19,8 @@ if(LFL_PROTOBUF)
 endif()
 
 if(LFL_PNG)
-  lfl_add_target(app_libpng_png STATIC_LIBRARY SOURCES libpng_png.cpp LINK_LIBRARIES libpng16)
+  lfl_add_target(app_libpng_png STATIC_LIBRARY SOURCES libpng_png.cpp
+                 INCLUDE_DIRECTORIES ${PNG_INCLUDE} LINK_LIBRARIES ${PNG_LIB})
   if(LFL_EMSCRIPTEN)
     target_compile_options(app_libpng_png PUBLIC -s USE_LIBPNG=1)
   endif()

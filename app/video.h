@@ -364,7 +364,7 @@ struct GraphicsDevice {
   virtual ~GraphicsDevice() {}
   virtual void Init(const Box&) = 0;
   virtual bool ShaderSupport() const = 0;
-  virtual bool GetEnabled(int) const = 0;
+  virtual bool GetEnabled(int) = 0;
   virtual void EnableTexture() = 0;
   virtual void DisableTexture() = 0;
   virtual void EnableLighting() = 0;
@@ -457,7 +457,7 @@ struct GraphicsDevice {
   virtual void BindAttribLocation(int prog, int loc, const string &name) = 0;
   virtual void LinkProgram(int prog) = 0;
   virtual void GetProgramiv(int p, int t, int *out) = 0;
-  virtual void GetIntegerv(int t, int *out) const = 0;
+  virtual void GetIntegerv(int t, int *out) = 0;
   virtual int GetAttribLocation(int prog, const string &name) = 0;
   virtual int GetUniformLocation(int prog, const string &name) = 0;
   virtual void Uniform1i(int u, int v) = 0;
@@ -486,8 +486,8 @@ struct GraphicsDevice {
   void PopScissor();
   void PushScissorStack();
   void PopScissorStack();
-  Box GetViewport() const;
-  Box GetScissorBox() const;
+  Box GetViewport();
+  Box GetScissorBox();
   void DrawPixels(const Box &b, const Texture &tex);
 
   static int VertsPerPrimitive(int gl_primtype);

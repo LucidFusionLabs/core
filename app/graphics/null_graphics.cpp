@@ -73,7 +73,7 @@ struct NullGraphicsDevice : public GraphicsDevice {
   NullGraphicsDevice(Window *w) : GraphicsDevice(w) {}
   void Init(const Box&) {}
   bool ShaderSupport() const { return 0; }
-  bool GetEnabled(int) const { return 0; }
+  bool GetEnabled(int) { return 0; }
   void EnableTexture() {}
   void DisableTexture() {}
   void EnableLighting() {}
@@ -164,7 +164,7 @@ struct NullGraphicsDevice : public GraphicsDevice {
   void BindAttribLocation(int prog, int loc, const string &name) {}
   void LinkProgram(int prog) {}
   void GetProgramiv(int p, int t, int *out) {}
-  void GetIntegerv(int t, int *out) const {}
+  void GetIntegerv(int t, int *out) {}
   int GetAttribLocation (int prog, const string &name) { return 0; }
   int GetUniformLocation(int prog, const string &name) { return 0; }
   void Uniform1i(int u, int v) {}

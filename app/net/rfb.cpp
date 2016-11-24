@@ -47,17 +47,17 @@ struct RFB {
   };
 
   struct ProtocolVersion : public Serializable {
-    int major, minor;
-    ProtocolVersion(int A=0, int B=0) : Serializable(0), major(A), minor(B) {}
+    int ver_major, ver_minor;
+    ProtocolVersion(int A=0, int B=0) : Serializable(0), ver_major(A), ver_minor(B) {}
  
     int HeaderSize() const { return 12; }
     int Size() const { return HeaderSize(); }
-    void Out(Serializable::Stream *o) const { o->String(StringPrintf("RFB %03d.%03d\n", major, minor)); }
+    void Out(Serializable::Stream *o) const { o->String(StringPrintf("RFB %03d.%03d\n", ver_major, ver_minor)); }
     int In(const Serializable::Stream *i) {
       string in(i->Get(Size()), Size()); 
       if (!PrefixMatch(in, "RFB ") || in[7] != '.' || in[11] != '\n') { i->error = true; return -1; }
-      major = atoi(in.data() + 4);
-      minor = atoi(in.data() + 8);
+      ver_major = atoi(in.data() + 4);
+      ver_minor = atoi(in.data() + 8);
       return i->Result();
     }
   };

@@ -17,9 +17,16 @@
  */
 
 namespace LFL {
-void Application::ShowSystemFontChooser(const FontDesc &cur_font, const StringVecCB&) {}
-void Application::ShowSystemFileChooser(bool files, bool dirs, bool multi, const StringVecCB&) {}
+string Application::GetVersion() { return "1.0"; }
 void Application::OpenSystemBrowser(const string &url_text) {}
+String16 Application::GetLocalizedString16(const char *key) { return String16(); }
+string Application::GetLocalizedString(const char *key) { return string(); }
+String16 Application::GetLocalizedInteger16(int number) { return String16(); }
+string Application::GetLocalizedInteger(int number) { return string(); }
+void Application::LoadDefaultSettings(const StringPairVec &v) {}
+string Application::GetSetting(const string &key) { return string(); }
+void Application::SaveSettings(const StringPairVec &v) {}
+
 Connection *Application::ConnectTCP(const string &hostport, int default_port, Connection::CB *connected_cb, bool background_services) {
   INFO("Application::ConnectTCP ", hostport, " (default_port = ", default_port, ") background_services = false"); 
   return app->net->tcp_client->Connect(hostport, default_port, connected_cb);

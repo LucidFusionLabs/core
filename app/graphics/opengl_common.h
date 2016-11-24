@@ -63,7 +63,7 @@ void CheckForError(const char *file, int line) {
   }
 }
 
-bool GetEnabled(int v) const { return glIsEnabled(v); }
+bool GetEnabled(int v) { return glIsEnabled(v); }
 void EnableScissor() { glEnable(GL_SCISSOR_TEST); }
 void DisableScissor() { glDisable(GL_SCISSOR_TEST); }
 void EnableDepthTest()  {  glEnable(GL_DEPTH_TEST); glDepthMask(GL_TRUE);  GDDebug("DepthTest=1"); }
@@ -183,7 +183,7 @@ void LinkProgram(int prog) {
   if (link_status != GL_TRUE) FATAL("link failed");
 }
 void GetProgramiv(int p, int t, int *out) { glGetProgramiv(p, t, out); }
-void GetIntegerv(int t, int *out) const { glGetIntegerv(t, out); }
+void GetIntegerv(int t, int *out) { glGetIntegerv(t, out); }
 int GetAttribLocation (int prog, const string &name) { return glGetAttribLocation (prog, name.c_str()); }
 int GetUniformLocation(int prog, const string &name) { return glGetUniformLocation(prog, name.c_str()); }
 void Uniform1i(int u, int v) { glUniform1i(u, v); }

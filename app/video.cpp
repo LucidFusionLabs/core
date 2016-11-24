@@ -782,8 +782,8 @@ void GraphicsDevice::PopScissorStack() {
   else { Scissor(parent->Box()); DisableScissor(); }
 }
 
-Box GraphicsDevice::GetViewport() const { Box vp; GetIntegerv(ViewportBox, &vp.x); return vp; }
-Box GraphicsDevice::GetScissorBox() const {
+Box GraphicsDevice::GetViewport() { Box vp; GetIntegerv(ViewportBox, &vp.x); return vp; }
+Box GraphicsDevice::GetScissorBox() {
   auto &ss = scissor_stack.back();
   Box ret = ss.size() ? ss.back() : Box(-1,-1);
 #ifdef LFL_DEBUG

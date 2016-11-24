@@ -74,7 +74,7 @@ struct X11FrameworkModule : public Module {
     if (!(display = XOpenDisplay(NULL))) return ERRORv(-1, "XOpenDisplay");
     if (!(vi = glXChooseVisual(display, 0, att))) return ERRORv(-1, "glXChooseVisual");
     app->scheduler.system_event_socket = ConnectionNumber(display);
-    app->scheduler.AddMainWaitSocket(app->focused app->scheduler.system_event_socket, SocketSet::READABLE);
+    app->scheduler.AddMainWaitSocket(app->focused, app->scheduler.system_event_socket, SocketSet::READABLE);
     SystemNetwork::SetSocketCloseOnExec(app->scheduler.system_event_socket, true);
     INFO("X11VideoModule::Init()");
     return Video::CreateWindow(app->focused) ? 0 : -1;
@@ -218,17 +218,6 @@ void FrameScheduler::DelMainWaitSocket(Window *w, Socket fd) {
   if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd);
   wait_forever_sockets.Del(fd);
 }
-
-SystemMenuView::~SystemMenuView() {}
-SystemMenuView::SystemMenuView(const string &t, MenuItemVec i) {}
-void SystemMenuView::Show() {}
-unique_ptr<SystemMenuView> SystemMenuView::CreateEditMenu(vector<MenuItem> items) { return nullptr; }
-
-SystemAlertView::~SystemAlertView() {}
-SystemAlertView::SystemAlertView(AlertItemVec items) {}
-void SystemAlertView::Show(const string &arg) {}
-void SystemAlertView::ShowCB(const string &title, const string &arg, StringCB confirm_cb) {}
-string SystemAlertView::RunModal(const string &arg) { return ""; }
 
 unique_ptr<Module> CreateFrameworkModule() { return make_unique<X11FrameworkModule>(); }
 
