@@ -245,7 +245,7 @@ elseif(LFL_LINUX)
       COMMAND rm -rf ${pkgname}
       COMMAND mkdir -p ${pkgname}
       COMMAND cp -r ${CMAKE_CURRENT_SOURCE_DIR}/assets ${pkgname}
-      COMMAND for d in ${CMAKE_CURRENT_SOURCE_DIR}/drawable-\*\; do if [ -d $$d ]; then cp -R $$d ${pkgname}\; fi\; done
+      COMMAND for d in ${CMAKE_CURRENT_SOURCE_DIR}/drawable-*\; do if [ -d $$d ]; then cp -R $$d ${pkgname}\; fi\; done
       COMMAND cp ${LFL_APP_ASSET_FILES} ${pkgname}/assets
       COMMAND cp ${target} ${pkgname}
       COMMAND if [ ${copy_lfl_app_lib_files} ]; then cp ${LFL_APP_LIB_FILES} ${pkgname}\; fi)
