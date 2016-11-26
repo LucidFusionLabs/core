@@ -69,7 +69,7 @@ struct QtAlert {
 class QtDrawBorderDelegate : public QStyledItemDelegate {
   public:
   QtDrawBorderDelegate(QObject *parent=0) : QStyledItemDelegate(parent) {}
-  void paint(QPainter* painter, const QStyleOptionViewItem &option, const QModelIndex &index) const {
+  void paint(QPainter* painter, const QStyleOptionViewItem &option, const QModelIndex &index) const override {
     const QRect rect(option.rect);
     painter->setPen(Qt::gray);
     int col = index.column(), cols = index.model()->columnCount();
@@ -81,20 +81,35 @@ class QtDrawBorderDelegate : public QStyledItemDelegate {
   }
 }; // DrawBorderDelegate
 
+class QtTableModel : public QStandardItemModel {
+  public:
+  vector<Table> *v;
+  QtTableModel(vector<Table> *V) : v(V) {}
+  QVariant data(const QModelIndex &index, int role) const override {
+    if (role == Qt::ForegroundRole && index.column() == 1) {
+      int section = -1, row = -1;
+      Table::FindSectionOffset(*v, index.row(), &section, &row);
+      if (section >= 0 && row < (*v)[section].item.size() && (*v)[section].item[row].right_text.size())
+        return QColor(0, 122, 255);
+    }
+    return QStandardItemModel::data(index, role);
+  }
+};
+
 struct QtTable {
+  vector<Table> data;
   unique_ptr<QTableView> table;
-  unique_ptr<QStandardItemModel> model;
+  unique_ptr<QtTableModel> model;
   SystemTableView *lfl_self;
   IntIntCB delete_row_cb;
   string style;
   bool modal_nav=0;
   int editable_section=-1, editable_start_row=-1, selected_section=0, selected_row=0, second_col=0, row_height=30, data_rows=0;
-  vector<Table> data;
   vector<unique_ptr<QtTable>> dropdowns;
   QtDrawBorderDelegate drawborder;
 
   QtTable(SystemTableView *lself, const string &title, string s, vector<Table> item) :
-    table(make_unique<QTableView>()), model(make_unique<QStandardItemModel>()),
+    table(make_unique<QTableView>()), model(make_unique<QtTableModel>(&data)),
     lfl_self(lself), style(move(s)), data(move(item)) {
     modal_nav = (style == "modal" || style == "dropdown");
 
@@ -132,12 +147,39 @@ struct QtTable {
   QList<QStandardItem*> MakeRow(const TableItem &r) {
     auto key = make_unique<QStandardItem>
       (r.left_icon ? *app_images[r.left_icon-1] : QIcon(), MakeQString(r.key));
-    auto val = make_unique<QStandardItem>(MakeQString(r.val));
+    auto val = make_unique<QStandardItem>(MakeQString(r.right_text.size() ? r.right_text : r.val));
     key->setFlags(Qt::ItemIsEnabled);
     if (!(r.type == TableItem::TextInput || r.type == TableItem::NumberInput
-        || r.type == TableItem::PasswordInput)) val->setFlags(Qt::ItemIsEnabled); 
+          || r.type == TableItem::PasswordInput)) val->setFlags(Qt::ItemIsEnabled); 
     val->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    if (r.type == TableItem::Toggle) {
+      val->setText("");
+      val->setCheckable(true);
+      val->setCheckState(Qt::Unchecked);
+    }
     return QList<QStandardItem*>{ key.release(), val.release() };
+  }
+
+  int GetCollapsedRowId(int section, int row) const { return data[section].start_row + 1 + row; }
+
+  void AddRow(int section, TableItem item) {
+    if (section == data.size()) data.emplace_back();
+    CHECK_LT(section, data.size());
+    data[section].item.emplace_back(move(item));
+  }
+
+  void SetValue(int section, int row, const std::string &v) {
+    CheckExists(section, row);
+    auto &ci = data[section].item[row];
+    ci.val = v;
+    auto val = model->item(GetCollapsedRowId(section, row), 1);
+    if (ci.type == TableItem::Toggle) val->setCheckState(v == "1" ? Qt::Checked : Qt::Unchecked);
+    else                              val->setText(MakeQString(v));
+  }
+
+  void SetHidden(int section, int row, bool v) {
+    CheckExists(section, row);
+    table->setRowHidden(GetCollapsedRowId(section, row), v);
   }
 
   void CheckExists(int section, int r) {
@@ -262,6 +304,11 @@ StringPairVec SystemTableView::GetSectionText(int section) {
 }
 
 void SystemTableView::SetSectionValues(int section, const StringVec &item) {
+  auto table = FromVoid<QtTable*>(impl);
+  if (section == table->data.size()) table->data.emplace_back();
+  CHECK_LT(section, table->data.size());
+  CHECK_EQ(item.size(), table->data[section].item.size());
+  for (int i=0, l=table->data[section].item.size(); i != l; ++i) table->SetValue(section, i, item[i]);
 }
 
 void SystemTableView::DelNavigationButton(int align) {}
@@ -280,13 +327,14 @@ void SystemTableView::Show(bool show_or_hide) {
   }
 }
 
-void SystemTableView::AddRow(int section, TableItem item) {}
-string SystemTableView::GetKey(int section, int row) { return ""; }
-int SystemTableView::GetTag(int section, int row) { return 0; }
-void SystemTableView::SetTag(int section, int row, int val) {}
-void SystemTableView::SetValue(int section, int row, const string &val) {}
-void SystemTableView::SetHidden(int section, int row, bool val) {}
-void SystemTableView::SetTitle(const string &title) {}
+void SystemTableView::AddRow(int section, TableItem item) { FromVoid<QtTable*>(impl)->AddRow(section, move(item)); }
+string SystemTableView::GetKey(int section, int row) { auto table = FromVoid<QtTable*>(impl); table->CheckExists(section, row); return table->data[section].item[row].key; }
+int SystemTableView::GetTag(int section, int row) { auto table = FromVoid<QtTable*>(impl); table->CheckExists(section, row); return table->data[section].item[row].tag; }
+void SystemTableView::SetTag(int section, int row, int val) { auto table = FromVoid<QtTable*>(impl); table->CheckExists(section, row); table->data[section].item[row].tag = val; }
+void SystemTableView::SetValue(int section, int row, const string &val) { FromVoid<QtTable*>(impl)->SetValue(section, row, val); }
+void SystemTableView::SetHidden(int section, int row, bool val) { FromVoid<QtTable*>(impl)->SetHidden(section, row, val); }
+void SystemTableView::SetTitle(const string &title) { FromVoid<QtTable*>(impl)->table->setWindowTitle(MakeQString(title)); }
+
 PickerItem *SystemTableView::GetPicker(int section, int row) { return 0; }
 void SystemTableView::SetEditableSection(int section, int start_row, LFL::IntIntCB cb) {}
 void SystemTableView::SelectRow(int section, int row) {} 
