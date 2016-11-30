@@ -120,7 +120,7 @@ struct QtTable {
       model->appendRow(MakeRow(*s));
       for (auto rb = s->item.begin(), re = s->item.end(), r = rb; r != re; ++r) {
         if (r->hidden) hide_indices.push_back(s->start_row + (r - rb));
-        model->appendRow(MakeRow(*r));
+        model->appendRow(MakeRow(&(*r)));
       }
     }
 
@@ -144,15 +144,46 @@ struct QtTable {
     return QList<QStandardItem*>{ key.release(), val.release() };
   }
 
-  QList<QStandardItem*> MakeRow(const TableItem &r) {
+  void LoadCellItem(TableItem *item, const string **ok, int *ot, const std::string **ov) {
+    if (!item->loaded) {
+      item->loaded = true;
+      if (item->type == LFL::TableItem::DropdownKey || item->type == LFL::TableItem::DropdownValue ||
+          item->type == LFL::TableItem::FixedDropdown) {
+        item->ref = dropdowns.size();
+        auto dropdown_table = make_unique<QtTable>(nullptr, item->key, "dropdown", Table::Convert(item->MoveChildren()));
+        // if (item->depends.size()) dropdown_table.changed = [self makeChangedCB: *item];
+        // dropdown_table.completed = ^{ [self reloadRowAtIndexPath:path withRowAnimation:UITableViewRowAnimationNone]; };
+        dropdowns.emplace_back(move(dropdown_table));
+      }
+    }
+
+    const LFL::TableItem *ret;
+    bool dropdown_value = item->type == LFL::TableItem::DropdownValue, parent_dropdown = style == "dropdown";
+    if (dropdown_value || item->type == LFL::TableItem::DropdownKey || item->type == LFL::TableItem::FixedDropdown) {
+      CHECK_RANGE(item->ref, 0, dropdowns.size());
+      auto dropdown_table = dropdowns[item->ref].get();
+      CHECK_EQ(0, dropdown_table->selected_section);
+      CHECK_RANGE(dropdown_table->selected_row, 0, dropdown_table->data[0].item.size());
+      ret = &dropdown_table->data[0].item[dropdown_table->selected_row];
+    } else ret = item;
+
+    *ok = dropdown_value  ? &item->key                         : &ret->key;
+    *ov = parent_dropdown ? LFL::Singleton<std::string>::Get() : &ret->val;
+    *ot = parent_dropdown ? 0 : ret->type;
+  }
+
+  QList<QStandardItem*> MakeRow(TableItem *item) {
+    int type;
+    const string *ok, *ov;
+    LoadCellItem(item, &ok, &type, &ov);
     auto key = make_unique<QStandardItem>
-      (r.left_icon ? *app_images[r.left_icon-1] : QIcon(), MakeQString(r.key));
-    auto val = make_unique<QStandardItem>(MakeQString(r.right_text.size() ? r.right_text : r.val));
+      (item->left_icon ? *app_images[item->left_icon-1] : QIcon(), MakeQString(*ok));
+    auto val = make_unique<QStandardItem>(MakeQString(item->right_text.size() ? item->right_text : *ov));
     key->setFlags(Qt::ItemIsEnabled);
-    if (!(r.type == TableItem::TextInput || r.type == TableItem::NumberInput
-          || r.type == TableItem::PasswordInput)) val->setFlags(Qt::ItemIsEnabled); 
+    if (!(type == TableItem::TextInput || type == TableItem::NumberInput
+          || type == TableItem::PasswordInput)) val->setFlags(Qt::ItemIsEnabled); 
     val->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    if (r.type == TableItem::Toggle) {
+    if (type == TableItem::Toggle) {
       val->setText("");
       val->setCheckable(true);
       val->setCheckState(Qt::Unchecked);
@@ -168,13 +199,23 @@ struct QtTable {
     data[section].item.emplace_back(move(item));
   }
 
-  void SetValue(int section, int row, const std::string &v) {
+  void SetValue(int section, int row, const string &v) {
     CheckExists(section, row);
     auto &ci = data[section].item[row];
     ci.val = v;
     auto val = model->item(GetCollapsedRowId(section, row), 1);
-    if (ci.type == TableItem::Toggle) val->setCheckState(v == "1" ? Qt::Checked : Qt::Unchecked);
-    else                              val->setText(MakeQString(v));
+    if ((ci.type == TableItem::DropdownKey || ci.type == TableItem::DropdownValue ||
+        ci.type == TableItem::FixedDropdown) && ci.loaded) {
+      vector<string> vv = Split(v, ',');
+      CHECK_RANGE(ci.ref, 0, dropdowns.size());
+      auto dropdown_table = dropdowns[ci.ref].get();
+      CHECK_EQ(dropdown_table->data[0].item.size(), vv.size()-1) << ": " << v;
+      for (int j=1; j < vv.size(); ++j) dropdown_table->SetValue(0, j-1, vv[j]);
+    } else if (ci.type == TableItem::Toggle) val->setCheckState(v == "1" ? Qt::Checked : Qt::Unchecked);
+    else                                     val->setText(MakeQString(v));
+  }
+
+  void SetDropdown() {
   }
 
   void SetHidden(int section, int row, bool v) {
@@ -298,8 +339,34 @@ SystemTableView::~SystemTableView() { if (auto table = FromVoid<QtTable*>(impl))
 SystemTableView::SystemTableView(const string &title, const string &style, TableItemVec items, int second_col) :
   impl(new QtTable(this, title, style, Table::Convert(move(items)))) {}
 
-StringPairVec SystemTableView::GetSectionText(int section) {
+StringPairVec SystemTableView::GetSectionText(int ind) {
   StringPairVec ret;
+  auto table = FromVoid<QtTable*>(impl);
+  CHECK_LT(ind, table->data.size());
+
+  for (int start_row=table->data[ind].start_row, l=table->data[ind].item.size(), type, i=0; i != l; i++) {
+    const string *k, *v;
+    auto &compiled_item = table->data[ind].item[i];
+    table->LoadCellItem(&compiled_item, &k, &type, &v);
+
+    if (compiled_item.type == TableItem::DropdownKey || compiled_item.type == TableItem::DropdownValue ||
+        compiled_item.type == TableItem::FixedDropdown) {
+      CHECK_RANGE(compiled_item.ref, 0, table->dropdowns.size());
+      auto dropdown_table = table->dropdowns[compiled_item.ref].get();
+      CHECK_EQ(0, dropdown_table->selected_section);
+      CHECK_LT(dropdown_table->selected_row, dropdown_table->data[0].item.size());
+      ret.emplace_back(GetQString(dropdown_table->table->windowTitle()),
+                       dropdown_table->data[0].item[dropdown_table->selected_row].key);
+    }
+
+    string val;
+    if (type == TableItem::Toggle) {
+      val = table->model->itemFromIndex(table->model->index(start_row+i+1, 1))->checkState()
+        == Qt::Checked ? "1" : "";
+    } else val = GetQString(table->model->index(start_row+i+1, 1).data().toString());
+
+    ret.emplace_back(*k, val);
+  }
   return ret;
 }
 
@@ -355,7 +422,7 @@ void SystemTableView::ReplaceSection(int section, const string &h, int image, in
   t->data[section].item = move(item);
   t->data_rows += size_delta;
   for (int i=0; i < item_size; ++i) {
-    auto row = t->MakeRow(t->data[section].item[i]);
+    auto row = t->MakeRow(&t->data[section].item[i]);
     if (i < old_item_size) {
       t->model->setItem(section_start_row + 1 + i, 0, row[0]);
       t->model->setItem(section_start_row + 1 + i, 1, row[1]);

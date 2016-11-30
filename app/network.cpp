@@ -413,7 +413,7 @@ int SelectSocketSet::Select(int wait_time) {
     if (s.second.first & EXCEPTION) { xc++; FD_SET(s.first, &xfds); added = 1; }
     if (added && s.first > maxfd) maxfd = s.first;
   }
-  if (!rc && !wc && !xc) { MSleep(wait_time); return 0; }
+  if (!rc && !wc && !xc) { if (wait_time >= 0) MSleep(wait_time); return 0; }
   if ((select(maxfd+1, rc?&rfds:0, wc?&wfds:0, xc?&xfds:0, wait_time >= 0 ? &tv : 0)) == -1)
     return ERRORv(-1, "select: ", SystemNetwork::LastError(), " maxfd=", maxfd, " ", DebugString());
   return 0;
@@ -1406,7 +1406,7 @@ int FWrite(FILE *f, const string &s) {
 int FWrite(FILE *f, const string &s) { return write(fileno(f), s.data(), s.size()); }
 #endif
 bool FWriteSuccess(FILE *f, const string &s) { return FWrite(f, s) == s.size(); }
-bool FGets(char *buf, int len) { return NBFGets(stdin, buf, len); }
+bool FGets(char *buf, int len) { return NBFGets(stdin, buf, len, -1); }
 bool NBFGets(FILE *f, char *buf, int len, int timeout) {
 #ifndef LFL_WINDOWS
   int fd = fileno(f);
@@ -1427,6 +1427,14 @@ string PromptFGets(const string &p, int s) {
   string ret(s, 0);
   fgets(&ret[0], ret.size(), stdin);
   return ret;
+}
+
+bool FGetsLine(string *buf, int size) {
+  buf->resize(size);
+  if (!FGets(&(*buf)[0], size)) { buf->clear(); return false; }
+  int l = strlen(buf->data()), nll = ChompNewlineLength(buf->data(), l);
+  buf->resize(l - nll);
+  return nll > 0;
 }
 
 }; // namespace LFL

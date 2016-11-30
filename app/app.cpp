@@ -299,8 +299,10 @@ void Application::Log(int level, const char *file, int line, const char *message
 }
 
 void Application::WriteLogLine(const char *tbuf, const char *message, const char *file, int line) {
-  fprintf(stdout, "%s %s (%s:%d)\r\n", tbuf, message, file, line);
-  fflush(stdout);
+  if (app->logout) {
+    fprintf(app->logout, "%s %s (%s:%d)\r\n", tbuf, message, file, line);
+    fflush(app->logout);
+  }
   if (app && app->logfile) {
     fprintf(app->logfile, "%s %s (%s:%d)\r\n", tbuf, message, file, line);
     fflush(app->logfile);
@@ -315,7 +317,7 @@ void Application::WriteLogLine(const char *tbuf, const char *message, const char
 
 void Application::WriteDebugLine(const char *message, const char *file, int line) {
   bool write_to_logfile = false;
-  fprintf(stderr, "%s (%s:%d)\n", message, file, line);
+  if (app->logerr) fprintf(app->logerr, "%s (%s:%d)\n", message, file, line);
 #ifdef LFL_IOS
   write_to_logfile = true;
   NSLogString(StringPrintf("%s (%s:%d)", message, file, line));

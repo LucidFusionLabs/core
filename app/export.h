@@ -53,9 +53,9 @@
   #define tvirtual
 #endif
 
-#define memzero(x) memset(&x, 0, sizeof(x))
-#define memzeros(x) memset(x, 0, sizeof(x))
-#define memzerop(x) memset(x, 0, sizeof(*x))
+#define memzero(x) memset(&(x), 0, sizeof(x))
+#define memzeros(x) memset((x), 0, sizeof(x))
+#define memzerop(x) memset((x), 0, sizeof(*(x)))
 #define sizeofarray(x) (sizeof(x) / sizeof((x)[0]))
 
 #define M_TAU (M_PI + M_PI)

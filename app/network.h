@@ -606,6 +606,7 @@ bool FGets(char *buf, int size);
 int FWrite(FILE *f, const string &s);
 bool FWriteSuccess(FILE *f, const string &s);
 string PromptFGets(const string &p, int s=32);
+bool FGetsLine(string *out, int s=1024);
 
 }; // namespace LFL
 

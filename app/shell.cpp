@@ -61,10 +61,9 @@ Shell::Shell(Window *W) : parent(W) {
 }
 
 bool Shell::FGets() {
-  char buf[1024];
-  if (!LFL::FGets(buf, sizeof(buf))) return false;
-  ChompNewline(buf, strlen(buf));
-  Shell::Run(buf);
+  string cmd;
+  if (!FGetsLine(&cmd)) return false;
+  Shell::Run(cmd);
   return true;
 }
 

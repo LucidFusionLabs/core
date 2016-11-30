@@ -532,7 +532,7 @@ static std::vector<UIImage*> app_images;
     }
 
     const LFL::TableItem *ret;
-    bool dropdown_value = item->type == LFL::TableItem::DropdownValue;
+    bool dropdown_value = item->type == LFL::TableItem::DropdownValue, parent_dropdown = _style == "dropdown";
     if (dropdown_value || item->type == LFL::TableItem::DropdownKey || item->type == LFL::TableItem::FixedDropdown) {
       CHECK_RANGE(item->ref, 0, dropdowns.size());
       auto dropdown_table = dropdowns[item->ref];
@@ -541,7 +541,6 @@ static std::vector<UIImage*> app_images;
       ret = &dropdown_table->data[0].item[dropdown_table.selected_row];
     } else ret = item;
 
-    bool parent_dropdown = _style == "dropdown";
     *ok = dropdown_value  ? &item->key                         : &ret->key;
     *ot = parent_dropdown ? 0                                  :  ret->type;
     *ov = parent_dropdown ? LFL::Singleton<std::string>::Get() : &ret->val;

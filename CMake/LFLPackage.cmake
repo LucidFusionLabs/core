@@ -15,6 +15,9 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 if(LFL_EMSCRIPTEN)
+  function(lfl_post_build_copy_asset_bin target binname pkgname)
+  endfunction()
+
   function(lfl_post_build_copy_bin target binname pkgname)
   endfunction()
 
@@ -35,6 +38,9 @@ if(LFL_EMSCRIPTEN)
   endfunction()
 
 elseif(LFL_ANDROID)
+  function(lfl_post_build_copy_asset_bin target binname pkgname)
+  endfunction()
+
   function(lfl_post_build_copy_bin target binname pkgname)
   endfunction()
 
@@ -64,6 +70,9 @@ elseif(LFL_ANDROID)
   endfunction()
 
 elseif(LFL_IOS)
+  function(lfl_post_build_copy_asset_bin target binname pkgname)
+  endfunction()
+
   function(lfl_post_build_copy_bin target binname pkgname)
   endfunction()
 
@@ -132,6 +141,11 @@ elseif(LFL_IOS)
   endfunction()
 
 elseif(LFL_OSX)
+  function(lfl_post_build_copy_asset_bin target binname pkgname)
+    add_custom_command(TARGET ${target} POST_BUILD WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+      COMMAND cp ${binname} ${pkgname}.app/Contents/Resources/assets)
+  endfunction()
+
   function(lfl_post_build_copy_bin target binname pkgname)
     set(bin ${pkgname}.app/Contents/MacOS/${target})
 
@@ -215,6 +229,9 @@ elseif(LFL_OSX)
   endfunction()
 
 elseif(LFL_WINDOWS)
+  function(lfl_post_build_copy_asset_bin target binname pkgname)
+  endfunction()
+
   function(lfl_post_build_copy_bin target binname pkgname)
   endfunction()
 
@@ -231,6 +248,9 @@ elseif(LFL_WINDOWS)
   endfunction()
 
 elseif(LFL_LINUX)
+  function(lfl_post_build_copy_asset_bin target binname pkgname)
+  endfunction()
+
   function(lfl_post_build_copy_bin target binname pkgname)
     add_custom_command(TARGET ${target} POST_BUILD WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
       COMMAND cp ${binname} ${pkgname})
@@ -259,6 +279,9 @@ elseif(LFL_LINUX)
   endfunction()
 
 else()
+  function(lfl_post_build_copy_asset_bin target binname pkgname)
+  endfunction()
+
   function(lfl_post_build_copy_bin target binname pkgname)
   endfunction()
 

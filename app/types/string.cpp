@@ -722,6 +722,7 @@ template <class X> int ChompNewlineLength(const X *line, int len) {
   if (len > 1 && line[len-2] == '\r') ret++;
   return ret;
 }
+template int ChompNewlineLength(const char *line, int len);
 
 const char *IncrementNewline(const char *in) {
   if (*in == '\r') in++;

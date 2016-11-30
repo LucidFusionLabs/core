@@ -643,8 +643,8 @@ struct Window : public ::LFAppWindow {
 struct Application : public ::LFApp {
   string name, progname, startdir, bindir, assetdir, savedir;
   int pid=0, opengles_version=2, argc=0;
+  FILE *logfile=0, *logout=stdout, *logerr=stderr;
   const char* const* argv=0;
-  FILE *logfile=0;
   tm log_time;
   mutex log_mutex;
   Time time_started;
