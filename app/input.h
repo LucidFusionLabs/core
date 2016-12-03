@@ -136,7 +136,7 @@ struct TextboxController : public KeyboardController {
 struct MouseControllerCallback {
   typedef function<void()> CB;
   typedef function<bool()> BoolCB;
-  typedef function<void(int, int, int, int)> CoordCB;
+  typedef function<void(int, point, point, int)> CoordCB;
   enum { NONE=0, CB_VOID=1, CB_BOOL=2, CB_COORD=3 } type;
   UNION FunctionPointer {
     CB      cb_void;
@@ -159,14 +159,17 @@ struct MouseControllerCallback {
 
   void Destruct();
   void Assign(const MouseControllerCallback &c);
-  bool Run(const point &p, int button, int down, bool wrote=false);
+  bool Run(point p, point d, int button, int down, bool wrote=false);
 };
 
 struct MouseController {
   typedef MouseControllerCallback::CB CB;
   typedef MouseControllerCallback::BoolCB BoolCB;
   typedef MouseControllerCallback::CoordCB CoordCB;
-  struct Event { enum { Click=1, RightClick=2, Hover=3, Drag=4, Wheel=5, Zoom=6 }; };
+  struct Event {
+    enum { Click=1, RightClick=2, Hover=3, Drag=4, Wheel=5, Zoom=6 }; 
+    static const char *Name(int e);
+  };
   struct HitBox {
     Box box;
     int evtype, val=0;

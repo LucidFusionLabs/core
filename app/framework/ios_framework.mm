@@ -126,7 +126,7 @@ static const char* const* ios_argv = 0;
     self.glk_controller.resumeOnDidBecomeActive = NO;
     // self.glk_controller.wantsFullScreenLayout = YES;
 
-    self.glk_view = [[[GLKView alloc] initWithFrame:wbounds] autorelease];
+    self.glk_view = [[[LFGLKView alloc] initWithFrame:wbounds] autorelease];
     self.glk_view.context = context;
     self.glk_view.delegate = self.glk_controller;
     self.glk_view.enableSetNeedsDisplay = TRUE;
@@ -189,9 +189,12 @@ static const char* const* ios_argv = 0;
   }
 
   - (void)applicationWillResignActive:(UIApplication*)application {}
-  - (void)applicationDidBecomeActive:(UIApplication*)application {}
-  - (void)applicationWillEnterForeground:(UIApplication *)application{}
+  - (void)applicationDidBecomeActive:(UIApplication*)application {
+    INFO("applicationDidBecomeActive");
+    [self showKeyboard];
+  }
 
+  - (void)applicationWillEnterForeground:(UIApplication *)application{}
   - (void)applicationDidEnterBackground:(UIApplication *)application {
 #if 0
     bg_task = [application beginBackgroundTaskWithName:@"MyTask" expirationHandler:^{
@@ -272,6 +275,9 @@ static const char* const* ios_argv = 0;
 
   - (void)objcWindowSelect {}
   - (void)objcWindowFrame { [self.glk_view setNeedsDisplay]; }
+@end
+
+@implementation LFGLKView
 @end
 
 @implementation LFGLKViewController
@@ -487,7 +493,7 @@ static const char* const* ios_argv = 0;
   - (void)swipeLeft:  (UISwipeGestureRecognizer*)sender { [self swipe:LFL::point(-1, 0) withSender:sender]; }
   - (void)swipeRight: (UISwipeGestureRecognizer*)sender { [self swipe:LFL::point( 1, 0) withSender:sender]; }
   - (void)swipe:(LFL::point)p withSender:(UISwipeGestureRecognizer*)sender {
-    if (LFL::app->input->MouseSwipe(p, p) && uiapp.frame_on_mouse_input) [self.view setNeedsDisplay];
+    if (LFL::app->input->MouseSwipe(p, p) && uiapp.frame_on_mouse_input) [uiapp.glk_view setNeedsDisplay];
   }
 
   - (void)tapGesture: (UITapGestureRecognizer *)tapGestureRecognizer {
@@ -501,11 +507,20 @@ static const char* const* ios_argv = 0;
       s->gesture_dpad_y[dpind] = position.y;
 #endif
       int fired = LFL::app->input->MouseClick(1, 1, LFL::point(position.x, s->y + s->height - position.y));
-      if (fired && uiapp.frame_on_mouse_input) [self.view setNeedsDisplay];
+      if (fired && uiapp.frame_on_mouse_input) [uiapp.glk_view setNeedsDisplay];
     }
   }
 
   - (void)panGesture: (UIPanGestureRecognizer *)panGestureRecognizer {
+    if (panGestureRecognizer.state == UIGestureRecognizerStateEnded ||
+        panGestureRecognizer.state == UIGestureRecognizerStateFailed ||
+        panGestureRecognizer.state == UIGestureRecognizerStateCancelled) {
+      if (auto s = LFL::app->focused) { 
+        int fired = LFL::app->input->MouseClick(1, 0, s->mouse);
+        if (fired && uiapp.frame_on_mouse_input) [uiapp.glk_view setNeedsDisplay];
+      }
+      return;
+    }
     if (![panGestureRecognizer numberOfTouches]) return;
     UIView *v = [panGestureRecognizer view];
     CGPoint position = [panGestureRecognizer locationOfTouch:0 inView:v];
@@ -513,13 +528,13 @@ static const char* const* ios_argv = 0;
     int dpind = v.frame.origin.y == 0;
     if (!dpind) position = CGPointMake(uiapp.scale * (position.x + v.frame.origin.x), uiapp.scale * (position.y + v.frame.origin.y));
     else        position = CGPointMake(uiapp.scale * position.x, uiapp.scale * position.y);
-    if (panGestureRecognizer.state == UIGestureRecognizerStateChanged) {}
-    else if (panGestureRecognizer.state == UIGestureRecognizerStateEnded) velocity = CGPointMake(0, 0);
     if (auto s = LFL::app->focused) { 
       LFL::point pos = LFL::Floor(LFL::GetCGPoint(position));
       pos.y = s->y + s->height - pos.y;
-      int fired = LFL::app->input->MouseMove(pos, LFL::app->focused ? (pos - LFL::app->focused->mouse) : pos);
-      if (fired && uiapp.frame_on_mouse_input) [self.view setNeedsDisplay];
+      int fired = panGestureRecognizer.state == UIGestureRecognizerStateBegan ?
+        LFL::app->input->MouseClick(1, 1, pos) :
+        LFL::app->input->MouseMove(pos, pos - LFL::app->focused->mouse);
+      if (fired && uiapp.frame_on_mouse_input) [uiapp.glk_view setNeedsDisplay];
     }
   }
     #if 0
@@ -559,7 +574,7 @@ static const char* const* ios_argv = 0;
     CGFloat p_scale = 1.0 + (pinch_scale - pinch.scale);
     LFL::v2 p(uiapp.scale * pinch_point.x, uiapp.scale * pinch_point.y), d(p_scale, p_scale);
     int fired = LFL::app->input->MouseZoom(p, d);
-    if (fired && uiapp.frame_on_mouse_input) [self.view setNeedsDisplay];
+    if (fired && uiapp.frame_on_mouse_input) [uiapp.glk_view setNeedsDisplay];
     pinch_scale = p_scale;
   }
 @end
@@ -587,7 +602,8 @@ static const char* const* ios_argv = 0;
       s->gesture_dpad_x[dpind] = position.x;
       s->gesture_dpad_y[dpind] = position.y;
 #endif
-      int fired = LFL::app->input->MouseClick(1, 1, LFL::point(position.x, s->y + s->height - (int)position.y));
+      LFL::point p(position.x, s->y + s->height - (int)position.y);
+      int fired = LFL::app->input->MouseClick(1, 1, p);
       if (fired && uiapp.frame_on_mouse_input) [self.superview setNeedsDisplay];
     }
   }
@@ -606,11 +622,13 @@ static const char* const* ios_argv = 0;
       s->gesture_dpad_x[dpind] = 0;
       s->gesture_dpad_y[dpind] = 0;
 #endif
-      int fired = LFL::app->input->MouseClick(1, 0, LFL::point(position.x, s->y + s->height - position.y));
+      LFL::point p(position.x, s->y + s->height - position.y);
+      int fired = LFL::app->input->MouseClick(1, 0, p);
       if (fired && uiapp.frame_on_mouse_input) [self.superview setNeedsDisplay];
     }
   }
 
+#if 0
   - (void)touchesMoved:(NSSet *)touches withEvent:(UIEvent *)event {
     UITouch *touch = [touches anyObject];
     UIView *v = [touch view];
@@ -629,12 +647,24 @@ static const char* const* ios_argv = 0;
       if (fired && uiapp.frame_on_mouse_input) [self.superview setNeedsDisplay];
     }
   }
+#endif
 @end
 
 @implementation MyTextField
   - (void)deleteBackward {
     [super deleteBackward];
     [[LFUIApplication sharedAppDelegate] handleKey: LFL::Key::Backspace];
+  }
+
+  - (BOOL)canPerformAction:(SEL)action withSender:(id)sender {
+    return action == @selector(copy:) || action == @selector(paste:);
+  }
+
+  - (void)copy:(id)sender {
+    if (_copy_cb) _copy_cb();
+  }
+
+  - (void)onCustom:(id)sender {
   }
 @end
 

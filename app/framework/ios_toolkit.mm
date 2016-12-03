@@ -1180,6 +1180,25 @@ void Application::ShowSystemFontChooser(const FontDesc &cur_font, const StringVe
   [[LFUIApplication sharedAppDelegate].glk_view addSubview: font_chooser];
 }
 
+void Application::ShowSystemContextMenu(const MenuItemVec &items) {
+  auto uiapp = [LFUIApplication sharedAppDelegate];
+  UIMenuController* mc = [UIMenuController sharedMenuController];
+  vector<UIMenuItem*> menuitems;
+  for (auto &i : items) {
+    if (i.name == "Copy") { uiapp.text_field.copy_cb = i.cb; continue; }
+    UIMenuItem *mi = [[UIMenuItem alloc] initWithTitle: MakeNSString(i.name) action:@selector(onCustom:)];
+    menuitems.push_back(mi);
+  }
+  if (menuitems.size())
+    mc.menuItems = [NSArray arrayWithObjects:&menuitems[0] count:menuitems.size()];
+
+  auto w = app->focused;
+  float s = [uiapp getScale];
+  CGRect rect = CGRectMake(w->mouse.x / s, (w->height + w->y - w->mouse.y) / s, w->default_font->Height(), 100);
+  [mc setTargetRect:rect inView:GetTyped<GLKView*>(w->id)];
+  [mc setMenuVisible:![mc isMenuVisible] animated:TRUE];
+}
+
 int Application::LoadSystemImage(const string &n) {
   UIImage *image = [UIImage imageNamed:MakeNSString(n)];
   if (!image) return 0;

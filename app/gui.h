@@ -142,7 +142,7 @@ struct Widget {
     void LayoutDivideBottom(const Box &in, Box *top,  Box *bottom, int offset=0);
     void LayoutDivideLeft  (const Box &in, Box *left, Box *right,  int offset=0);
     void LayoutDivideRight (const Box &in, Box *left, Box *right,  int offset=0);
-    void DragCB(int b, int x, int y, int down);
+    void DragCB(int b, point p, point d, int down);
   };
 };
 
@@ -176,7 +176,7 @@ struct TextBox : public GUI, public TextboxController {
     shared_ptr<Texture> image;
     Control(Line *P, GUI *G, const Box3 &b, string, MouseControllerCallback);
     virtual ~Control() { if (line->parent->hover_control == this) line->parent->hover_control = 0; }
-    void Hover(int, int, int, int down) { line->parent->hover_control = down ? this : 0; }
+    void Hover(int, point, point, int down) { line->parent->hover_control = down ? this : 0; }
   };
 
   struct LineData {
@@ -298,6 +298,7 @@ struct TextBox : public GUI, public TextboxController {
     String16 text;
     float start_v_scrolled=0;
     int gui_ind=-1, scrolled=0;
+    bool explicitly_initiated=0;
     void Begin(float s) { end=beg; start_v_scrolled=s; scrolled=0; text.clear(); }
   };
 
@@ -381,10 +382,11 @@ struct TextArea : public TextBox {
   Lines line;
   LinesFrameBuffer line_fb;
   Time write_last=Time(0);
-  bool wrap_lines=1, write_timestamp=0, write_newline=1, reverse_line_fb=0, cursor_enabled=1, touch_toggles_keyboard=0;
+  bool wrap_lines=1, write_timestamp=0, write_newline=1, reverse_line_fb=0, cursor_enabled=1;
   int line_left=0, end_line_adjust=0, start_line_cutoff=0, end_line_cutoff=0;
   int extra_height=0, scroll_inc=10, scrolled_lines=0;
   float v_scrolled=0, h_scrolled=0, last_v_scrolled=0, last_h_scrolled=0;
+  function<bool(int, point, point, int)> drag_cb;
 
   TextArea(Window *W, const FontRef &F, int S, int LC);
   virtual ~TextArea() {}
@@ -428,7 +430,7 @@ struct TextArea : public TextBox {
 
   void InitSelection();
   void DrawSelection();
-  void DragCB(int button, int x, int y, int down);
+  void DragCB(int button, point p, point d, int down);
   void CopyText(const Selection::Point &beg, const Selection::Point &end);
   string CopyText(int beg_line_ind, int beg_char_ind, int end_line_end, int end_char_ind, bool add_nl);
   void InitContextMenu(const MouseController::CB &cb) { context_gui_ind = mouse.AddRightClickBox(box, cb); }
@@ -503,7 +505,7 @@ struct PropertyView : public TextView {
   void UpdateMapping(int width, int flag=0);
   int UpdateMappedLines(pair<int, int>, bool, bool, bool, bool, bool);
   void LayoutLine(Line *L, const NodeIndex &n, const point &p);
-  void HandleNodeControlClicked(Id id, int b, int x, int y, int down);
+  void HandleNodeControlClicked(Id id, int b, point p, point d, int down);
   void SelectionCB(const Selection::Point &p);
 };
 

@@ -229,10 +229,10 @@ void Widget::Divider::LayoutDivideRight(const Box &in, Box *left, Box *right, in
              MouseController::CoordCB(bind(&Widget::Divider::DragCB, this, _1, _2, _3, _4)));
 }
 
-void Widget::Divider::DragCB(int b, int x, int y, int down) {
-  int p = (horizontal ? y : -x) * (direction ? -1 : 1);
-  if (!changing && down) Assign(&start, &start_size, p, size);
-  size = max(0, (start_size + p - start));
+void Widget::Divider::DragCB(int b, point p, point d, int down) {
+  int v = (horizontal ? p.y : -p.x) * (direction ? -1 : 1);
+  if (!changing && down) Assign(&start, &start_size, v, size);
+  size = max(0, (start_size + v - start));
   Assign(&changing, &changed, bool(down), true);
 }
 
@@ -630,6 +630,20 @@ int TextBox::WriteHistory(const string &dir, const string &name, const string &h
 TextArea::TextArea(Window *W, const FontRef &F, int S, int LC) :
   TextBox(W, F, LC), line(this, S), line_fb(W->gd) {
   InitSelection();
+#ifdef LFL_MOBILE
+  drag_cb = [=](int, point p, point d, int down){
+    if (selection.explicitly_initiated) return false;
+    if (selection.Update(p, down)) app->ShowSystemContextMenu
+      (MenuItemVec{ MenuItem{"", "Copy", [=](){ selection.explicitly_initiated = true; } } });
+    if (d.y) {
+      float sl = float(d.y) / style.font->Height();
+      v_scrolled = Clamp(v_scrolled + sl * PercentOfLines(1), 0.0f, 1.0f);
+      UpdateScrolled();
+      if (!W->target_fps) app->scheduler.Wakeup(root);
+    }
+    return true;
+  };
+#endif
 }
 
 void TextArea::Write(const StringPiece &s, bool update_fb, bool release_fb) {
@@ -819,7 +833,7 @@ bool TextArea::GetGlyphFromCoordsOffset(const point &p, Selection::Point *out, i
 void TextArea::InitSelection() {
   wheel_gui_ind = mouse.AddWheelBox
     (Box(), MouseController::CoordCB
-     ([=](int button, int x, int y, int down) { if (y > 0) ScrollUp(); else ScrollDown(); }));
+     ([=](int button, point p, point d, int down) { if (d.y > 0) ScrollUp(); else ScrollDown(); }));
   selection.gui_ind = mouse.AddDragBox
     (Box(), MouseController::CoordCB(bind(&TextArea::DragCB, this, _1, _2, _3, _4)));
 }
@@ -832,15 +846,10 @@ void TextArea::DrawSelection() {
   gc.gd->SetColor(Color::white);
 }
 
-void TextArea::DragCB(int, int, int, int down) {
+void TextArea::DragCB(int b, point p, point d, int down) {
   if (!line.ring.size) return;
-  if (down) {
-    if (!Active()) Activate();
-#ifdef LFL_MOBILE
-    if (touch_toggles_keyboard) app->ToggleTouchKeyboard();
-    return;
-#endif
-  }
+  if (down) { if (!Active()) Activate(); }
+  if (drag_cb && drag_cb(b, p, d, down)) return;
 
   Selection *s = &selection;
   point last_end_click = s->end_click;
@@ -869,6 +878,8 @@ void TextArea::DragCB(int, int, int, int down) {
       Redraw();
     }
     CopyText(swap ? s->end : s->beg, swap ? s->beg : s->end);
+    selection.explicitly_initiated = false;
+    s->box = Box3();
   } else {
     LinesFrameBuffer *fb = GetFrameBuffer();
     int fh = style.font->Height(), h = box.h;
@@ -1066,12 +1077,12 @@ void PropertyView::LayoutLine(Line *L, const NodeIndex &ni, const point &p) {
   flow->AppendText(n->text);
 }
 
-void PropertyView::HandleNodeControlClicked(Id id, int b, int x, int y, int down) {
+void PropertyView::HandleNodeControlClicked(Id id, int b, point p, point d, int down) {
   if (!down) return;
   auto n = GetNode(id);
   auto fb = GetFrameBuffer();
   int h = fb->h, fh = style.font->Height(), depth = n->depth, added = 0;
-  // int line_no = RingIndex::Wrap((h - fb->scroll.y * h - y), h) / fh, child_line_no = line_no + 1;
+  // int line_no = RingIndex::Wrap((h - fb->scroll.y * h - p.y), h) / fh, child_line_no = line_no + 1;
   int line_no = last_first_line + (box.top() - root->mouse.y) / fh, child_line_no = line_no + 1;
   if (line_no == selected_line_no) selected_line_no = -1;
 

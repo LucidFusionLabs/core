@@ -427,12 +427,12 @@ int Input::MouseEventDispatch(InputEvent::Id event, const point &p, const point 
 
   if (auto mc = screen->active_controller) {
     if ((events = mc->SendMouseEvent(event, mc->parent_gui ? mc->parent_gui->RelativePosition(p) : p, d, down, 0))) {
-      InputDebug("Input::MouseEventDispatch sent MouseController[%p] events = %d", mc, events);
+      InputDebug("Input::MouseEventDispatch sent MouseController[%p] %s events = %d", mc, InputEvent::Name(event), events);
       return events;
     }
   } else for (auto b = screen->gui.begin(), e = screen->gui.end(), i = b; i != e; ++i) {
     if ((events = MouseEventDispatchGUI(event, p, d, down, *i, &active_guis))) {
-      InputDebug("Input::MouseEventDispatch sent GUI[%d] events = %d", i - b, events);
+      InputDebug("Input::MouseEventDispatch sent GUI[%d] %s events = %d", i - b, InputEvent::Name(event), events);
       return events;
     }
   }
@@ -469,16 +469,28 @@ void MouseControllerCallback::Assign(const MouseControllerCallback &c) {
   }
 }
 
-bool MouseControllerCallback::Run(const point &p, int button, int down, bool wrote) {
-  if (run_from_message_loop && !wrote) { app->RunInMainThread([=]{ Run(p, button, down, true); }); return false; }
+bool MouseControllerCallback::Run(point p, point d, int button, int down, bool wrote) {
+  if (run_from_message_loop && !wrote) { app->RunInMainThread([=]{ Run(p, d, button, down, true); }); return false; }
   bool ret = 1;
   switch (type) {
-    case CB_VOID:  cb.cb_void();                        break;
-    case CB_BOOL:  ret = cb.cb_bool();                  break;
-    case CB_COORD: cb.cb_coord(button, p.x, p.y, down); break;
-    default:                                            break;
+    case CB_VOID:  cb.cb_void();                    break;
+    case CB_BOOL:  ret = cb.cb_bool();              break;
+    case CB_COORD: cb.cb_coord(button, p, d, down); break;
+    default:                                        break;
   }
   return ret;
+}
+
+const char *MouseController::Event::Name(int e) {
+  switch(e) {
+    case Click:      return "Click";
+    case RightClick: return "RightClick";
+    case Hover:      return "Hover";
+    case Drag:       return "Drag";
+    case Wheel:      return "Wheel";
+    case Zoom:       return "Zoom";
+    default:         return "";
+  }
 }
 
 int MouseController::SendMouseEvent(InputEvent::Id event, const point &p, const point &dp, int down, int flag) {
@@ -494,7 +506,7 @@ int MouseController::SendMouseEvent(InputEvent::Id event, const point &p, const 
     h = VectorEraseIterSwapBack(&hover, h);
     if (e->deleted) continue;
     e->val = 0;
-    e->CB.Run(p, event, 0);
+    e->CB.Run(p, dp, event, 0);
     fired++;
   }
 
@@ -505,7 +517,8 @@ int MouseController::SendMouseEvent(InputEvent::Id event, const point &p, const 
         (!down && (e->evtype == Event::Click || e->evtype == Event::RightClick) &&
          e->CB.type != MouseControllerCallback::CB_COORD)) continue;
 
-    InputDebug("check %s within %s", p.DebugString().c_str(), e->box.DebugString().c_str());
+    InputDebug("%s check %s within %s (%s)", InputEvent::Name(event), p.DebugString().c_str(),
+               e->box.DebugString().c_str(), Event::Name(e->evtype));
     boxes_checked++;
     if (e->box.within(p)) {
       if (e->run_only_if_first && fired) continue;
@@ -522,7 +535,7 @@ int MouseController::SendMouseEvent(InputEvent::Id event, const point &p, const 
     if (thunk) {
       InputDebugIfDown("MouseController::Input %s RunCB %s",
                        p.DebugString().c_str(), e->box.DebugString().c_str());
-      if (!e->CB.Run(p, event, e_hover ? 1 : down)) continue;
+      if (!e->CB.Run(p, dp, event, e_hover ? 1 : down)) continue;
 
       if (e_hover) hover.push_back(ForwardIteratorFromReverse(e) - hit.data.begin());
       fired++;
@@ -532,8 +545,8 @@ int MouseController::SendMouseEvent(InputEvent::Id event, const point &p, const 
     }
   }
 
-  if (event == Mouse::Event::Motion) { for (auto d : drag) if (hit.data[d].CB.Run(p, event, down)) fired++; }
-  else if (!down && but1)            { for (auto d : drag) if (hit.data[d].CB.Run(p, event, down)) fired++; drag.clear(); }
+  if (event == Mouse::Event::Motion) { for (auto d : drag) if (hit.data[d].CB.Run(p, dp, event, down)) fired++; }
+  else if (!down && but1)            { for (auto d : drag) if (hit.data[d].CB.Run(p, dp, event, down)) fired++; drag.clear(); }
 
   InputDebugIfDown("MouseController::Input %s fired=%d, checked %zd of %zd hitboxes",
                    p.DebugString().c_str(), fired, boxes_checked, hit.data.size());

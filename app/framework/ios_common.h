@@ -20,6 +20,7 @@
 @end
 
 @interface MyTextField : UITextField {}
+  @property (nonatomic, assign) LFL::Callback copy_cb;
 @end
 
 @interface LFViewController : UIViewController<UIActionSheetDelegate> {}
@@ -30,6 +31,9 @@
   - (void)initNotifications;
   - (void)shutdownNotifications;
   - (void)shutdownGestureRecognizers;
+@end
+
+@interface LFGLKView : GLKView {}
 @end
 
 @interface LFGLKViewController : GLKViewController<GLKViewControllerDelegate, GLKViewDelegate> {}
