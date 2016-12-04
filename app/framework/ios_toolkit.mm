@@ -355,12 +355,13 @@ static std::vector<UIImage*> app_images;
   {
     std::vector<LFL::Table> data;
     std::vector<IOSTable*> dropdowns;
+    int double_section_row_height;
   }
 
   - (void)load:(LFL::SystemTableView*)lself withTitle:(const std::string&)title withStyle:(const std::string&)sty items:(std::vector<LFL::Table>)item {
     _lfl_self = lself;
     _style = sty;
-    _editable_section = _editable_start_row = -1;
+    _editable_section = _editable_start_row = double_section_row_height = -1;
     data = move(item);
     self.title = LFL::MakeNSString(title);
 
@@ -370,6 +371,8 @@ static std::vector<UIImage*> app_images;
     if (_style == "modal" || _style == "dropdown") {
       _modal_nav = [[UINavigationController alloc] initWithRootViewController: self];
       _modal_nav.modalTransitionStyle = UIModalTransitionStyleCoverVertical;
+    } else if (_style == "big") {
+      double_section_row_height = 0;
     }
 
     if (_second_col < 0) {
@@ -485,6 +488,7 @@ static std::vector<UIImage*> app_images;
     if (ci.hidden) return 0;
     else if (ci.gui_loaded &&
              (ci.type == LFL::TableItem::Picker || ci.type == LFL::TableItem::FontPicker)) return ci.height;
+    else if (double_section_row_height == path.section) return tableView.rowHeight * 2;
     else return tableView.rowHeight;
   }
 
@@ -1133,7 +1137,7 @@ void SystemNavigationView::Show(bool show_or_hide) {
     uiapp.top_controller = nav;
     [uiapp.controller presentViewController:nav animated:YES completion:nil];
   } else {
-    INFO("LFViewController.dismissViewController ", GetNSString(NSStringFromClass([uiapp.controller class])), " frame=", LFL::GetCGRect(uiapp.controller.view.frame).DebugString());
+    INFO("LFViewController.dismissViewController ", GetNSString(NSStringFromClass([uiapp.controller.presentedViewController class])), " frame=", LFL::GetCGRect(uiapp.controller.view.frame).DebugString());
     uiapp.top_controller = uiapp.root_controller;
     [uiapp.controller dismissViewControllerAnimated:YES completion:nil];
   }
@@ -1148,9 +1152,18 @@ SystemTableView *SystemNavigationView::Back() {
 }
 
 void SystemNavigationView::PushTableView(SystemTableView *t) {
-  if (!root) root = t;
+  if (!root && last_root == t) { root = t; return; }
+  auto nav = FromVoid<IOSNavigation*>(impl);
   if (t->show_cb) t->show_cb();
-  [FromVoid<IOSNavigation*>(impl) pushViewController: FromVoid<IOSTable*>(t->impl) animated: YES];
+  [nav pushViewController: FromVoid<IOSTable*>(t->impl) animated: YES];
+  if (root) return;
+  root = t;
+  int children = [nav.viewControllers count];
+  if (children == 1) return;
+  CHECK_EQ(2, children);
+  NSMutableArray *vc = [nav.viewControllers mutableCopy];
+  [vc removeObjectAtIndex:0];
+  nav.viewControllers = vc;
 }
 
 void SystemNavigationView::PushTextView(SystemTextView *t) {
@@ -1163,10 +1176,10 @@ void SystemNavigationView::PopToRoot() {
 }
 
 void SystemNavigationView::PopAll() {
-  if (root && !(root=0)) {
-    [FromVoid<IOSNavigation*>(impl) popToRootViewControllerAnimated: NO];
-    [FromVoid<IOSNavigation*>(impl) setViewControllers:@[] animated:NO];
-  }
+  if (!root) return;
+  last_root = root;
+  root = 0;
+  [FromVoid<IOSNavigation*>(impl) popToRootViewControllerAnimated: NO];
 }
 
 void SystemNavigationView::PopView(int n) {
@@ -1200,11 +1213,23 @@ void Application::ShowSystemContextMenu(const MenuItemVec &items) {
 }
 
 int Application::LoadSystemImage(const string &n) {
+  if (n.empty()) {
+    app_images.push_back(nullptr);
+    return app_images.size();
+  }
   UIImage *image = [UIImage imageNamed:MakeNSString(n)];
   if (!image) return 0;
   [image retain];
   app_images.push_back(image);
   return app_images.size();
+}
+
+void Application::UpdateSystemImage(int n, Texture &t) {
+  CHECK_RANGE(n-1, 0, app_images.size());
+  CGImageRef image = MakeCGImage(t);
+  if (app_images[n-1]) [app_images[n-1] release];
+  if (!(app_images[n-1] = [[UIImage alloc] initWithCGImage:image])) ERROR("UpdateSystemImage failed");
+  CGImageRelease(image);
 }
 
 }; // namespace LFL

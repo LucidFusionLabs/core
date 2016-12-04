@@ -182,6 +182,24 @@ NSArray *MakeNSStringArray(const vector<string> &v) {
   return [NSArray arrayWithObjects:&vs[0] count:vs.size()];
 }
 
+void CleanUpTextureCGImageData(void *info, const void *data, size_t size) {
+  delete [] static_cast<unsigned char *>(info);
+}
+
+CGImageRef MakeCGImage(Texture &t) {
+  if (!t.buf) return nullptr;
+  unsigned char *buf = t.ReleaseBuffer();
+  CGColorSpaceRef rgb = CGColorSpaceCreateDeviceRGB();
+  CGDataProviderRef provider = 
+    CGDataProviderCreateWithData(buf, buf, t.BufferSize(), CleanUpTextureCGImageData);
+  auto ret = CGImageCreate(t.width, t.height, 8, 8*t.PixelSize(), t.LineSize(), rgb,
+                           kCGBitmapByteOrderDefault /* | kCGImageAlphaLast */,
+                           provider, nullptr, false, kCGRenderingIntentDefault);
+  CGDataProviderRelease(provider);
+  CGColorSpaceRelease(rgb); 
+  return ret;
+}
+
 string Application::GetVersion() {
   NSDictionary *info = [[NSBundle mainBundle] infoDictionary];
   NSString *version = [info objectForKey:@"CFBundleVersion"];

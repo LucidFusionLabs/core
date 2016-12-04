@@ -718,6 +718,7 @@ struct Application : public ::LFApp {
   void ShowSystemFileChooser(bool files, bool dirs, bool multi, const StringVecCB&);
   void ShowSystemStatusBar(bool);
   int LoadSystemImage(const string &fn);
+  void UpdateSystemImage(int n, Texture&);
   bool OpenSystemAppPreferences();
 
   void OpenTouchKeyboard();
@@ -855,7 +856,7 @@ struct SystemTextView {
 struct SystemNavigationView {
   VoidPtr impl;
   bool shown=0;
-  SystemTableView *root=0;
+  SystemTableView *root=0, *last_root=0;
   virtual ~SystemNavigationView();
   SystemNavigationView();
 
