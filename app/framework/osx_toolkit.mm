@@ -281,18 +281,14 @@ static std::vector<NSImage*> app_images;
   @property (nonatomic, assign) LFL::SystemTableView *lfl_self;
   @property (nonatomic, assign) LFL::IntIntCB delete_row_cb;
   @property (nonatomic)         std::string style;
-  @property (nonatomic)         bool modal_nav;
   @property (nonatomic)         int editable_section, editable_start_row, selected_section, selected_row,
                                     second_col, row_height;
-  @property (copy)              void (^changed)(const std::string&);
-  @property (copy)              void (^completed)();
 @end
 
 @implementation OSXTable
   {
     int data_rows;
     std::vector<LFL::Table> data;
-    std::vector<OSXTable*> dropdowns;
   }
 
   - (id)init: (LFL::SystemTableView*)lself withTitle:(const std::string&)title andStyle:(const std::string&)style items:(std::vector<LFL::Table>)item { 
@@ -300,7 +296,6 @@ static std::vector<NSImage*> app_images;
     self.title = LFL::MakeNSString(title);
     _lfl_self = lself;
     _style = style;
-    _modal_nav = (_style == "modal" || _style == "dropdown");
     _editable_section = _editable_start_row = -1;
     _row_height = 30;
     data = move(item);
@@ -374,6 +369,13 @@ static std::vector<NSImage*> app_images;
     CHECK_LT(r, data[section].item.size());
   }
 
+  - (void)setKey:(int)section row:(int)r val:(const std::string&)v {
+    [self checkExists:section row:r];
+    auto &ci = data[section].item[r];
+    ci.key = v;
+    if (ci.depends.size()) [self applyItemDeps: ci withDep: v];
+  }
+
   - (std::string)getKey:(int)section row:(int)r {
     [self checkExists:section row:r];
     return data[section].item[r].key;
@@ -400,11 +402,6 @@ static std::vector<NSImage*> app_images;
     [self checkExists:section row:r];
     auto &ci = data[section].item[r];
     ci.val = v;
-    if (!ci.loaded) return;
-  }
-
-  - (void)setDropdown:(int)section row:(int)r index:(int)ind {
-    [self checkExists:section row:r];
   }
 
   - (void)setSectionValues:(int)section items:(const LFL::StringVec&)item {
@@ -414,6 +411,16 @@ static std::vector<NSImage*> app_images;
     for (int i=0, l=data[section].item.size(); i != l; ++i) [self setValue:section row:i val:item[i]];
     // [self.tableView reloadSections:[NSIndexSet indexSetWithIndex: section]
     //  withRowAnimation:UITableViewRowAnimationNone];
+  }
+
+  - (void)applyItemDeps:(const LFL::TableItem&)compiled_item withDep:(const std::string&)v {
+    LFL::Table::ApplyItemDepends(compiled_item, v, &data, [=](const LFL::TableItem::Dep &d){
+    #if 0
+      NSIndexPath *p = [NSIndexPath indexPathForRow:d.row inSection:d.section];
+      [self.tableView reloadRowsAtIndexPaths:@[p] withRowAnimation:UITableViewRowAnimationNone];
+    #endif
+    });
+    [_tableView reloadData];
   }
 
   - (LFL::PickerItem*)getPicker:(int)section row:(int)r { return nil; } 
@@ -691,6 +698,7 @@ void SystemTableView::AddRow(int section, TableItem item) { return [FromVoid<OSX
 string SystemTableView::GetKey(int section, int row) { return [FromVoid<OSXTable*>(impl) getKey:section row:row]; }
 int SystemTableView::GetTag(int section, int row) { return [FromVoid<OSXTable*>(impl) getTag:section row:row]; }
 void SystemTableView::SetTag(int section, int row, int val) { [FromVoid<OSXTable*>(impl) setTag:section row:row val:val]; }
+void SystemTableView::SetKey(int section, int row, const string &val) { [FromVoid<OSXTable*>(impl) setKey:section row:row val:val]; }
 void SystemTableView::SetValue(int section, int row, const string &val) { [FromVoid<OSXTable*>(impl) setValue:section row:row val:val]; }
 void SystemTableView::SetHidden(int section, int row, bool val) { [FromVoid<OSXTable*>(impl) setHidden:section row:row val:val]; }
 void SystemTableView::SetTitle(const string &title) { FromVoid<OSXTable*>(impl).title = LFL::MakeNSString(title); }
@@ -707,7 +715,6 @@ void SystemTableView::SelectRow(int section, int row) {
 
 void SystemTableView::BeginUpdates() { [FromVoid<OSXTable*>(impl).tableView beginUpdates]; }
 void SystemTableView::EndUpdates() { [FromVoid<OSXTable*>(impl).tableView endUpdates]; }
-void SystemTableView::SetDropdown(int section, int row, int val) { [FromVoid<OSXTable*>(impl) setDropdown:section row:row index:val]; }
 void SystemTableView::SetSectionValues(int section, const StringVec &item) { [FromVoid<OSXTable*>(impl) setSectionValues:section items:item]; }
 void SystemTableView::ReplaceSection(int section, const string &h, int image, int flag, TableItemVec item, Callback add_button)
 { [FromVoid<OSXTable*>(impl) replaceSection:section items:move(item) header:h image:image flag:flag addbutton:move(add_button)]; }
@@ -803,6 +810,7 @@ void Application::ShowSystemContextMenu(const MenuItemVec &items) {
   [LFL::GetTyped<GameView*>(app->focused->id) clearKeyModifiers];
 }
 
+void Application::UpdateSystemImage(int n, Texture&) {}
 int Application::LoadSystemImage(const string &n) {
   NSImage *image = [[NSImage alloc] initWithContentsOfFile: MakeNSString(StrCat(app->assetdir, "../", n)) ];
   if (!image) return 0;

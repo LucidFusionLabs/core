@@ -77,8 +77,41 @@ class QtDrawBorderDelegate : public QStyledItemDelegate {
     if (col == cols - 1)  painter->drawLine(rect.topRight(),   rect.bottomRight());
     if (index.row() == 0) painter->drawLine(rect.topLeft(),    rect.topRight());
     if (1)                painter->drawLine(rect.bottomLeft(), rect.bottomRight());
-    QStyledItemDelegate::paint(painter, option, index);
+    if (col == 1 && (index.flags() & Qt::ItemIsUserCheckable)) {
+      auto new_option = option;
+      const int text_margin = QApplication::style()->pixelMetric(QStyle::PM_FocusFrameHMargin) + 1;
+      new_option.rect = QStyle::alignedRect
+        (option.direction, Qt::AlignRight, QSize(option.decorationSize.width() + 5, option.decorationSize.height()),
+         QRect(option.rect.x() + text_margin, option.rect.y(), option.rect.width() - (2 * text_margin), option.rect.height()));
+      QStyledItemDelegate::paint(painter, new_option, index);
+    } else {
+      QStyledItemDelegate::paint(painter, option, index);
+    }
   }
+
+  bool editorEvent(QEvent *event, QAbstractItemModel *model, const QStyleOptionViewItem &option, const QModelIndex &index) override {
+    Q_ASSERT(event);
+    Q_ASSERT(model);
+    Qt::ItemFlags flags = model->flags(index);
+    if (!(flags & Qt::ItemIsUserCheckable) || !(flags & Qt::ItemIsEnabled)) return false;
+    QVariant value = index.data(Qt::CheckStateRole);
+    if (!value.isValid()) return false;
+
+    if (event->type() == QEvent::MouseButtonRelease) {
+      const int text_margin = QApplication::style()->pixelMetric(QStyle::PM_FocusFrameHMargin) + 1;
+      QRect check_rect = QStyle::alignedRect
+        (option.direction, Qt::AlignCenter, option.decorationSize,
+         QRect(option.rect.x()     + (2 * text_margin), option.rect.y(),
+               option.rect.width() - (2 * text_margin), option.rect.height()));
+      if (!check_rect.contains(static_cast<QMouseEvent*>(event)->pos())) return false;
+    } else if (event->type() == QEvent::KeyPress) {
+      if (static_cast<QKeyEvent*>(event)->key() != Qt::Key_Space &&
+          static_cast<QKeyEvent*>(event)->key() != Qt::Key_Select) return false;
+    } else return false;
+    Qt::CheckState state = Qt::CheckState(value.toInt()) == Qt::Checked ? Qt::Unchecked : Qt::Checked;
+    return model->setData(index, state, Qt::CheckStateRole);
+  }
+
 }; // DrawBorderDelegate
 
 class QtTableModel : public QStandardItemModel {
@@ -103,15 +136,12 @@ struct QtTable {
   SystemTableView *lfl_self;
   IntIntCB delete_row_cb;
   string style;
-  bool modal_nav=0;
   int editable_section=-1, editable_start_row=-1, selected_section=0, selected_row=0, second_col=0, row_height=30, data_rows=0;
-  vector<unique_ptr<QtTable>> dropdowns;
   QtDrawBorderDelegate drawborder;
 
   QtTable(SystemTableView *lself, const string &title, string s, vector<Table> item) :
     table(make_unique<QTableView>()), model(make_unique<QtTableModel>(&data)),
     lfl_self(lself), style(move(s)), data(move(item)) {
-    modal_nav = (style == "modal" || style == "dropdown");
 
     vector<int> hide_indices;
     for (auto sb = data.begin(), se = data.end(), s = sb; s != se; ++s) {
@@ -144,50 +174,21 @@ struct QtTable {
     return QList<QStandardItem*>{ key.release(), val.release() };
   }
 
-  void LoadCellItem(TableItem *item, const string **ok, int *ot, const std::string **ov) {
-    if (!item->loaded) {
-      item->loaded = true;
-      if (item->type == LFL::TableItem::DropdownKey || item->type == LFL::TableItem::DropdownValue ||
-          item->type == LFL::TableItem::FixedDropdown) {
-        item->ref = dropdowns.size();
-        auto dropdown_table = make_unique<QtTable>(nullptr, item->key, "dropdown", Table::Convert(item->MoveChildren()));
-        // if (item->depends.size()) dropdown_table.changed = [self makeChangedCB: *item];
-        // dropdown_table.completed = ^{ [self reloadRowAtIndexPath:path withRowAnimation:UITableViewRowAnimationNone]; };
-        dropdowns.emplace_back(move(dropdown_table));
-      }
-    }
-
-    const LFL::TableItem *ret;
-    bool dropdown_value = item->type == LFL::TableItem::DropdownValue, parent_dropdown = style == "dropdown";
-    if (dropdown_value || item->type == LFL::TableItem::DropdownKey || item->type == LFL::TableItem::FixedDropdown) {
-      CHECK_RANGE(item->ref, 0, dropdowns.size());
-      auto dropdown_table = dropdowns[item->ref].get();
-      CHECK_EQ(0, dropdown_table->selected_section);
-      CHECK_RANGE(dropdown_table->selected_row, 0, dropdown_table->data[0].item.size());
-      ret = &dropdown_table->data[0].item[dropdown_table->selected_row];
-    } else ret = item;
-
-    *ok = dropdown_value  ? &item->key                         : &ret->key;
-    *ov = parent_dropdown ? LFL::Singleton<std::string>::Get() : &ret->val;
-    *ot = parent_dropdown ? 0 : ret->type;
-  }
-
   QList<QStandardItem*> MakeRow(TableItem *item) {
-    int type;
-    const string *ok, *ov;
-    LoadCellItem(item, &ok, &type, &ov);
+    int type = item->type;
+    const string *ok = &item->key, *ov = &item->val;
     auto key = make_unique<QStandardItem>
       (item->left_icon ? *app_images[item->left_icon-1] : QIcon(), MakeQString(*ok));
     auto val = make_unique<QStandardItem>(MakeQString(item->right_text.size() ? item->right_text : *ov));
     key->setFlags(Qt::ItemIsEnabled);
     if (!(type == TableItem::TextInput || type == TableItem::NumberInput
           || type == TableItem::PasswordInput)) val->setFlags(Qt::ItemIsEnabled); 
-    val->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
     if (type == TableItem::Toggle) {
       val->setText("");
       val->setCheckable(true);
       val->setCheckState(Qt::Unchecked);
     }
+    val->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
     return QList<QStandardItem*>{ key.release(), val.release() };
   }
 
@@ -199,23 +200,16 @@ struct QtTable {
     data[section].item.emplace_back(move(item));
   }
 
+  void SetKey(int section, int row, const string &v) {
+  }
+
   void SetValue(int section, int row, const string &v) {
     CheckExists(section, row);
     auto &ci = data[section].item[row];
     ci.val = v;
     auto val = model->item(GetCollapsedRowId(section, row), 1);
-    if ((ci.type == TableItem::DropdownKey || ci.type == TableItem::DropdownValue ||
-        ci.type == TableItem::FixedDropdown) && ci.loaded) {
-      vector<string> vv = Split(v, ',');
-      CHECK_RANGE(ci.ref, 0, dropdowns.size());
-      auto dropdown_table = dropdowns[ci.ref].get();
-      CHECK_EQ(dropdown_table->data[0].item.size(), vv.size()-1) << ": " << v;
-      for (int j=1; j < vv.size(); ++j) dropdown_table->SetValue(0, j-1, vv[j]);
-    } else if (ci.type == TableItem::Toggle) val->setCheckState(v == "1" ? Qt::Checked : Qt::Unchecked);
-    else                                     val->setText(MakeQString(v));
-  }
-
-  void SetDropdown() {
+    if (ci.type == TableItem::Toggle) val->setCheckState(v == "1" ? Qt::Checked : Qt::Unchecked);
+    else                              val->setText(MakeQString(v));
   }
 
   void SetHidden(int section, int row, bool v) {
@@ -344,20 +338,10 @@ StringPairVec SystemTableView::GetSectionText(int ind) {
   auto table = FromVoid<QtTable*>(impl);
   CHECK_LT(ind, table->data.size());
 
-  for (int start_row=table->data[ind].start_row, l=table->data[ind].item.size(), type, i=0; i != l; i++) {
-    const string *k, *v;
+  for (int start_row=table->data[ind].start_row, l=table->data[ind].item.size(), i=0; i != l; i++) {
     auto &compiled_item = table->data[ind].item[i];
-    table->LoadCellItem(&compiled_item, &k, &type, &v);
-
-    if (compiled_item.type == TableItem::DropdownKey || compiled_item.type == TableItem::DropdownValue ||
-        compiled_item.type == TableItem::FixedDropdown) {
-      CHECK_RANGE(compiled_item.ref, 0, table->dropdowns.size());
-      auto dropdown_table = table->dropdowns[compiled_item.ref].get();
-      CHECK_EQ(0, dropdown_table->selected_section);
-      CHECK_LT(dropdown_table->selected_row, dropdown_table->data[0].item.size());
-      ret.emplace_back(GetQString(dropdown_table->table->windowTitle()),
-                       dropdown_table->data[0].item[dropdown_table->selected_row].key);
-    }
+    int type = compiled_item.type;
+    const string *k = &compiled_item.key, *v = &compiled_item.val;
 
     string val;
     if (type == TableItem::Toggle) {
@@ -365,6 +349,7 @@ StringPairVec SystemTableView::GetSectionText(int ind) {
         == Qt::Checked ? "1" : "";
     } else val = GetQString(table->model->index(start_row+i+1, 1).data().toString());
 
+    if (compiled_item.dropdown_key.size()) ret.emplace_back(compiled_item.dropdown_key, *k);
     ret.emplace_back(*k, val);
   }
   return ret;
@@ -398,6 +383,7 @@ void SystemTableView::AddRow(int section, TableItem item) { FromVoid<QtTable*>(i
 string SystemTableView::GetKey(int section, int row) { auto table = FromVoid<QtTable*>(impl); table->CheckExists(section, row); return table->data[section].item[row].key; }
 int SystemTableView::GetTag(int section, int row) { auto table = FromVoid<QtTable*>(impl); table->CheckExists(section, row); return table->data[section].item[row].tag; }
 void SystemTableView::SetTag(int section, int row, int val) { auto table = FromVoid<QtTable*>(impl); table->CheckExists(section, row); table->data[section].item[row].tag = val; }
+void SystemTableView::SetKey(int section, int row, const string &val) { FromVoid<QtTable*>(impl)->SetKey(section, row, val); }
 void SystemTableView::SetValue(int section, int row, const string &val) { FromVoid<QtTable*>(impl)->SetValue(section, row, val); }
 void SystemTableView::SetHidden(int section, int row, bool val) { FromVoid<QtTable*>(impl)->SetHidden(section, row, val); }
 void SystemTableView::SetTitle(const string &title) { FromVoid<QtTable*>(impl)->table->setWindowTitle(MakeQString(title)); }
@@ -407,7 +393,6 @@ void SystemTableView::SetEditableSection(int section, int start_row, LFL::IntInt
 void SystemTableView::SelectRow(int section, int row) {} 
 void SystemTableView::BeginUpdates() {}
 void SystemTableView::EndUpdates() {}
-void SystemTableView::SetDropdown(int section, int row, int val) {}
 
 void SystemTableView::ReplaceSection(int section, const string &h, int image, int flag, TableItemVec item, Callback add_button) {
   auto t = FromVoid<QtTable*>(impl);
@@ -484,6 +469,9 @@ void Application::ShowSystemContextMenu(const vector<MenuItem>&items) {}
 int Application::LoadSystemImage(const string &n) {
   app_images.emplace_back(make_unique<QIcon>(MakeQString(StrCat(app->assetdir, "../", n))));
   return app_images.size();
+}
+
+void Application::UpdateSystemImage(int n, Texture &t) {
 }
 
 }; // namespace LFL

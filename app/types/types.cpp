@@ -154,6 +154,16 @@ void RingSampler::Handle::CopyFrom(const RingSampler::Handle *src) {
   for (int i=0; i<B; i++) Write(0.0);
 }
 
+void TableItem::AssignDep(const TableItem::Dep &d) {
+  if (1)            hidden     = d.hidden;
+  if (d.left_icon)  left_icon  = d.left_icon  == -1 ? 0 : d.left_icon;
+  if (d.right_icon) right_icon = d.right_icon == -1 ? 0 : d.right_icon;
+  if (d.key.size()) key        = d.key;
+  if (d.cb)         cb         = d.cb;
+  if (d.type)       type       = d.type;
+  if (1)            val        = d.val;
+}
+
 vector<Table> Table::Convert(vector<TableItem> in) {
   vector<Table> ret;
   ret.emplace_back();
@@ -171,6 +181,18 @@ void Table::FindSectionOffset(const vector<Table> &data, int collapsed_row, int 
   CHECK_NE(data.begin(), it);
   *section_out = (it != data.end() ? (it - data.begin()) : data.size()) - 1;
   *row_out = collapsed_row - data[*section_out].start_row - 1;
+}
+
+void Table::ApplyItemDepends(const TableItem &in, const string &v, vector<Table> *out, function<void(const TableItem::Dep&)> f) {
+  auto it = in.depends.find(v);
+  if (it == in.depends.end()) return;
+  for (auto &d : it->second) {
+    CHECK_LT(d.section, out->size());
+    CHECK_LT(d.row, (*out)[d.section].item.size());
+    auto &ci = (*out)[d.section].item[d.row];
+    ci.AssignDep(d);
+    if (f) f(d);
+  }
 }
 
 }; // namespace LFL

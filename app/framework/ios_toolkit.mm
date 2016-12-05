@@ -340,21 +340,17 @@ static std::vector<UIImage*> app_images;
 @interface IOSTable : UITableViewController
   @property (nonatomic, retain) UIView *header;
   @property (nonatomic, retain) UILabel *header_label;
-  @property (nonatomic, retain) UINavigationController *modal_nav;
   @property (nonatomic, assign) IOSToolbar *toolbar;
   @property (nonatomic, assign) LFL::SystemTableView *lfl_self;
   @property (nonatomic, assign) LFL::IntIntCB delete_row_cb;
   @property (nonatomic)         std::string style;
   @property (nonatomic)         int editable_section, editable_start_row, selected_section, selected_row,
                                     second_col;
-  @property (copy)              void (^changed)(const std::string&);
-  @property (copy)              void (^completed)();
 @end
 
 @implementation IOSTable
   {
     std::vector<LFL::Table> data;
-    std::vector<IOSTable*> dropdowns;
     int double_section_row_height;
   }
 
@@ -366,14 +362,9 @@ static std::vector<UIImage*> app_images;
     self.title = LFL::MakeNSString(title);
 
     if (_style != "indent") self.tableView.separatorInset = UIEdgeInsetsZero;
+    if (_style == "big") double_section_row_height = 0;
     [self.tableView setSeparatorStyle:UITableViewCellSeparatorStyleSingleLine];
     [self.tableView setSeparatorColor:[UIColor grayColor]];
-    if (_style == "modal" || _style == "dropdown") {
-      _modal_nav = [[UINavigationController alloc] initWithRootViewController: self];
-      _modal_nav.modalTransitionStyle = UIModalTransitionStyleCoverVertical;
-    } else if (_style == "big") {
-      double_section_row_height = 0;
-    }
 
     if (_second_col < 0) {
       UIFont *font = [UIFont boldSystemFontOfSize:[UIFont labelFontSize]];
@@ -411,6 +402,13 @@ static std::vector<UIImage*> app_images;
     CHECK_LT(r, data[section].item.size());
   }
 
+  - (void)setKey:(int)section row:(int)r val:(const std::string&)v {
+    [self checkExists:section row:r];
+    auto &ci = data[section].item[r];
+    ci.key = v;
+    if (ci.depends.size()) [self applyItemDeps: ci withDep: v];
+  }
+
   - (std::string)getKey:(int)section row:(int)r {
     [self checkExists:section row:r];
     return data[section].item[r].key;
@@ -435,36 +433,6 @@ static std::vector<UIImage*> app_images;
     [self checkExists:section row:r];
     auto &ci = data[section].item[r];
     ci.val = v;
-    if (!ci.loaded) return;
-    if (ci.type == LFL::TableItem::DropdownKey || ci.type == LFL::TableItem::DropdownValue ||
-        ci.type == LFL::TableItem::FixedDropdown) {
-      std::vector<std::string> vv=LFL::Split(v, ',');
-      CHECK_RANGE(ci.ref, 0, dropdowns.size());
-      auto dropdown_table = dropdowns[ci.ref];
-      CHECK_EQ(dropdown_table->data[0].item.size(), vv.size()-1) << ": " << v;
-      for (int j=1; j < vv.size(); ++j) dropdown_table->data[0].item[j-1].val = vv[j];
-    } else if (ci.type == LFL::TableItem::Picker) {
-    }
-  }
-
-  - (void)setDropdown:(int)section row:(int)r index:(int)ind {
-    [self checkExists:section row:r];
-    NSIndexPath *path = [NSIndexPath indexPathForRow:r inSection:section];
-    UITableViewCell *cell = [self.tableView cellForRowAtIndexPath: path];
-    int type=0;
-    const std::string *k=0, *v=0;
-    auto &ci = data[path.section].item[path.row];
-    [self loadCellItem:cell withPath:path withItem:&ci outK:&k outT:&type outV:&v];
-    if (ci.type == LFL::TableItem::DropdownKey || ci.type == LFL::TableItem::DropdownValue ||
-        ci.type == LFL::TableItem::FixedDropdown) {
-      CHECK_RANGE(ci.ref, 0, dropdowns.size());
-      auto dropdown_table = dropdowns[ci.ref];
-      CHECK_EQ(0, dropdown_table.selected_section);
-      CHECK_LT(ind, dropdown_table->data[0].item.size());
-      dropdown_table.selected_row = ind;
-      [self.tableView reloadRowsAtIndexPaths:@[path] withRowAnimation:UITableViewRowAnimationNone];
-      if (dropdown_table.changed) dropdown_table.changed(dropdown_table->data[0].item[ind].key);
-    } 
   }
 
   - (void)setSectionValues:(int)section items:(const LFL::StringVec&)item {
@@ -517,53 +485,20 @@ static std::vector<UIImage*> app_images;
     }
   }
 
-  - (void)loadCellItem:(UITableViewCell*)cell withPath:(NSIndexPath*)path withItem:(LFL::TableItem*)item
-                       outK:(const std::string**)ok outT:(int*)ot outV:(const std::string**)ov {
-    if (!item->loaded) {
-      item->loaded = true;
-      if (item->type == LFL::TableItem::DropdownKey || item->type == LFL::TableItem::DropdownValue ||
-          item->type == LFL::TableItem::FixedDropdown) {
-        item->ref = dropdowns.size();
-        auto dropdown_table = [[IOSTable alloc] initWithStyle: UITableViewStyleGrouped];
-        [dropdown_table load:nullptr withTitle:item->key withStyle:"dropdown" items:LFL::Table::Convert(item->MoveChildren())];
-        [dropdown_table loadNavigationButton:
-          LFL::TableItem("Back", LFL::TableItem::Button, "", "", 0, 0, 0, [=](){ [dropdown_table show: false]; })
-          withAlign: LFL::HAlign::Left];
-        if (item->depends.size()) dropdown_table.changed = [self makeChangedCB: *item];
-        dropdown_table.completed = ^{ [self reloadRowAtIndexPath:path withRowAnimation:UITableViewRowAnimationNone]; };
-        dropdowns.push_back(dropdown_table);
-      }
-    }
-
-    const LFL::TableItem *ret;
-    bool dropdown_value = item->type == LFL::TableItem::DropdownValue, parent_dropdown = _style == "dropdown";
-    if (dropdown_value || item->type == LFL::TableItem::DropdownKey || item->type == LFL::TableItem::FixedDropdown) {
-      CHECK_RANGE(item->ref, 0, dropdowns.size());
-      auto dropdown_table = dropdowns[item->ref];
-      CHECK_EQ(0, dropdown_table.selected_section);
-      CHECK_RANGE(dropdown_table.selected_row, 0, dropdown_table->data[0].item.size());
-      ret = &dropdown_table->data[0].item[dropdown_table.selected_row];
-    } else ret = item;
-
-    *ok = dropdown_value  ? &item->key                         : &ret->key;
-    *ot = parent_dropdown ? 0                                  :  ret->type;
-    *ov = parent_dropdown ? LFL::Singleton<std::string>::Get() : &ret->val;
-  }
-
   - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)path {
     static NSString *cellIdentifier = @"cellIdentifier";
     UITableViewCell *cell = [self.tableView dequeueReusableCellWithIdentifier:cellIdentifier];
     if (cell) { [cell release]; cell = nil; }
     if (cell == nil) {
-      int type = 0, row = path.row, section = path.section;
+      int row = path.row, section = path.section;
       CHECK_LT(section, data.size());
       CHECK_LT(row, data[section].item.size());
       cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:cellIdentifier];
       cell.selectionStyle = UITableViewCellSelectionStyleNone;
 
-      const std::string *k=0, *v=0;
       auto &compiled_item = data[section].item[row];
-      [self loadCellItem:cell withPath:path withItem:&compiled_item outK:&k outT:&type outV:&v];
+      const std::string *k = &compiled_item.key, *v = &compiled_item.val;
+      int type = compiled_item.type;
       compiled_item.gui_loaded = true;
       UIColor *blue = [UIColor colorWithRed:0.0/255 green:122.0/255 blue:255.0/255 alpha:1];
 
@@ -574,7 +509,7 @@ static std::vector<UIImage*> app_images;
         }
       }
 
-      if (compiled_item.type == LFL::TableItem::DropdownKey || compiled_item.type == LFL::TableItem::DropdownValue) {
+      if (compiled_item.dropdown_key.size()) {
         int w = 10, x = _second_col ? _second_col - w : [LFL::MakeNSString(*k) sizeWithAttributes:
           @{NSFontAttributeName:[UIFont boldSystemFontOfSize:[UIFont labelFontSize]]}].width + 20 +
           (cell.imageView.image ? 60 : 0);
@@ -583,8 +518,6 @@ static std::vector<UIImage*> app_images;
         if (compiled_item.cb) {
           [button addTarget:button action:@selector(buttonClicked:) forControlEvents:UIControlEventTouchUpInside];
           button.cb = [=](){ data[section].item[row].cb(); };
-        } else {
-          [button addTarget:self action:@selector(dropDownClicked:) forControlEvents:UIControlEventTouchUpInside];
         }
         [button setTag: compiled_item.ref];
         [cell.contentView addSubview: button];
@@ -705,7 +638,7 @@ static std::vector<UIImage*> app_images;
         cell.textLabel.text = LFL::MakeNSString(*k);
       }
 
-      if (compiled_item.type == LFL::TableItem::DropdownKey && cell.textLabel.text.length) {
+      if (compiled_item.dropdown_key.size() && cell.textLabel.text.length) {
         cell.textLabel.textColor = blue;
         cell.textLabel.text = [NSString stringWithFormat:@"%@  \U000002C5", cell.textLabel.text];
       }
@@ -834,15 +767,6 @@ static std::vector<UIImage*> app_images;
     _selected_row = path.row;
     _selected_section = path.section;
     auto &compiled_item = data[path.section].item[path.row];
-    if (_modal_nav) {
-      [self show: false];
-      if (_changed) {
-        [self.tableView beginUpdates];
-        _changed(compiled_item.key);
-        [self.tableView endUpdates];
-      }
-      if (_completed) _completed();
-    }
     if (compiled_item.type == LFL::TableItem::Command || compiled_item.type == LFL::TableItem::Button) {
       compiled_item.cb();
     } else if (compiled_item.type == LFL::TableItem::Label && path.row + 1 < data[path.section].item.size()) {
@@ -857,17 +781,8 @@ static std::vector<UIImage*> app_images;
 
   - (void)show:(bool)show_or_hide {
     auto uiapp = [LFUIApplication sharedAppDelegate];
-    if (show_or_hide) {
-      if (_modal_nav) {
-        if (auto nav = LFL::objc_dynamic_cast<IOSNavigation>(uiapp.top_controller)) [nav pushViewController:self animated:YES];
-        else [uiapp.top_controller presentViewController:self.modal_nav animated:YES completion:nil];
-      } else [uiapp.glk_view addSubview: self.tableView];
-    } else {
-      if (_modal_nav) {
-        if (auto nav = LFL::objc_dynamic_cast<IOSNavigation>(uiapp.top_controller)) [nav popViewControllerAnimated:YES];
-        else [uiapp.top_controller dismissViewControllerAnimated:YES completion:nil];
-      } else [self.tableView removeFromSuperview];
-    }
+    if (show_or_hide) [uiapp.glk_view addSubview: self.tableView];
+    else              [self.tableView removeFromSuperview];
   }
 
   - (void)viewWillAppear:   (BOOL)animated { [super viewWillAppear:    animated]; if (_toolbar) [_toolbar show: true];  }
@@ -876,14 +791,6 @@ static std::vector<UIImage*> app_images;
   - (void)textFieldDidChange:(IOSTextField*)sender {
     _lfl_self->changed = true;
     [sender textFieldDidChange: sender];
-  }
-
-  - (void)dropDownClicked:(IOSButton *)sender {
-    _lfl_self->changed = true;
-    int dropdown_ind = sender.tag;
-    CHECK_RANGE(dropdown_ind, 0, dropdowns.size());
-    auto dropdown_table = dropdowns[dropdown_ind];
-    [dropdown_table show:true];
   }
 
   - (void)segmentedControlClicked:(IOSSegmentedControl *)segmented_control {
@@ -928,20 +835,9 @@ static std::vector<UIImage*> app_images;
     for (int i=0, l=data[ind].item.size(); i != l; i++) {
       NSIndexPath *path = [NSIndexPath indexPathForRow: i inSection: ind];
       UITableViewCell *cell = [self.tableView cellForRowAtIndexPath: path];
-      int type=0;
-      const std::string *k=0, *v=0;
       auto &compiled_item = data[path.section].item[path.row];
-      [self loadCellItem:cell withPath:path withItem:&compiled_item outK:&k outT:&type outV:&v];
-
-      if (compiled_item.type == LFL::TableItem::DropdownKey || compiled_item.type == LFL::TableItem::DropdownValue ||
-          compiled_item.type == LFL::TableItem::FixedDropdown) {
-        CHECK_RANGE(compiled_item.ref, 0, dropdowns.size());
-        auto dropdown_table = dropdowns[compiled_item.ref];
-        CHECK_EQ(0, dropdown_table.selected_section);
-        CHECK_LT(dropdown_table.selected_row, dropdown_table->data[0].item.size());
-        ret.emplace_back(LFL::GetNSString(dropdown_table.title),
-                         dropdown_table->data[0].item[dropdown_table.selected_row].key);
-      }
+      const std::string *k = &compiled_item.key, *v = &compiled_item.val;
+      int type = compiled_item.type;
 
       std::string val;
       if (!compiled_item.gui_loaded) {
@@ -966,36 +862,21 @@ static std::vector<UIImage*> app_images;
         IOSPicker *picker_control = [[cell.contentView subviews] lastObject];
         val = [picker_control getItem]->PickedString();
       }
+
+      if (compiled_item.dropdown_key.size()) ret.emplace_back(compiled_item.dropdown_key, *k);
       ret.emplace_back(*k, val);
     }
     return ret;
   }
 
-  - (void(^)(const std::string&)) makeChangedCB: (const LFL::TableItem&)compiled_item  {
-    return Block_copy(^(const std::string &v){
-      auto it = compiled_item.depends.find(v);
-      if (it == compiled_item.depends.end()) return;
-      for (auto &c : it->second) {
-        CHECK_LT(c.section, data.size());
-        CHECK_LT(c.row, data[c.section].item.size());
-        auto &ci = data[c.section].item[c.row];
-        bool dropdown = c.type == LFL::TableItem::DropdownKey || c.type == LFL::TableItem::DropdownValue ||
-                        c.type == LFL::TableItem::FixedDropdown;
+  - (void(^)(const std::string&)) makeChangedCB: (const LFL::TableItem&)compiled_item {
+    return Block_copy(^(const std::string &v){ [self applyItemDeps: compiled_item withDep: v]; });
+  }
 
-        if (1)            ci.hidden     = c.hidden;
-        if (c.left_icon)  ci.left_icon  = c.left_icon  == -1 ? 0 : c.left_icon;
-        if (c.right_icon) ci.right_icon = c.right_icon == -1 ? 0 : c.right_icon;
-        if (c.key.size()) ci.key        = c.key;
-        if (c.cb)         ci.cb         = c.cb;
-        if (c.type) {     ci.type       = c.type;
-          if (dropdown) [self setDropdown:c.section row:c.row index:0];
-        }
-        if (dropdown) [self setValue:c.section row:c.row val:c.val];
-        else          ci.val = c.val;
-
-        NSIndexPath *p = [NSIndexPath indexPathForRow:c.row inSection:c.section];
-        [self.tableView reloadRowsAtIndexPaths:@[p] withRowAnimation:UITableViewRowAnimationNone];
-      }
+  - (void)applyItemDeps:(const LFL::TableItem&)compiled_item withDep:(const std::string&)v {
+    LFL::Table::ApplyItemDepends(compiled_item, v, &data, [=](const LFL::TableItem::Dep &d){
+      NSIndexPath *p = [NSIndexPath indexPathForRow:d.row inSection:d.section];
+      [self.tableView reloadRowsAtIndexPaths:@[p] withRowAnimation:UITableViewRowAnimationNone];
     });
   }
 
@@ -1093,6 +974,7 @@ void SystemTableView::AddRow(int section, TableItem item) { return [FromVoid<IOS
 string SystemTableView::GetKey(int section, int row) { return [FromVoid<IOSTable*>(impl) getKey:section row:row]; }
 int SystemTableView::GetTag(int section, int row) { return [FromVoid<IOSTable*>(impl) getTag:section row:row]; }
 void SystemTableView::SetTag(int section, int row, int val) { [FromVoid<IOSTable*>(impl) setTag:section row:row val:val]; }
+void SystemTableView::SetKey(int section, int row, const string &val) { [FromVoid<IOSTable*>(impl) setKey:section row:row val:val]; }
 void SystemTableView::SetValue(int section, int row, const string &val) { [FromVoid<IOSTable*>(impl) setValue:section row:row val:val]; }
 void SystemTableView::SetHidden(int section, int row, bool val) { [FromVoid<IOSTable*>(impl) setHidden:section row:row val:val]; }
 void SystemTableView::SetTitle(const string &title) { FromVoid<IOSTable*>(impl).title = LFL::MakeNSString(title); }
@@ -1111,7 +993,6 @@ void SystemTableView::SelectRow(int section, int row) {
 
 void SystemTableView::BeginUpdates() { [FromVoid<IOSTable*>(impl).tableView beginUpdates]; }
 void SystemTableView::EndUpdates() { [FromVoid<IOSTable*>(impl).tableView endUpdates]; }
-void SystemTableView::SetDropdown(int section, int row, int val) { [FromVoid<IOSTable*>(impl) setDropdown:section row:row index:val]; }
 void SystemTableView::SetSectionValues(int section, const StringVec &item) { [FromVoid<IOSTable*>(impl) setSectionValues:section items:item]; }
 void SystemTableView::ReplaceSection(int section, const string &h, int image, int flag, TableItemVec item, Callback add_button)
 { [FromVoid<IOSTable*>(impl) replaceSection:section items:move(item) header:h image:image flag:flag addbutton:move(add_button)]; }

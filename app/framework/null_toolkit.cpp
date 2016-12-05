@@ -66,6 +66,7 @@ void SystemTableView::AddRow(int section, TableItem item) {}
 string SystemTableView::GetKey(int section, int row) { return ""; }
 int SystemTableView::GetTag(int section, int row) { return 0; }
 void SystemTableView::SetTag(int section, int row, int val) {}
+void SystemTableView::SetKey(int section, int row, const string &val) {}
 void SystemTableView::SetValue(int section, int row, const string &val) {}
 void SystemTableView::SetHidden(int section, int row, bool val) {}
 void SystemTableView::SetTitle(const string &title) {}
@@ -74,7 +75,6 @@ void SystemTableView::SetEditableSection(int section, int start_row, LFL::IntInt
 void SystemTableView::SelectRow(int section, int row) {} 
 void SystemTableView::BeginUpdates() {}
 void SystemTableView::EndUpdates() {}
-void SystemTableView::SetDropdown(int section, int row, int val) {}
 void SystemTableView::ReplaceSection(int section, const string &h, int image, int flag, TableItemVec item, Callback add_button) {}
 
 SystemTextView::~SystemTextView() {}
@@ -95,5 +95,6 @@ void Application::ShowSystemFontChooser(const FontDesc &cur_font, const StringVe
 void Application::ShowSystemFileChooser(bool files, bool dirs, bool multi, const StringVecCB&) {}
 void Application::ShowSystemContextMenu(const vector<MenuItem>&items) {}
 int Application::LoadSystemImage(const string &n) { static int ret=0; return ++ret; }
+void Application::UpdateSystemImage(int n, Texture&) {}
 
 }; // namespace LFL

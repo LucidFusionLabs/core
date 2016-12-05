@@ -130,6 +130,26 @@ extern int optind;
 #define CHECK_RANGE(x, y, z) { CHECK_GE(x, y); CHECK_LT(x, z); }
 #define CHECK(x) if (!(x)) FATAL(#x)
 
+#ifdef LFL_DEBUG
+#define DEBUG_CHECK_LT(x, a) CHECK_LT(x, a)
+#define DEBUG_CHECK_GT(x, a) CHECK_GT(x, a)
+#define DEBUG_CHECK_GE(x, a) CHECK_GE(x, a)
+#define DEBUG_CHECK_LE(x, a) CHECK_LE(x, a)
+#define DEBUG_CHECK_EQ(x, a) CHECK_EQ(x, a)
+#define DEBUG_CHECK_NE(x, a) CHECK_NE(x, a)
+#define DEBUG_CHECK_RANGE(x, y, z) CHECK_RANGE(x, y, z)
+#define DEBUG_CHECK(x) CHECK(x)
+#else
+#define DEBUG_CHECK_LT(x, a)
+#define DEBUG_CHECK_GT(x, a)
+#define DEBUG_CHECK_GE(x, a)
+#define DEBUG_CHECK_LE(x, a)
+#define DEBUG_CHECK_EQ(x, a)
+#define DEBUG_CHECK_NE(x, a)
+#define DEBUG_CHECK_RANGE(x, y, z)
+#define DEBUG_CHECK(x)
+#endif
+
 #define DEFINE_FLAG(name, type, initial, description) \
   type FLAGS_ ## name = initial; \
   FlagOfType<type> FLAGS_ ## name ## _(#name, description, __FILE__, __LINE__, &FLAGS_ ## name)
@@ -424,14 +444,14 @@ struct PickerItem {
   { string v; for (int i=0, l=data.size(); i!=l; ++i) StrAppend(&v, i ? " " : "", Picked(i)); return v; }
 };
 
-struct TableItemChild {
+struct TableItem {
   struct Dep { int section, row; string val; bool hidden; int left_icon, right_icon, type; string key; Callback cb; };
-  enum { None=0, Label=1, Separator=2, Command=3, Button=4, Toggle=5, Selector=6, Picker=7, DropdownKey=8,
-    DropdownValue=9, FixedDropdown=10, TextInput=11, NumberInput=12, PasswordInput=13, FontPicker=14 }; 
+  enum { None=0, Label=1, Separator=2, Command=3, Button=4, Toggle=5, Selector=6, Picker=7, TextInput=8,
+    NumberInput=9, PasswordInput=10, FontPicker=11 }; 
   typedef unordered_map<string, vector<Dep>> Depends;
   string key;
   int type;
-  string val, right_text;
+  string val, right_text, dropdown_key;
   int tag, left_icon, right_icon;
   Callback cb, right_icon_cb;
   Depends depends;
@@ -439,25 +459,14 @@ struct TableItemChild {
   PickerItem *picker;
   int ref=-1, height=0;
   bool loaded=0, gui_loaded=0;
-  virtual ~TableItemChild() {}
-  TableItemChild(string K=string(), int T=0, string V=string(), string RT=string(), int TG=0, int LI=0,
-                 int RI=0, Callback CB=Callback(), Callback RC=Callback(), Depends D=Depends(), bool H=false,
-                 PickerItem *P=0) : key(move(K)), type(T), val(move(V)), right_text(move(RT)), tag(TG),
-  left_icon(LI), right_icon(RI), cb(move(CB)), right_icon_cb(move(RC)), depends(move(D)), hidden(H), picker(P) {}
-  void CheckAssign(const string &k, Callback c) { CHECK_EQ(k, key); cb=move(c); }
-};
-
-struct TableItem : public TableItemChild {
-  vector<TableItemChild> child;
   virtual ~TableItem() {}
   TableItem(string K=string(), int T=0, string V=string(), string RT=string(), int TG=0, int LI=0,
             int RI=0, Callback CB=Callback(), Callback RC=Callback(), Depends D=Depends(), bool H=false,
-            PickerItem *P=0, vector<TableItemChild> C=vector<TableItemChild>()) :
-    TableItemChild(move(K), T, move(V), move(RT), TG, LI, RI, move(CB), move(RC), move(D), H, P), child(move(C)) {}
-  TableItem(TableItemChild &&x) :
-    TableItemChild(move(x.key), x.type, move(x.val), move(x.right_text), x.tag, x.left_icon, x.right_icon,
-                   move(x.cb), move(x.right_icon_cb), move(x.depends), x.hidden, x.picker) {}
-  vector<TableItem> MoveChildren() { vector<TableItem> v; for (auto &c : child) v.emplace_back(move(c)); return v; }
+            PickerItem *P=0, string DDK=string()) :
+    key(move(K)), type(T), val(move(V)), right_text(move(RT)), dropdown_key(move(DDK)), tag(TG), left_icon(LI),
+    right_icon(RI), cb(move(CB)), right_icon_cb(move(RC)), depends(move(D)), hidden(H), picker(P) {}
+  void CheckAssign(const string &k, Callback c) { CHECK_EQ(k, key); cb=move(c); }
+  void AssignDep(const Dep &d);
 };
 
 struct Table {
@@ -469,6 +478,7 @@ struct Table {
   Table(string h="", int i=0, int f=0, Callback c=Callback(), int sr=0) : header(move(h)), image(i), flag(f), start_row(sr), add_cb(move(c)) {}
   static vector<Table> Convert(vector<TableItem> in);
   static void FindSectionOffset(const vector<Table> &in, int collapsed_row, int *section_out, int *row_out);
+  static void ApplyItemDepends(const TableItem &in, const string &name, vector<Table> *out, function<void(const TableItem::Dep&)>);
 };
 
 typedef vector<MenuItem>  MenuItemVec;
@@ -828,6 +838,7 @@ struct SystemTableView {
   string GetKey(int section, int row);
   int GetTag(int section, int row);
   void SetTag(int section, int row, int val);
+  void SetKey(int seciton, int row, const string &key);
   void SetValue(int section, int row, const string &val);
   void SetHidden(int section, int row, bool val);
   void SetTitle(const string &title);
@@ -840,7 +851,6 @@ struct SystemTableView {
   void BeginUpdates();
   void EndUpdates();
   void AddRow(int section, TableItem item);
-  void SetDropdown(int section, int row, int val);
   void SetSectionValues(int section, const StringVec&);
   void ReplaceSection(int section, const string &h, int image, int flag, TableItemVec item, Callback add_button=Callback());
 };
