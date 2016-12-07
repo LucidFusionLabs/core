@@ -117,7 +117,7 @@ static std::vector<UIImage*> app_images;
 
   - (void)actionSheet:(UIActionSheet *)actions clickedButtonAtIndex:(NSInteger)buttonIndex {
     if (buttonIndex < 1 || buttonIndex > menu.size()) { ERRORf("invalid buttonIndex %d size=%d", buttonIndex, menu.size()); return; }
-    menu[buttonIndex-1].cb();
+    if (menu[buttonIndex-1].cb) menu[buttonIndex-1].cb();
   }
 @end
 
@@ -191,7 +191,7 @@ static std::vector<UIImage*> app_images;
     UIBarButtonItem *item = (UIBarButtonItem*)sender;
     CHECK_RANGE(item.tag, 0, data.size());
     auto &b = data[item.tag];
-    b.cb();
+    if (b.cb) b.cb();
     if (b.name == "toggle") [self toggleButton: item.tag];
     [[LFUIApplication sharedAppDelegate].controller resignFirstResponder];
   }
@@ -288,7 +288,7 @@ static std::vector<UIImage*> app_images;
   - (id)init {
     LFL::PickerItem p;
     p.cb = [=](LFL::PickerItem *x) -> bool {
-      font_change_cb(LFL::StringVec{x->data[0][x->picked[0]], x->data[1][x->picked[1]]});
+      if (font_change_cb) font_change_cb(LFL::StringVec{x->data[0][x->picked[0]], x->data[1][x->picked[1]]});
       return true;
     };
     [IOSFontPicker getSystemFonts:     &LFL::PushBack(p.data, {})];
@@ -517,7 +517,7 @@ static std::vector<UIImage*> app_images;
         button.frame = CGRectMake(0, 0, x+w, 40.0);
         if (compiled_item.cb) {
           [button addTarget:button action:@selector(buttonClicked:) forControlEvents:UIControlEventTouchUpInside];
-          button.cb = [=](){ data[section].item[row].cb(); };
+          button.cb = [=](){ auto &item = data[section].item[row]; if (item.cb) item.cb(); };
         }
         [button setTag: compiled_item.ref];
         [cell.contentView addSubview: button];
@@ -597,7 +597,7 @@ static std::vector<UIImage*> app_images;
           UIImage *image = app_images[icon - 1]; 
           IOSButton *button = [IOSButton buttonWithType:UIButtonTypeCustom];
           [button addTarget:button action:@selector(buttonClicked:) forControlEvents:UIControlEventTouchUpInside];
-          button.cb = [=](){ data[section].item[row].cb(); };
+          button.cb = [=](){ auto &item = data[section].item[row]; if (item.cb) item.cb(); };
           button.frame = cell.frame;
           int spacing = -10, target_height = 40, margin = fabs(button.frame.size.height - target_height) / 2;
           // [button setFont:[UIFont boldSystemFontOfSize:[UIFont labelFontSize]]];
@@ -669,7 +669,7 @@ static std::vector<UIImage*> app_images;
   - (void)tableView:(UITableView *)tableView commitEditingStyle:(UITableViewCellEditingStyle)editingStyle forRowAtIndexPath:(NSIndexPath *)path {
     [self checkExists:path.section row:path.row];
     if (editingStyle == UITableViewCellEditingStyleDelete) {
-      _delete_row_cb(path.row, data[path.section].item[path.row].tag);
+      if (_delete_row_cb) _delete_row_cb(path.row, data[path.section].item[path.row].tag);
       data[path.section].item.erase(data[path.section].item.begin() + path.row);
       [tableView beginUpdates];
       [tableView deleteRowsAtIndexPaths:@[path] withRowAnimation:UITableViewRowAnimationNone];
@@ -768,7 +768,7 @@ static std::vector<UIImage*> app_images;
     _selected_section = path.section;
     auto &compiled_item = data[path.section].item[path.row];
     if (compiled_item.type == LFL::TableItem::Command || compiled_item.type == LFL::TableItem::Button) {
-      compiled_item.cb();
+      if (compiled_item.cb) compiled_item.cb();
     } else if (compiled_item.type == LFL::TableItem::Label && path.row + 1 < data[path.section].item.size()) {
       auto &next_compiled_item = data[path.section].item[path.row+1];
       if (next_compiled_item.type == LFL::TableItem::Picker ||

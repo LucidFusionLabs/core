@@ -336,6 +336,7 @@ static std::vector<NSImage*> app_images;
     data[section].item.emplace_back(move(item));
     data_rows++;
     // [self.tableView insertRowsAtIndexPaths:@[path] withRowAnimation:UITableViewRowAnimationNone];
+    [_tableView reloadData];
   }
 
   - (void)replaceSection:(int)section items:(std::vector<LFL::TableItem>)item header:(const std::string&)h image:(int)im flag:(int)f addbutton:(LFL::Callback)addb {

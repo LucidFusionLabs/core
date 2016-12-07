@@ -172,8 +172,10 @@ class QtWindow : public QWindow, public QtWindowInterface {
 
 bool Video::CreateWindow(Window *W) {
   CHECK(!W->id.v && W->gd);
+  QMainWindow *main_window = new QMainWindow();
   QtWindow *my_qwin = new QtWindow();
   QtWindowInterface *my_qwin_interface = my_qwin;
+  my_qwin->window = main_window;
   my_qwin->lfl_window = W;
   my_qwin->opengl_window = my_qwin;
 
@@ -186,15 +188,15 @@ bool Video::CreateWindow(Window *W) {
   W->id = MakeTyped(my_qwin_interface);
   W->impl = MakeTyped(my_qwin);
 
-  my_qwin->container = QWidget::createWindowContainer(my_qwin);
-  my_qwin->container->setFocusPolicy(Qt::TabFocus);
-  my_qwin->layout = new QStackedLayout();
-  my_qwin->window = new QWidget();
-  my_qwin->window->setLayout(my_qwin->layout);
-  my_qwin->layout->addWidget(my_qwin->container);
+  my_qwin->opengl_container = QWidget::createWindowContainer(my_qwin, main_window);
+  my_qwin->opengl_container->setFocusPolicy(Qt::TabFocus);
+  my_qwin->layout = new QStackedLayout(main_window);
+  my_qwin->window->setCentralWidget(new QWidget(main_window));
+  my_qwin->window->centralWidget()->setLayout(my_qwin->layout);
+  my_qwin->layout->addWidget(my_qwin->opengl_container);
   my_qwin->window->resize(W->width, W->height);
   my_qwin->window->show();
-  my_qwin->container->setFocus();
+  my_qwin->opengl_container->setFocus();
   my_qwin->RequestRender();
 
   app->windows[W->id.v] = W;

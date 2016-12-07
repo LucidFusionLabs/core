@@ -20,12 +20,14 @@
 #include <QApplication>
 #include <QInputDialog>
 #include <QMessageBox>
+#include <QToolBar>
 #include <QTableView>
 #include <QTableWidget>
 #include "qt_common.h"
 
 namespace LFL {
 static vector<unique_ptr<QIcon>> app_images;
+struct QtTable;
 
 struct QtAlert {
   string style;
@@ -47,6 +49,9 @@ struct QtAlert {
       alert->setCancelButtonText(MakeQString(kv[2].first));
       alert->setOkButtonText(MakeQString(kv[3].first));
       alert->setModal(false);
+      alert->connect(alert.get(), &QInputDialog::finished, [=](int res){
+        if (res == 1) { if (confirm_cb) confirm_cb(GetQString(alert->textValue())); }
+        else          { if (cancel_cb) cancel_cb(""); } });
     } else {
       msg = make_unique<QMessageBox>();
       msg->setAttribute(Qt::WA_DeleteOnClose);
@@ -61,8 +66,21 @@ struct QtAlert {
       alert->setWindowTitle(MakeQString(t));
       alert->setLabelText(MakeQString(m));
     } else { 
+      msg->setText(MakeQString(t));
+      msg->setInformativeText(MakeQString(m));
     }
     confirm_cb = move(cb);
+  }
+};
+
+struct QtToolbar {
+  unique_ptr<QToolBar> toolbar;
+  bool init=0;
+  QtToolbar(MenuItemVec v) : toolbar(make_unique<QToolBar>()) {
+    for (auto b = v.begin(), e = v.end(), i = b; i != e; ++i) {
+      QAction *action = toolbar->addAction(MakeQString(i->shortcut));
+      if (i->cb) toolbar->connect(action, &QAction::triggered, move(i->cb));
+    }
   }
 };
 
@@ -100,7 +118,7 @@ class QtDrawBorderDelegate : public QStyledItemDelegate {
     if (event->type() == QEvent::MouseButtonRelease) {
       const int text_margin = QApplication::style()->pixelMetric(QStyle::PM_FocusFrameHMargin) + 1;
       QRect check_rect = QStyle::alignedRect
-        (option.direction, Qt::AlignCenter, option.decorationSize,
+        (option.direction, Qt::AlignRight, option.decorationSize,
          QRect(option.rect.x()     + (2 * text_margin), option.rect.y(),
                option.rect.width() - (2 * text_margin), option.rect.height()));
       if (!check_rect.contains(static_cast<QMouseEvent*>(event)->pos())) return false;
@@ -111,26 +129,34 @@ class QtDrawBorderDelegate : public QStyledItemDelegate {
     Qt::CheckState state = Qt::CheckState(value.toInt()) == Qt::Checked ? Qt::Unchecked : Qt::Checked;
     return model->setData(index, state, Qt::CheckStateRole);
   }
-
-}; // DrawBorderDelegate
+};
 
 class QtTableModel : public QStandardItemModel {
   public:
   vector<Table> *v;
   QtTableModel(vector<Table> *V) : v(V) {}
   QVariant data(const QModelIndex &index, int role) const override {
-    if (role == Qt::ForegroundRole && index.column() == 1) {
+    if (role == Qt::ForegroundRole) {
       int section = -1, row = -1;
       Table::FindSectionOffset(*v, index.row(), &section, &row);
-      if (section >= 0 && row < (*v)[section].item.size() && (*v)[section].item[row].right_text.size())
+      if (section >= 0 && row < (*v)[section].item.size() &&
+          ((index.column() == 0 && (*v)[section].item[row].dropdown_key.size()) ||
+           (index.column() == 1 && (*v)[section].item[row].right_text.size())))
         return QColor(0, 122, 255);
     }
     return QStandardItemModel::data(index, role);
   }
 };
 
+class QtTableView : public QTableView {
+  public:
+  QtTable *lfl_parent;
+  QtTableView(QtTable *P) : lfl_parent(P) {}
+};
+
 struct QtTable {
   vector<Table> data;
+  TableItem left_nav, right_nav;
   unique_ptr<QTableView> table;
   unique_ptr<QtTableModel> model;
   SystemTableView *lfl_self;
@@ -140,7 +166,7 @@ struct QtTable {
   QtDrawBorderDelegate drawborder;
 
   QtTable(SystemTableView *lself, const string &title, string s, vector<Table> item) :
-    table(make_unique<QTableView>()), model(make_unique<QtTableModel>(&data)),
+    table(make_unique<QtTableView>(this)), model(make_unique<QtTableModel>(&data)),
     lfl_self(lself), style(move(s)), data(move(item)) {
 
     vector<int> hide_indices;
@@ -149,7 +175,7 @@ struct QtTable {
       data_rows += s->item.size();
       model->appendRow(MakeRow(*s));
       for (auto rb = s->item.begin(), re = s->item.end(), r = rb; r != re; ++r) {
-        if (r->hidden) hide_indices.push_back(s->start_row + (r - rb));
+        if (r->hidden) hide_indices.push_back(s->start_row + 1 + (r - rb));
         model->appendRow(MakeRow(&(*r)));
       }
     }
@@ -226,7 +252,7 @@ struct QtTable {
   void HideIndices(const vector<int> &ind, bool v) { for (auto &i : ind) table->setRowHidden(i, v); }
   void HideHiddenRows(const Table &s, bool v) {
     for (auto rb = s.item.begin(), re = s.item.end(), r = rb; r != re; ++r)
-      if (r->hidden) table->setRowHidden(s.start_row + (r - rb), v);
+      if (r->hidden) table->setRowHidden(s.start_row + 1 + (r - rb), v);
   }
 
   void HandleCellClicked(const QModelIndex &index) {
@@ -238,8 +264,10 @@ struct QtTable {
     selected_row = row;
 
     auto &compiled_item = data[section].item[row];
-    if (compiled_item.type == LFL::TableItem::Command || compiled_item.type == LFL::TableItem::Button) {
-      compiled_item.cb();
+    if (compiled_item.dropdown_key.size() && index.column() == 0) {
+      if (compiled_item.cb) compiled_item.cb();
+    } else if (compiled_item.type == LFL::TableItem::Command || compiled_item.type == LFL::TableItem::Button) {
+      if (compiled_item.cb) compiled_item.cb();
     } else if (compiled_item.type == LFL::TableItem::Label && row + 1 < data[section].item.size()) {
       auto &next_compiled_item = data[section].item[row+1];
       if (next_compiled_item.type == LFL::TableItem::Picker ||
@@ -260,7 +288,8 @@ struct QtNavigation {
   QtNavigation() : header_widget(make_unique<QWidget>()), content_widget(make_unique<QWidget>()),
   header_label(make_unique<QLabel>()), header_back(make_unique<QPushButton>()), header_forward(make_unique<QPushButton>()),
   header_layout(make_unique<QHBoxLayout>()), content_layout(make_unique<QStackedLayout>()) {
-    QObject::connect(header_back.get(), &QPushButton::clicked, bind(&QtNavigation::HandleBackClicked, this));
+    QObject::connect(header_back   .get(), &QPushButton::clicked, bind(&QtNavigation::HandleBackClicked,    this));
+    QObject::connect(header_forward.get(), &QPushButton::clicked, bind(&QtNavigation::HandleForwardClicked, this));
     QSizePolicy sp_retain = header_back->sizePolicy();
     sp_retain.setRetainSizeWhenHidden(true);
     header_back->setSizePolicy(sp_retain);
@@ -280,6 +309,13 @@ struct QtNavigation {
   QWidget *GetBackWidget() { int count = content_layout->count(); return count ? GetWidget(count-1) : nullptr; }
 
   void UpdateBackButton() {
+    if (auto view = dynamic_cast<QtTableView*>(content_layout->currentWidget())) {
+      if (view->lfl_parent->left_nav.cb) {
+        header_back->setText(MakeQString(view->lfl_parent->left_nav.key));
+        header_back->setHidden(false);
+        return;
+      }
+    }
     int count = content_layout->count(); 
     if (count < 2) { header_back->setHidden(true); return; }
     auto widget = GetWidget(count - 2);
@@ -291,9 +327,18 @@ struct QtNavigation {
   void HandleBackClicked() {
     auto w = GetBackWidget();
     if (!w) return;
+    if (auto view = dynamic_cast<QtTableView*>(w)) {
+      if (view->lfl_parent->left_nav.cb) {
+        view->lfl_parent->left_nav.cb();
+        return;
+      }
+    }
     content_layout->removeWidget(w);
     if ((w = GetBackWidget())) header_label->setText(w->windowTitle());
     UpdateBackButton();
+  }
+
+  void HandleForwardClicked() {
   }
 };
 
@@ -315,7 +360,17 @@ string SystemAlertView::RunModal(const string &arg) {
 }
 
 SystemMenuView::~SystemMenuView() {}
-SystemMenuView::SystemMenuView(const string &title_text, MenuItemVec items) {}
+SystemMenuView::SystemMenuView(const string &title_text, MenuItemVec v) {
+  auto mb = GetTyped<QtWindowInterface*>(app->focused->id)->window->menuBar();
+  QMenu *menu = new QMenu(MakeQString(title_text), mb);
+  for (auto b = v.begin(), e = v.end(), i = b; i != e; ++i) {
+    QAction *action = menu->addAction(MakeQString(i->name));
+    if (i->shortcut.size()) action->setShortcut(QKeySequence(Qt::CTRL + i->shortcut[0]));
+    if (i->cb) mb->connect(action, &QAction::triggered, move(i->cb));
+  }
+  mb->addMenu(menu);
+}
+
 unique_ptr<SystemMenuView> SystemMenuView::CreateEditMenu(MenuItemVec items) { return nullptr; }
 void SystemMenuView::Show() {}
 
@@ -324,10 +379,16 @@ SystemPanelView::SystemPanelView(const Box &b, const string &title, PanelItemVec
 void SystemPanelView::Show() {}
 void SystemPanelView::SetTitle(const string &title) {}
 
-SystemToolbarView::~SystemToolbarView() {}
-SystemToolbarView::SystemToolbarView(MenuItemVec items) : impl(0) {}
-void SystemToolbarView::Show(bool show_or_hide) {}
+SystemToolbarView::~SystemToolbarView() { if (auto tb = FromVoid<QtToolbar*>(impl)) delete tb; }
+SystemToolbarView::SystemToolbarView(MenuItemVec items) : impl(new QtToolbar(move(items))) {}
 void SystemToolbarView::ToggleButton(const string &n) {}
+void SystemToolbarView::Show(bool show_or_hide) {  
+  auto tb = FromVoid<QtToolbar*>(impl);
+  if (!tb->init && (tb->init=1)) 
+    GetTyped<QtWindowInterface*>(app->focused->id)->layout->setMenuBar(tb->toolbar.get());
+  if (show_or_hide) tb->toolbar->show();
+  else              tb->toolbar->hide();
+}
 
 SystemTableView::~SystemTableView() { if (auto table = FromVoid<QtTable*>(impl)) delete table; }
 SystemTableView::SystemTableView(const string &title, const string &style, TableItemVec items, int second_col) :
@@ -363,9 +424,16 @@ void SystemTableView::SetSectionValues(int section, const StringVec &item) {
   for (int i=0, l=table->data[section].item.size(); i != l; ++i) table->SetValue(section, i, item[i]);
 }
 
-void SystemTableView::DelNavigationButton(int align) {}
-void SystemTableView::AddNavigationButton(int align, const TableItem &item) {}
 void SystemTableView::AddToolbar(SystemToolbarView *t) {}
+void SystemTableView::AddNavigationButton(int align, const TableItem &item) {
+  if      (align == HAlign::Left)  FromVoid<QtTable*>(impl)->left_nav  = item;
+  else if (align == HAlign::Right) FromVoid<QtTable*>(impl)->right_nav = item;
+}
+
+void SystemTableView::DelNavigationButton(int align) {
+  if      (align == HAlign::Left)  FromVoid<QtTable*>(impl)->left_nav  = TableItem();
+  else if (align == HAlign::Right) FromVoid<QtTable*>(impl)->right_nav = TableItem();
+}
 
 void SystemTableView::Show(bool show_or_hide) {
   auto w = GetTyped<QtWindowInterface*>(app->focused->id);
@@ -374,7 +442,7 @@ void SystemTableView::Show(bool show_or_hide) {
     w->layout->addWidget(table->table.get());
     w->layout->setCurrentWidget(table->table.get());
   } else {
-    w->layout->setCurrentWidget(w->container);
+    w->layout->setCurrentWidget(w->opengl_container);
     w->layout->removeWidget(table->table.get());
   }
 }
@@ -433,12 +501,19 @@ void SystemNavigationView::Show(bool show_or_hide) {
     w->layout->addWidget(nav->content_widget.get());
     w->layout->setCurrentWidget(nav->content_widget.get());
   } else {
-    w->layout->setCurrentWidget(w->container);
+    w->layout->setCurrentWidget(w->opengl_container);
     w->layout->removeWidget(nav->content_widget.get());
   }
 }
 
-SystemTableView *SystemNavigationView::Back() { return nullptr; }
+SystemTableView *SystemNavigationView::Back() { 
+  auto nav = FromVoid<QtNavigation*>(impl);
+  for (int i = nav->content_layout->count()-1; i >= 0; --i) {
+    QWidget *qw = nav->content_layout->widget(i);
+    if (auto qt = dynamic_cast<QtTableView*>(qw)) return qt->lfl_parent->lfl_self;
+  }
+  return nullptr;
+}
 
 void SystemNavigationView::PushTableView(SystemTableView *t) {
   auto nav = FromVoid<QtNavigation*>(impl);
@@ -450,9 +525,8 @@ void SystemNavigationView::PushTableView(SystemTableView *t) {
 }
 
 void SystemNavigationView::PushTextView(SystemTextView *t) {}
-void SystemNavigationView::PopToRoot() {}
-void SystemNavigationView::PopAll() {}
-
+void SystemNavigationView::PopAll()    { int n=FromVoid<QtNavigation*>(impl)->content_layout->count(); PopView(n); }
+void SystemNavigationView::PopToRoot() { int n=FromVoid<QtNavigation*>(impl)->content_layout->count(); PopView(n-1); }
 void SystemNavigationView::PopView(int n) {
   auto nav = FromVoid<QtNavigation*>(impl);
   for (int i=0; i<n; ++i) {

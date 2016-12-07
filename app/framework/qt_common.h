@@ -21,9 +21,10 @@ inline QString MakeQString(const string &v) { return QString::fromUtf8(v.data(),
 inline string GetQString(const QString &v) { return v.toStdString(); }
 
 struct QtWindowInterface {
+  QMainWindow *window=0;
   QStackedLayout *layout=0;
-  QWidget *window=0, *container=0;
   QWindow *opengl_window=0;
+  QWidget *opengl_container=0;
 };
 
 }; // namespace LFL
