@@ -458,13 +458,15 @@ struct TableItem {
   bool hidden;
   PickerItem *picker;
   int ref=-1, height=0;
-  bool loaded=0, gui_loaded=0;
+  bool loaded=0, gui_loaded=0, has_placeholder_val=0;
   virtual ~TableItem() {}
   TableItem(string K=string(), int T=0, string V=string(), string RT=string(), int TG=0, int LI=0,
             int RI=0, Callback CB=Callback(), Callback RC=Callback(), Depends D=Depends(), bool H=false,
             PickerItem *P=0, string DDK=string()) :
     key(move(K)), type(T), val(move(V)), right_text(move(RT)), dropdown_key(move(DDK)), tag(TG), left_icon(LI),
     right_icon(RI), cb(move(CB)), right_icon_cb(move(RC)), depends(move(D)), hidden(H), picker(P) {}
+  bool HasPlaceholderValue() const { return val.size() && (val[0] == 1 || val[0] == 2); }
+  string GetPlaceholderValue() const { return val.substr(1); }
   void CheckAssign(const string &k, Callback c) { CHECK_EQ(k, key); cb=move(c); }
   void AssignDep(const Dep &d);
 };
