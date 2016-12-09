@@ -50,7 +50,7 @@ struct Pixel {
     RGB24=5, BGR24=6, 
     RGB555=7, BGR555=8, RGB565=9, BGR565=10,
     YUV410P=11, YUV420P=12, YUYV422=13, YUVJ420P=14, YUVJ422P=15, YUVJ444P=16,
-    GRAY8=17, GRAYA8=18, LCD=19 };
+    ALPHA8=17, GRAY8=18, GRAYA8=19, LCD=20 };
 
   static const char *Name(int id);
   static int Size(int p);

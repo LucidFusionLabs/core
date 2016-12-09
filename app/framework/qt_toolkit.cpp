@@ -23,6 +23,8 @@
 #include <QToolBar>
 #include <QTableView>
 #include <QTableWidget>
+#include <QPlainTextEdit>
+#include <QPixmap>
 #include "qt_common.h"
 
 namespace LFL {
@@ -73,6 +75,17 @@ struct QtAlert {
   }
 };
 
+struct QtPanel {
+  unique_ptr<QDialog> dialog;
+  QHBoxLayout *layout=0;
+  QLabel *title=0;
+  QLineEdit *text=0;
+  QtPanel(const string &title_text) : dialog(make_unique<QDialog>()) {
+    layout = new QHBoxLayout(dialog.get());
+    layout->addWidget((title = new QLabel(MakeQString(title_text), dialog.get())));
+  }
+};
+
 struct QtToolbar {
   unique_ptr<QToolBar> toolbar;
   bool init=0;
@@ -94,6 +107,8 @@ struct QtTableInterface {
     CHECK_LT(section, data.size());
     CHECK_LT(r, data[section].item.size());
   }
+
+  virtual void HandleCellClicked(const QModelIndex &index) = 0;
 };
 
 class QtStyledItemDelegate : public QStyledItemDelegate {
@@ -108,39 +123,60 @@ class QtStyledItemDelegate : public QStyledItemDelegate {
     if (col == cols - 1)  painter->drawLine(rect.topRight(),   rect.bottomRight());
     if (index.row() == 0) painter->drawLine(rect.topLeft(),    rect.topRight());
     if (1)                painter->drawLine(rect.bottomLeft(), rect.bottomRight());
-    if (col == 1 && (index.flags() & Qt::ItemIsUserCheckable)) {
-      auto new_option = option;
-      const int text_margin = QApplication::style()->pixelMetric(QStyle::PM_FocusFrameHMargin) + 1;
-      new_option.rect = QStyle::alignedRect
-        (option.direction, Qt::AlignRight, QSize(option.decorationSize.width() + 5, option.decorationSize.height()),
-         QRect(option.rect.x() + text_margin, option.rect.y(), option.rect.width() - (2 * text_margin), option.rect.height()));
-      QStyledItemDelegate::paint(painter, new_option, index);
-    } else {
-      QStyledItemDelegate::paint(painter, option, index);
+    if (col == 1) {
+      int section = -1, row = -1;
+      LFL::Table::FindSectionOffset(table->data, index.row(), &section, &row);
+      if (row >= 0) {
+        table->CheckExists(section, row);
+        auto &ci = table->data[section].item[row];
+        bool right_aligned = (index.flags() & Qt::ItemIsUserCheckable) || ci.right_icon;
+        if (right_aligned) {
+          auto new_option = option;
+          const int text_margin = QApplication::style()->pixelMetric(QStyle::PM_FocusFrameHMargin) + 1;
+          new_option.rect = QStyle::alignedRect
+            (option.direction, Qt::AlignRight, QSize(option.decorationSize.width() + 5, option.decorationSize.height()),
+             QRect(option.rect.x() + text_margin, option.rect.y(), option.rect.width() - (2 * text_margin), option.rect.height()));
+          return QStyledItemDelegate::paint(painter, new_option, index);
+        }
+      }
     }
+    return QStyledItemDelegate::paint(painter, option, index);
   }
 
   bool editorEvent(QEvent *event, QAbstractItemModel *model, const QStyleOptionViewItem &option, const QModelIndex &index) override {
     Q_ASSERT(event);
     Q_ASSERT(model);
-    Qt::ItemFlags flags = model->flags(index);
-    if (!(flags & Qt::ItemIsUserCheckable) || !(flags & Qt::ItemIsEnabled)) return false;
-    QVariant value = index.data(Qt::CheckStateRole);
-    if (!value.isValid()) return false;
+    if (index.flags() & Qt::ItemIsUserCheckable) {
+      QVariant value = index.data(Qt::CheckStateRole);
+      if (!value.isValid()) return false;
 
-    if (event->type() == QEvent::MouseButtonRelease) {
-      const int text_margin = QApplication::style()->pixelMetric(QStyle::PM_FocusFrameHMargin) + 1;
-      QRect check_rect = QStyle::alignedRect
-        (option.direction, Qt::AlignRight, option.decorationSize,
-         QRect(option.rect.x()     + (2 * text_margin), option.rect.y(),
-               option.rect.width() - (2 * text_margin), option.rect.height()));
-      if (!check_rect.contains(static_cast<QMouseEvent*>(event)->pos())) return false;
-    } else if (event->type() == QEvent::KeyPress) {
-      if (static_cast<QKeyEvent*>(event)->key() != Qt::Key_Space &&
-          static_cast<QKeyEvent*>(event)->key() != Qt::Key_Select) return false;
-    } else return false;
-    Qt::CheckState state = Qt::CheckState(value.toInt()) == Qt::Checked ? Qt::Unchecked : Qt::Checked;
-    return model->setData(index, state, Qt::CheckStateRole);
+      if (event->type() == QEvent::MouseButtonRelease) {
+        QRect check_rect = GetRealignedRect(option);
+        if (!check_rect.contains(static_cast<QMouseEvent*>(event)->pos())) return false;
+      } else if (event->type() == QEvent::KeyPress) {
+        if (static_cast<QKeyEvent*>(event)->key() != Qt::Key_Space &&
+            static_cast<QKeyEvent*>(event)->key() != Qt::Key_Select) return false;
+      } else return false;
+
+      Qt::CheckState state = Qt::CheckState(value.toInt()) == Qt::Checked ? Qt::Unchecked : Qt::Checked;
+      return model->setData(index, state, Qt::CheckStateRole);
+
+    } else if (event->type() == QEvent::MouseButtonRelease) {
+      int section = -1, row = -1;
+      if (!(index.flags() & Qt::ItemIsEnabled)) return false;
+      LFL::Table::FindSectionOffset(table->data, index.row(), &section, &row);
+      if (row < 0) return false;
+      auto &ci = table->data[section].item[row];
+
+      if (ci.right_icon_cb) {
+        QRect check_rect = GetRealignedRect(option);
+        if (check_rect.contains(static_cast<QMouseEvent*>(event)->pos())) { ci.right_icon_cb(); return true; }
+      }
+
+      table->HandleCellClicked(index);
+      return true;
+    }
+    return false;
   }
 
   QWidget *createEditor(QWidget *parent, const QStyleOptionViewItem &option, const QModelIndex &index) const override {
@@ -158,6 +194,13 @@ class QtStyledItemDelegate : public QStyledItemDelegate {
     auto &ci = table->data[section].item[row];
     if (ci.HasPlaceholderValue())
       editor->setPlaceholderText(MakeQString(ci.GetPlaceholderValue()));
+  }
+
+  static QRect GetRealignedRect(const QStyleOptionViewItem &option) {
+    const int text_margin = QApplication::style()->pixelMetric(QStyle::PM_FocusFrameHMargin) + 1;
+    return QStyle::alignedRect(option.direction, Qt::AlignRight, option.decorationSize,
+                               QRect(option.rect.x()     + (2 * text_margin), option.rect.y(),
+                                     option.rect.width() - (2 * text_margin), option.rect.height()));
   }
 };
 
@@ -223,7 +266,7 @@ struct QtTable : public QtTableInterface {
     table->setModel(model.get());
     HideIndices(hide_indices, true);
 
-    QObject::connect(table.get(), &QTableView::clicked, bind(&QtTable::HandleCellClicked, this, _1));
+    // QObject::connect(table.get(), &QTableView::clicked, bind(&QtTable::HandleCellClicked, this, _1));
     QObject::connect(model.get(), &QStandardItemModel::itemChanged, bind(&QtTable::HandleCellChanged, this, _1));
   }
 
@@ -241,7 +284,7 @@ struct QtTable : public QtTableInterface {
     auto key = make_unique<QStandardItem>
       (item->left_icon ? *app_images[item->left_icon-1] : QIcon(), MakeQString(item->key));
     auto val = make_unique<QStandardItem>
-      (MakeQString
+      (item->right_icon ? *app_images[item->right_icon-1] : QIcon(), MakeQString
        (item->right_text.size() ? item->right_text :
         ((item->has_placeholder_val = item->HasPlaceholderValue()) ? item->GetPlaceholderValue() : item->val)));
     key->setFlags(Qt::ItemIsEnabled);
@@ -286,8 +329,9 @@ struct QtTable : public QtTableInterface {
     auto val = model->item(GetCollapsedRowId(section, row), 1);
     model->blockSignals(true);
     if (ci.type == TableItem::Toggle) val->setCheckState(v == "1" ? Qt::Checked : Qt::Unchecked);
-    else val->setText(MakeQString((ci.has_placeholder_val = ci.HasPlaceholderValue()) ?
-                                  ci.GetPlaceholderValue() : ci.val));
+    else if (!ci.right_text.size())
+      val->setText(MakeQString((ci.has_placeholder_val = ci.HasPlaceholderValue()) ?
+                               ci.GetPlaceholderValue() : ci.val));
     model->blockSignals(false);
   }
 
@@ -456,13 +500,31 @@ SystemMenuView::SystemMenuView(const string &title_text, MenuItemVec v) {
   mb->addMenu(menu);
 }
 
-unique_ptr<SystemMenuView> SystemMenuView::CreateEditMenu(MenuItemVec items) { return nullptr; }
 void SystemMenuView::Show() {}
+unique_ptr<SystemMenuView> SystemMenuView::CreateEditMenu(MenuItemVec items) {
+  return make_unique<SystemMenuView>("Edit", move(items));
+}
 
-SystemPanelView::~SystemPanelView() {}
-SystemPanelView::SystemPanelView(const Box &b, const string &title, PanelItemVec items) {}
-void SystemPanelView::Show() {}
-void SystemPanelView::SetTitle(const string &title) {}
+SystemPanelView::~SystemPanelView() { if (auto panel = FromVoid<QtPanel*>(impl)) delete panel; }
+SystemPanelView::SystemPanelView(const Box &b, const string &title, PanelItemVec items) : impl(new QtPanel(title)) {
+  auto panel = FromVoid<QtPanel*>(impl);
+  for (auto &i : items) {
+    const Box &b = i.box;
+    const string &t = i.type;
+    if (t == "textbox") {
+      panel->layout->addWidget((panel->text = new QLineEdit(panel->dialog.get())));
+    } else if (PrefixMatch(t, "button:")) {
+      auto button = new QPushButton(MakeQString(t.substr(7)), panel->dialog.get());
+      if (i.cb) QObject::connect(button, &QPushButton::clicked, [=](){
+        i.cb(panel->text ? GetQString(panel->text->text()) : string());                         
+      });
+      panel->layout->addWidget(button);
+    } else ERROR("unknown panel item ", t);
+  }
+}
+
+void SystemPanelView::SetTitle(const string &title) { FromVoid<QtPanel*>(impl)->title->setText(MakeQString(title)); }
+void SystemPanelView::Show() { FromVoid<QtPanel*>(impl)->dialog->show(); }
 
 SystemToolbarView::~SystemToolbarView() { if (auto tb = FromVoid<QtToolbar*>(impl)) delete tb; }
 SystemToolbarView::SystemToolbarView(MenuItemVec items) : impl(new QtToolbar(move(items))) {}
@@ -582,9 +644,12 @@ void SystemTableView::ReplaceSection(int section, const string &h, int image, in
   t->HideHiddenRows(t->data[section], true);
 }
 
-SystemTextView::~SystemTextView() {}
+SystemTextView::~SystemTextView() { if (auto text = FromVoid<QPlainTextEdit*>(impl)) delete text; }
 SystemTextView::SystemTextView(const string &title, File *f) : SystemTextView(title, f ? f->Contents() : "") {}
-SystemTextView::SystemTextView(const string &title, const string &text) : impl(0) {}
+SystemTextView::SystemTextView(const string &title, const string &text) : impl(new QPlainTextEdit(MakeQString(text))) {
+  FromVoid<QPlainTextEdit*>(impl)->setWindowTitle(MakeQString(title));
+  FromVoid<QPlainTextEdit*>(impl)->setReadOnly(true);
+}
 
 SystemNavigationView::~SystemNavigationView() { if (auto nav = FromVoid<QtNavigation*>(impl)) delete nav; }
 SystemNavigationView::SystemNavigationView() : impl(new QtNavigation()) {}
@@ -623,6 +688,12 @@ void SystemNavigationView::PushTableView(SystemTableView *t) {
 
 void SystemNavigationView::PushTextView(SystemTextView *t) {
   if (t->show_cb) t->show_cb();
+  auto nav = FromVoid<QtNavigation*>(impl);
+  auto text = FromVoid<QPlainTextEdit*>(t->impl);
+  nav->content_layout->addWidget(text);
+  nav->content_layout->setCurrentWidget(text);
+  nav->header_label->setText(text->windowTitle());
+  nav->UpdateBackButton();
 }
 
 void SystemNavigationView::PopAll()    { int n=FromVoid<QtNavigation*>(impl)->content_layout->count(); PopView(n); }
@@ -636,9 +707,33 @@ void SystemNavigationView::PopView(int n) {
   }
 }
 
-void Application::ShowSystemFontChooser(const FontDesc &cur_font, const StringVecCB&) {}
-void Application::ShowSystemFileChooser(bool files, bool dirs, bool multi, const StringVecCB&) {}
-void Application::ShowSystemContextMenu(const vector<MenuItem>&items) {}
+void Application::ShowSystemFontChooser(const FontDesc &cur_font, const StringVecCB &font_change_cb) {
+  QFontDialog *font_chooser = new QFontDialog(QFont(MakeQString(cur_font.name), cur_font.size));
+  font_chooser->show();
+  QObject::connect(font_chooser, &QFontDialog::fontSelected, [=](const QFont &f) {
+    font_change_cb(StringVec{ GetQString(f.family()), StrCat(f.pointSize()) });
+  });
+}
+
+void Application::ShowSystemFileChooser(bool files, bool dirs, bool multi, const StringVecCB &choose_cb) {
+  QFileDialog *file_chooser = new QFileDialog();
+  if (!files && dirs) file_chooser->setOptions(QFileDialog::ShowDirsOnly);
+  QObject::connect(file_chooser, &QFileDialog::filesSelected, [=](const QStringList &selected){
+    if (selected.size()) choose_cb(GetQStringList(selected));
+  });
+  file_chooser->show();
+}
+
+void Application::ShowSystemContextMenu(const vector<MenuItem> &items) {
+  auto screen = app->focused;
+  QMenu *menu = new QMenu();
+  for (auto &i : items) {
+    QAction *action = menu->addAction(MakeQString(i.name));
+    if (i.cb) menu->connect(action, &QAction::triggered, i.cb);
+  }
+  menu->popup(GetTyped<QtWindowInterface*>(screen->id)->opengl_window->mapToGlobal
+              (MakeQPoint(Input::TransformMouseCoordinate(screen->mouse))));
+}
 
 int Application::LoadSystemImage(const string &n) {
   app_images.emplace_back(make_unique<QIcon>(MakeQString(StrCat(app->assetdir, "../", n))));
@@ -646,6 +741,10 @@ int Application::LoadSystemImage(const string &n) {
 }
 
 void Application::UpdateSystemImage(int n, Texture &t) {
+  CHECK_RANGE(n-1, 0, app_images.size());
+  QPixmap pixmap;
+  pixmap.convertFromImage(MakeQImage(t));
+  app_images[n-1] = make_unique<QIcon>(move(pixmap));
 }
 
 }; // namespace LFL

@@ -60,6 +60,52 @@ const int Key::Home       = Qt::Key_Home;
 const int Key::End        = Qt::Key_End;
 const int Key::Insert     = Qt::Key_Insert;
 
+StringVec GetQStringList(const QStringList &v) {
+  StringVec ret;
+  for (auto i = v.constBegin(), e = v.constEnd(); i != e; ++i) ret.push_back(GetQString(*i));
+  return ret;
+}
+
+void CleanUpTextureQImageData(void *info) {
+  delete [] static_cast<unsigned char *>(info);
+}
+
+QImage MakeQImage(Texture &t) {
+  if (!t.buf) return QImage();
+  unsigned char *buf = t.ReleaseBuffer();
+  return QImage(buf, t.width, t.height, t.LineSize(), PixelToQImageFormat(t.pf),
+                CleanUpTextureQImageData, buf);
+}
+
+QImage::Format PixelToQImageFormat(int pf) {
+  switch (pf) {
+    case Pixel::RGB32:  return QImage::Format_RGB32;
+    case Pixel::BGR32:  return QImage::Format_RGB32;
+    case Pixel::RGB24:  return QImage::Format_RGB888;
+    case Pixel::BGR24:  return QImage::Format_RGB888;
+    case Pixel::RGBA:   return QImage::Format_ARGB32;
+    case Pixel::BGRA:   return QImage::Format_ARGB32;
+#if 0
+    case Pixel::ALPHA8: return QImage::Format_Alpha8;
+    case Pixel::GRAY8:  return QImage::Format_Grayscale8;
+#endif
+    default:            return QImage::Format_Invalid;
+  }
+}
+
+int PixelFromQImageFormat(QImage::Format fmt) {
+  switch (fmt) {
+    case QImage::Format_ARGB32:     return Pixel::RGBA;
+    case QImage::Format_RGB32:      return Pixel::RGB32;
+    case QImage::Format_RGB888:     return Pixel::RGB24;
+#if 0
+    case QImage::Format_Alpha8:     return Pixel::ALPHA8;
+    case QImage::Format_Grayscale8: return Pixel::GRAY8;
+#endif
+    default: return 0;
+  }
+}
+
 struct QtFrameworkModule : public Module {
   int Free() {
     delete qapp;
@@ -120,17 +166,7 @@ class QtWindow : public QWindow, public QtWindowInterface {
   }
 
   void mouseReleaseEvent(QMouseEvent *ev) { QWindow::mouseReleaseEvent(ev); mouseClickEvent(ev, false); }
-  void mousePressEvent  (QMouseEvent *ev) { QWindow::mousePressEvent(ev);   mouseClickEvent(ev, true);
-#if 0
-    if (ev->button() == Qt::RightButton) {
-      QMenu menu;
-      QAction* openAct = new QAction("Open...", this);
-      menu.addAction(openAct);
-      menu.addSeparator();
-      menu.exec(mapToGlobal(ev->pos()));
-    }
-#endif
-  }
+  void mousePressEvent  (QMouseEvent *ev) { QWindow::mousePressEvent(ev);   mouseClickEvent(ev, true); }
 
   void mouseClickEvent(QMouseEvent *ev, bool down) {
     if (!init) return;

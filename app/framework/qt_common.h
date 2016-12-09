@@ -17,8 +17,14 @@
  */
 
 namespace LFL {
+inline QPoint MakeQPoint(const point &v) { return QPoint(v.x, v.y); }
+inline QPoint MakeQPoint(const v2    &v) { return QPoint(v.x, v.y); }
 inline QString MakeQString(const string &v) { return QString::fromUtf8(v.data(), v.size()); }
 inline string GetQString(const QString &v) { return v.toStdString(); }
+StringVec GetQStringList(const QStringList &v);
+QImage MakeQImage(Texture &t);
+QImage::Format PixelToQImageFormat(int pf);
+int PixelFromQImageFormat(QImage::Format fmt);
 
 struct QtWindowInterface {
   QMainWindow *window=0;
