@@ -30,6 +30,7 @@ struct CCCipher { size_t algo=0; CCAlgorithm ccalgo=0; CCCryptorRef ctx=0; };
 struct CCDigest { size_t algo=0; void *v=0; CCDigest(int A=0) : algo(A) {} };
 struct CCMAC { CCHmacAlgorithm algo; CCHmacContext ctx; };
 
+string Crypto::LibraryName() { return "CommonCrypto"; }
 Crypto::CipherAlgo Crypto::CipherAlgos::AES128_CTR()   { return Void(CCCipherAlgo::AES128_CTR); }
 Crypto::CipherAlgo Crypto::CipherAlgos::AES128_CBC()   { return Void(CCCipherAlgo::AES128_CBC); }
 Crypto::CipherAlgo Crypto::CipherAlgos::AES256_CBC()   { return Void(CCCipherAlgo::AES256_CBC); }
@@ -216,7 +217,7 @@ void Crypto::MACUpdate(MAC m, const StringPiece &in) {
 }
 
 int Crypto::MACFinish(MAC x, char *out, int outlen) {
-  auto m = FromVoid<CCMAC*>(x);
+  unique_ptr<CCMAC> m(FromVoid<CCMAC*>(x));
   CCHmacFinal(&m->ctx, out); 
   switch(m->algo) {
     case kCCHmacAlgMD5:    return CC_MD5_DIGEST_LENGTH;

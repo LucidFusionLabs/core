@@ -20,6 +20,7 @@
 #include "core/app/crypto.h"
 
 namespace LFL {
+string Crypto::LibraryName() { return "Null"; }
 Crypto::CipherAlgo Crypto::CipherAlgos::AES128_CTR()   { FATAL(not_implemented); }
 Crypto::CipherAlgo Crypto::CipherAlgos::AES128_CBC()   { FATAL(not_implemented); }
 Crypto::CipherAlgo Crypto::CipherAlgos::AES256_CBC()   { FATAL(not_implemented); }

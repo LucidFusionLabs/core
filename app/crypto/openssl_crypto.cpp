@@ -24,6 +24,7 @@
 #include "openssl/hmac.h"
 
 namespace LFL {
+string Crypto::LibraryName() { return "OpenSSL"; }
 #ifdef LFL_APPLE
 Crypto::CipherAlgo Crypto::CipherAlgos::AES128_CTR()   { return 0; }
 #else
@@ -91,8 +92,19 @@ string Crypto::DigestFinish(Digest d) {
   return ret;
 }
 
-Crypto::MAC Crypto::MACOpen(MACAlgo algo, const StringPiece &k) { HMAC_CTX *m=new HMAC_CTX(); HMAC_Init(m, k.data(), k.size(), FromVoid<const EVP_MD*>(algo)); return m; }
+Crypto::MAC Crypto::MACOpen(MACAlgo algo, const StringPiece &k) {
+  HMAC_CTX *m = new HMAC_CTX();
+  HMAC_Init(m, k.data(), k.size(), FromVoid<const EVP_MD*>(algo));
+  return m;
+}
+
 void Crypto::MACUpdate(MAC m, const StringPiece &in) { HMAC_Update(FromVoid<HMAC_CTX*>(m), MakeUnsigned(in.data()), in.size()); }
-int Crypto::MACFinish(MAC m, char *out, int outlen) { unsigned len=outlen; HMAC_Final(FromVoid<HMAC_CTX*>(m), MakeUnsigned(out), &len); delete FromVoid<HMAC_CTX*>(m); return len; }
+int Crypto::MACFinish(MAC m, char *out, int outlen) { 
+  unsigned len = outlen;
+  HMAC_Final(FromVoid<HMAC_CTX*>(m), MakeUnsigned(out), &len);
+  HMAC_CTX_cleanup(FromVoid<HMAC_CTX*>(m));
+  delete FromVoid<HMAC_CTX*>(m);
+  return len;
+}
 
 }; // namespace LFL

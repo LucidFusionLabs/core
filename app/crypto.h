@@ -165,6 +165,7 @@ struct Crypto {
     bool ComputeSecret(BigNum *K);
   };
 
+  static string LibraryName();
   static string MD5(const string &in);
   static string SHA1(const string &in);
   static string SHA256(const string &in);
