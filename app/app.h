@@ -445,12 +445,13 @@ struct PickerItem {
 };
 
 struct TableItem {
-  struct Dep { int section, row; string val; bool hidden; int left_icon, right_icon, type; string key; Callback cb; };
+  struct Dep { int section, row; string val; bool hidden; int left_icon, right_icon, type; string key; Callback cb; int flags; };
   enum { None=0, Label=1, Separator=2, Command=3, Button=4, Toggle=5, Selector=6, Picker=7, TextInput=8,
     NumberInput=9, PasswordInput=10, FontPicker=11 }; 
+  struct Flag { enum { FixDropdown=1 }; };
   typedef unordered_map<string, vector<Dep>> Depends;
   string key;
-  int type;
+  int type, flags=0;
   string val, right_text, dropdown_key;
   int tag, left_icon, right_icon;
   Callback cb, right_icon_cb;
@@ -830,7 +831,7 @@ struct SystemTableView {
   bool changed=0;
   Callback hide_cb, show_cb = [=](){ changed=0; }; 
   virtual ~SystemTableView();
-  SystemTableView(const string &title, const string &style, TableItemVec items, int second_col=0);
+  SystemTableView(const string &title, const string &style, TableItemVec items);
 
   void DelNavigationButton(int id);
   void AddNavigationButton(int id, const TableItem &item);

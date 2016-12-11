@@ -162,6 +162,7 @@ void TableItem::AssignDep(const TableItem::Dep &d) {
   if (d.cb)         cb         = d.cb;
   if (d.type)       type       = d.type;
   if (1)            val        = d.val;
+  if (1)            flags      = d.flags;
 }
 
 vector<Table> Table::Convert(vector<TableItem> in) {

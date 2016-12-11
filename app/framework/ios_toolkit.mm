@@ -344,8 +344,7 @@ static std::vector<UIImage*> app_images;
   @property (nonatomic, assign) LFL::SystemTableView *lfl_self;
   @property (nonatomic, assign) LFL::IntIntCB delete_row_cb;
   @property (nonatomic)         std::string style;
-  @property (nonatomic)         int editable_section, editable_start_row, selected_section, selected_row,
-                                    second_col;
+  @property (nonatomic)         int editable_section, editable_start_row, selected_section, selected_row;
 @end
 
 @implementation IOSTable
@@ -360,23 +359,10 @@ static std::vector<UIImage*> app_images;
     _editable_section = _editable_start_row = double_section_row_height = -1;
     data = move(item);
     self.title = LFL::MakeNSString(title);
-
     if (_style != "indent") self.tableView.separatorInset = UIEdgeInsetsZero;
     if (_style == "big") double_section_row_height = 0;
     [self.tableView setSeparatorStyle:UITableViewCellSeparatorStyleSingleLine];
     [self.tableView setSeparatorColor:[UIColor grayColor]];
-
-    if (_second_col < 0) {
-      UIFont *font = [UIFont boldSystemFontOfSize:[UIFont labelFontSize]];
-      NSDictionary *attr = @{NSFontAttributeName:font, NSForegroundColorAttributeName:[UIColor blackColor]};
-      for (auto &d : data) {
-        for (auto &i : d.item) {
-          const CGSize size = [LFL::MakeNSString(i.key) sizeWithAttributes:attr];
-          if (size.width > _second_col) _second_col = size.width;
-        }
-      }
-      _second_col += 30;
-    }
   }
 
   - (void)addRow:(int)section withItem:(LFL::TableItem)item {
@@ -450,6 +436,7 @@ static std::vector<UIImage*> app_images;
     return data[section].item.size();
   }
 
+  - (CGRect)getCellFrame { return CGRectMake(0, 0, 150, 44); }
   - (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)path {
     if (path.section >= data.size() || path.row >= data[path.section].item.size()) return tableView.rowHeight;
     const auto &ci = data[path.section].item[path.row];
@@ -458,11 +445,6 @@ static std::vector<UIImage*> app_images;
              (ci.type == LFL::TableItem::Picker || ci.type == LFL::TableItem::FontPicker)) return ci.height;
     else if (double_section_row_height == path.section) return tableView.rowHeight * 2;
     else return tableView.rowHeight;
-  }
-
-  - (CGRect)getCellFrame {
-    if (_second_col) return CGRectMake(_second_col, 0, self.tableView.frame.size.width - _second_col - 30, 44);
-    else             return CGRectMake(0, 0, 200, 44);
   }
   
   - (void)clearNavigationButton:(int)align {
@@ -507,8 +489,8 @@ static std::vector<UIImage*> app_images;
         }
       }
 
-      if (ci.dropdown_key.size()) {
-        int w = 10, x = _second_col ? _second_col - w : [LFL::MakeNSString(ci.key) sizeWithAttributes:
+      if (ci.dropdown_key.size() && !(ci.flags & LFL::TableItem::Flag::FixDropdown)) {
+        int w = 10, x = [LFL::MakeNSString(ci.key) sizeWithAttributes:
           @{NSFontAttributeName:[UIFont boldSystemFontOfSize:[UIFont labelFontSize]]}].width + 20 +
           (cell.imageView.image ? 60 : 0);
         IOSButton *button = [IOSButton buttonWithType:UIButtonTypeCustom];
@@ -544,11 +526,8 @@ static std::vector<UIImage*> app_images;
         else if (ci.val.size())       [textfield setText:        LFL::MakeNSString(ci.val)];
 
         cell.textLabel.text = LFL::MakeNSString(ci.key);
-        if (_second_col) [cell.contentView addSubview: textfield];
-        else {
-          textfield.textAlignment = NSTextAlignmentRight;
-          cell.accessoryView = textfield;
-        }
+        textfield.textAlignment = NSTextAlignmentRight;
+        cell.accessoryView = textfield;
         if (section == _selected_section && row == _selected_row) [textfield becomeFirstResponder];
         [textfield release];
 
@@ -625,18 +604,16 @@ static std::vector<UIImage*> app_images;
         label.text = LFL::MakeNSString(ci.val);
         label.adjustsFontSizeToFitWidth = TRUE;
         cell.textLabel.text = LFL::MakeNSString(ci.key);
-        if (_second_col) [cell.contentView addSubview: label];
-        else {
-          label.textAlignment = NSTextAlignmentRight;
-          cell.accessoryView = label;
-        }
+        label.textAlignment = NSTextAlignmentRight;
+        cell.accessoryView = label;
         [label release];
 
       } else {
         cell.textLabel.text = LFL::MakeNSString(ci.key);
       }
 
-      if (ci.dropdown_key.size() && cell.textLabel.text.length) {
+      if (ci.dropdown_key.size() && cell.textLabel.text.length &&
+          !(ci.flags & LFL::TableItem::Flag::FixDropdown)) {
         cell.textLabel.textColor = blue;
         cell.textLabel.text = [NSString stringWithFormat:@"%@  \U000002C5", cell.textLabel.text];
       }
@@ -840,13 +817,13 @@ static std::vector<UIImage*> app_images;
         if (ci.val.size() && ci.val[0] != 1) val = ci.val[0] == 2 ? ci.val.substr(1) : ci.val;
       } else if ((ci.type == LFL::TableItem::TextInput) || (ci.type == LFL::TableItem::NumberInput) ||
                  (ci.type == LFL::TableItem::PasswordInput)) {
-        IOSTextField *textfield = _second_col ? [[cell.contentView subviews] lastObject] : cell.accessoryView;
+        IOSTextField *textfield = LFL::objc_dynamic_cast<IOSTextField>(cell.accessoryView);
         val = LFL::GetNSString(textfield.text);
         if (val.empty() && !textfield.modified) {
           if (ci.val.size() && ci.val[0] != 1) val = ci.val[0] == 2 ? ci.val.substr(1) : ci.val;
         }
       } else if (ci.type == LFL::TableItem::Label) {
-        UILabel *label = _second_col ? [[cell.contentView subviews] lastObject] : cell.accessoryView;
+        UILabel *label = LFL::objc_dynamic_cast<UILabel>(cell.accessoryView);
         val = LFL::GetNSString(label.text);
       } else if (ci.type == LFL::TableItem::Selector) {
         UISegmentedControl *segmented_control = [[cell.contentView subviews] lastObject];
@@ -947,9 +924,8 @@ void SystemToolbarView::Show(bool show_or_hide) { [FromVoid<IOSToolbar*>(impl) s
 void SystemToolbarView::ToggleButton(const string &n) { [FromVoid<IOSToolbar*>(impl) toggleButtonNamed: n]; }
 
 SystemTableView::~SystemTableView() { if (auto table = FromVoid<IOSTable*>(impl)) [table release]; }
-SystemTableView::SystemTableView(const string &title, const string &style, TableItemVec items, int second_col) {
+SystemTableView::SystemTableView(const string &title, const string &style, TableItemVec items) {
   auto table = [[IOSTable alloc] initWithStyle: UITableViewStyleGrouped];
-  if (second_col) table.second_col = second_col;
   [table load:this withTitle:title withStyle:style items:Table::Convert(move(items))];
   impl = table;
 }
@@ -1057,6 +1033,7 @@ void SystemNavigationView::PopAll() {
   last_root = root;
   root = 0;
   [FromVoid<IOSNavigation*>(impl) popToRootViewControllerAnimated: NO];
+  if (last_root && last_root->hide_cb) last_root->hide_cb();
 }
 
 void SystemNavigationView::PopView(int n) {

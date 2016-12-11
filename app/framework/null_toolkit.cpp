@@ -39,7 +39,7 @@ void SystemToolbarView::Show(bool show_or_hide) {}
 void SystemToolbarView::ToggleButton(const string &n) {}
 
 SystemTableView::~SystemTableView() {}
-SystemTableView::SystemTableView(const string &title, const string &style, TableItemVec items, int second_col) :
+SystemTableView::SystemTableView(const string &title, const string &style, TableItemVec items) :
   impl(new vector<Table>(Table::Convert(move(items)))) {}
 
 StringPairVec SystemTableView::GetSectionText(int section) {

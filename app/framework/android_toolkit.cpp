@@ -74,7 +74,7 @@ void SystemMenuView::Show() {
 
 int GetTableViewID(SystemTableView *w) { return int(w->impl); }
 SystemTableView::~SystemTableView() {}
-SystemTableView::SystemTableView(const string &title, const string &style, TableItemVec items, int second_col) {
+SystemTableView::SystemTableView(const string &title, const string &style, TableItemVec items) {
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->activity_class,
                            "addTable", "(Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;)I"));

@@ -236,8 +236,7 @@ struct QtTable : public QtTableInterface {
   SystemTableView *lfl_self;
   IntIntCB delete_row_cb;
   string style;
-  int editable_section=-1, editable_start_row=-1, selected_section=0, selected_row=0, second_col=0,
-      row_height=30;
+  int editable_section=-1, editable_start_row=-1, selected_section=0, selected_row=0, row_height=30;
   QtStyledItemDelegate item_delegate;
 
   QtTable(SystemTableView *lself, const string &title, string sty, vector<Table> item) :
@@ -538,7 +537,7 @@ void SystemToolbarView::Show(bool show_or_hide) {
 }
 
 SystemTableView::~SystemTableView() { if (auto table = FromVoid<QtTable*>(impl)) delete table; }
-SystemTableView::SystemTableView(const string &title, const string &style, TableItemVec items, int second_col) :
+SystemTableView::SystemTableView(const string &title, const string &style, TableItemVec items) :
   impl(new QtTable(this, title, style, Table::Convert(move(items)))) {}
 
 StringPairVec SystemTableView::GetSectionText(int ind) {

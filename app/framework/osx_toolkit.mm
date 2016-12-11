@@ -282,7 +282,7 @@ static std::vector<NSImage*> app_images;
   @property (nonatomic, assign) LFL::IntIntCB delete_row_cb;
   @property (nonatomic)         std::string style;
   @property (nonatomic)         int editable_section, editable_start_row, selected_section, selected_row,
-                                    second_col, row_height;
+                                    row_height;
 @end
 
 @implementation OSXTable
@@ -677,7 +677,7 @@ void SystemToolbarView::Show(bool show_or_hide) {}
 void SystemToolbarView::ToggleButton(const string &n) {}
 
 SystemTableView::~SystemTableView() { if (auto table = FromVoid<OSXTable*>(impl)) [table release]; }
-SystemTableView::SystemTableView(const string &title, const string &style, TableItemVec items, int second_col) :
+SystemTableView::SystemTableView(const string &title, const string &style, TableItemVec items) :
   impl([[OSXTable alloc] init:this withTitle:title andStyle:style items:Table::Convert(move(items))]) {}
 
 void SystemTableView::DelNavigationButton(int align) {}
