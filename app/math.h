@@ -313,6 +313,10 @@ struct Box {
   static Box DelBorder(const Box &w, const Border &b) { return DelBorder(w, b.top, b.right, b.bottom, b.left); }
   static Box TopBorder(const Box &w, const Border &b) { return Box(w.x, w.top()-b.top, w.w, b.top); }
   static Box BotBorder(const Box &w, const Border &b) { return Box(w.x, w.y,           w.w, b.bottom); }
+  static Box AddBorder(const Box &w, const Border &b, float scale) { return AddBorder(w, XY_or_Y(scale, b.top), XY_or_Y(scale, b.right), XY_or_Y(scale, b.bottom), XY_or_Y(scale, b.left)); }
+  static Box DelBorder(const Box &w, const Border &b, float scale) { return DelBorder(w, XY_or_Y(scale, b.top), XY_or_Y(scale, b.right), XY_or_Y(scale, b.bottom), XY_or_Y(scale, b.left)); }
+  static Box TopBorder(const Box &w, const Border &b, float scale) { int v=XY_or_Y(scale, b.top);    return Box(w.x, w.top()-v, w.w, v); }
+  static Box BotBorder(const Box &w, const Border &b, float scale) { int v=XY_or_Y(scale, b.bottom); return Box(w.x, w.y,       w.w, v); }
   static Box FromString(const string &v);
 };
 

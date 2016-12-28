@@ -163,6 +163,7 @@ struct GraphicsContext {
   void DrawGradientBox(const Box &b, const Color *c) { return DrawGradientBox1(gd, b, c); }
   void DrawCrimpedBox(const Box &b, const float *tc, int o, float sx=0, float sy=0) { return DrawCrimpedBox1(gd, b, tc, o, sx, sy); }
   void DrawBox3(const Box3 &b, const point &p=point(), const Color *c=0) { return DrawTexturedBox3(gd, b, p, c); }
+  void DrawBox1(const Box &b) { return DrawTexturedBox(b); }
   static void DrawTexturedBox1(GraphicsDevice*, const Box&, const float *texcoord=0, int orientation=0);
   static void DrawGradientBox1(GraphicsDevice*, const Box&, const Color*);
   static void DrawCrimpedBox1(GraphicsDevice*, const Box&, const float *texcoord, int orientation, float scrollX=0, float scrollY=0);
@@ -359,6 +360,7 @@ struct GraphicsDevice {
   vector<Color> default_color;
   vector<vector<Box>> scissor_stack;
   vector<int*> buffers;
+  FrameBuffer *attached_framebuffer = 0;
 
   GraphicsDevice(Window *W) : parent(W), scissor_stack(1) {}
   virtual ~GraphicsDevice() {}

@@ -778,9 +778,10 @@ void TextArea::ChangeColors(Colors *C) {
 }
 
 void TextArea::Draw(const Box &b, int flag, Shader *shader) {
+  float scale = 0;
   GraphicsContext gc(root->gd);
   if (shader) {
-    float scale = shader->scale;
+    scale = shader->scale;
     glShadertoyShader(gc.gd, shader);
     shader->SetUniform1i("iChannelFlip", 0);
     shader->SetUniform4f("iTargetBox", 0, 0,   XY_or_Y(scale, gc.gd->TextureDim(line_fb.w)), 
@@ -795,7 +796,7 @@ void TextArea::Draw(const Box &b, int flag, Shader *shader) {
   int font_height = style.font->Height();
   LinesFrameBuffer *fb = GetFrameBuffer();
   if (flag & DrawFlag::CheckResized) CheckResized(b);
-  if (clip) gc.gd->PushScissor(Box::DelBorder(b, *clip));
+  if (clip) gc.gd->PushScissor(Box::DelBorder(b, *clip, scale));
   else if (extra_height) gc.gd->PushScissor(b);
   fb->DrawAligned(b, point(0, max(0, CommandLines()-1) * font_height));
   if (clip || extra_height) gc.gd->PopScissor();
@@ -1769,15 +1770,22 @@ void Terminal::UpdateToken(Line *L, int word_offset, int word_len, int update_ty
 }
 
 void Terminal::Draw(const Box &b, int flag, Shader *shader) {
+  float scale = 0;
+  int fh = style.font->Height();
   GraphicsContext gc(root->gd);
   TextArea::Draw(b, flag & ~DrawFlag::DrawCursor, shader);
-  if (shader) shader->SetUniform2f("iChannelScroll", 0, XY_or_Y(shader->scale, -b.y));
+  if (shader) {
+    scale = shader->scale;
+    shader->SetUniform2f("iChannelScroll", 0, XY_or_Y(scale, -line_fb.align_top_or_bot * extra_height) - b.y);
+  }
   if (clip) {
-    { Scissor s(gc.gd, Box::TopBorder(b, *clip)); cmd_fb.DrawAligned(b, point()); }
-    { Scissor s(gc.gd, Box::BotBorder(b, *clip)); cmd_fb.DrawAligned(b, point()); }
+    if (scale) { Box ub(b); ub.y /= scale; ub = Box::TopBorder(ub, *clip); ub.y *= scale; Scissor s(gc.gd, ub); cmd_fb.DrawAligned(ub, point()); }
+    else       { Scissor s(gc.gd, Box::TopBorder(b, *clip, scale)); cmd_fb.DrawAligned(b, point()); }
+    if (1)     { Scissor s(gc.gd, Box::BotBorder(b, *clip, scale)); cmd_fb.DrawAligned(b, point()); }
     if (hover_control) DrawHoverLink(b);
   }
-  if (flag & DrawFlag::DrawCursor) TextBox::DrawCursor(b.Position() + cursor.p);
+  if (flag & DrawFlag::DrawCursor)
+    TextBox::DrawCursor(b.Position() + point(0, -scrolled_lines * fh) + cursor.p);
   if (extra_height && !shader) {
     ScopedFillColor c(gc.gd, *bg_color);
     gc.DrawTexturedBox(Box(b.x, b.y + (line_fb.align_top_or_bot ? 0 : line_fb.h), b.w, extra_height));

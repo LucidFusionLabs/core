@@ -528,11 +528,13 @@ void FrameBuffer::AllocTexture(Texture *out) {
 }
 
 void FrameBuffer::Release(bool update_viewport) {
+  gd->attached_framebuffer = nullptr;
   gd->BindFrameBuffer(gd->default_framebuffer);
   if (update_viewport) gd->RestoreViewport(DrawMode::_2D);
 }
 
 void FrameBuffer::Attach(int ct, int dt, bool update_viewport) {
+  gd->attached_framebuffer = this;
   gd->BindFrameBuffer(ID);
   if (ct) { if (tex  .ID != ct) tex.owner   = false; gd->FrameBufferTexture     ((tex.ID   = ct)); }
   if (dt) { if (depth.ID != dt) depth.owner = false; gd->FrameBufferDepthTexture((depth.ID = dt)); }
