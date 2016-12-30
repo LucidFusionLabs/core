@@ -733,7 +733,7 @@ DOM::Node *Browser::LayoutNode(Flow *flow, DOM::Node *n, bool reflow) {
   if (render->background_image) render->UpdateBackgroundImage(flow);
   if (style->bgcolor_not_inherited || render->inline_block || render->clip || render->floating
       || render->bs_t || render->bs_b || render->bs_r || render->bs_l) {
-    render->content = Box(0, -render->box.h, render->box.w, render->box.h);
+    render->content = render->box.RelativeCoordinatesBox();
     render->padding = Box::AddBorder(render->content, render->PaddingOffset());
     render->border  = Box::AddBorder(render->content, render->BorderOffset());
     render->margin  = Box::AddBorder(render->content, render->MarginOffset());

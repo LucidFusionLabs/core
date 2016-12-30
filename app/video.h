@@ -59,7 +59,7 @@ struct Pixel {
 
 struct Color {
   float x[4];
-  Color() { r()=0; g()=0; b()=0; a()=1; }
+  Color() { r()=0; g()=0; b()=0; a()=0; }
   Color(const float *f) { r()=f[0]; g()=f[1]; b()=f[2]; a()=f[3]; }
   Color(double R, double G, double B) { r()=R; g()=G; b()=B; a()=1.0; }
   Color(double R, double G, double B, double A) { r()=R; g()=G; b()=B; a()=A; }

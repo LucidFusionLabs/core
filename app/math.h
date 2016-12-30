@@ -272,6 +272,7 @@ struct Box {
   Box &operator-=(const point &p) { x-=p.x; y-=p.y; return *this; }
   Box  operator+ (const point &p) const { return Box(x+p.x, y+p.y, w, h); }
   Box  operator- (const point &p) const { return Box(x-p.x, y-p.y, w, h); }
+  Box  operator*(float v) const { Box b = *this; b.scale(v, v); return b; }
   int top    () const { return y+h; }
   int right  () const { return x+w; }
   int centerX() const { return x+w/2; }
@@ -293,6 +294,7 @@ struct Box {
   void swapaxis(int width, int height) { x += w; y += h; swap(x,y); swap(w,h); y = width - y; x = height - x; } 
   void AddBorder(const Border &b) { *this = AddBorder(*this, b); }
   void DelBorder(const Border &b) { *this = DelBorder(*this, b); }
+  Box RelativeCoordinatesBox() const { return Box(0, -h, w, h); }
   Box Intersect(const Box &w) const { Box ret(max(x, w.x), max(y, w.y), min(right(), w.right()), min(top(), w.top())); ret.w -= ret.x; ret.h -= ret.y; return (ret.w >= 0 && ret.h >= 0) ? ret : Box(); }
   Box BottomLeft(const Box &sub) const { return Box(x+sub.x, y+sub.y,           sub.w, sub.h); }
   Box    TopLeft(const Box &sub) const { return Box(x+sub.x, top()-sub.y-sub.h, sub.w, sub.h); }

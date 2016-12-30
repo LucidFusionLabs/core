@@ -115,7 +115,7 @@ struct Widget {
     float scrolled=0, last_scrolled=0, increment=20;
     Color color=Color(15, 15, 15, 55), *outline_topleft=&Color::grey80, *outline_bottomright=&Color::grey50;
     Font *menuicon=0;
-    bool dragging=0, dirty=0;
+    bool dragging=0, dirty=0, arrows=1;
     virtual ~Slider() {}
     Slider(GUI *Gui, int f=Flag::Attached);
 
@@ -355,7 +355,7 @@ struct TextBox : public GUI, public TextboxController {
   virtual void UpdateCommandFB() { UpdateLineFB(&cmd_line, &cmd_fb); }
   virtual void UpdateLineFB(Line *L, LinesFrameBuffer *fb, int flag=0);
   virtual void Draw(const Box &b);
-  virtual void DrawCursor(point p);
+  virtual void DrawCursor(point p, Shader *shader=0);
   virtual void UpdateToken(Line*, int word_offset, int word_len, int update_type, const TokenProcessor<DrawableBox>*);
   virtual void UpdateLongToken(Line *BL, int beg_offset, Line *EL, int end_offset, const string &text, int update_type);
   virtual shared_ptr<Control> AddUrlBox(Line *BL, int beg_offset, Line *EL, int end_offset, string v, Callback cb);
@@ -694,6 +694,7 @@ struct Terminal : public TextArea {
   LinesFrameBuffer *GetFrameBuffer(const Line *l);
   void PushBackLines (int n) { TextArea::Write(string(n, '\n'), true, false); }
   void PushFrontLines(int n) { for (int i=0; i<n; ++i) LineUpdate(line.InsertAt(-term_height, 1, start_line_adjust), GetPrimaryFrameBuffer(), LineUpdate::PushFront); }
+  point GetCursorPosition() const { return point(0, -scrolled_lines * style.font->Height()) + cursor.p; }
   Border *UpdateClipBorder();
   void MoveLines(int sy, int ey, int dy, bool move_fb_p);
   void Scroll(int sl);

@@ -145,13 +145,13 @@ void Widget::Slider::Layout(int, int, bool flip) {
 
   if (1) {
     int attr_id = gui->child_box.attr.GetAttrId(Drawable::Attr(menuicon, &Color::white, nullptr, false, true));
-    gui->child_box.PushBack(arrow_up,   attr_id, menuicon ? menuicon->FindGlyph(flip ? 2 : 4) : 0);
-    gui->child_box.PushBack(arrow_down, attr_id, menuicon ? menuicon->FindGlyph(flip ? 3 : 1) : 0);
-    gui->child_box.PushBack(scroll_dot, attr_id, menuicon ? menuicon->FindGlyph(           5) : 0, &drawbox_ind);
+    if (arrows) gui->child_box.PushBack(arrow_up,   attr_id, menuicon ? menuicon->FindGlyph(flip ? 2 : 4) : 0);
+    if (arrows) gui->child_box.PushBack(arrow_down, attr_id, menuicon ? menuicon->FindGlyph(flip ? 3 : 1) : 0);
+    if (1)      gui->child_box.PushBack(scroll_dot, attr_id, menuicon ? menuicon->FindGlyph(           5) : 0, &drawbox_ind);
 
-    AddDragBox (scroll_dot, MouseController::CB(bind(&Slider::DragScrollDot, this)));
-    AddClickBox(arrow_up,   MouseController::CB(bind(flip ? &Slider::ScrollDown : &Slider::ScrollUp,   this)));
-    AddClickBox(arrow_down, MouseController::CB(bind(flip ? &Slider::ScrollUp   : &Slider::ScrollDown, this)));
+    if (1)      AddDragBox (scroll_dot, MouseController::CB(bind(&Slider::DragScrollDot, this)));
+    if (arrows) AddClickBox(arrow_up,   MouseController::CB(bind(flip ? &Slider::ScrollDown : &Slider::ScrollUp,   this)));
+    if (arrows) AddClickBox(arrow_down, MouseController::CB(bind(flip ? &Slider::ScrollUp   : &Slider::ScrollDown, this)));
   }
   Update(true);
 }
@@ -160,13 +160,12 @@ void Widget::Slider::Update(bool force) {
   if (!app->input || !app->input->MouseButton1Down()) dragging = false;
   if (!dragging && !dirty && !force) return;
   bool flip = flag & Flag::Horizontal;
-  int aw = dot_size, ah = dot_size;
   if (dragging) {
     if (flip) scrolled = Clamp(    float(gui->RelativePosition(gui->root->mouse).x - track.x) / track.w, 0.0f, 1.0f);
     else      scrolled = Clamp(1 - float(gui->RelativePosition(gui->root->mouse).y - track.y) / track.h, 0.0f, 1.0f);
   }
-  if (flip) gui->UpdateBoxX(track.x          + int((track.w - aw) * scrolled), drawbox_ind, IndexOrDefault(hitbox, 0, -1));
-  else      gui->UpdateBoxY(track.top() - ah - int((track.h - ah) * scrolled), drawbox_ind, IndexOrDefault(hitbox, 0, -1));
+  if (flip) { int aw = arrows ? dot_size : 0; gui->UpdateBoxX(track.x          + int((track.w - aw) * scrolled), drawbox_ind, IndexOrDefault(hitbox, 0, -1)); }
+  else      { int ah = arrows ? dot_size : 0; gui->UpdateBoxY(track.top() - ah - int((track.h - ah) * scrolled), drawbox_ind, IndexOrDefault(hitbox, 0, -1)); }
   dirty = false;
 }
 
@@ -534,13 +533,14 @@ void TextBox::Draw(const Box &b) {
   // gd->PopColor();
 }
 
-void TextBox::DrawCursor(point p) {
+void TextBox::DrawCursor(point p, Shader *shader) {
+  float scale = shader ? X_or_Y(shader->scale, 1) : 1;
   GraphicsContext gc(root->gd);
   if (cursor.type == Cursor::Block) {
     gc.gd->EnableBlend();
     gc.gd->BlendMode(GraphicsDevice::OneMinusDstColor, GraphicsDevice::OneMinusSrcAlpha);
     gc.gd->FillColor(cmd_color);
-    gc.DrawTexturedBox(Box(p.x, p.y - style.font->Height(), style.font->max_width, style.font->Height()));
+    gc.DrawTexturedBox(Box(p.x, p.y - style.font->Height(), style.font->max_width, style.font->Height()) * scale);
     gc.gd->BlendMode(GraphicsDevice::SrcAlpha, GraphicsDevice::One);
     gc.gd->DisableBlend();
   } else {
@@ -550,7 +550,7 @@ void TextBox::DrawCursor(point p) {
       if (elapsed > cursor.blink_time * 2) cursor.blink_begin = now;
       else blinking = true;
     }
-    if (blinking) style.font->Draw("_", p - point(0, style.font->Height()));
+    if (blinking) style.font->Draw("_", (p - point(0, style.font->Height())) * scale);
   }
 }
 
@@ -860,6 +860,7 @@ void TextArea::DragCB(int b, point p, point d, int down) {
     s->Begin(v_scrolled);
     if (selection_cb) selection_cb(s->beg);
   } else {
+#ifndef LFL_MOBILE
     int add_scroll = 0;
     if      (s->end_click.y>box.top()) add_scroll = max(0, s->end_click.y-max(box.top(), last_end_click.y));
     else if (s->end_click.y<box.y)     add_scroll = min(0, s->end_click.y-min(box.y,     last_end_click.y));
@@ -867,6 +868,7 @@ void TextArea::DragCB(int b, point p, point d, int down) {
       AddVScroll(reverse_line_fb ? -add_scroll : add_scroll);
       selection.scrolled += add_scroll;
     }
+#endif
     GetGlyphFromCoords(s->end_click, &s->end);
   }
 
@@ -1771,7 +1773,6 @@ void Terminal::UpdateToken(Line *L, int word_offset, int word_len, int update_ty
 
 void Terminal::Draw(const Box &b, int flag, Shader *shader) {
   float scale = 0;
-  int fh = style.font->Height();
   GraphicsContext gc(root->gd);
   TextArea::Draw(b, flag & ~DrawFlag::DrawCursor, shader);
   if (shader) {
@@ -1784,8 +1785,7 @@ void Terminal::Draw(const Box &b, int flag, Shader *shader) {
     if (1)     { Scissor s(gc.gd, Box::BotBorder(b, *clip, scale)); cmd_fb.DrawAligned(b, point()); }
     if (hover_control) DrawHoverLink(b);
   }
-  if (flag & DrawFlag::DrawCursor)
-    TextBox::DrawCursor(b.Position() + point(0, -scrolled_lines * fh) + cursor.p);
+  if (flag & DrawFlag::DrawCursor) TextBox::DrawCursor(b.Position() + GetCursorPosition());
   if (extra_height && !shader) {
     ScopedFillColor c(gc.gd, *bg_color);
     gc.DrawTexturedBox(Box(b.x, b.y + (line_fb.align_top_or_bot ? 0 : line_fb.h), b.w, extra_height));

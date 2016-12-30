@@ -351,6 +351,7 @@ static std::vector<UIImage*> app_images;
   {
     std::vector<LFL::Table> data;
     int double_section_row_height;
+    bool change_selected_row_background;
   }
 
   - (void)load:(LFL::SystemTableView*)lself withTitle:(const std::string&)title withStyle:(const std::string&)sty items:(std::vector<LFL::Table>)item {
@@ -360,7 +361,10 @@ static std::vector<UIImage*> app_images;
     data = move(item);
     self.title = LFL::MakeNSString(title);
     if (_style != "indent") self.tableView.separatorInset = UIEdgeInsetsZero;
-    if (_style == "big") double_section_row_height = 0;
+    if (_style == "big") {
+      double_section_row_height = 0;
+      change_selected_row_background = true;
+    }
     [self.tableView setSeparatorStyle:UITableViewCellSeparatorStyleSingleLine];
     [self.tableView setSeparatorColor:[UIColor grayColor]];
   }
@@ -480,7 +484,9 @@ static std::vector<UIImage*> app_images;
 
       auto &ci = data[section].item[row];
       ci.gui_loaded = true;
+      bool is_selected_row = section == _selected_section && row == _selected_row;
       UIColor *blue = [UIColor colorWithRed:0.0/255 green:122.0/255 blue:255.0/255 alpha:1];
+      if (change_selected_row_background && is_selected_row) [cell setBackgroundColor:[UIColor lightGrayColor]];
 
       if (ci.type != LFL::TableItem::Button) {
         if (int icon = ci.left_icon) {
@@ -528,7 +534,7 @@ static std::vector<UIImage*> app_images;
         cell.textLabel.text = LFL::MakeNSString(ci.key);
         textfield.textAlignment = NSTextAlignmentRight;
         cell.accessoryView = textfield;
-        if (section == _selected_section && row == _selected_row) [textfield becomeFirstResponder];
+        if (is_selected_row) [textfield becomeFirstResponder];
         [textfield release];
 
       } else if (ci.type == LFL::TableItem::Selector) {
