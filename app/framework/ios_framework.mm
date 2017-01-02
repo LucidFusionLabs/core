@@ -73,6 +73,9 @@ static int                ios_argc = 0;
 static const char* const* ios_argv = 0;
 };
 
+@implementation LFUIWindow
+@end
+
 @implementation LFUIApplication
   {
     bool want_extra_scale;
@@ -103,7 +106,7 @@ static const char* const* ios_argv = 0;
     CGRect wbounds = [[UIScreen mainScreen] bounds];
 
     MyAppCreate(LFL::ios_argc, LFL::ios_argv);
-    self.window = [[[UIWindow alloc] initWithFrame:wbounds] autorelease];
+    self.window = [[[LFUIWindow alloc] initWithFrame:wbounds] autorelease];
       
     if (_show_title) {
       _title_bar = [[UINavigationBar alloc] initWithFrame:CGRectMake(0, 0, CGRectGetWidth(wbounds), 44)];
@@ -232,12 +235,13 @@ static const char* const* ios_argv = 0;
   }
 
   - (void)hideKeyboard {
-    [self.controller.view endEditing:YES];
-    // [self.text_field resignFirstResponder];
+    [self.controller performSelector:@selector(becomeFirstResponder) withObject:nil afterDelay:0];
   }
+
   - (void)showKeyboard {
-    if ([self.text_field isFirstResponder]) [self.text_field resignFirstResponder];
-    [self.text_field becomeFirstResponder];
+    if ([self.text_field isFirstResponder])
+      [self.text_field performSelector:@selector(resignFirstResponder) withObject:nil afterDelay:0];
+    [self.text_field performSelector:@selector(becomeFirstResponder) withObject:nil afterDelay:0.1f];
   }
 
   - (BOOL)textField: (UITextField *)textField shouldChangeCharactersInRange:(NSRange)range replacementString:(NSString *)string {
@@ -326,9 +330,9 @@ static const char* const* ios_argv = 0;
     CGPoint pinch_point;
   }
 
-  // - (BOOL)canBecomeFirstResponder { return YES; }
-  // - (UIView*)inputAccessoryView { return _input_accessory_toolbar; }
+  - (BOOL)canBecomeFirstResponder { return YES; }
   - (BOOL)prefersStatusBarHidden { return status_bar_hidden; }
+  // - (UIView*)inputAccessoryView { return _input_accessory_toolbar; }
 
   - (CGRect)getKeyboardFrame { return keyboard_frame; }
   - (CGRect)getKeyboardToolbarFrame {
@@ -408,7 +412,7 @@ static const char* const* ios_argv = 0;
   }
 
   - (void)kbWillShowOrHide:(BOOL)show_or_hide withRect:(CGRect)rect andDuration:(NSTimeInterval)interval andCurve:(UIViewAnimationCurve)curve {
-    if (interface_rotation || CGRectEqualToRect(rect, keyboard_frame)) return;
+    if (/*interface_rotation || */ CGRectEqualToRect(rect, keyboard_frame)) return;
     if (_input_accessory_toolbar) _input_accessory_toolbar.hidden = show_or_hide;
     _showing_keyboard = show_or_hide;
     keyboard_frame = rect;
@@ -577,6 +581,13 @@ static const char* const* ios_argv = 0;
     if (fired && uiapp.frame_on_mouse_input) [uiapp.glk_view setNeedsDisplay];
     pinch_scale = p_scale;
   }
+
+  - (BOOL)canPerformAction:(SEL)action withSender:(id)sender {
+    return action == @selector(copy:) || action == @selector(paste:) || action == @selector(toggleKeyboard:);
+  }
+
+  - (void)copy:(id)sender { if (uiapp.text_field.copy_cb) uiapp.text_field.copy_cb(); }
+  - (void)toggleKeyboard:(id)sender { LFL::app->ToggleTouchKeyboard(); }
 @end
 
 @implementation MyTouchView
@@ -657,15 +668,11 @@ static const char* const* ios_argv = 0;
   }
 
   - (BOOL)canPerformAction:(SEL)action withSender:(id)sender {
-    return action == @selector(copy:) || action == @selector(paste:);
+    return action == @selector(copy:) || action == @selector(paste:) || action == @selector(toggleKeyboard:);
   }
 
-  - (void)copy:(id)sender {
-    if (_copy_cb) _copy_cb();
-  }
-
-  - (void)onCustom:(id)sender {
-  }
+  - (void)copy:(id)sender { if (_copy_cb) _copy_cb(); }
+  - (void)toggleKeyboard:(id)sender { LFL::app->ToggleTouchKeyboard(); }
 @end
 
 namespace LFL {

@@ -33,6 +33,9 @@
   - (void)shutdownGestureRecognizers;
 @end
 
+@interface LFUIWindow : UIWindow {}
+@end
+
 @interface LFGLKView : GLKView {}
 @end
 
@@ -40,7 +43,7 @@
 @end
 
 @interface LFUIApplication : NSObject<UIApplicationDelegate, UITextFieldDelegate, ObjcWindow> {}
-  @property (nonatomic, retain) UIWindow *window;
+  @property (nonatomic, retain) LFUIWindow *window;
   @property (nonatomic, retain) LFViewController *controller;
   @property (nonatomic, retain) LFGLKViewController *glk_controller;
   @property (nonatomic, retain) GLKView *glk_view;

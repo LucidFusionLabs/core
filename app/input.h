@@ -199,6 +199,7 @@ struct MouseController {
 struct DragTracker {
   bool changing=0;
   point beg_click, end_click;
+  Time beg_click_time;
   bool Update(const point &p, bool down);
 };
 

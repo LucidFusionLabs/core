@@ -133,12 +133,12 @@ static std::vector<UIImage*> app_images;
     data = move(kv);
     toggled.resize(data.size());
     for (auto b = data.begin(), e = data.end(), i = b; i != e; ++i) toolbar_titles[i->shortcut] = i - b;
-    _toolbar = [self createUIToolbar: [self getToolbarFrame]];
-    _toolbar2 = [self createUIToolbar: [self getToolbarFrame]];
+    _toolbar  = [self createUIToolbar: [self getToolbarFrame] first:true];
+    _toolbar2 = [self createUIToolbar: [self getToolbarFrame] first:false];
     return self;
   }
 
-  - (UIToolbar*)createUIToolbar:(CGRect)rect {
+  - (UIToolbar*)createUIToolbar:(CGRect)rect first:(BOOL)first {
     NSMutableArray *items = [[NSMutableArray alloc] init];
     UIBarButtonItem *spacer = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil];
     for (int i=0, l=data.size(); i<l; i++) {
@@ -146,7 +146,7 @@ static std::vector<UIImage*> app_images;
       NSString *K = [NSString stringWithUTF8String: data[i].shortcut.c_str()];
       UIBarButtonItem *item =
         [[UIBarButtonItem alloc] initWithTitle:(([K length] && LFL::isascii([K characterAtIndex:0])) ? [NSString stringWithFormat:@"%@", K] : [NSString stringWithFormat:@"%@\U0000FE0E", K])
-        style:UIBarButtonItemStylePlain target:self action:@selector(onClick:)];
+        style:UIBarButtonItemStylePlain target:self action:(first ? @selector(onClick:) : @selector(onClick2:))];
       [item setTag:i];
       [items addObject:item];
       [item release];
@@ -193,6 +193,10 @@ static std::vector<UIImage*> app_images;
     auto &b = data[item.tag];
     if (b.cb) b.cb();
     if (b.name == "toggle") [self toggleButton: item.tag];
+  }
+
+  - (void)onClick2:(id)sender {
+    [self onClick: sender];
     [[LFUIApplication sharedAppDelegate].controller resignFirstResponder];
   }
 
@@ -440,7 +444,7 @@ static std::vector<UIImage*> app_images;
     return data[section].item.size();
   }
 
-  - (CGRect)getCellFrame { return CGRectMake(0, 0, 150, 44); }
+  - (CGRect)getCellFrame { return CGRectMake(0, 0, 110, 44); }
   - (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)path {
     if (path.section >= data.size() || path.row >= data[path.section].item.size()) return tableView.rowHeight;
     const auto &ci = data[path.section].item[path.row];
@@ -1058,9 +1062,12 @@ void Application::ShowSystemContextMenu(const MenuItemVec &items) {
   UIMenuController* mc = [UIMenuController sharedMenuController];
   vector<UIMenuItem*> menuitems;
   for (auto &i : items) {
-    if (i.name == "Copy") { uiapp.text_field.copy_cb = i.cb; continue; }
-    UIMenuItem *mi = [[UIMenuItem alloc] initWithTitle: MakeNSString(i.name) action:@selector(onCustom:)];
-    menuitems.push_back(mi);
+    if      (i.name == "Copy") { uiapp.text_field.copy_cb = i.cb; continue; }
+    else if (i.name == "Keyboard") {
+      string title = [[LFUIApplication sharedAppDelegate] isKeyboardFirstResponder] ? "Hide Keyboard" : "Show Keyboard";
+      UIMenuItem *mi = [[UIMenuItem alloc] initWithTitle: MakeNSString(title) action:@selector(toggleKeyboard:)];
+      menuitems.push_back(mi);
+    }
   }
   if (menuitems.size())
     mc.menuItems = [NSArray arrayWithObjects:&menuitems[0] count:menuitems.size()];

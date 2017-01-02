@@ -633,8 +633,15 @@ TextArea::TextArea(Window *W, const FontRef &F, int S, int LC) :
 #ifdef LFL_MOBILE
   drag_cb = [=](int, point p, point d, int down){
     if (selection.explicitly_initiated) return false;
-    if (selection.Update(p, down)) app->ShowSystemContextMenu
-      (MenuItemVec{ MenuItem{"", "Copy", [=](){ selection.explicitly_initiated = true; } } });
+    if (selection.Update(p, down)) selection.beg_click_time = Now();
+    else if (!down && abs(selection.beg_click.y - selection.end_click.y) < 3
+             && Now() - selection.beg_click_time > Time(500)) {
+      app->ShowSystemContextMenu
+        (MenuItemVec{ 
+         MenuItem{"", "Copy", [=](){ selection.explicitly_initiated = true; } },
+         MenuItem{"", "Keyboard" } });
+      return true;
+    }
     if (d.y) {
       float sl = float(d.y) / style.font->Height();
       v_scrolled = Clamp(v_scrolled + sl * PercentOfLines(1), 0.0f, 1.0f);
@@ -843,7 +850,7 @@ void TextArea::DrawSelection() {
   GraphicsContext gc(root->gd);
   gc.gd->EnableBlend();
   gc.gd->FillColor(selection_color);
-  gc.DrawBox3(selection.box, box.BottomLeft());
+  gc.DrawBox3(selection.box, box.BottomLeft() + point(0, line_fb.align_top_or_bot ? extra_height : 0));
   gc.gd->SetColor(Color::white);
 }
 
