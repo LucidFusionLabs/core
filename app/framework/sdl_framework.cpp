@@ -170,7 +170,7 @@ void Application::CloseTouchKeyboard() {
   SDL_iPhoneKeyboardHide((SDL_Window*)screen->id);
 #endif
 }
-void Application::OpenTouchKeyboard() {
+void Application::OpenTouchKeyboard(bool) {
 #ifdef LFL_IOS
   SDL_iPhoneKeyboardShow((SDL_Window*)screen->id);
 #endif

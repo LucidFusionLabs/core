@@ -133,7 +133,7 @@ void Application::SetClipboardText(const string &s) {}
 string Application::GetClipboardText() { return string(); }
 void Application::ShowSystemContextMenu(const vector<MenuItem>&items) {}
 
-void Application::OpenTouchKeyboard() {}
+void Application::OpenTouchKeyboard(bool) {}
 void Application::SetTouchKeyboardTiled(bool v) {}
 void Application::SetAutoRotateOrientation(bool v) {}
 void Application::SetDownScale(bool) {}

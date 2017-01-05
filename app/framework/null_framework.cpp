@@ -77,7 +77,9 @@ void Application::ReleaseMouseFocus() {}
 string Application::GetClipboardText() { return ""; }
 void Application::SetClipboardText(const string &s) {}
 
-void Application::OpenTouchKeyboard() {}
+void Application::SetAppFrameEnabled(bool) {}
+void Application::OpenTouchKeyboard(bool) {}
+void Application::CloseTouchKeyboard() {}
 void Application::ToggleTouchKeyboard() {}
 void Application::CloseTouchKeyboardAfterReturn(bool v) {}
 void Application::SetTouchKeyboardTiled(bool v) {}

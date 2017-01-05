@@ -204,7 +204,7 @@ static std::vector<UIImage*> app_images;
     auto uiapp = [LFUIApplication sharedAppDelegate];
     uiapp.controller.input_accessory_toolbar = show_or_hide ? _toolbar : nil;
     uiapp.text_field.inputAccessoryView = show_or_hide ? _toolbar2 : nil;
-    [uiapp.text_field reloadInputViews];
+    if ([uiapp.text_field isFirstResponder]) [uiapp.text_field reloadInputViews];
     [_toolbar removeFromSuperview];
     if (show_or_hide) {
       uiapp.controller.input_accessory_toolbar.hidden = uiapp.controller.showing_keyboard;
@@ -444,7 +444,10 @@ static std::vector<UIImage*> app_images;
     return data[section].item.size();
   }
 
-  - (CGRect)getCellFrame { return CGRectMake(0, 0, 110, 44); }
+  - (CGRect)getCellFrame:(int)labelWidth {
+    return CGRectMake(0, 0, self.tableView.frame.size.width - 110 - labelWidth, 44);
+  }
+
   - (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)path {
     if (path.section >= data.size() || path.row >= data[path.section].item.size()) return tableView.rowHeight;
     const auto &ci = data[path.section].item[path.row];
@@ -516,9 +519,13 @@ static std::vector<UIImage*> app_images;
       bool textinput=0, numinput=0, pwinput=0;
       if ((textinput = ci.type == LFL::TableItem::TextInput) || (numinput = ci.type == LFL::TableItem::NumberInput)
           || (pwinput = ci.type == LFL::TableItem::PasswordInput)) {
-        IOSTextField *textfield = [[IOSTextField alloc] initWithFrame: [self getCellFrame]];
+        cell.textLabel.text = LFL::MakeNSString(ci.key);
+        [cell.textLabel sizeToFit];
+
+        IOSTextField *textfield = [[IOSTextField alloc] initWithFrame:
+          [self getCellFrame:cell.textLabel.frame.size.width]];
         textfield.autoresizingMask = UIViewAutoresizingFlexibleHeight;
-        textfield.adjustsFontSizeToFitWidth = YES;
+        // textfield.adjustsFontSizeToFitWidth = YES;
         textfield.autoresizesSubviews = YES;
         textfield.autocorrectionType = UITextAutocorrectionTypeNo;
         textfield.autocapitalizationType = UITextAutocapitalizationTypeNone;
@@ -535,7 +542,6 @@ static std::vector<UIImage*> app_images;
         if (ci.HasPlaceholderValue()) [textfield setPlaceholder: LFL::MakeNSString(ci.GetPlaceholderValue())];
         else if (ci.val.size())       [textfield setText:        LFL::MakeNSString(ci.val)];
 
-        cell.textLabel.text = LFL::MakeNSString(ci.key);
         textfield.textAlignment = NSTextAlignmentRight;
         cell.accessoryView = textfield;
         if (is_selected_row) [textfield becomeFirstResponder];
@@ -610,10 +616,12 @@ static std::vector<UIImage*> app_images;
         [onoff release];
 
       } else if (ci.type == LFL::TableItem::Label) {
-        UILabel *label = [[UILabel alloc] initWithFrame: [self getCellFrame]];
+        cell.textLabel.text = LFL::MakeNSString(ci.key);
+        [cell.textLabel sizeToFit];
+
+        UILabel *label = [[UILabel alloc] initWithFrame: [self getCellFrame: cell.textLabel.frame.size.width]];
         label.text = LFL::MakeNSString(ci.val);
         label.adjustsFontSizeToFitWidth = TRUE;
-        cell.textLabel.text = LFL::MakeNSString(ci.key);
         label.textAlignment = NSTextAlignmentRight;
         cell.accessoryView = label;
         [label release];

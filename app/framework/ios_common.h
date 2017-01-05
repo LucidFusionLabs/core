@@ -52,7 +52,8 @@
   @property (nonatomic, retain) UINavigationBar *title_bar;
   @property (nonatomic, retain) NSMutableDictionary *main_wait_fh;
   @property (nonatomic, assign) UIViewController *root_controller, *top_controller;
-  @property BOOL resign_textfield_on_return, frame_on_keyboard_input, frame_on_mouse_input, downscale, show_title;
+  @property BOOL frame_disabled, enable_frame_on_textfield_shown, resign_textfield_on_return, frame_on_keyboard_input,
+                 frame_on_mouse_input, downscale, show_title;
   @property int screen_y, screen_width, screen_height;
   @property CGFloat scale;
   + (LFUIApplication *) sharedAppDelegate;
@@ -62,7 +63,7 @@
   - (CGRect)getFrame;
   - (bool)isKeyboardFirstResponder;
   - (void)hideKeyboard;
-  - (void)showKeyboard;
+  - (void)showKeyboard:(bool)enable_app_frame;
 @end
 
 @interface IOSToolbar : NSObject

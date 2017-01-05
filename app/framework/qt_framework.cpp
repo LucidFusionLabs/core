@@ -268,7 +268,7 @@ void Application::LoseFocus() {}
 void Application::GrabMouseFocus()    { auto screen=app->focused; GetTyped<QtWindow*>(screen->impl)->grabbed=1; GetTyped<QtWindowInterface*>(screen->id)->window->windowHandle()->setCursor(Qt::BlankCursor); screen->grab_mode.On();  screen->cursor_grabbed=true;  }
 void Application::ReleaseMouseFocus() { auto screen=app->focused; GetTyped<QtWindow*>(screen->impl)->grabbed=0; GetTyped<QtWindowInterface*>(screen->id)->window->windowHandle()->unsetCursor();              screen->grab_mode.Off(); screen->cursor_grabbed=false; }
 void Application::ToggleTouchKeyboard() {}
-void Application::OpenTouchKeyboard() {}
+void Application::OpenTouchKeyboard(bool) {}
 void Application::CloseTouchKeyboard() {}
 void Application::CloseTouchKeyboardAfterReturn(bool v) {}
 void Application::SetTouchKeyboardTiled(bool v) {}

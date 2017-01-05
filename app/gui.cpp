@@ -262,6 +262,13 @@ TextBox::Control::Control(TextBox::Line *P, GUI *G, const Box3 &b, string v, Mou
   del_hitbox = true;
 }
 
+void TextBox::LineData::AddControlsDelta(int delta_y) {
+  for (auto &i : controls) {
+    i.second->box += point(0, delta_y);
+    for (auto &j : i.second->hitbox) i.second->gui->IncrementBoxY(delta_y, -1, j);
+  }
+}
+
 int TextBox::Line::Erase(int x, int l) {
   if (!(l = max(0, min(Size() - x, l)))) return 0;
   TokenProcessor<DrawableBox> update;
@@ -714,8 +721,12 @@ void TextArea::Redraw(bool attach, bool relayout) {
   fb->p = reverse_line_fb ? point(0, fb->h - start_line_adjust * font_height) 
                           : point(0, start_line_adjust * font_height);
   if (attach) { fb->fb.Attach(); fb->fb.gd->Clear(); }
-  for (int i=start_line; i<line.ring.count && lines < fb->lines; i++)
-    lines += (fb->*update_cb)(&line[-i-1], -line_left, 0, fb->lines - lines, fb_flag);
+  for (int i=start_line; i<line.ring.count && lines < fb->lines; i++) {
+    Line *L = &line[-i-1];
+    int py = L->p.y;
+    lines += (fb->*update_cb)(L, -line_left, 0, fb->lines - lines, fb_flag);
+    L->data->AddControlsDelta(L->p.y - py);
+  }
   fb->p = point(0, fb->h);
   if (attach) { fb->scroll = v2(); fb->fb.Release(); }
 }
@@ -1683,13 +1694,8 @@ void Terminal::MoveToOrFromScrollRegion(TextBox::LinesFrameBuffer *fb, TextBox::
   int plpy = l->p.y;
   fb->Update(l, p, flag);
   bool last_outside_scroll_region = l->data->outside_scroll_region;
-  if ((l->data->outside_scroll_region = fb != &line_fb) != last_outside_scroll_region) {
-    int delta_y = plpy - l->p.y + line_fb.h * (l->data->outside_scroll_region ? -1 : 1);
-    for (auto &i : l->data->controls) {
-      i.second->box += point(0, delta_y);
-      for (auto &j : i.second->hitbox) i.second->gui->IncrementBoxY(delta_y, -1, j);
-    }
-  }
+  if ((l->data->outside_scroll_region = fb != &line_fb) != last_outside_scroll_region)
+    l->data->AddControlsDelta(plpy - l->p.y + line_fb.h * (l->data->outside_scroll_region ? -1 : 1));
 }
 
 void Terminal::SetScrollRegion(int b, int e, bool release_fb) {
@@ -2029,6 +2035,7 @@ void Terminal::FlushParseText() {
     TerminalTrace("Terminal: FlushParseText: UpdateText(%d, %d, '%s').size = [%d, %d] attr=%d",
                   term_cursor.x, term_cursor.y, String::ToUTF8(input_piece).c_str(), write_size, update_size, cursor.attr);
     if (!update_size) continue;
+    l->data->outside_scroll_region = fb != &line_fb;
     l->Layout();
     if (!fb->lines) continue;
     int s = l->Size(), ol = s - o, sx = l->data->glyphs.LeftBound(o), ex = l->data->glyphs.RightBound(s-1);

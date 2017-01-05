@@ -78,7 +78,7 @@ static const char* const* ios_argv = 0;
 
 @implementation LFUIApplication
   {
-    bool want_extra_scale;
+    bool want_extra_scale, has_become_active;
     int target_fps;
     UIBackgroundTaskIdentifier bg_task;
   }
@@ -194,7 +194,8 @@ static const char* const* ios_argv = 0;
   - (void)applicationWillResignActive:(UIApplication*)application {}
   - (void)applicationDidBecomeActive:(UIApplication*)application {
     INFO("applicationDidBecomeActive");
-    [self showKeyboard];
+    if (!has_become_active && (has_become_active = true)) return;
+    [self showKeyboard: false];
   }
 
   - (void)applicationWillEnterForeground:(UIApplication *)application{}
@@ -238,7 +239,8 @@ static const char* const* ios_argv = 0;
     [self.controller performSelector:@selector(becomeFirstResponder) withObject:nil afterDelay:0];
   }
 
-  - (void)showKeyboard {
+  - (void)showKeyboard: (bool)enable_app_frame {
+    _enable_frame_on_textfield_shown = enable_app_frame; 
     if ([self.text_field isFirstResponder])
       [self.text_field performSelector:@selector(resignFirstResponder) withObject:nil afterDelay:0];
     [self.text_field performSelector:@selector(becomeFirstResponder) withObject:nil afterDelay:0.1f];
@@ -312,7 +314,7 @@ static const char* const* ios_argv = 0;
 
   - (void)glkView:(GLKView *)v drawInRect:(CGRect)rect {
     LFL::Window *screen = LFL::app->focused;
-    if (!uiapp.screen_width || !uiapp.screen_height || !screen) return;
+    if (uiapp.frame_disabled || !uiapp.screen_width || !uiapp.screen_height || !screen) return;
     if (screen->y != uiapp.screen_y || screen->width != uiapp.screen_width || screen->height != uiapp.screen_height)
       LFL::app->focused->Reshaped(LFL::Box(0, uiapp.screen_y, uiapp.screen_width, uiapp.screen_height));
 
@@ -418,6 +420,8 @@ static const char* const* ios_argv = 0;
     keyboard_frame = rect;
     bool presented_controller = uiapp.top_controller != uiapp.root_controller;
     if (presented_controller) [uiapp.top_controller.view setNeedsLayout];
+    if (uiapp.enable_frame_on_textfield_shown && show_or_hide)
+      uiapp.frame_disabled = uiapp.enable_frame_on_textfield_shown = false;
     [uiapp.glk_view setNeedsLayout];
 #if 0
     [UIView animateWithDuration:interval animations:^{
@@ -722,7 +726,7 @@ void Application::SetClipboardText(const string &s) {
   if (auto ns = MakeNSString(s)) [UIPasteboard generalPasteboard].string = ns;
 }
 
-void Application::OpenTouchKeyboard() { [[LFUIApplication sharedAppDelegate] showKeyboard]; }
+void Application::OpenTouchKeyboard(bool enable_app_frame) { [[LFUIApplication sharedAppDelegate] showKeyboard: enable_app_frame]; }
 void Application::CloseTouchKeyboard() { [[LFUIApplication sharedAppDelegate] hideKeyboard]; }
 void Application::CloseTouchKeyboardAfterReturn(bool v) { [LFUIApplication sharedAppDelegate].resign_textfield_on_return = v; }
 void Application::SetTouchKeyboardTiled(bool v) { [[LFUIApplication sharedAppDelegate].controller setOverlapKeyboard: !v]; }
@@ -731,6 +735,7 @@ void Application::ToggleTouchKeyboard() {
   else OpenTouchKeyboard();
 }
 
+void Application::SetAppFrameEnabled(bool v) { [LFUIApplication sharedAppDelegate].frame_disabled = !v; }
 void Application::SetAutoRotateOrientation(bool v) {}
 int Application::SetMultisample(bool v) { return [[LFUIApplication sharedAppDelegate] updateGLKMultisample:v]; }
 int Application::SetExtraScale(bool v) { return [[LFUIApplication sharedAppDelegate] updateScale:v]; }

@@ -186,6 +186,7 @@ struct TextBox : public GUI, public TextboxController {
     bool wrapped=0, outside_scroll_region=0;
     unordered_map<int, shared_ptr<Control>> controls;
     void Clear() { controls.clear(); glyphs.Clear(); wrapped=0; }
+    void AddControlsDelta(int delta_y);
   };
 
   struct Line {

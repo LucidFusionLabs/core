@@ -250,7 +250,7 @@ void Application::CloseWindow(Window *W) {
 
 void Application::ReleaseMouseFocus() {}
 void Application::GrabMouseFocus() {}
-void Application::OpenTouchKeyboard() {}
+void Application::OpenTouchKeyboard(bool) {}
 void Application::SetTouchKeyboardTiled(bool v) {}
 void Application::SetAutoRotateOrientation(bool v) {}
 

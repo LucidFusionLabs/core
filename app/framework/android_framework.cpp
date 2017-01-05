@@ -115,7 +115,7 @@ void Application::ReleaseMouseFocus() {}
 string Application::GetClipboardText() { return ""; }
 void Application::SetClipboardText(const string &s) {}
 
-void Application::OpenTouchKeyboard() {
+void Application::OpenTouchKeyboard(bool) {
   static jmethodID jni_activity_method_show_keyboard =
     CheckNotNull(jni->env->GetMethodID(jni->activity_class, "showKeyboard", "()V"));
   jni->env->CallVoidMethod(jni->activity, jni_activity_method_show_keyboard);

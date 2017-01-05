@@ -734,11 +734,12 @@ struct Application : public ::LFApp {
   void UpdateSystemImage(int n, Texture&);
   bool OpenSystemAppPreferences();
 
-  void OpenTouchKeyboard();
+  void OpenTouchKeyboard(bool enable_app_frame=false);
   void CloseTouchKeyboard();
   void CloseTouchKeyboardAfterReturn(bool);
   void SetTouchKeyboardTiled(bool);
   void ToggleTouchKeyboard();
+  void SetAppFrameEnabled(bool);
   void SetAutoRotateOrientation(bool);
   void SetVerticalSwipeRecognizer(int touches);
   void SetHorizontalSwipeRecognizer(int touches);
