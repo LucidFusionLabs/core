@@ -193,7 +193,7 @@ struct MouseController {
   virtual int AddHoverBox     (const Box &w, MouseControllerCallback cb) { return hit.Insert(HitBox(Event::Hover,      w, move(cb))); }
   virtual int AddDragBox      (const Box &w, MouseControllerCallback cb) { return hit.Insert(HitBox(Event::Drag,       w, move(cb))); }
   virtual int SendMouseEvent(InputEvent::Id, const point &p, const point &d, int down, int flag);
-  virtual int SendWheelEvent(InputEvent::Id, const v2    &p, const v2    &d) { return 0; }
+  virtual int SendWheelEvent(InputEvent::Id, const v2    &p, const v2    &d, bool begin) { return 0; }
 };
 
 struct DragTracker {
@@ -211,8 +211,9 @@ struct Input : public Module {
       struct { int   x, y, a, b; } iv;
       struct { float x, y, a, b; } fv;
     } data;
-    InputCB(int T=0, int X=0, int Y=0, int A=0, int B=0) : type(T) { data.iv.x=X; data.iv.y=Y; data.iv.a=A; data.iv.b=B; }
-    InputCB(int T, float X, float Y, float A, float B, bool round) : type(T) { data.fv.x=X; data.fv.y=Y; data.fv.a=A; data.fv.b=B; }
+    bool begin;
+    InputCB(int T=0, int X=0, int Y=0, int A=0, int B=0, bool b=0) : type(T), begin(b) { data.iv.x=X; data.iv.y=Y; data.iv.a=A; data.iv.b=B; }
+    InputCB(int T, float X, float Y, float A, float B, bool b, bool round) : type(T), begin(b) { data.fv.x=X; data.fv.y=Y; data.fv.a=A; data.fv.b=B; }
   };
 
   bool left_shift_down = 0, right_shift_down = 0, left_ctrl_down = 0, right_ctrl_down = 0;
@@ -226,7 +227,7 @@ struct Input : public Module {
   void QueueMouseMovement(const point &p, const point &d);
   void QueueMouseSwipe(const point &p, const point &d);
   void QueueMouseWheel(const v2 &p, const v2 &d);
-  void QueueMouseZoom(const v2 &p, const v2 &d);
+  void QueueMouseZoom(const v2 &p, const v2 &d, bool begin);
 
   bool ShiftKeyDown() const { return left_shift_down || right_shift_down; }
   bool CtrlKeyDown() const { return left_ctrl_down || right_ctrl_down; }
@@ -244,7 +245,7 @@ struct Input : public Module {
   int MouseMove(const point &p, const point &d);
   int MouseSwipe(const point &p, const point &d);
   int MouseWheel(const v2 &p, const v2 &d);
-  int MouseZoom(const v2 &p, const v2 &d);
+  int MouseZoom(const v2 &p, const v2 &d, bool begin);
   int MouseClick(int button, bool down, const point &p);
   int MouseEventDispatch(InputEvent::Id event, const point &p, const point &d, int down);
   int MouseEventDispatchGUI(InputEvent::Id event, const point &p, const point &d, int down, GUI *g, int *active_guis);

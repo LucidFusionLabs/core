@@ -218,7 +218,7 @@
   - (void)magnifyWithEvent:(NSEvent*)event {
     CGFloat p_scale = [event magnification] + 1.0;
     LFL::v2 d(p_scale, p_scale);
-    int fired = LFL::app->input->MouseZoom(LFL::app->focused ? LFL::app->focused->mouse : LFL::point(), d);
+    int fired = LFL::app->input->MouseZoom(LFL::app->focused ? LFL::app->focused->mouse : LFL::point(), d, 0);
     if (fired && _frame_on_mouse_input) [self setNeedsDisplay:YES]; 
   }
 

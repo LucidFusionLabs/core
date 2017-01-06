@@ -575,13 +575,14 @@ static const char* const* ios_argv = 0;
   #endif
 
   - (void)pinchGesture: (UIPinchGestureRecognizer*)pinch {
-    if (pinch.state == UIGestureRecognizerStateBegan) {
+    bool begin = pinch.state == UIGestureRecognizerStateBegan;
+    if (begin) {
       pinch_scale = 1.0;
       pinch_point = [pinch locationInView: self.view];
     }
-    CGFloat p_scale = 1.0 + (pinch_scale - pinch.scale);
+    CGFloat p_scale = 1.0 - (pinch_scale - pinch.scale);
     LFL::v2 p(uiapp.scale * pinch_point.x, uiapp.scale * pinch_point.y), d(p_scale, p_scale);
-    int fired = LFL::app->input->MouseZoom(p, d);
+    int fired = LFL::app->input->MouseZoom(p, d, begin);
     if (fired && uiapp.frame_on_mouse_input) [uiapp.glk_view setNeedsDisplay];
     pinch_scale = p_scale;
   }
