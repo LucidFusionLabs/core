@@ -331,7 +331,7 @@ static std::vector<UIImage*> app_images;
     [super viewDidLoad];
     INFO("IOSNavigation viewDidLoad: frame=", LFL::GetCGRect(self.view.frame).DebugString());
   }
- 
+
   - (void) viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
     INFO("IOSNavigation viewDidAppear: frame=", LFL::GetCGRect(self.view.frame).DebugString());
@@ -1006,7 +1006,8 @@ void SystemNavigationView::Show(bool show_or_hide) {
     if (root->show_cb) root->show_cb();
     INFO("LFViewController.presentViewController IOSNavigation frame=", LFL::GetCGRect(uiapp.controller.view.frame).DebugString());
     uiapp.top_controller = nav;
-    [uiapp.controller presentViewController:nav animated:YES completion:nil];
+    if (uiapp.controller.presentedViewController != nav)
+      [uiapp.controller presentViewController:nav animated:YES completion:nil];
   } else {
     INFO("LFViewController.dismissViewController ", GetNSString(NSStringFromClass([uiapp.controller.presentedViewController class])), " frame=", LFL::GetCGRect(uiapp.controller.view.frame).DebugString());
     uiapp.top_controller = uiapp.root_controller;

@@ -693,7 +693,7 @@ struct RFBClientConnection : public Connection::Handler {
 
 Connection *RFBClient::Open(Params p, RFBClient::LoadPasswordCB pcb, RFBClient::UpdateCB ucb,
                             RFBClient::CopyCB ccb, Connection::CB *detach, Callback *success) { 
-  Connection *c = app->net->tcp_client->Connect(p.hostport, 5900, detach);
+  Connection *c = app->ConnectTCP(p.hostport, 5900, detach, p.background_services);
   if (!c) return 0;
   c->handler = make_unique<RFBClientConnection>(move(p), move(pcb), move(ucb), move(ccb),
                                                 move(success ? *success : Callback()));
