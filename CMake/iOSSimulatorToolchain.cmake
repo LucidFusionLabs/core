@@ -14,7 +14,7 @@ set(CMAKE_CXX_COMPILER_WORKS TRUE)
 set(CMAKE_C_COMPILER_WORKS TRUE)
 set(CMAKE_OSX_SYSROOT ${LFL_IOS_SDK} CACHE PATH "iOS sysroot")
 set(CMAKE_OSX_DEPLOYMENT_TARGET "" CACHE STRING "iOS deploy" FORCE)
-set(CMAKE_OSX_ARCHITECTURES i686 CACHE string "iOS arch")
+set(CMAKE_OSX_ARCHITECTURES x86_64 CACHE string "iOS arch")
 set(CMAKE_SYSTEM_FRAMEWORK_PATH ${LFL_IOS_SDK}/System/Library/Frameworks)
 set(CMAKE_SIZEOF_VOID_P 4)
 
@@ -36,9 +36,9 @@ include_directories(${LFL_IOS_SDK}/System/Library/Frameworks/OpenGLES.framework/
 set(ENV{CC} "/usr/bin/clang")
 set(ENV{CXX} "/usr/bin/clang++")
 set(ENV{CODESIGN_ALLOCATE} "${LFL_IOS_ROOT}/usr/bin/codesign_allocate")
-set(ENV{CFLAGS}   "-arch i686 -isysroot ${LFL_IOS_SDK} ${IOS_VERSION_MIN}")
-set(ENV{CXXFLAGS} "-arch i686 -isysroot ${LFL_IOS_SDK} ${IOS_VERSION_MIN}")
-set(ENV{LDFLAGS}  "-arch i686 -isysroot ${LFL_IOS_SDK} ${IOS_VERSION_MIN}")
+set(ENV{CFLAGS}   "-arch x86_64 -isysroot ${LFL_IOS_SDK} ${IOS_VERSION_MIN}")
+set(ENV{CXXFLAGS} "-arch x86_64 -isysroot ${LFL_IOS_SDK} ${IOS_VERSION_MIN}")
+set(ENV{LDFLAGS}  "-arch x86_64 -isysroot ${LFL_IOS_SDK} ${IOS_VERSION_MIN}")
 
 set(CONFIGURE_ENV CC=$ENV{CC} CXX=$ENV{CXX} CPP=$ENV{CPP} CXXCPP=$ENV{CXXCPP} AR=$ENV{AR} RANLIB=$ENV{RANLIB}
     CFLAGS=$ENV{CFLAGS} CXXFLAGS=$ENV{CXXFLAGS} LDFLAGS=$ENV{LDFLAGS})

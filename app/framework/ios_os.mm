@@ -84,7 +84,7 @@ void Application::SaveKeychain(const string &keyname, const string &val_in) {
   UIAlertAction *actionYes = [UIAlertAction actionWithTitle:@"Yes" style:UIAlertActionStyleDefault
     handler:^(UIAlertAction *){
       [IOSKeychain save:k data: val];
-      [val replaceCharactersInRange:NSMakeRange(0, [val length]) withString:[NSString stringWithFormat:@"%*s", [val length], ""]];
+      [val replaceCharactersInRange:NSMakeRange(0, [val length]) withString:[NSString stringWithFormat:@"%*s", int([val length]), ""]];
       [val release];
       [k release];
     }];

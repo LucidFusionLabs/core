@@ -576,10 +576,17 @@ static const char* const* ios_argv = 0;
   #endif
 
   - (void)pinchGesture: (UIPinchGestureRecognizer*)pinch {
+    auto s = LFL::app->focused;
+    if (!s || [pinch numberOfTouches] < 2) return;
     bool begin = pinch.state == UIGestureRecognizerStateBegan;
     if (begin) {
+      UIView *v = [pinch view];
+      CGPoint point0 = [pinch locationOfTouch:0 inView:v];
+      CGPoint point1 = [pinch locationOfTouch:1 inView:v];
+      point0.y = s->y + s->height - point0.y;
+      point1.y = s->y + s->height - point1.y;
+      pinch_point = CGPointMake((point0.x + point1.x) / 2.0, (point0.y + point1.y) / 2.0);
       pinch_scale = 1.0;
-      pinch_point = [pinch locationInView: self.view];
     }
     CGFloat p_scale = 1.0 - (pinch_scale - pinch.scale);
     LFL::v2 p(uiapp.scale * pinch_point.x, uiapp.scale * pinch_point.y), d(p_scale, p_scale);

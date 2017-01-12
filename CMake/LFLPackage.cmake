@@ -81,9 +81,10 @@ elseif(LFL_IOS)
     set(info_plist ${CMAKE_CURRENT_SOURCE_DIR}/iphone-Info.plist)
     set(entitlements_plist ${CMAKE_CURRENT_SOURCE_DIR}/iphone-Entitlements.plist)
 
+    # For the Info.plist files, Xcode inserts BuildMachineOSBuild, DTCompiler, DTPlatformBuild,
+    # DTPlatformVersion, DTSDKBuild, DTSDKName, DTXcode, DTXcodeBuild keys.
     add_custom_command(TARGET ${target} POST_BUILD WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-      COMMAND rm -rf ${pkgname}.dSYM
-      COMMAND rm -rf i${pkgname}.app
+      COMMAND rm -rf ${pkgname}.dSYM i${pkgname}.app 
       COMMAND mkdir  i${pkgname}.app
       COMMAND cp ${info_plist} i${pkgname}.app/Info.plist
       COMMAND cp -r ${CMAKE_CURRENT_SOURCE_DIR}/assets i${pkgname}.app
@@ -97,11 +98,10 @@ elseif(LFL_IOS)
       COMMAND cp ${target} i${pkgname}.app
       COMMAND if ! [ ${LFL_IOS_SIM} ]\; then codesign -f -s \"${LFL_IOS_CERT}\" --entitlements ${entitlements_plist} i${pkgname}.app\; fi)
 
-    add_custom_target(${target}_pkg WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-      COMMAND rm -rf   Payload
-      COMMAND mkdir -p Payload
-      COMMAND cp -rp i${pkgname}.app Payload
-      COMMAND zip -r i${pkgname}.ipa Payload)
+    add_custom_target(${target}_pkg WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} DEPENDS ${target}
+      COMMAND rm -rf i${pkgname}.ipa
+      COMMAND /usr/bin/xcrun -sdk iphoneos PackageApplication -v ${CMAKE_CURRENT_BINARY_DIR}/i${pkgname}.app
+      -o ${CMAKE_CURRENT_BINARY_DIR}/i${pkgname}.ipa --sign \"${LFL_IOS_CERT}\" --embed ${LFL_IOS_PROVISION})
 
     add_custom_target(${target}_help WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
       COMMAND echo "Symbolicate with: atos -arch armv7 -o ./i${pkgname}.app/${target} -l 0xcc000 0x006cf99f")
