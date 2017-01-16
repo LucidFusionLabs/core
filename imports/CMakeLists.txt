@@ -127,10 +127,14 @@ if(LFL_FREETYPE)
     set(FREETYPE_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/freetype/include PARENT_SCOPE)
     set(FREETYPE_LIB freetype239_D.lib PARENT_SCOPE)
   else()
+    set(FREETYPE_CMAKE_DEF)
+    if(LFL_ANDROID)
+      set(FREETYPE_CMAKE_DEF ${FREETYPE_CMAKE_DEF} -DWITH_BZip2=OFF)
+    endif()
     ExternalProject_Add(freetype SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/freetype
                         PREFIX ${CMAKE_CURRENT_BINARY_DIR}/freetype
                         CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_CURRENT_BINARY_DIR}/freetype
-                        -DCMAKE_TOOLCHAIN_FILE:string=${CMAKE_TOOLCHAIN_FILE})
+                        -DCMAKE_TOOLCHAIN_FILE:string=${CMAKE_TOOLCHAIN_FILE} ${FREETYPE_CMAKE_DEF})
     add_library(libfreetype IMPORTED STATIC GLOBAL)
     add_dependencies(libfreetype freetype)
     set_property(TARGET libfreetype PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/freetype/lib/libfreetype.a)
@@ -256,7 +260,8 @@ if(LFL_OPENSSL)
                         <SOURCE_DIR>/Configure darwin64-x86_64-cc shared enable-ec_nistp_64_gcc_128 no-ssl2 no-ssl3 no-comp $ENV{CFLAGS} --prefix=<INSTALL_DIR>
                         COMMAND ${CMAKE_COMMAND} -E env ${OPENSSL_CONFIGURE_ENV} make depend
                         DOWNLOAD_COMMAND rm -rf openssl
-                        COMMAND cp -R ${CMAKE_CURRENT_SOURCE_DIR}/openssl openssl)
+                        COMMAND cp -R ${CMAKE_CURRENT_SOURCE_DIR}/openssl openssl
+                        INSTALL_DIR openssl/install)
     ExternalProject_Get_Property(openssl INSTALL_DIR)
 
     add_library(libssl IMPORTED SHARED GLOBAL)

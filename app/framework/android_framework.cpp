@@ -57,12 +57,14 @@ const int Key::F11        = -31;
 const int Key::F12        = -32;
 const int Key::Home       = -33;
 const int Key::End        = -34;
+const int Key::Insert     = -35;
 
 struct AndroidFrameworkModule : public Module {
   bool frame_on_keyboard_input = 0, frame_on_mouse_input = 0;
 
   int Init() {
     INFO("AndroidFrameworkModule::Init()");
+    auto screen = app->focused;
     screen->x      = jni->activity_box.x;
     screen->y      = jni->activity_box.y;
     screen->width  = jni->activity_box.w;
@@ -141,10 +143,17 @@ void Application::CloseTouchKeyboardAfterReturn(bool v) {
 #endif
 } 
 
+void Application::SetAppFrameEnabled(bool) {}
+void Application::SetAutoRotateOrientation(bool) {}
+void Application::SetVerticalSwipeRecognizer(int touches) {}
+void Application::SetHorizontalSwipeRecognizer(int touches) {}
+void Application::SetPanRecognizer(bool enabled) {}
+void Application::SetPinchRecognizer(bool enabled) {}
 void Application::SetTouchKeyboardTiled(bool v) {}
 int  Application::SetMultisample(bool v) {}
 int  Application::SetExtraScale(bool v) {}
 void Application::SetDownScale(bool v) {}
+void Application::ShowSystemStatusBar(bool v) {}
 
 void Application::SetTitleBar(bool v) {
   if (!v) {
@@ -175,9 +184,10 @@ bool Video::CreateWindow(Window *W) { return true; }
 void Video::StartWindow(Window *W) {}
 int Video::Swap() {
   static jmethodID jni_view_method_swap = CheckNotNull(jni->env->GetMethodID(jni->view_class, "swapEGL", "()V"));
-  screen->gd->Flush();
+  auto gd = app->focused->gd;
+  gd->Flush();
   jni->env->CallVoidMethod(jni->view, jni_view_method_swap);
-  screen->gd->CheckForError(__FILE__, __LINE__);
+  gd->CheckForError(__FILE__, __LINE__);
   return 0;
 }
 
@@ -274,7 +284,7 @@ extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppNewMainLoop(JNIEnv 
   jni->Init(a, false);
   SetLFAppMainThread();
   if (reset) LFAppResetGL();
-  WindowUnMinimized();
+  app->focused->UnMinimized();
   int ret = LFAppMainLoop();
   INFOf("NewMainLoop: env=%p ret=%d", jni->env, ret);
   jni->Free();
@@ -282,7 +292,7 @@ extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppNewMainLoop(JNIEnv 
 
 extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppMinimize(JNIEnv* env, jobject a) {
   INFOf("%s", "minimize");
-  QueueWindowMinimized();
+  app->RunInMainThread([=](){ app->focused->Minimized(); });
 }
 
 extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppReshaped(JNIEnv *e, jobject a, jint x, jint y, jint w, jint h) { 
@@ -291,33 +301,34 @@ extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppReshaped(JNIEnv *e,
   if (jni->activity_box.x == x && jni->activity_box.y == y &&
       jni->activity_box.w == w && jni->activity_box.h == h) return;
   jni->activity_box = Box(x, y, w, h);
-  QueueWindowReshaped(x, y, w, h);
+  app->RunInMainThread([=](){ app->focused->Reshaped(Box(x, y, w, h)); });
 }
 
 extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppKeyPress(JNIEnv *e, jobject a, jint keycode, jint mod, jint down) {
-  QueueKeyPress(keycode, mod, down);
+  app->input->KeyPress(keycode, mod, down);
   LFAppWakeup();
 }
 
 extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppTouch(JNIEnv *e, jobject a, jint action, jfloat x, jfloat y, jfloat p) {
   static float lx[2]={0,0}, ly[2]={0,0};
+  auto screen = app->focused;
   int dpind = (/*FLAGS_swap_axis*/ 0) ? y < screen->width/2 : x < screen->width/2;
   if (action == AndroidEvent::ACTION_DOWN || action == AndroidEvent::ACTION_POINTER_DOWN) {
     // INFOf("%d down %f, %f", dpind, x, screen->height - y);
-    QueueMouseClick(1, 1, screen->x + x, screen->y + screen->height - y);
+    app->input->QueueMouseClick(1, 1, point(screen->x + x, screen->y + screen->height - y));
     LFAppWakeup();
-    screen->gesture_tap[dpind] = 1;
-    screen->gesture_dpad_x[dpind] = x;
-    screen->gesture_dpad_y[dpind] = y;
+    // screen->gesture_tap[dpind] = 1;
+    // screen->gesture_dpad_x[dpind] = x;
+    // screen->gesture_dpad_y[dpind] = y;
     lx[dpind] = x;
     ly[dpind] = y;
   } else if (action == AndroidEvent::ACTION_UP || action == AndroidEvent::ACTION_POINTER_UP) {
     // INFOf("%d up %f, %f", dpind, x, y);
-    QueueMouseClick(1, 0, screen->x + x, screen->y + screen->height - y);
+    app->input->QueueMouseClick(1, 0, point(screen->x + x, screen->y + screen->height - y));
     LFAppWakeup();
-    screen->gesture_dpad_stop[dpind] = 1;
-    screen->gesture_dpad_x[dpind] = 0;
-    screen->gesture_dpad_y[dpind] = 0;
+    // screen->gesture_dpad_stop[dpind] = 1;
+    // screen->gesture_dpad_x[dpind] = 0;
+    // screen->gesture_dpad_y[dpind] = 0;
   } else if (action == AndroidEvent::ACTION_MOVE) {
     float vx = x - lx[dpind];
     float vy = y - ly[dpind];
@@ -325,43 +336,44 @@ extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppTouch(JNIEnv *e, jo
     ly[dpind] = y;
     // INFOf("%d move %f, %f vel = %f, %f", dpind, x, y, vx, vy);
     if (vx > 1.5 || vx < -1.5 || vy > 1.5 || vy < -1.5) {
-      screen->gesture_dpad_dx[dpind] = vx;
-      screen->gesture_dpad_dy[dpind] = vy;
+      // screen->gesture_dpad_dx[dpind] = vx;
+      // screen->gesture_dpad_dy[dpind] = vy;
     }
-    screen->gesture_dpad_x[dpind] = x;
-    screen->gesture_dpad_y[dpind] = y;
+    // screen->gesture_dpad_x[dpind] = x;
+    // screen->gesture_dpad_y[dpind] = y;
   } else INFOf("unhandled action %d", action);
 } 
 
 extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppFling(JNIEnv *e, jobject a, jfloat x, jfloat y, jfloat vx, jfloat vy) {
+  auto screen = app->focused;
   int dpind = y < screen->width/2;
-  screen->gesture_dpad_dx[dpind] = vx;
-  screen->gesture_dpad_dy[dpind] = vy;
+  // screen->gesture_dpad_dx[dpind] = vx;
+  // screen->gesture_dpad_dy[dpind] = vy;
   INFOf("fling(%f, %f) = %d of (%d, %d) and vel = (%f, %f)", x, y, dpind, screen->width, screen->height, vx, vy);
 }
 
 extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppScroll(JNIEnv *e, jobject a, jfloat x, jfloat y, jfloat vx, jfloat vy) {
-  screen->gesture_swipe_up = screen->gesture_swipe_down = 0;
+  // screen->gesture_swipe_up = screen->gesture_swipe_down = 0;
 }
 
 extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppAccel(JNIEnv *e, jobject a, jfloat x, jfloat y, jfloat z) {}
 
 extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppShellRun(JNIEnv *e, jobject a, jstring text) {
-  ShellRun(e->GetStringUTFChars(text, 0));
+  app->focused->shell->Run(e->GetStringUTFChars(text, 0));
 }
 
 extern "C" void Java_com_lucidfusionlabs_app_GPlusClient_startGame(JNIEnv *e, jobject a, jboolean server, jstring pid) {
   char buf[128];
   const char *participant_id = e->GetStringUTFChars(pid, 0);
   snprintf(buf, sizeof(buf), "%s %s", server ? "gplus_server" : "gplus_client", participant_id);
-  ShellRun(buf);
+  app->focused->shell->Run(buf);
   e->ReleaseStringUTFChars(pid, participant_id);
 }
 
 extern "C" void Java_com_lucidfusionlabs_app_GPlusClient_read(JNIEnv *e, jobject a, jstring pid, jobject bb, jint len) {
   static GPlus *gplus = Singleton<GPlus>::Get();
   const char *participant_id = e->GetStringUTFChars(pid, 0);
-  if (gplus->server) EndpointRead(gplus->server, participant_id, (const char*)e->GetDirectBufferAddress(bb), len);
+  if (gplus->server) gplus->server->EndpointRead(participant_id, (const char*)e->GetDirectBufferAddress(bb), len);
   e->ReleaseStringUTFChars(pid, participant_id);
 }
 

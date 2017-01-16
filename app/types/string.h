@@ -412,11 +412,11 @@ int isfileslash(int c);
 int IsOpenParen(int c);
 int IsCloseParen(int c);
 int MatchingParens(int c1, int c2);
-int atoi(const char     *v);
 int atoi(const char16_t *v);
+int my_atoi(const char *v);
 float my_atof(const char *v);
-inline double atof(const string &v) { return ::atof(v.c_str()); }
-inline int    atoi(const string &v) { return ::atoi(v.c_str()); }
+inline double atof(const string &v) { return atof(v.c_str()); }
+inline int    atoi(const string &v) { return atoi(v.c_str()); }
 uint32_t fnv32(const void *buf, unsigned len=0, uint32_t hval=0);
 uint64_t fnv64(const void *buf, unsigned len=0, uint64_t hval=0);
 

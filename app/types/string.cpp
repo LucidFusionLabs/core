@@ -145,8 +145,8 @@ int isfileslash (int c) { return c == LocalFile::Slash; }
 int IsOpenParen (int c) { return c == '(' || c == '[' || c == '<' || c == '{'; }
 int IsCloseParen(int c) { return c == ')' || c == ']' || c == '>' || c == '}'; }
 int MatchingParens(int c1, int c2) { return (c1 == '(' && c2 == ')') || (c1 == '[' && c2 == ']') || (c1 == '<' && c2 == '>') || (c1 == '{' && c2 == '}'); }
-float my_atof(const char *v) { return v ? ::atof(v) : 0; }
-int atoi(const char *v) { return v ? ::atoi(v) : 0; }
+float my_atof(const char *v) { return v ? atof(v) : 0; }
+int   my_atoi(const char *v) { return v ? atoi(v) : 0; }
 int atoi(const char16_t *v) {
   const char16_t *p;
   if (!v) return 0; int ret = 0;

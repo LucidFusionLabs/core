@@ -38,7 +38,7 @@ Regex::Result Regex::MatchOne(const StringPiece &text) {
 }
 
 Regex::Result Regex::MatchOne(const String16Piece &text) {
-#ifdef LFL_LINUX
+#if defined(LFL_LINUX) || defined(LFL_ANDROID)
   ERROR("Regex Match16 not supported");
   return Regex::Result();
 #else

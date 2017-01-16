@@ -239,6 +239,8 @@ using LFL_STL11_NAMESPACE::make_shared;
 using LFL_STL11_NAMESPACE::make_tuple;
 using LFL_STL11_NAMESPACE::isinf;
 using LFL_STL11_NAMESPACE::isnan;
+using LFL_STL11_NAMESPACE::atoi;
+using LFL_STL11_NAMESPACE::atof;
 #define tuple_get LFL_STL11_NAMESPACE::get
 
 template <class X> struct Singleton { static X *Get() { static X instance; return &instance; } };

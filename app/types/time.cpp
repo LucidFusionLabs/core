@@ -231,7 +231,7 @@ Time RFC822Date(const char *text) {
   if (!RFC822Time(timetext.c_str(), &tm.tm_hour, &tm.tm_min, &tm.tm_sec))
   { ERROR("RFC822Date('", text, "') RFC822Time('", timetext, "') failed"); return Time(0); }
   int hours_from_gmt = RFC822TimeZone(words.NextString().c_str());
-  return Seconds(timegm(&tm) - hours_from_gmt * 3600);
+  return Seconds(LFL::timegm(&tm) - hours_from_gmt * 3600);
 }
 
 bool NumericTime(const char *text, int *hour, int *min, int *sec) {
@@ -253,7 +253,7 @@ Time NumericDate(const char *datetext, const char *timetext, const char *timezon
   tm.tm_year = atoi(words.NextString()) - 1900;
   NumericTime(timetext, &tm.tm_hour, &tm.tm_min, &tm.tm_sec);
   int hours_from_gmt = RFC822TimeZone(BlankNull(timezone));
-  return Seconds(timegm(&tm) - hours_from_gmt * 3600);
+  return Seconds(LFL::timegm(&tm) - hours_from_gmt * 3600);
 }
 
 Time SinceDayBegan(Time t, int gmt_offset_hrs) {

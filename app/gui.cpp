@@ -642,7 +642,7 @@ TextArea::TextArea(Window *W, const FontRef &F, int S, int LC) :
     if (selection.explicitly_initiated) return false;
     if (selection.Update(p, down)) selection.beg_click_time = Now();
     else if (!down && abs(selection.beg_click.y - selection.end_click.y) < 3
-             && Now() - selection.beg_click_time > Time(500)) {
+             && (Now() - selection.beg_click_time).count() > 200) {
       app->ShowSystemContextMenu
         (MenuItemVec{ 
          MenuItem{"", "Copy", [=](){ selection.explicitly_initiated = true; } },

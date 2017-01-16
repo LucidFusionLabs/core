@@ -37,6 +37,9 @@ void SystemAlertView::Show(const string &arg) {
   jni->env->CallVoidMethod(jni->activity, mid, jint(impl.v), jni->ToJString(arg));
 }
 
+void SystemAlertView::ShowCB(const string &title, const string &msg, const string &arg, StringCB confirm_cb) {}
+string SystemAlertView::RunModal(const string &arg) { return ""; }
+
 int GetToolbarViewID(SystemToolbarView *w) { return int(w->impl); }
 SystemToolbarView::~SystemToolbarView() {}
 SystemToolbarView::SystemToolbarView(MenuItemVec items) {
@@ -85,8 +88,8 @@ SystemTableView::SystemTableView(const string &title, const string &style, Table
 #endif
 }
 
-void SystemTableView::AddNavigationButton(const TableItem &item, int align) {}
-//void SystemTableView::SetEditableSection(int section) {}
+void SystemTableView::DelNavigationButton(int) {}
+void SystemTableView::AddNavigationButton(int, const TableItem &item) {}
 
 void SystemTableView::AddToolbar(SystemToolbarView *toolbar) {
   static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "addTableToolbar", "(II)V"));
@@ -98,6 +101,16 @@ void SystemTableView::Show(bool show_or_hide) {
     (jni->env->GetMethodID(jni->activity_class, "showTable", "(IZ)V"));
     jni->env->CallVoidMethod(jni->activity, mid, jint(impl.v), jboolean(show_or_hide));
 }
+
+string SystemTableView::GetKey(int section, int row) { return ""; }
+int SystemTableView::GetTag(int section, int row) { return 0; }
+void SystemTableView::SetTag(int section, int row, int val) {}
+void SystemTableView::SetKey(int seciton, int row, const string &key) {}
+void SystemTableView::SetValue(int section, int row, const string &val) {}
+void SystemTableView::SetHidden(int section, int row, bool val) {}
+void SystemTableView::SetTitle(const string &title) {}
+PickerItem *SystemTableView::GetPicker(int section, int row) { return 0; }
+void SystemTableView::SelectRow(int section, int row) {}
 
 StringPairVec SystemTableView::GetSectionText(int section) {
   static jmethodID mid = CheckNotNull
@@ -114,16 +127,27 @@ StringPairVec SystemTableView::GetSectionText(int section) {
   return ret;
 }
 
-void SystemTableView::SetSectionValues(const StringVec&, int section) {}
-void SystemTableView::ReplaceSection(TableItemVec item, int section) {}
+void SystemTableView::SetEditableSection(int section, int start_row, IntIntCB cb) {}
+
+void SystemTableView::BeginUpdates() {}
+void SystemTableView::EndUpdates() {}
+void SystemTableView::AddRow(int section, TableItem item) {}
+void SystemTableView::SetSectionValues(int section, const StringVec&) {}
+void SystemTableView::ReplaceSection(int section, const string &h, int image, int flag, TableItemVec item, Callback add_button) {}
+
+SystemTextView::~SystemTextView() {}
+SystemTextView::SystemTextView(const string &title, File *f) : SystemTextView(title, f ? f->Contents() : "") {}
+SystemTextView::SystemTextView(const string &title, const string &text) {}
 
 int GetNavigationViewID(SystemNavigationView *w) { return int(w->impl); }
 SystemNavigationView::~SystemNavigationView() {}
-SystemNavigationView::SystemNavigationView(SystemTableView *r) {
+SystemNavigationView::SystemNavigationView() {
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->activity_class, "addNavigation", "(I)I"));
-  impl.v = Void(jni->env->CallIntMethod(jni->activity, mid, jint(r->impl.v)));
+  impl.v = Void(jni->env->CallIntMethod(jni->activity, mid, 0)); // jint(r->impl.v)));
 }
+
+SystemTableView *SystemNavigationView::Back() { return nullptr; }
 
 void SystemNavigationView::Show(bool show_or_hide) {
   static jmethodID mid = CheckNotNull
@@ -131,15 +155,33 @@ void SystemNavigationView::Show(bool show_or_hide) {
     jni->env->CallVoidMethod(jni->activity, mid, jint(impl.v), jboolean(show_or_hide));
 }
 
-void SystemNavigationView::PushTable(SystemTableView *t) {
+void SystemNavigationView::PushTableView(SystemTableView *t) {
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->activity_class, "pushNavigationTable", "(II)V"));
     jni->env->CallVoidMethod(jni->activity, mid, jint(impl.v), jint(t->impl.v));
 }
 
-void SystemNavigationView::PopTable(int n) {}
+void SystemNavigationView::PushTextView(SystemTextView*) {}
+void SystemNavigationView::PopView(int n) {}
+void SystemNavigationView::PopToRoot() {}
+void SystemNavigationView::PopAll() {}
+
+SystemAdvertisingView::SystemAdvertisingView() {}
+void SystemAdvertisingView::Show() {
+  static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "showAds", "()V"));
+  jni->env->CallVoidMethod(jni->activity, mid);
+}
+
+void SystemAdvertisingView::Hide() {
+  static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "hideAds", "()V"));
+  jni->env->CallVoidMethod(jni->activity, mid);
+}
 
 void Application::ShowSystemFontChooser(const FontDesc &cur_font, const StringVecCB &cb) {}
 void Application::ShowSystemFileChooser(bool files, bool dirs, bool multi, const StringVecCB &cb) {}
+void Application::ShowSystemContextMenu(const MenuItemVec &items) {}
+
+int Application::LoadSystemImage(const string &n) { return 1; }
+void Application::UpdateSystemImage(int n, Texture &t) {}
 
 }; // namespace LFL

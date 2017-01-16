@@ -138,6 +138,8 @@ BufferFile *JNI::OpenAsset(const string &fn) {
   return ret.release();
 }
 
+string Application::GetVersion() { return "1.0"; }
+
 void Application::OpenSystemBrowser(const string &url_text) {
   static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "openBrowser", "(Ljava/lang/String;)V"));
   jstring jurl = jni->ToJString(url_text);
@@ -159,16 +161,6 @@ bool Application::OpenSystemAppPreferences() {
 void Application::SaveKeychain(const string &k, const string &v) {}
 bool Application::LoadKeychain(const string &k, string *v) { return false; }
 
-void Application::ShowAds() {
-  static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "showAds", "()V"));
-  jni->env->CallVoidMethod(jni->activity, mid);
-}
-
-void Application::HideAds() {
-  static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "hideAds", "()V"));
-  jni->env->CallVoidMethod(jni->activity, mid);
-}
-
 String16 Application::GetLocalizedString16(const char *key) { return String16(); }
 string Application::GetLocalizedString(const char *key) {
   static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->resources_class, "getString", "(I)Ljava/lang/String;"));
@@ -181,6 +173,15 @@ string Application::GetLocalizedString(const char *key) {
 String16 Application::GetLocalizedInteger16(int number) { return String16(); }
 string Application::GetLocalizedInteger(int number) {
   return StrCat(number);
+}
+
+void Application::LoadDefaultSettings(const StringPairVec &v) {}
+string Application::GetSetting(const string &key) { return string(); }
+void Application::SaveSettings(const StringPairVec &v) {}
+
+Connection *Application::ConnectTCP(const string &hostport, int default_port, Connection::CB *connected_cb, bool background_services) {
+  INFO("Application::ConnectTCP ", hostport, " (default_port = ", default_port, ") background_services = false"); 
+  return app->net->tcp_client->Connect(hostport, default_port, connected_cb);
 }
 
 void GPlus::SignIn() {

@@ -1,6 +1,6 @@
 set(LFL_ANDROID 1)
 set(LFL_ANDROID_SDK "$ENV{HOME}/android-sdk-macosx")
-set(LFL_ANDROID_NDK "$ENV{HOME}/android-ndk-r10d")
+set(LFL_ANDROID_NDK "$ENV{HOME}/android-ndk-r13b")
 set(LFL_ANDROID_ROOT "$ENV{HOME}/android-toolchain")
 set(LFL_GRADLE_BIN "$ENV{HOME}/gradle-2.4/bin/gradle")
 
@@ -37,6 +37,7 @@ set(CONFIGURE_OPTIONS "--host=arm")
 set(CONFIGURE_ENV CC=$ENV{CC} CXX=$ENV{CXX} CPP=$ENV{CPP} CXXCPP=$ENV{CXXCPP} AR=$ENV{AR} RANLIB=$ENV{RANLIB}
     CFLAGS=$ENV{CFLAGS} CXXFLAGS=$ENV{CXXFLAGS} LDFLAGS=$ENV{LDFLAGS})
 
+set(C_LIBRARY ${LFL_ANDROID_ROOT}/sysroot/usr/lib/libc.so)
 set(M_LIBRARY ${LFL_ANDROID_ROOT}/sysroot/usr/lib/libm.so)
 set(ZLIB_INCLUDE_DIR ${LFL_ANDROID_ROOT}/sysroot/usr/include)
 set(ZLIB_LIBRARY ${LFL_ANDROID_ROOT}/sysroot/usr/lib/libz.so)

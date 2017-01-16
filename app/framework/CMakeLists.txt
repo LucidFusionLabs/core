@@ -6,7 +6,7 @@ lfl_add_target(app_null_toolkit STATIC_LIBRARY SOURCES null_toolkit.cpp)
 lfl_add_target(app_null_crashreporting STATIC_LIBRARY SOURCES null_crashreporting.cpp)
 
 if(LFL_ANDROID)
-  lfl_add_target(app_android_os STATIC_LIBRARY SOURCES android_os.cpp LINK_LIBRARIES -llog -lz)
+  lfl_add_target(app_android_os STATIC_LIBRARY SOURCES android_os.cpp LINK_LIBRARIES -llog -lz ${C_LIBRARY})
   lfl_add_target(app_android_framework STATIC_LIBRARY SOURCES android_framework.cpp)
   lfl_add_target(app_android_toolkit STATIC_LIBRARY SOURCES android_toolkit.cpp)
 endif()
