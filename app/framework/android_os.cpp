@@ -105,6 +105,18 @@ tuple<jobjectArray, jobjectArray, jobjectArray> JNI::ToJObjectArray(const MenuIt
   return make_tuple(k, v, w);
 }
 
+tuple<jobjectArray, jobjectArray, jobjectArray> JNI::ToJObjectArray(const TableItemVec &items) {
+  jobjectArray k = env->NewObjectArray(items.size(), string_class, NULL);
+  jobjectArray v = env->NewObjectArray(items.size(), string_class, NULL);
+  jobjectArray w = env->NewObjectArray(items.size(), string_class, NULL);
+  for (int i=0, l=items.size(); i != l; ++i) {
+    env->SetObjectArrayElement(k, i, ToJString(items[i].key));
+    env->SetObjectArrayElement(v, i, ToJString(items[i].val));
+    env->SetObjectArrayElement(w, i, ToJString(items[i].val));
+  }
+  return make_tuple(k, v, w);
+}
+
 BufferFile *JNI::OpenAsset(const string &fn) {
   static jmethodID get_assets_mid = CheckNotNull(env->GetMethodID(activity_class, "getAssets", "()Landroid/content/res/AssetManager;"));
   static jmethodID assetmgr_open_mid = CheckNotNull(env->GetMethodID(assetmgr_class, "open", "(Ljava/lang/String;)Ljava/io/InputStream;"));

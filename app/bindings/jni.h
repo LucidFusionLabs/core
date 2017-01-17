@@ -45,6 +45,7 @@ struct JNI {
   jstring ToJString(const string  &x) { return env->NewStringUTF(x.c_str()); }
   pair<jobjectArray, jobjectArray> ToJObjectArray(const StringPairVec& items);
   tuple<jobjectArray, jobjectArray, jobjectArray> ToJObjectArray(const MenuItemVec &items);
+  tuple<jobjectArray, jobjectArray, jobjectArray> ToJObjectArray(const TableItemVec &items);
   BufferFile *OpenAsset(const string &fn);
 };
 

@@ -196,13 +196,18 @@ void FrameScheduler::Setup() {
 }
 
 bool FrameScheduler::DoMainWait() {
+  bool ret = false;
   wait_forever_sockets.Select(-1);
+  for (auto &s : wait_forever_sockets.socket) {
+    if (auto f = static_cast<function<bool()>*>(s.second.second)) 
+      if ((*f)()) ret = true;
+  }
   if (wait_forever_sockets.GetReadable(system_event_socket)) {
     char buf[512];
     read(system_event_socket, buf, sizeof(buf));
-    return true;
+    ret = true;
   }
-  return true;
+  return ret;
 }
 
 void FrameScheduler::Wakeup(Window *w) {
@@ -218,15 +223,16 @@ void FrameScheduler::AddMainWaitMouse(Window*)    { dynamic_cast<AndroidFramewor
 void FrameScheduler::DelMainWaitMouse(Window*)    { dynamic_cast<AndroidFrameworkModule*>(app->framework.get())->frame_on_mouse_input    = false; }
 void FrameScheduler::AddMainWaitKeyboard(Window*) { dynamic_cast<AndroidFrameworkModule*>(app->framework.get())->frame_on_keyboard_input = true;  }
 void FrameScheduler::DelMainWaitKeyboard(Window*) { dynamic_cast<AndroidFrameworkModule*>(app->framework.get())->frame_on_keyboard_input = false; }
-void FrameScheduler::AddMainWaitSocket(Window *w, Socket fd, int flag, function<bool()>) {
+void FrameScheduler::AddMainWaitSocket(Window *w, Socket fd, int flag, function<bool()> f) {
   if (fd == InvalidSocket) return;
-  if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, w);
-  wait_forever_sockets.Add(fd, flag, w);
+  wait_forever_sockets.Add(fd, flag, f ? new function<bool()>(move(f)) : nullptr);
 }
 
 void FrameScheduler::DelMainWaitSocket(Window*, Socket fd) {
   if (fd == InvalidSocket) return;
-  if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd);
+  auto it = wait_forever_sockets.socket.find(fd);
+  if (it == wait_forever_sockets.socket.end()) return;
+  if (auto f = static_cast<function<bool()>*>(it->second.second)) delete f;
   wait_forever_sockets.Del(fd);
 }
 

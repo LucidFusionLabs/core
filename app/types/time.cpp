@@ -31,17 +31,16 @@ timeval Time2timeval(Time x) {
 }
 
 #if defined (WIN32) || defined(LFL_ANDROID)
-int is_leap(unsigned y) { y += 1900; return (y % 4) == 0 && ((y % 100) != 0 || (y % 400) == 0); }
-
-time_t timegm(tm *tm) {
+static int IsLeapYear(unsigned y) { y += 1900; return (y % 4) == 0 && ((y % 100) != 0 || (y % 400) == 0); }
+time_t GetGreenwichTimeT(tm *tm) {
   static const unsigned ndays[2][12] = {
     {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31},
     {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}
   };
 
   time_t res = 0;
-  for (int i = 70; i < tm->tm_year; ++i) res += is_leap(i) ? 366 : 365;
-  for (int i = 0; i < tm->tm_mon; ++i) res += ndays[is_leap(tm->tm_year)][i];
+  for (int i = 70; i < tm->tm_year; ++i) res += IsLeapYear(i) ? 366 : 365;
+  for (int i = 0; i < tm->tm_mon; ++i) res += ndays[IsLeapYear(tm->tm_year)][i];
 
   res += tm->tm_mday - 1;
   res *= 24;
@@ -52,6 +51,8 @@ time_t timegm(tm *tm) {
   res += tm->tm_sec;
   return res;
 }
+#else
+time_t GetGreenwichTimeT(tm *tm) { return timegm(tm); }
 #endif
 
 const char *dayname(int wday) {
@@ -231,7 +232,7 @@ Time RFC822Date(const char *text) {
   if (!RFC822Time(timetext.c_str(), &tm.tm_hour, &tm.tm_min, &tm.tm_sec))
   { ERROR("RFC822Date('", text, "') RFC822Time('", timetext, "') failed"); return Time(0); }
   int hours_from_gmt = RFC822TimeZone(words.NextString().c_str());
-  return Seconds(LFL::timegm(&tm) - hours_from_gmt * 3600);
+  return Seconds(GetGreenwichTimeT(&tm) - hours_from_gmt * 3600);
 }
 
 bool NumericTime(const char *text, int *hour, int *min, int *sec) {
@@ -253,7 +254,7 @@ Time NumericDate(const char *datetext, const char *timetext, const char *timezon
   tm.tm_year = atoi(words.NextString()) - 1900;
   NumericTime(timetext, &tm.tm_hour, &tm.tm_min, &tm.tm_sec);
   int hours_from_gmt = RFC822TimeZone(BlankNull(timezone));
-  return Seconds(LFL::timegm(&tm) - hours_from_gmt * 3600);
+  return Seconds(GetGreenwichTimeT(&tm) - hours_from_gmt * 3600);
 }
 
 Time SinceDayBegan(Time t, int gmt_offset_hrs) {

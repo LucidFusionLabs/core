@@ -19,7 +19,11 @@
 #ifndef LFL_CORE_APP_TYPES_STRING_H__
 #define LFL_CORE_APP_TYPES_STRING_H__
 
-#ifdef WIN32
+#ifdef LFL_ANDROID
+inline int ffsl(unsigned long x) { return __builtin_ffsl(x); }
+inline int ffsll(unsigned long long x) { return __builtin_ffsll(x); }
+inline int ffs(int x) { return ffsl(x); }
+#elif LFL_WINDOWS
 #include <intrin.h>
 #pragma intrinsic(_BitScanForward)
 static __forceinline int ffsl(long x) {

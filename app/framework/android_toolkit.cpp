@@ -47,7 +47,7 @@ SystemToolbarView::SystemToolbarView(MenuItemVec items) {
     (jni->env->GetMethodID(jni->activity_class,
                            "addToolbar", "([Ljava/lang/String;[Ljava/lang/String;)I"));
   auto kv = jni->ToJObjectArray(items);
-  // impl.v = Void(jni->env->CallIntMethod(jni->activity, mid, kv.first, kv.second));
+   impl.v = Void(jni->env->CallIntMethod(jni->activity, mid, tuple_get<0>(kv), tuple_get<1>(kv)));
 }
 
 void SystemToolbarView::ToggleButton(const string &n) {}
@@ -81,11 +81,9 @@ SystemTableView::SystemTableView(const string &title, const string &style, Table
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->activity_class,
                            "addTable", "(Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;)I"));
-#if 0
   auto kvw = jni->ToJObjectArray(items);
   impl.v = Void(jni->env->CallIntMethod(jni->activity, mid, jni->ToJString(title),
                                         tuple_get<0>(kvw), tuple_get<1>(kvw), tuple_get<2>(kvw)));
-#endif
 }
 
 void SystemTableView::DelNavigationButton(int) {}
@@ -143,8 +141,8 @@ int GetNavigationViewID(SystemNavigationView *w) { return int(w->impl); }
 SystemNavigationView::~SystemNavigationView() {}
 SystemNavigationView::SystemNavigationView() {
   static jmethodID mid = CheckNotNull
-    (jni->env->GetMethodID(jni->activity_class, "addNavigation", "(I)I"));
-  impl.v = Void(jni->env->CallIntMethod(jni->activity, mid, 0)); // jint(r->impl.v)));
+    (jni->env->GetMethodID(jni->activity_class, "addNavigation", "()I"));
+  impl.v = Void(jni->env->CallIntMethod(jni->activity, mid));
 }
 
 SystemTableView *SystemNavigationView::Back() { return nullptr; }

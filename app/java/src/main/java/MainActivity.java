@@ -395,8 +395,8 @@ public class MainActivity extends android.app.Activity {
         return table.data.getSectionText(table.listview, section);
     }
 
-    public int addNavigation(final int root_table_id) {
-        app_widgets.navigations.add(root_table_id);
+    public int addNavigation() {
+        app_widgets.navigations.add(0);
         return app_widgets.navigations.size()-1;
     }
 
