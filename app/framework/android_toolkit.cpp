@@ -21,20 +21,20 @@ static JNI *jni = Singleton<JNI>::Get();
 
 int GetAlertViewID(SystemAlertView *w) { return int(w->impl); }
 SystemAlertView::~SystemAlertView() {}
+
 SystemAlertView::SystemAlertView(AlertItemVec items) {
   CHECK_EQ(4, items.size());
   CHECK_EQ("style", items[0].first);
   static jmethodID mid = CheckNotNull
-    (jni->env->GetMethodID(jni->activity_class,
-                           "addAlert", "([Ljava/lang/String;[Ljava/lang/String;)I"));
-  // auto kv = jni->ToJObjectArray(items);
-  // impl.v = Void(jni->env->CallIntMethod(jni->activity, mid, kv.first, kv.second));
+    (jni->env->GetMethodID(jni->jalert_class,
+                           "<init>", "(Lcom/lucidfusionlabs/app/MainActivity;Ljava/util/ArrayList;)V"));
+  impl.v = jni->env->NewObject(jni->jalert_class, mid, jni->activity, jni->ToJModelItemArrayList(move(items)));
 }
 
 void SystemAlertView::Show(const string &arg) {
   static jmethodID mid = CheckNotNull
-    (jni->env->GetMethodID(jni->activity_class, "showAlert", "(ILjava/lang/String;)V"));
-  jni->env->CallVoidMethod(jni->activity, mid, jint(impl.v), jni->ToJString(arg));
+    (jni->env->GetMethodID(jni->jalert_class, "showText", "(Lcom/lucidfusionlabs/app/MainActivity;Ljava/lang/String;)V"));
+  jni->env->CallVoidMethod(jobject(impl.v), mid, jni->activity, jni->ToJString(arg));
 }
 
 void SystemAlertView::ShowCB(const string &title, const string &msg, const string &arg, StringCB confirm_cb) {}
@@ -44,60 +44,52 @@ int GetToolbarViewID(SystemToolbarView *w) { return int(w->impl); }
 SystemToolbarView::~SystemToolbarView() {}
 SystemToolbarView::SystemToolbarView(MenuItemVec items) {
   static jmethodID mid = CheckNotNull
-    (jni->env->GetMethodID(jni->activity_class,
-                           "addToolbar", "([Ljava/lang/String;[Ljava/lang/String;)I"));
-  auto kv = jni->ToJObjectArray(items);
-   impl.v = Void(jni->env->CallIntMethod(jni->activity, mid, tuple_get<0>(kv), tuple_get<1>(kv)));
+    (jni->env->GetMethodID(jni->jtoolbar_class,
+                           "<init>", "(Lcom/lucidfusionlabs/app/MainActivity;Ljava/util/ArrayList;)V"));
+  impl.v = jni->env->NewObject(jni->jtoolbar_class, mid, jni->activity, jni->ToJModelItemArrayList(move(items)));
 }
 
 void SystemToolbarView::ToggleButton(const string &n) {}
 void SystemToolbarView::Show(bool show_or_hide) {
   static jmethodID mid = CheckNotNull
-    (jni->env->GetMethodID(jni->activity_class, "showToolbar", "(I)V"));
-  jni->env->CallVoidMethod(jni->activity, mid, jint(impl.v));
+    (jni->env->GetMethodID(jni->jtoolbar_class, "show", "(Lcom/lucidfusionlabs/app/MainActivity;Z)V"));
+  jni->env->CallVoidMethod(jobject(impl.v), mid, jni->activity, true);
 }
 
 int GetMenuViewID(SystemMenuView *w) { return int(w->impl); }
 SystemMenuView::~SystemMenuView() {}
 SystemMenuView::SystemMenuView(const string &title, MenuItemVec items) {
   static jmethodID mid = CheckNotNull
-    (jni->env->GetMethodID(jni->activity_class,
-                           "addMenu", "(Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;)I"));
-  auto kvw = jni->ToJObjectArray(items);
-  impl.v = Void(jni->env->CallIntMethod(jni->activity, mid, jni->ToJString(title),
-                                        tuple_get<0>(kvw), tuple_get<1>(kvw), tuple_get<2>(kvw)));
+    (jni->env->GetMethodID(jni->jmenu_class,
+                           "<init>", "(Lcom/lucidfusionlabs/app/MainActivity;Ljava/lang/String;Ljava/util/ArrayList;)V"));
+  impl.v = jni->env->NewObject(jni->jmenu_class, mid, jni->activity, jni->ToJString(title), jni->ToJModelItemArrayList(move(items)));
 }
 
 unique_ptr<SystemMenuView> SystemMenuView::CreateEditMenu(MenuItemVec items) { return nullptr; }
 void SystemMenuView::Show() {
   static jmethodID mid = CheckNotNull
-    (jni->env->GetMethodID(jni->activity_class, "showMenu", "(I)V"));
-  jni->env->CallVoidMethod(jni->activity, mid, jint(impl.v));
+    (jni->env->GetMethodID(jni->jmenu_class, "show", "(Lcom/lucidfusionlabs/app/MainActivity;Z)V"));
+  jni->env->CallVoidMethod(jobject(impl.v), mid, jni->activity, true);
 }
 
 int GetTableViewID(SystemTableView *w) { return int(w->impl); }
 SystemTableView::~SystemTableView() {}
 SystemTableView::SystemTableView(const string &title, const string &style, TableItemVec items) {
   static jmethodID mid = CheckNotNull
-    (jni->env->GetMethodID(jni->activity_class,
-                           "addTable", "(Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;)I"));
-  auto kvw = jni->ToJObjectArray(items);
-  impl.v = Void(jni->env->CallIntMethod(jni->activity, mid, jni->ToJString(title),
-                                        tuple_get<0>(kvw), tuple_get<1>(kvw), tuple_get<2>(kvw)));
+    (jni->env->GetMethodID(jni->jtable_class,
+                           "<init>", "(Lcom/lucidfusionlabs/app/MainActivity;Ljava/lang/String;Ljava/util/ArrayList;)V"));
+  impl.v = jni->env->NewObject(jni->jtable_class, mid, jni->activity, jni->ToJString(title),
+                               jni->ToJModelItemArrayList(move(items)));
 }
 
 void SystemTableView::DelNavigationButton(int) {}
 void SystemTableView::AddNavigationButton(int, const TableItem &item) {}
-
-void SystemTableView::AddToolbar(SystemToolbarView *toolbar) {
-  static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "addTableToolbar", "(II)V"));
-  jni->env->CallVoidMethod(jni->activity, mid, jint(impl.v), jint(toolbar->impl.v));
-}
+void SystemTableView::AddToolbar(SystemToolbarView *toolbar) { ERROR("not implemented"); }
 
 void SystemTableView::Show(bool show_or_hide) {
   static jmethodID mid = CheckNotNull
-    (jni->env->GetMethodID(jni->activity_class, "showTable", "(IZ)V"));
-    jni->env->CallVoidMethod(jni->activity, mid, jint(impl.v), jboolean(show_or_hide));
+    (jni->env->GetMethodID(jni->jtable_class, "show", "(Lcom/lucidfusionlabs/app/MainActivity;Z)V"));
+  jni->env->CallVoidMethod(jobject(impl.v), mid, jni->activity, true);
 }
 
 string SystemTableView::GetKey(int section, int row) { return ""; }
@@ -112,8 +104,8 @@ void SystemTableView::SelectRow(int section, int row) {}
 
 StringPairVec SystemTableView::GetSectionText(int section) {
   static jmethodID mid = CheckNotNull
-    (jni->env->GetMethodID(jni->activity_class, "getTableSectionText", "(II)Ljava/util/ArrayList;"));
-  jobject arraylist = jni->env->CallObjectMethod(jni->activity, mid, jint(impl.v), section);
+    (jni->env->GetMethodID(jni->jtable_class, "getSectionText", "(Lcom/lucidfusionlabs/app/MainActivity;I)Ljava/util/ArrayList;"));
+  jobject arraylist = jni->env->CallObjectMethod(jobject(impl.v), mid, jni->activity, section);
   int size = jni->env->CallIntMethod(arraylist, jni->arraylist_size);
   StringPairVec ret;
   for (int i = 0; i != size; ++i) {
@@ -141,22 +133,23 @@ int GetNavigationViewID(SystemNavigationView *w) { return int(w->impl); }
 SystemNavigationView::~SystemNavigationView() {}
 SystemNavigationView::SystemNavigationView() {
   static jmethodID mid = CheckNotNull
-    (jni->env->GetMethodID(jni->activity_class, "addNavigation", "()I"));
-  impl.v = Void(jni->env->CallIntMethod(jni->activity, mid));
+    (jni->env->GetMethodID(jni->jnavigation_class,
+                           "<init>", "(Lcom/lucidfusionlabs/app/MainActivity;)V"));
+  impl.v = jni->env->NewObject(jni->jnavigation_class, mid, jni->activity);
 }
 
 SystemTableView *SystemNavigationView::Back() { return nullptr; }
 
 void SystemNavigationView::Show(bool show_or_hide) {
   static jmethodID mid = CheckNotNull
-    (jni->env->GetMethodID(jni->activity_class, "showNavigation", "(IZ)V"));
-    jni->env->CallVoidMethod(jni->activity, mid, jint(impl.v), jboolean(show_or_hide));
+    (jni->env->GetMethodID(jni->jnavigation_class, "show", "(Lcom/lucidfusionlabs/app/MainActivity;Z)V"));
+  jni->env->CallVoidMethod(jobject(impl.v), mid, jni->activity, true);
 }
 
 void SystemNavigationView::PushTableView(SystemTableView *t) {
   static jmethodID mid = CheckNotNull
-    (jni->env->GetMethodID(jni->activity_class, "pushNavigationTable", "(II)V"));
-    jni->env->CallVoidMethod(jni->activity, mid, jint(impl.v), jint(t->impl.v));
+    (jni->env->GetMethodID(jni->jnavigation_class, "pushTable", "(Lcom/lucidfusionlabs/app/MainActivity;Lcom/lucidfusionlabs/app/JTable;)V"));
+    jni->env->CallVoidMethod(jobject(impl.v), mid, jni->activity, jobject(t->impl.v));
 }
 
 void SystemNavigationView::PushTextView(SystemTextView*) {}

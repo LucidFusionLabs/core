@@ -23,12 +23,11 @@ public class ListViewFragment extends Fragment implements OnItemClickListener {
     public ListView listview;
     public View toolbar;
 
-    ListViewFragment(final MainActivity activity,
-                     final String t, final String[] k, final String[] v, final String[] w, View tb) {
+    ListViewFragment(final MainActivity activity, final String t, final ListAdapter d, View tb) {
         main_activity = activity;
         title = t;
         toolbar = tb;
-        data = new ListAdapter(activity, k, v, w);
+        data = d;
     }
 
     @Override
@@ -51,7 +50,7 @@ public class ListViewFragment extends Fragment implements OnItemClickListener {
     public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
         int t = data.types.get(position);
         if (t == ListAdapter.TYPE_COMMAND || t == ListAdapter.TYPE_BUTTON) {
-            main_activity.AppShellRun(data.vals.get(position));
+            main_activity.AppFocusedShellRun(data.vals.get(position));
         }
     }
 }

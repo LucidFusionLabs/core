@@ -241,11 +241,14 @@ unique_ptr<AssetLoaderInterface> CreateAssetLoader() { return make_unique<Androi
 
 extern "C" jint JNI_OnLoad(JavaVM* vm, void* reserved) { return JNI_VERSION_1_4; }
 
+extern "C" void Java_com_lucidfusionlabs_app_JModelItem_close(JNIEnv *e, jobject a) {
+}
+
 extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppCreate(JNIEnv *e, jobject a) {
   CHECK(jni->env = e);
   CHECK(jni->activity_class = (jclass)e->NewGlobalRef(e->GetObjectClass(a)));
   CHECK(jni->activity_resources = e->GetFieldID(jni->activity_class, "resources", "Landroid/content/res/Resources;"));
-  CHECK(jni->activity_view      = e->GetFieldID(jni->activity_class, "view",      "Lcom/lucidfusionlabs/app/GameView;"));
+  CHECK(jni->activity_view      = e->GetFieldID(jni->activity_class, "view",      "Lcom/lucidfusionlabs/app/MainView;"));
   CHECK(jni->activity_gplus     = e->GetFieldID(jni->activity_class, "gplus",     "Lcom/lucidfusionlabs/app/GPlusClient;"));
   static jmethodID activity_getpkgname_mid =
     CheckNotNull(jni->env->GetMethodID(jni->activity_class, "getPackageName", "()Ljava/lang/String;"));
@@ -266,8 +269,19 @@ extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppCreate(JNIEnv *e, j
   CHECK(jni->inputstream_class  = (jclass)e->NewGlobalRef(e->FindClass("java/io/InputStream")));
   CHECK(jni->channels_class     = (jclass)e->NewGlobalRef(e->FindClass("java/nio/channels/Channels")));
   CHECK(jni->readbytechan_class = (jclass)e->NewGlobalRef(e->FindClass("java/nio/channels/ReadableByteChannel")));
+  CHECK(jni->jmodelitem_class   = (jclass)e->NewGlobalRef(e->FindClass("com/lucidfusionlabs/app/JModelItem")));
+  CHECK(jni->jalert_class       = (jclass)e->NewGlobalRef(e->FindClass("com/lucidfusionlabs/app/JAlert")));
+  CHECK(jni->jtoolbar_class     = (jclass)e->NewGlobalRef(e->FindClass("com/lucidfusionlabs/app/JToolbar")));
+  CHECK(jni->jmenu_class        = (jclass)e->NewGlobalRef(e->FindClass("com/lucidfusionlabs/app/JMenu")));
+  CHECK(jni->jtable_class       = (jclass)e->NewGlobalRef(e->FindClass("com/lucidfusionlabs/app/JTable")));
+  CHECK(jni->jtextview_class    = (jclass)e->NewGlobalRef(e->FindClass("com/lucidfusionlabs/app/JTextView")));
+  CHECK(jni->jnavigation_class  = (jclass)e->NewGlobalRef(e->FindClass("com/lucidfusionlabs/app/JNavigation")));
+  jclass jmodelitem_class=0, jalert_class=0, jtoolbar_class=0, jtable_class=0, jnavigation_class=0;
+  CHECK(jni->arraylist_construct = e->GetMethodID(jni->arraylist_class, "<init>", "()V"));
   CHECK(jni->arraylist_size = e->GetMethodID(jni->arraylist_class, "size", "()I"));
-  CHECK(jni->arraylist_get  = e->GetMethodID(jni->arraylist_class, "get", "(I)Ljava/lang/Object;"));
+  CHECK(jni->arraylist_get = e->GetMethodID(jni->arraylist_class, "get", "(I)Ljava/lang/Object;"));
+  CHECK(jni->arraylist_add = e->GetMethodID(jni->arraylist_class, "add", "(Ljava/lang/Object;)Z"));
+  CHECK(jni->jmodelitem_construct = e->GetMethodID(jni->jmodelitem_class, "<init>", "(Ljava/lang/String;Ljava/lang/String;IIIJJJZ)V"));
   CHECK(jni->pair_first  = e->GetFieldID(jni->pair_class, "first",  "Ljava/lang/Object;"));
   CHECK(jni->pair_second = e->GetFieldID(jni->pair_class, "second", "Ljava/lang/Object;"));
   if (jni->gplus) CHECK(jni->gplus_class = (jclass)e->NewGlobalRef(e->GetObjectClass(jni->gplus)));
@@ -366,6 +380,15 @@ extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppAccel(JNIEnv *e, jo
 
 extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppShellRun(JNIEnv *e, jobject a, jstring text) {
   app->focused->shell->Run(e->GetStringUTFChars(text, 0));
+}
+
+extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppRunCallbackInMainThread(JNIEnv *e, jobject a, jlong cb) {
+  app->RunCallbackInMainThread(new Callback(*static_cast<Callback*>(Void(cb))));
+}
+
+extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppRunStringCBInMainThread(JNIEnv *e, jobject a, jlong cb, jstring text) {
+  string t = JNI::GetEnvJString(e, text);
+  app->RunCallbackInMainThread(new Callback([=](){ (*static_cast<StringCB*>(Void(cb)))(t); }));
 }
 
 extern "C" void Java_com_lucidfusionlabs_app_GPlusClient_startGame(JNIEnv *e, jobject a, jboolean server, jstring pid) {

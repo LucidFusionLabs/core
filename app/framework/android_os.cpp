@@ -76,14 +76,14 @@ void JNI::LogException(jthrowable &exception) {
   INFOf("JNI::LogException: %s", out.c_str());
 }
 
-string JNI::GetJString(jstring x) {
-  const char *buf = env->GetStringUTFChars(x, 0);
+string JNI::GetEnvJString(JNIEnv *e, jstring x) {
+  const char *buf = e->GetStringUTFChars(x, 0);
   string ret = buf;
-  env->ReleaseStringUTFChars(x, buf);
+  e->ReleaseStringUTFChars(x, buf);
   return ret;
 }
 
-pair<jobjectArray, jobjectArray> JNI::ToJObjectArray(const StringPairVec& items) {
+pair<jobjectArray, jobjectArray> JNI::ToJStringArrays(StringPairVec items) {
   jobjectArray k = env->NewObjectArray(items.size(), string_class, NULL);
   jobjectArray v = env->NewObjectArray(items.size(), string_class, NULL);
   for (int i=0, l=items.size(); i != l; ++i) {
@@ -93,28 +93,63 @@ pair<jobjectArray, jobjectArray> JNI::ToJObjectArray(const StringPairVec& items)
   return make_pair(k, v);
 }
 
-tuple<jobjectArray, jobjectArray, jobjectArray> JNI::ToJObjectArray(const MenuItemVec &items) {
-  jobjectArray k = env->NewObjectArray(items.size(), string_class, NULL);
-  jobjectArray v = env->NewObjectArray(items.size(), string_class, NULL);
-  jobjectArray w = env->NewObjectArray(items.size(), string_class, NULL);
+jobject JNI::ToJModelItemArrayList(AlertItemVec items) {
+  jobject ret = env->NewObject(arraylist_class, arraylist_construct);
   for (int i=0, l=items.size(); i != l; ++i) {
-    env->SetObjectArrayElement(k, i, ToJString(items[i].shortcut));
-    env->SetObjectArrayElement(v, i, ToJString(items[i].name));
-    // env->SetObjectArrayElement(w, i, ToJString(items[i].cmd));
+    jobject v = ToJModelItem(items[i]);
+    CHECK(env->CallBooleanMethod(ret, arraylist_add, v));
+    env->DeleteLocalRef(v);
   }
-  return make_tuple(k, v, w);
+  return ret;
 }
 
-tuple<jobjectArray, jobjectArray, jobjectArray> JNI::ToJObjectArray(const TableItemVec &items) {
-  jobjectArray k = env->NewObjectArray(items.size(), string_class, NULL);
-  jobjectArray v = env->NewObjectArray(items.size(), string_class, NULL);
-  jobjectArray w = env->NewObjectArray(items.size(), string_class, NULL);
+jobject JNI::ToJModelItemArrayList(MenuItemVec items) {
+  jobject ret = env->NewObject(arraylist_class, arraylist_construct);
   for (int i=0, l=items.size(); i != l; ++i) {
-    env->SetObjectArrayElement(k, i, ToJString(items[i].key));
-    env->SetObjectArrayElement(v, i, ToJString(items[i].val));
-    env->SetObjectArrayElement(w, i, ToJString(items[i].val));
+    jobject v = ToJModelItem(items[i]);
+    CHECK(env->CallBooleanMethod(ret, arraylist_add, v));
+    env->DeleteLocalRef(v);
   }
-  return make_tuple(k, v, w);
+  return ret;
+}
+
+jobject JNI::ToJModelItemArrayList(TableItemVec items) {
+  jobject ret = env->NewObject(arraylist_class, arraylist_construct);
+  for (int i=0, l=items.size(); i != l; ++i) {
+    jobject v = ToJModelItem(items[i]);
+    CHECK(env->CallBooleanMethod(ret, arraylist_add, v));
+    env->DeleteLocalRef(v);
+  }
+  return ret;
+}
+
+jobject JNI::ToJModelItem(AlertItem item) {
+  jobject k = ToJString(item.first), v = ToJString(item.second);
+  jlong cb = item.cb ? intptr_t(new StringCB(move(item.cb))) : 0;
+  jobject ret = env->NewObject(jmodelitem_class, jmodelitem_construct, k, v, jint(0), jint(0), jint(0),
+                               jlong(0), jlong(0), cb, false);
+  env->DeleteLocalRef(k);
+  env->DeleteLocalRef(v);
+  return ret;
+}
+
+jobject JNI::ToJModelItem(MenuItem item) {
+  jobject k = ToJString(item.shortcut), v = ToJString(item.name);
+  jlong cb = item.cb ? intptr_t(new Callback(move(item.cb))) : 0;
+  jobject ret = env->NewObject(jmodelitem_class, jmodelitem_construct, k, v, jint(0), jint(0), jint(0),
+                               cb, jlong(0), jlong(0), false);
+  env->DeleteLocalRef(k);
+  env->DeleteLocalRef(v);
+  return ret;
+}
+
+jobject JNI::ToJModelItem(TableItem item) {
+  jobject k = ToJString(item.key), v = ToJString(item.val);
+  jobject ret = env->NewObject(jmodelitem_class, jmodelitem_construct, k, v, item.type, item.left_icon, item.right_icon,
+                               jlong(0), jlong(0), jlong(0), item.hidden);
+  env->DeleteLocalRef(k);
+  env->DeleteLocalRef(v);
+  return ret;
 }
 
 BufferFile *JNI::OpenAsset(const string &fn) {

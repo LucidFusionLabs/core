@@ -48,17 +48,19 @@ public class MainActivity extends android.app.Activity {
     public native void AppFling(float x, float y, float vx, float vy);
     public native void AppScroll(float x, float y, float sx, float sy);
     public native void AppAccel(float x, float y, float z);
-    public native void AppShellRun(String text);
+    public native void AppFocusedShellRun(String text);
+    public native void AppRunCallbackInMainThread(long cb);
+    public native void AppRunStringCBInMainThread(long cb, String text);
 
     public static boolean app_created, app_init, disable_title;
-    public static AppWidgets app_widgets = new AppWidgets();
+    public static JWidgets jwidgets = new JWidgets();
 
     public Resources resources;
     public FrameLayout frame_layout;
     public ActionBar action_bar;
     public Window root_window;
     public View root_view;
-    public GameView view;
+    public MainView view;
     public Thread thread;
     public AudioManager audio;
     public GPlusClient gplus;
@@ -79,7 +81,7 @@ public class MainActivity extends android.app.Activity {
         frame_layout = (FrameLayout)inflater.inflate(R.layout.main, null);
         root_window = getWindow();
         resources = getResources();
-        view = new GameView(this, context);
+        view = new MainView(this, context);
         audio = (AudioManager)getSystemService(Context.AUDIO_SERVICE);
         action_bar = getActionBar();
 
@@ -111,8 +113,8 @@ public class MainActivity extends android.app.Activity {
 
                 int actionbar_h = action_bar.isShowing() ? action_bar.getHeight() : 0;
                 int h = r.bottom - r.top - actionbar_h;
-                for (Integer id : app_widgets.toolbar_bottom) {
-                    View tb = app_widgets.toolbars.get(id);
+                for (JToolbar toolbar : jwidgets.toolbar_bottom) {
+                    View tb = toolbar.view;
                     if (tb == null) continue;
                     FrameLayout.LayoutParams params = (FrameLayout.LayoutParams)tb.getLayoutParams();
                     params.bottomMargin = surface_height - h;
@@ -137,7 +139,7 @@ public class MainActivity extends android.app.Activity {
         boolean have_surface = view.have_surface, thread_exists = thread != null;
         Log.i("lfl", "MainActivity.onResume() have_surface=" + have_surface + " thread_exists=" + thread_exists);
         super.onResume();
-        app_widgets.onResume(this);
+        jwidgets.onResume(this);
         if (have_surface && !thread_exists) startRenderThread(false);
     }
     
@@ -165,7 +167,7 @@ public class MainActivity extends android.app.Activity {
     @Override
     protected void onDestroy() {
         Log.i("lfl", "MainActivity.onDestroy()");
-        app_widgets.onDestroy();
+        jwidgets.onDestroy();
         if (advertising != null) advertising.onDestroy();
         super.onDestroy();
     }
@@ -322,103 +324,6 @@ public class MainActivity extends android.app.Activity {
 
     public void hideAds() { if (advertising != null) advertising.hideAds(); }
     public void showAds() { if (advertising != null) advertising.showAds(); }
-    
-    public int addAlert(final String[] k, final String[] v) {
-        app_widgets.alert_specs.add(app_widgets.new Spec(k, v));
-        app_widgets.alerts.add(null);
-        return app_widgets.alert_specs.size() - 1;
-    }
-
-    public void showAlert(final int id, final String arg) {
-        final MainActivity self = this;
-        runOnUiThread(new Runnable() { public void run() {
-            Pair<AlertDialog, EditText> alert = app_widgets.getAlert(self, id);
-            if (alert.second != null) { alert.second.setText(arg); }
-            alert.first.show();
-        }});
-    }
-
-    public int addToolbar(final String[] k, final String[] v) {
-        app_widgets.toolbar_specs.add(app_widgets.new Spec(k, v));
-        app_widgets.toolbars.add(null);
-        return app_widgets.toolbar_specs.size() - 1;
-    }
-    
-    public void showToolbar(final int id) {
-        final MainActivity self = this;
-        runOnUiThread(new Runnable() { public void run() {
-            app_widgets.toolbar_bottom.add(id);
-            View toolbar = app_widgets.getToolbar(self, id);
-            frame_layout.addView(toolbar, new LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,
-                                                           FrameLayout.LayoutParams.WRAP_CONTENT,
-                                                           Gravity.BOTTOM));
-        }});
-    }
-    
-    public int addMenu(final String title, final String[] k, final String[] v, final String[] w) {
-        return 0;
-    }
-
-    public void showMenu(final int id) {
-        runOnUiThread(new Runnable() { public void run() {
-        }});
-    }
-
-    public int addTable(final String title, final String[] k, final String[] v, final String[] w) {
-        app_widgets.table_specs.add(app_widgets.new Spec(title, k, v, w));
-        app_widgets.tables.add(null);
-        app_widgets.table_toolbars.add(new ArrayList<Integer>());
-        return app_widgets.table_specs.size() - 1;
-    }
-
-    public void addTableToolbar(final int id, final int toolbar_id) {
-        app_widgets.table_toolbars.get(id).add(toolbar_id);
-    }
-
-    public void showTable(final int id, final boolean show_or_hide) {
-        final MainActivity self = this;
-        runOnUiThread(new Runnable() { public void run() {
-            ListViewFragment table = app_widgets.getTable(self, id);
-            if (show_or_hide) {
-                action_bar.show();
-                getFragmentManager().beginTransaction().replace(R.id.content_frame, table).commit();
-            } else {
-                if (disable_title) action_bar.hide();
-                getFragmentManager().beginTransaction().remove(table).commit();
-            }
-        }});
-    }
-
-    public ArrayList<Pair<String, String>> getTableSectionText(final int id, final int section) {
-        ListViewFragment table = app_widgets.tables.get(id);
-        if (table == null) return new ArrayList<Pair<String, String>>();
-        return table.data.getSectionText(table.listview, section);
-    }
-
-    public int addNavigation() {
-        app_widgets.navigations.add(0);
-        return app_widgets.navigations.size()-1;
-    }
-
-    public void showNavigation(final int id, final boolean show_or_hide) {
-        if (show_or_hide) {
-           app_widgets.navigation_stack.add(id);
-           showTable(app_widgets.navigations.get(id), true);
-        } else runOnUiThread(new Runnable() { public void run() {
-           app_widgets.navigation_stack.remove(app_widgets.navigation_stack.size()-1);
-           getFragmentManager().popBackStackImmediate(null, android.app.FragmentManager.POP_BACK_STACK_INCLUSIVE);
-           showTable(app_widgets.navigations.get(id), false);
-        }});
-    }
-
-    public void pushNavigationTable(final int id, final int table_id) {
-        final MainActivity self = this;
-        runOnUiThread(new Runnable() { public void run() {
-            ListViewFragment table = app_widgets.getTable(self, table_id);
-            getFragmentManager().beginTransaction()
-                .replace(R.id.content_frame, table).addToBackStack(table.title).commit();
-        }});
-    }
 }
 
 class MyGestureListener extends android.view.GestureDetector.SimpleOnGestureListener {
@@ -431,7 +336,7 @@ class MyGestureListener extends android.view.GestureDetector.SimpleOnGestureList
     }
 }
 
-class GameView extends android.view.SurfaceView implements SurfaceHolder.Callback, View.OnKeyListener, View.OnTouchListener, SensorEventListener {
+class MainView extends android.view.SurfaceView implements SurfaceHolder.Callback, View.OnKeyListener, View.OnTouchListener, SensorEventListener {
     public MainActivity main_activity;
     public EGLContext egl_context;
     public EGLSurface egl_surface;
@@ -440,7 +345,7 @@ class GameView extends android.view.SurfaceView implements SurfaceHolder.Callbac
     public SensorManager sensor;
     public boolean have_surface;
 
-    public GameView(MainActivity activity, Context context) {
+    public MainView(MainActivity activity, Context context) {
         super(context);
         main_activity = activity;
         sensor = (SensorManager)context.getSystemService("sensor");  
@@ -455,17 +360,17 @@ class GameView extends android.view.SurfaceView implements SurfaceHolder.Callbac
 
     @Override
     protected void onSizeChanged(int xNew, int yNew, int xOld, int yOld) {
-        Log.i("lfl", "GameView.onSizeChanged(" + xNew + ", " + yNew + ", " + xOld + ", " + yOld + ")");
+        Log.i("lfl", "MainView.onSizeChanged(" + xNew + ", " + yNew + ", " + xOld + ", " + yOld + ")");
     }
 
     public void surfaceCreated(SurfaceHolder holder) {
-        Log.i("lfl", "GameView.surfaceCreated()");
+        Log.i("lfl", "MainView.surfaceCreated()");
         sensor.registerListener(this, sensor.getDefaultSensor(Sensor.TYPE_ACCELEROMETER), SensorManager.SENSOR_DELAY_GAME, null);
         have_surface = true;
     }
 
     public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
-        Log.i("lfl", "GameView.surfaceChanged(" + width + ", " + height + ")");
+        Log.i("lfl", "MainView.surfaceChanged(" + width + ", " + height + ")");
         main_activity.surfaceChanged(format, width, height);
     }
 

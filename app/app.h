@@ -771,9 +771,12 @@ struct Application : public ::LFApp {
   Connection *ConnectTCP(const string &hostport, int default_port, Connection::CB *connected_cb,
                          bool background_services = false);
 
-  template <class... Args> void RunInMainThread(Args&&... args) {
-    message_queue.Write(new Callback(forward<Args>(args)...));
+  void RunCallbackInMainThread(Callback *cb) {
+    message_queue.Write(cb);
     if (!FLAGS_target_fps) scheduler.Wakeup(focused);
+  }
+  template <class... Args> void RunInMainThread(Args&&... args) {
+    RunCallbackInMainThread(new Callback(forward<Args>(args)...));
   }
   template <class... Args> void RunInNetworkThread(Args&&... args) {
     if (auto nt = network_thread.get()) nt->Write(new Callback(forward<Args>(args)...));

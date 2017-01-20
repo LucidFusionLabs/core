@@ -52,8 +52,8 @@ public class ListAdapter extends BaseAdapter {
     public ArrayList<String>  vals     = new ArrayList<String>();
     public ArrayList<Integer> sections = new ArrayList<Integer>();
 
-    public ListAdapter(final MainActivity activity, final String[] k, final String[] t, final String[] v) {
-        for (int i = 0; i < k.length; i++) addItem(k[i], t[i], v[i]);
+    public ListAdapter(final MainActivity activity, final ArrayList<JModelItem> item) {
+        for (JModelItem r : item) addItem(r.key, "", r.val);
         inflater = (LayoutInflater)activity.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
     }
 
