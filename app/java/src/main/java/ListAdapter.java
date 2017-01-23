@@ -37,61 +37,44 @@ public class ListAdapter extends BaseAdapter {
         public EditText editText;
     }
 
-    public static final int TYPE_LABEL     = 0;
-    public static final int TYPE_COMMAND   = 1;
-    public static final int TYPE_BUTTON    = 2;
-    public static final int TYPE_TEXTINPUT = 3;
-    public static final int TYPE_NUMINPUT  = 4;
-    public static final int TYPE_PWINPUT   = 5;
-    public static final int TYPE_SEPARATOR = 6;
-    public static final int TYPE_MAX       = 7;
+    public static class Section {
+        public int start_row;
+        public Section(Integer v) { start_row = v; }
+    }
 
-    public LayoutInflater     inflater = null;
-    public ArrayList<String>  keys     = new ArrayList<String>();
-    public ArrayList<Integer> types    = new ArrayList<Integer>();
-    public ArrayList<String>  vals     = new ArrayList<String>();
-    public ArrayList<Integer> sections = new ArrayList<Integer>();
+    public LayoutInflater inflater = null;
+    public ArrayList<JModelItem> data = new ArrayList<JModelItem>();
+    public ArrayList<Section> sections = new ArrayList<Section>();
+    public int selected_section = 0, selected_row = 0;
+    public int editable_section = -1, editable_start_row = -1;
+    public long delete_row_cb = 0;
+    public native void close();
 
-    public ListAdapter(final MainActivity activity, final ArrayList<JModelItem> item) {
-        for (JModelItem r : item) addItem(r.key, "", r.val);
+    public ListAdapter(final MainActivity activity, final ArrayList<JModelItem> v) {
         inflater = (LayoutInflater)activity.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
+        data = v;
+        beginUpdates();
+        if ((data.size() == 0 || data.get(0).type != JModelItem.TYPE_SEPARATOR))
+            data.add(0, new JModelItem("", "", JModelItem.TYPE_SEPARATOR, 0, 0, 0, 0, 0, false));
+        for (int i = 0, l = data.size(); i != l; ++i)
+            if (data.get(i).type == JModelItem.TYPE_SEPARATOR) sections.add(new Section(i));
+        endUpdates();
     }
-
-    public void addItem(String k, String t, String v) {
-        if (k.indexOf(',') >= 0) {
-            String[] kv = k.split(",");
-            String[] tv = t.split(",");
-            k = kv[0];
-            t = tv[0];
-        }
-        keys.add(k);
-        vals.add(v);
-
-        int type = TYPE_LABEL;
-        if      (k.equals("<separator>")) type = TYPE_SEPARATOR;
-        else if (t.equals("command"))     type = TYPE_COMMAND;
-        else if (t.equals("button"))      type = TYPE_BUTTON;
-        else if (t.equals("textinput"))   type = TYPE_TEXTINPUT;
-        else if (t.equals("numinput"))    type = TYPE_NUMINPUT;
-        else if (t.equals("pwinput"))     type = TYPE_PWINPUT;
-        types.add(type);
-
-        if (type == TYPE_SEPARATOR) sections.add(keys.size());
-
-        if (inflater != null) notifyDataSetChanged();
-    }
+    
+    @Override
+    protected void finalize() throws Throwable { try { close(); } finally { super.finalize(); } }
 
     @Override
-    public int getItemViewType(int position) { return types.get(position); }
+    public int getItemViewType(int position) { return data.get(position).type; }
 
     @Override
-    public int getViewTypeCount() { return TYPE_MAX; }
+    public int getViewTypeCount() { return JModelItem.TYPE_COUNT; }
 
     @Override
-    public int getCount() { return keys.size(); }
+    public int getCount() { return data.size(); }
 
     @Override
-    public String getItem(int position) { return keys.get(position); }
+    public String getItem(int position) { return data.get(position).key; }
 
     @Override
     public long getItemId(int position) { return position; }
@@ -103,9 +86,9 @@ public class ListAdapter extends BaseAdapter {
         if (convertView == null) {
             holder = new ViewHolder();
             switch (type) {
-                case TYPE_TEXTINPUT:
-                case TYPE_NUMINPUT:
-                case TYPE_PWINPUT:
+                case JModelItem.TYPE_TEXTINPUT:
+                case JModelItem.TYPE_NUMBERINPUT:
+                case JModelItem.TYPE_PASSWORDINPUT:
                     convertView = inflater.inflate(R.layout.listview_cell_textinput, null);
                     holder.textView = (TextView)convertView.findViewById(R.id.listview_cell_title);
                     holder.editText = (EditText)convertView.findViewById(R.id.listview_cell_textinput);
@@ -120,7 +103,7 @@ public class ListAdapter extends BaseAdapter {
         } else {
             holder = (ViewHolder)convertView.getTag();
         }
-        holder.textView.setText(type == TYPE_SEPARATOR ? "" : keys.get(position));
+        holder.textView.setText(type == JModelItem.TYPE_SEPARATOR ? "" : data.get(position).key);
         return convertView;
     }
 
@@ -136,17 +119,90 @@ public class ListAdapter extends BaseAdapter {
         }
     }
 
+    public int getSectionBeginRowId(final int section) { 
+      return sections.get(section).start_row;
+    }
+
+    public int getSectionEndRowId(final int section) {
+        return ((section+1) == sections.size() ? data.size() : getSectionBeginRowId(section+1)) - 1;
+    }
+
+    public int getSectionSize(final int section) {
+        return getSectionEndRowId(section) - getSectionBeginRowId(section);
+    }
+
+    public int getCollapsedRowId(final int section, final int row) {
+        return getSectionBeginRowId(section) + 1 + row;
+    }
+
+    public void beginUpdates() {}
+    public void endUpdates() { notifyDataSetChanged(); }
+
+    public void selectRow(final int s, final int r) {
+        selected_section = s;
+        selected_row = r;
+    }
+
+    public void setEditable(final int s, final int start_row, final long intint_cb) {
+        editable_section = s;
+        editable_start_row = start_row;
+        delete_row_cb = intint_cb;
+    }
+
+    public void addSection() {
+        sections.add(new Section(data.size()));
+        data.add(new JModelItem("", "", JModelItem.TYPE_SEPARATOR, 0, 0, 0, 0, 0, false));
+    }
+
+    public void addRow(final int section, JModelItem row) {
+        if (section == sections.size()) addSection();
+        assert section < sections.size();
+        data.add(getSectionEndRowId(section), row);
+        moveSectionsAfterBy(section, 1);
+    }
+
+    public void replaceSection(final String h, final int image, final int flag, final int section, ArrayList<JModelItem> v) {
+        if (section == sections.size()) addSection();
+        assert section < sections.size();
+        int start_row = getSectionBeginRowId(section), old_section_size = getSectionSize(section);
+        data.subList(start_row + 1, start_row + 1 + old_section_size).clear();
+        data.addAll(start_row + 1, v);
+        moveSectionsAfterBy(section, v.size() - getSectionSize(section));
+    }
+
+    public void setSectionValues(final int section, ArrayList<String> v) {
+        if (section == sections.size()) addSection();
+        assert section < sections.size();
+        int section_size = getSectionSize(section), section_row = getSectionBeginRowId(section);
+        assert section_size == v.size();
+        for (int i = 0; i < section_size; ++i) {
+            data.get(section_row + i).val = v.get(i);
+        }
+    }
+
+    public void moveSectionsAfterBy(final int section, final int delta) {
+        for (int i = section + 1, l = sections.size(); i < l; i++) sections.get(i).start_row += delta;
+    }
+
+    public String getKey(final int s, final int r) { return data.get(getCollapsedRowId(s, r)).val; }
+    public int    getTag(final int s, final int r) { return data.get(getCollapsedRowId(s, r)).tag; }
+
+    public void setTag   (final int s, final int r, final int     v) { data.get(getCollapsedRowId(s, r)).tag = v; } 
+    public void setKey   (final int s, final int r, final String  v) { data.get(getCollapsedRowId(s, r)).key = v; }
+    public void setValue (final int s, final int r, final String  v) { data.get(getCollapsedRowId(s, r)).val = v; }
+    public void setHidden(final int s, final int r, final boolean v) { data.get(getCollapsedRowId(s, r)).hidden = v; }
+
     public ArrayList<Pair<String, String>> getSectionText(ListView listview, final int section) {
         ArrayList<Pair<String, String>> ret = new ArrayList<Pair<String, String>>();
-        final int start_section = section > 0               ? sections.get(section-1)+1 : 0;
-        final int   end_section = section < sections.size() ? sections.get(section)-1   : keys.size();
+        final int start_section = section > 0               ? sections.get(section-1).start_row+1 : 0;
+        final int   end_section = section < sections.size() ? sections.get(section).start_row-1   : data.size();
         for (int i = start_section; i < end_section; i++) {
             String valtext = "";
             View rowview = getViewByPosition(listview, i);
             ViewHolder holder = (ViewHolder)rowview.getTag();
             if (holder.editText != null)
                 valtext = holder.editText.getText().toString();
-            ret.add(new Pair<String, String>(keys.get(i), (valtext.length() > 0) ? valtext : vals.get(i)));
+            ret.add(new Pair<String, String>(data.get(i).key, (valtext.length() > 0) ? valtext : data.get(i).val));
         }
         return ret;
     }

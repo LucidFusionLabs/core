@@ -83,14 +83,51 @@ string JNI::GetEnvJString(JNIEnv *e, jstring x) {
   return ret;
 }
 
+jobjectArray JNI::ToJStringArray(StringVec items) {
+  jobjectArray v = env->NewObjectArray(items.size(), string_class, NULL);
+  for (int i=0, l=items.size(); i != l; ++i) {
+    jstring vi = ToJString(items[i]);
+    env->SetObjectArrayElement(v, i, vi);
+    env->DeleteLocalRef(vi);
+  }
+  return v;
+}
+
 pair<jobjectArray, jobjectArray> JNI::ToJStringArrays(StringPairVec items) {
   jobjectArray k = env->NewObjectArray(items.size(), string_class, NULL);
   jobjectArray v = env->NewObjectArray(items.size(), string_class, NULL);
   for (int i=0, l=items.size(); i != l; ++i) {
-    env->SetObjectArrayElement(k, i, ToJString(items[i].first));
-    env->SetObjectArrayElement(v, i, ToJString(items[i].second));
+    jstring ki = ToJString(items[i].first), vi = ToJString(items[i].second);
+    env->SetObjectArrayElement(k, i, ki);
+    env->SetObjectArrayElement(v, i, vi);
+    env->DeleteLocalRef(ki);
+    env->DeleteLocalRef(vi);
   }
   return make_pair(k, v);
+}
+
+jobject JNI::ToJStringArrayList(StringVec items) {
+  jobject ret = env->NewObject(arraylist_class, arraylist_construct);
+  for (int i=0, l=items.size(); i != l; ++i) {
+    jobject v = ToJString(items[i]);
+    CHECK(env->CallBooleanMethod(ret, arraylist_add, v));
+    env->DeleteLocalRef(v);
+  }
+  return ret;
+}
+
+jobject JNI::ToJStringPairArrayList(StringPairVec items) {
+  static jmethodID string_pair_construct = CheckNotNull
+    (env->GetMethodID(pair_class, "<init>", "(Ljava/lang/String;Ljava/lang/String;)V"));
+  jobject ret = env->NewObject(arraylist_class, arraylist_construct);
+  for (int i=0, l=items.size(); i != l; ++i) {
+    jstring ki = ToJString(items[i].first), vi = ToJString(items[i].second);
+    jobject v = env->NewObject(pair_class, string_pair_construct, ki, vi);
+    env->DeleteLocalRef(v);
+    env->DeleteLocalRef(ki);
+    env->DeleteLocalRef(vi);
+  }
+  return ret;
 }
 
 jobject JNI::ToJModelItemArrayList(AlertItemVec items) {
@@ -145,8 +182,10 @@ jobject JNI::ToJModelItem(MenuItem item) {
 
 jobject JNI::ToJModelItem(TableItem item) {
   jobject k = ToJString(item.key), v = ToJString(item.val);
-  jobject ret = env->NewObject(jmodelitem_class, jmodelitem_construct, k, v, item.type, item.left_icon, item.right_icon,
-                               jlong(0), jlong(0), jlong(0), item.hidden);
+  jlong cb = item.cb ? intptr_t(new Callback(move(item.cb))) : 0;
+  jlong rcb = item.right_icon_cb ? intptr_t(new Callback(move(item.right_icon_cb))) : 0;
+  jobject ret = env->NewObject(jmodelitem_class, jmodelitem_construct, k, v, item.type,
+                               item.left_icon, item.right_icon, cb, rcb, jlong(0), item.hidden);
   env->DeleteLocalRef(k);
   env->DeleteLocalRef(v);
   return ret;

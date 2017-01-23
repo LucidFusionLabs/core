@@ -19,50 +19,63 @@
 namespace LFL {
 static JNI *jni = Singleton<JNI>::Get();
 
-int GetAlertViewID(SystemAlertView *w) { return int(w->impl); }
-SystemAlertView::~SystemAlertView() {}
-
+SystemAlertView::~SystemAlertView() { jni->env->DeleteGlobalRef(jobject(impl.v)); }
 SystemAlertView::SystemAlertView(AlertItemVec items) {
   CHECK_EQ(4, items.size());
   CHECK_EQ("style", items[0].first);
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->jalert_class,
                            "<init>", "(Lcom/lucidfusionlabs/app/MainActivity;Ljava/util/ArrayList;)V"));
-  impl.v = jni->env->NewObject(jni->jalert_class, mid, jni->activity, jni->ToJModelItemArrayList(move(items)));
+  jobject v = jni->env->NewObject(jni->jalert_class, mid, jni->activity, jni->ToJModelItemArrayList(move(items)));
+  impl.v = jni->env->NewGlobalRef(v);
+  jni->env->DeleteLocalRef(v);
 }
 
 void SystemAlertView::Show(const string &arg) {
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->jalert_class, "showText", "(Lcom/lucidfusionlabs/app/MainActivity;Ljava/lang/String;)V"));
-  jni->env->CallVoidMethod(jobject(impl.v), mid, jni->activity, jni->ToJString(arg));
+  jstring astr = jni->ToJString(arg);
+  jni->env->CallVoidMethod(jobject(impl.v), mid, jni->activity, astr);
+  jni->env->DeleteLocalRef(astr);
 }
 
-void SystemAlertView::ShowCB(const string &title, const string &msg, const string &arg, StringCB confirm_cb) {}
-string SystemAlertView::RunModal(const string &arg) { return ""; }
+string SystemAlertView::RunModal(const string &arg) { return ERRORv(string(), "not implemented"); }
+void SystemAlertView::ShowCB(const string &title, const string &msg, const string &arg, StringCB confirm_cb) {
+}
 
-int GetToolbarViewID(SystemToolbarView *w) { return int(w->impl); }
-SystemToolbarView::~SystemToolbarView() {}
+SystemToolbarView::~SystemToolbarView() { jni->env->DeleteGlobalRef(jobject(impl.v)); }
 SystemToolbarView::SystemToolbarView(MenuItemVec items) {
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->jtoolbar_class,
                            "<init>", "(Lcom/lucidfusionlabs/app/MainActivity;Ljava/util/ArrayList;)V"));
-  impl.v = jni->env->NewObject(jni->jtoolbar_class, mid, jni->activity, jni->ToJModelItemArrayList(move(items)));
+  jobject l = jni->ToJModelItemArrayList(move(items));
+  jobject v = jni->env->NewObject(jni->jtoolbar_class, mid, jni->activity, l);
+  impl.v = jni->env->NewGlobalRef(v);
+  jni->env->DeleteLocalRef(v);
+  jni->env->DeleteLocalRef(l);
 }
 
-void SystemToolbarView::ToggleButton(const string &n) {}
+void SystemToolbarView::ToggleButton(const string &n) {
+}
+
 void SystemToolbarView::Show(bool show_or_hide) {
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->jtoolbar_class, "show", "(Lcom/lucidfusionlabs/app/MainActivity;Z)V"));
   jni->env->CallVoidMethod(jobject(impl.v), mid, jni->activity, true);
 }
 
-int GetMenuViewID(SystemMenuView *w) { return int(w->impl); }
-SystemMenuView::~SystemMenuView() {}
+SystemMenuView::~SystemMenuView() { jni->env->DeleteGlobalRef(jobject(impl.v)); }
 SystemMenuView::SystemMenuView(const string &title, MenuItemVec items) {
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->jmenu_class,
                            "<init>", "(Lcom/lucidfusionlabs/app/MainActivity;Ljava/lang/String;Ljava/util/ArrayList;)V"));
-  impl.v = jni->env->NewObject(jni->jmenu_class, mid, jni->activity, jni->ToJString(title), jni->ToJModelItemArrayList(move(items)));
+  jstring tstr = jni->ToJString(title);
+  jobject l = jni->ToJModelItemArrayList(move(items));
+  jobject v = jni->env->NewObject(jni->jmenu_class, mid, jni->activity, tstr, l);
+  impl.v = jni->env->NewGlobalRef(v);
+  jni->env->DeleteLocalRef(v);
+  jni->env->DeleteLocalRef(l);
+  jni->env->DeleteLocalRef(tstr);
 }
 
 unique_ptr<SystemMenuView> SystemMenuView::CreateEditMenu(MenuItemVec items) { return nullptr; }
@@ -72,19 +85,23 @@ void SystemMenuView::Show() {
   jni->env->CallVoidMethod(jobject(impl.v), mid, jni->activity, true);
 }
 
-int GetTableViewID(SystemTableView *w) { return int(w->impl); }
-SystemTableView::~SystemTableView() {}
+SystemTableView::~SystemTableView() { jni->env->DeleteGlobalRef(jobject(impl.v)); }
 SystemTableView::SystemTableView(const string &title, const string &style, TableItemVec items) {
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->jtable_class,
                            "<init>", "(Lcom/lucidfusionlabs/app/MainActivity;Ljava/lang/String;Ljava/util/ArrayList;)V"));
-  impl.v = jni->env->NewObject(jni->jtable_class, mid, jni->activity, jni->ToJString(title),
-                               jni->ToJModelItemArrayList(move(items)));
+  jstring tstr = jni->ToJString(title);
+  jobject l = jni->ToJModelItemArrayList(move(items));
+  jobject v = jni->env->NewObject(jni->jtable_class, mid, jni->activity, tstr, l);
+  impl.v = jni->env->NewGlobalRef(v);
+  jni->env->DeleteLocalRef(v);
+  jni->env->DeleteLocalRef(l);
+  jni->env->DeleteLocalRef(tstr);
 }
 
-void SystemTableView::DelNavigationButton(int) {}
-void SystemTableView::AddNavigationButton(int, const TableItem &item) {}
 void SystemTableView::AddToolbar(SystemToolbarView *toolbar) { ERROR("not implemented"); }
+void SystemTableView::AddNavigationButton(int, const TableItem &item) {}
+void SystemTableView::DelNavigationButton(int) {}
 
 void SystemTableView::Show(bool show_or_hide) {
   static jmethodID mid = CheckNotNull
@@ -92,15 +109,68 @@ void SystemTableView::Show(bool show_or_hide) {
   jni->env->CallVoidMethod(jobject(impl.v), mid, jni->activity, true);
 }
 
-string SystemTableView::GetKey(int section, int row) { return ""; }
-int SystemTableView::GetTag(int section, int row) { return 0; }
-void SystemTableView::SetTag(int section, int row, int val) {}
-void SystemTableView::SetKey(int seciton, int row, const string &key) {}
-void SystemTableView::SetValue(int section, int row, const string &val) {}
-void SystemTableView::SetHidden(int section, int row, bool val) {}
-void SystemTableView::SetTitle(const string &title) {}
-PickerItem *SystemTableView::GetPicker(int section, int row) { return 0; }
-void SystemTableView::SelectRow(int section, int row) {}
+string SystemTableView::GetKey(int section, int row) {
+  static jmethodID mid = CheckNotNull
+    (jni->env->GetMethodID(jni->jtable_class,
+                           "getKey", "(Lcom/lucidfusionlabs/app/MainActivity;II)I"));
+  jstring v = jstring(jni->env->CallObjectMethod(jobject(impl.v), mid, jni->activity, jint(section), jint(row)));
+  string ret = jni->GetJString(v);
+  jni->env->DeleteLocalRef(v);
+  return ret;
+}
+
+int SystemTableView::GetTag(int section, int row) {
+  static jmethodID mid = CheckNotNull
+    (jni->env->GetMethodID(jni->jtable_class,
+                           "getTag", "(Lcom/lucidfusionlabs/app/MainActivity;II)I"));
+  jni->env->CallIntMethod(jobject(impl.v), mid, jni->activity, jint(section), jint(row));
+}
+
+void SystemTableView::SetTag(int section, int row, int val) {
+  static jmethodID mid = CheckNotNull
+    (jni->env->GetMethodID(jni->jtable_class,
+                           "setTag", "(Lcom/lucidfusionlabs/app/MainActivity;III)V"));
+  jni->env->CallVoidMethod(jobject(impl.v), mid, jni->activity, jint(section), jint(row), jint(val));
+}
+
+void SystemTableView::SetKey(int seciton, int row, const string &key) {
+  static jmethodID mid = CheckNotNull
+    (jni->env->GetMethodID(jni->jtable_class,
+                           "setKey", "(Lcom/lucidfusionlabs/app/MainActivity;IILjava/lang/String;)V"));
+  jstring kstr = jni->ToJString(key);
+  jni->env->CallVoidMethod(jobject(impl.v), mid, jni->activity, jint(seciton), jint(row), kstr);
+  jni->env->DeleteLocalRef(kstr);
+}
+
+void SystemTableView::SetValue(int section, int row, const string &val) {
+  static jmethodID mid = CheckNotNull
+    (jni->env->GetMethodID(jni->jtable_class,
+                           "setValue", "(Lcom/lucidfusionlabs/app/MainActivity;IILjava/lang/String;)V"));
+  jstring vstr = jni->ToJString(val);
+  jni->env->CallVoidMethod(jobject(impl.v), mid, jni->activity, jint(section), jint(row), vstr);
+  jni->env->DeleteLocalRef(vstr);
+}
+
+void SystemTableView::SetHidden(int section, int row, bool val) {
+  static jmethodID mid = CheckNotNull
+    (jni->env->GetMethodID(jni->jtable_class, "setHidden", "(Lcom/lucidfusionlabs/app/MainActivity;IIZ)V"));
+  jni->env->CallVoidMethod(jobject(impl.v), mid, jni->activity, jint(section), jint(row), jboolean(val));
+}
+
+void SystemTableView::SetTitle(const string &title) {
+  static jmethodID mid = CheckNotNull
+    (jni->env->GetMethodID(jni->jtable_class,
+                           "setTitle", "(Lcom/lucidfusionlabs/app/MainActivity;Ljava/lang/String;)V"));
+  jstring tstr = jni->ToJString(title);
+  jni->env->CallVoidMethod(jobject(impl.v), mid, jni->activity, tstr);
+  jni->env->DeleteLocalRef(tstr);
+}
+
+void SystemTableView::SelectRow(int section, int row) {
+  static jmethodID mid = CheckNotNull
+    (jni->env->GetMethodID(jni->jtable_class, "selectRow", "(Lcom/lucidfusionlabs/app/MainActivity;II)V"));
+  jni->env->CallVoidMethod(jobject(impl.v), mid, jni->activity, jint(section), jint(row));
+}
 
 StringPairVec SystemTableView::GetSectionText(int section) {
   static jmethodID mid = CheckNotNull
@@ -117,25 +187,78 @@ StringPairVec SystemTableView::GetSectionText(int section) {
   return ret;
 }
 
-void SystemTableView::SetEditableSection(int section, int start_row, IntIntCB cb) {}
+PickerItem *SystemTableView::GetPicker(int section, int row) { return 0; }
+void SystemTableView::SetEditableSection(int section, int start_row, IntIntCB iicb) {
+  static jmethodID mid = CheckNotNull
+    (jni->env->GetMethodID(jni->jtable_class, "setEditable", "(Lcom/lucidfusionlabs/app/MainActivity;IIJ)V"));
+  jlong cb = iicb ? intptr_t(new IntIntCB(move(iicb))) : 0;
+  jni->env->CallVoidMethod(jobject(impl.v), mid, jni->activity, jint(section), jint(start_row), cb);
+}
 
-void SystemTableView::BeginUpdates() {}
-void SystemTableView::EndUpdates() {}
-void SystemTableView::AddRow(int section, TableItem item) {}
-void SystemTableView::SetSectionValues(int section, const StringVec&) {}
-void SystemTableView::ReplaceSection(int section, const string &h, int image, int flag, TableItemVec item, Callback add_button) {}
+void SystemTableView::BeginUpdates() {
+  static jmethodID mid = CheckNotNull
+    (jni->env->GetMethodID(jni->jtable_class,
+                           "beginUpdates", "(Lcom/lucidfusionlabs/app/MainActivity;)V"));
+  jni->env->CallVoidMethod(jobject(impl.v), mid, jni->activity);
+}
 
-SystemTextView::~SystemTextView() {}
+void SystemTableView::EndUpdates() {
+  static jmethodID mid = CheckNotNull
+    (jni->env->GetMethodID(jni->jtable_class,
+                           "endUpdates", "(Lcom/lucidfusionlabs/app/MainActivity;)V"));
+  jni->env->CallVoidMethod(jobject(impl.v), mid, jni->activity);
+}
+
+void SystemTableView::AddRow(int section, TableItem item) {
+  static jmethodID mid = CheckNotNull
+    (jni->env->GetMethodID(jni->jtable_class,
+                           "addRow", "(Lcom/lucidfusionlabs/app/MainActivity;ILcom/lucidfusionlabs/app/JModelItem;)V"));
+  jobject v = jni->ToJModelItem(move(item));
+  jni->env->CallVoidMethod(jobject(impl.v), mid, jni->activity, jint(section), v);
+  jni->env->DeleteLocalRef(v);
+}
+
+void SystemTableView::SetSectionValues(int section, const StringVec &in) {
+  static jmethodID mid = CheckNotNull
+    (jni->env->GetMethodID(jni->jtable_class,
+                           "setSectionValues", "(Lcom/lucidfusionlabs/app/MainActivity;ILjava/util/ArrayList;)V"));
+  jobject v = jni->ToJStringArrayList(in);
+  jni->env->CallVoidMethod(jobject(impl.v), mid, jni->activity, jint(section), v);
+  jni->env->DeleteLocalRef(v);
+}
+
+void SystemTableView::ReplaceSection(int section, const string &h, int image, int flag, TableItemVec item, Callback add_button) {
+  jstring hstr = jni->ToJString(h);
+  jobject l = jni->ToJModelItemArrayList(move(item));
+  static jmethodID mid = CheckNotNull
+    (jni->env->GetMethodID(jni->jtable_class, "replaceSection", "(Lcom/lucidfusionlabs/app/MainActivity;Ljava/lang/String;IIILjava/util/ArrayList;)V"));
+  jni->env->CallVoidMethod(jobject(impl.v), mid, jni->activity, hstr, jint(image), jint(flag), jint(section), l);
+  jni->env->DeleteLocalRef(l);
+  jni->env->DeleteLocalRef(hstr);
+}
+
+SystemTextView::~SystemTextView() { jni->env->DeleteGlobalRef(jobject(impl.v)); }
 SystemTextView::SystemTextView(const string &title, File *f) : SystemTextView(title, f ? f->Contents() : "") {}
-SystemTextView::SystemTextView(const string &title, const string &text) {}
+SystemTextView::SystemTextView(const string &title, const string &text) {
+  static jmethodID mid = CheckNotNull
+    (jni->env->GetMethodID(jni->jtextview_class,
+                           "<init>", "(Lcom/lucidfusionlabs/app/MainActivity;Ljava/lang/String;Ljava/lang/String;)V"));
+  jstring hstr = jni->ToJString(title), tstr = jni->ToJString(text);
+  jobject v = jni->env->NewObject(jni->jtextview_class, mid, jni->activity, hstr, tstr);
+  impl.v = jni->env->NewGlobalRef(v);
+  jni->env->DeleteLocalRef(v);
+  jni->env->DeleteLocalRef(tstr);
+  jni->env->DeleteLocalRef(hstr);
+}
 
-int GetNavigationViewID(SystemNavigationView *w) { return int(w->impl); }
-SystemNavigationView::~SystemNavigationView() {}
+SystemNavigationView::~SystemNavigationView() { jni->env->DeleteGlobalRef(jobject(impl.v)); }
 SystemNavigationView::SystemNavigationView() {
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->jnavigation_class,
                            "<init>", "(Lcom/lucidfusionlabs/app/MainActivity;)V"));
-  impl.v = jni->env->NewObject(jni->jnavigation_class, mid, jni->activity);
+  jobject v = jni->env->NewObject(jni->jnavigation_class, mid, jni->activity);
+  impl.v = jni->env->NewGlobalRef(v);
+  jni->env->DeleteLocalRef(v);
 }
 
 SystemTableView *SystemNavigationView::Back() { return nullptr; }

@@ -186,7 +186,7 @@ public class MainActivity extends android.app.Activity {
         if (gplus != null) gplus.onActivityResult(request, response, data);
     }
 
-    void surfaceChanged(int format, int width, int height) {
+    public void surfaceChanged(int format, int width, int height) {
         surface_width = width;
         surface_height = height;
         boolean thread_exists = thread != null;
@@ -196,7 +196,7 @@ public class MainActivity extends android.app.Activity {
         startRenderThread(true);
     }
 
-    void startRenderThread(boolean app_reset) {
+    public void startRenderThread(boolean app_reset) {
         Log.i("lfl", "startRenderThread app_init= " + app_init);
         if      (!app_init) thread = new Thread(new Runnable() { public void run() { view.initEGL();        AppMain       ();      } }, "JNIMainThread");
         else if (app_reset) thread = new Thread(new Runnable() { public void run() { view.initEGL();        AppNewMainLoop(true);  } }, "JNIMainThread");
@@ -205,7 +205,7 @@ public class MainActivity extends android.app.Activity {
         app_init = true;
     }
 
-    void forceExit() {
+    public void forceExit() {
         Log.i("lfl", "MainActivity.froceExit()");
         android.os.Process.killProcess(android.os.Process.myPid());
     }

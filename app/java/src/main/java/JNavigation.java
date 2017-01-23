@@ -44,21 +44,31 @@ public class JNavigation extends JWidget {
     }
 
     public void show(final MainActivity activity, final boolean show_or_hide) {
-        if (show_or_hide) {
-           //activity.jwidgets.navigation_stack.add(this);
-           //showTable(jwidgets.navigations.get(activity), true);
-        } else activity.runOnUiThread(new Runnable() { public void run() {
-           //activity.jwidgets.navigation_stack.remove(jwidgets.navigation_stack.size()-1);
-           //getFragmentManager().popBackStackImmediate(null, android.app.FragmentManager.POP_BACK_STACK_INCLUSIVE);
-           //showTable(jwidgets.navigations.get(activity), false);
+        final JNavigation self = this;
+        activity.runOnUiThread(new Runnable() { public void run() {
+           if (show_or_hide) activity.jwidgets.navigations.add(self);
+           else {
+               int size = activity.jwidgets.navigations.size();
+               assert size != 0 && activity.jwidgets.navigations.get(size-1) == self;
+               activity.jwidgets.navigations.remove(size-1);
+           }
+           if (stack.size() != 0) stack.get(stack.size()-1).show(activity, show_or_hide);
         }});
     }
 
     public void pushTable(final MainActivity activity, final JTable x) {
         activity.runOnUiThread(new Runnable() { public void run() {
+            stack.add(x);
             ListViewFragment table = x.get(activity);
             activity.getFragmentManager().beginTransaction()
                 .replace(R.id.content_frame, table).addToBackStack(table.title).commit();
+        }});
+    }
+    
+    public void popView(final MainActivity activity) {
+        activity.runOnUiThread(new Runnable() { public void run() {
+            stack.remove(stack.size()-1);
+            activity.getFragmentManager().popBackStackImmediate(null, android.app.FragmentManager.POP_BACK_STACK_INCLUSIVE);
         }});
     }
 }

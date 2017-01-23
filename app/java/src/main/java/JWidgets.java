@@ -32,12 +32,11 @@ import android.app.ActionBar;
 import android.app.AlertDialog;
 
 public class JWidgets {
-    public boolean destroyed;
-
-    public ArrayList<JToolbar> toolbar_top = new ArrayList<JToolbar>();
-    public ArrayList<JToolbar> toolbar_bottom = new ArrayList<JToolbar>();
-		public ArrayList<JNavigation> navigations = new ArrayList<JNavigation>();
-		public HashSet<JWidget> widgets = new HashSet<JWidget>();
+    public boolean                destroyed;
+    public HashSet<JWidget>       widgets        = new HashSet<JWidget>();
+    public ArrayList<JNavigation> navigations    = new ArrayList<JNavigation>();
+    public ArrayList<JToolbar>    toolbar_top    = new ArrayList<JToolbar>();
+    public ArrayList<JToolbar>    toolbar_bottom = new ArrayList<JToolbar>();
 
     public void onDestroy() {
         Log.i("lfl", "JWidgets.onDestroy()");

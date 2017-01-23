@@ -242,6 +242,11 @@ unique_ptr<AssetLoaderInterface> CreateAssetLoader() { return make_unique<Androi
 extern "C" jint JNI_OnLoad(JavaVM* vm, void* reserved) { return JNI_VERSION_1_4; }
 
 extern "C" void Java_com_lucidfusionlabs_app_JModelItem_close(JNIEnv *e, jobject a) {
+  INFO("JModelItem close");
+}
+
+extern "C" void Java_com_lucidfusionlabs_app_JListAdapter_close(JNIEnv *e, jobject a) {
+  INFO("JListAdapter close");
 }
 
 extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppCreate(JNIEnv *e, jobject a) {
@@ -378,7 +383,7 @@ extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppScroll(JNIEnv *e, j
 
 extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppAccel(JNIEnv *e, jobject a, jfloat x, jfloat y, jfloat z) {}
 
-extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppShellRun(JNIEnv *e, jobject a, jstring text) {
+extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppFocusedShellRun(JNIEnv *e, jobject a, jstring text) {
   app->focused->shell->Run(e->GetStringUTFChars(text, 0));
 }
 

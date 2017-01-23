@@ -44,7 +44,10 @@ struct JNI {
   void LogException(jthrowable &exception);
   string GetJString(jstring x) { return GetEnvJString(env, x); }
   jstring ToJString(const string &x) { return env->NewStringUTF(x.c_str()); }
+  jobjectArray ToJStringArray(StringVec items);
   pair<jobjectArray, jobjectArray> ToJStringArrays(StringPairVec items);
+  jobject ToJStringArrayList(StringVec items);
+  jobject ToJStringPairArrayList(StringPairVec items);
   jobject ToJModelItemArrayList(AlertItemVec items);
   jobject ToJModelItemArrayList(MenuItemVec items);
   jobject ToJModelItemArrayList(TableItemVec items);
@@ -64,12 +67,6 @@ struct GPlus {
   int  Accept();
   int  QuickGame();
 };
-
-int GetAlertViewID(SystemAlertView*);
-int GetToolbarViewID(SystemToolbarView*);
-int GetMenuViewID(SystemMenuView*);
-int GetTableViewID(SystemTableView*);
-int GetNavigationViewID(SystemNavigationView*);
 
 }; // namespace LFL
 #endif // LFL_CORE_APP_BINDINGS_JNI_H__
