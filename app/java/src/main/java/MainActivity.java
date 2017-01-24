@@ -318,7 +318,7 @@ public class MainActivity extends android.app.Activity {
     }
 
     public void openListViewActivity() {
-        final Intent intent = new Intent(this, com.lucidfusionlabs.app.ListViewActivity.class);
+        final Intent intent = new Intent(this, com.lucidfusionlabs.app.JListViewActivity.class);
         startActivity(intent);
     }
 

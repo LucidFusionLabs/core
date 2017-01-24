@@ -35,7 +35,7 @@ public class JToolbar extends JWidget {
     public View view;
 
     public JToolbar(final MainActivity activity, ArrayList<JModelItem> m) {
-        super(activity);
+        super(JWidget.TYPE_TOOLBAR, activity, "");
         model = m;
     }
 
@@ -76,10 +76,17 @@ public class JToolbar extends JWidget {
         final JToolbar self = this;
         activity.runOnUiThread(new Runnable() { public void run() {
             View toolbar = get(activity);
-            activity.jwidgets.toolbar_bottom.add(self);
-            activity.frame_layout.addView(toolbar, new LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,
-                                                                    FrameLayout.LayoutParams.WRAP_CONTENT,
-                                                                    Gravity.BOTTOM));
+            if (show_or_hide) {
+                activity.jwidgets.toolbar_bottom.add(self);
+                activity.frame_layout.addView(toolbar, new LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,
+                                                                        FrameLayout.LayoutParams.WRAP_CONTENT,
+                                                                        Gravity.BOTTOM));
+            } else {
+                int size = activity.jwidgets.toolbar_bottom.size();
+                assert size != 0 && activity.jwidgets.toolbar_bottom.get(size-1) == self;
+                activity.jwidgets.toolbar_bottom.remove(size-1);
+                activity.frame_layout.removeView(toolbar);
+            }
         }});
     }
 }

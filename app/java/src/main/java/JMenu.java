@@ -32,19 +32,18 @@ import android.app.AlertDialog;
 
 public class JMenu extends JWidget {
     public ArrayList<JModelItem> model;
-    public ListViewFragment view;
+    public JListViewFragment view;
 
     public JMenu(final MainActivity activity, String t, ArrayList<JModelItem> m) {
-        super(activity);
-        title = t;
+        super(JWidget.TYPE_MENU, activity, t);
         model = m;
     }
 
     public void clear() { view = null; }
 
-    public ListViewFragment get(final MainActivity activity) {
+    public JListViewFragment get(final MainActivity activity) {
         if (view == null) {
-            view = new ListViewFragment(activity, title, new ListAdapter(activity, model), null);
+            view = new JListViewFragment(activity, title, new JListAdapter(activity, model), null, 0);
         }
         return view;
     }

@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.HashMap;
+import java.util.concurrent.Callable;
+import java.util.concurrent.FutureTask;
 
 import android.os.*;
 import android.view.*;
@@ -29,46 +31,98 @@ import android.net.Uri;
 import android.graphics.Rect;
 import android.app.ActionBar;
 import android.app.AlertDialog;
+import android.app.Fragment;
 
 public class JNavigation extends JWidget {
-    public ArrayList<JWidget> stack = new ArrayList<JWidget>();
-
     public JNavigation(final MainActivity activity) {
-        super(activity);
+        super(JWidget.TYPE_NAVIGATION, activity, "");
     }
 
     public void clear() {}
 
-    public ListViewFragment get(final MainActivity activity) {
+    public JListViewFragment get(final MainActivity activity) {
         return null;
     }
 
     public void show(final MainActivity activity, final boolean show_or_hide) {
         final JNavigation self = this;
         activity.runOnUiThread(new Runnable() { public void run() {
-           if (show_or_hide) activity.jwidgets.navigations.add(self);
-           else {
-               int size = activity.jwidgets.navigations.size();
-               assert size != 0 && activity.jwidgets.navigations.get(size-1) == self;
-               activity.jwidgets.navigations.remove(size-1);
-           }
-           if (stack.size() != 0) stack.get(stack.size()-1).show(activity, show_or_hide);
+            if (show_or_hide) {
+                activity.jwidgets.navigations.add(self);
+                activity.action_bar.show();
+
+                int stack_size = activity.getFragmentManager().getBackStackEntryCount();
+                if (stack_size != 0) {
+                    String tag = Integer.toString(stack_size-1);
+                    Fragment frag = activity.getFragmentManager().findFragmentByTag(tag);
+                    activity.getFragmentManager().beginTransaction().replace(R.id.content_frame, frag, tag).commit();
+                }
+            } else {
+                int size = activity.jwidgets.navigations.size();
+                assert size != 0 && activity.jwidgets.navigations.get(size-1) == self;
+                activity.jwidgets.navigations.remove(size-1);
+
+                if (activity.disable_title) activity.action_bar.hide();
+                if (activity.getFragmentManager().findFragmentById(R.id.content_frame) != null) {
+                    Fragment frag = activity.getFragmentManager().findFragmentById(R.id.content_frame);
+                    activity.getFragmentManager().beginTransaction().remove(frag).commit();
+                }
+            }
         }});
     }
 
     public void pushTable(final MainActivity activity, final JTable x) {
         activity.runOnUiThread(new Runnable() { public void run() {
-            stack.add(x);
-            ListViewFragment table = x.get(activity);
+            String tag = Integer.toString(activity.getFragmentManager().getBackStackEntryCount());
+            JListViewFragment table = x.get(activity);
             activity.getFragmentManager().beginTransaction()
-                .replace(R.id.content_frame, table).addToBackStack(table.title).commit();
+                .replace(R.id.content_frame, table, tag).addToBackStack(tag).commit();
         }});
     }
     
-    public void popView(final MainActivity activity) {
+    public void pushTextView(final MainActivity activity, final JTextView x) {
+    }
+
+    public void popView(final MainActivity activity, final int n) {
         activity.runOnUiThread(new Runnable() { public void run() {
-            stack.remove(stack.size()-1);
-            activity.getFragmentManager().popBackStackImmediate(null, android.app.FragmentManager.POP_BACK_STACK_INCLUSIVE);
+            for (int i = 0; i < n && activity.getFragmentManager().getBackStackEntryCount() > 0; i++) {
+                activity.getFragmentManager().popBackStackImmediate(null, 0);
+            }
         }});
+    }
+
+    public void popToRoot(final MainActivity activity) {
+        activity.runOnUiThread(new Runnable() { public void run() {
+            while (activity.getFragmentManager().getBackStackEntryCount() > 1) {
+                activity.getFragmentManager().popBackStackImmediate(null, 0);
+            }
+        }});
+    }
+
+    public void popAll(final MainActivity activity) {
+        activity.runOnUiThread(new Runnable() { public void run() {
+            while (activity.getFragmentManager().getBackStackEntryCount() > 0) {
+                activity.getFragmentManager().popBackStackImmediate(null, 0);
+            }
+        }});
+    }
+
+    public Fragment getBack(final MainActivity activity) {
+        FutureTask<Fragment> future = new FutureTask<Fragment>
+            (new Callable<Fragment>(){ public Fragment call() throws Exception {
+                int stack_size = activity.getFragmentManager().getBackStackEntryCount();
+                if (stack_size == 0) return null;
+                String tag = Integer.toString(stack_size-1);
+                return activity.getFragmentManager().findFragmentByTag(tag);
+            }});
+        try { activity.runOnUiThread(future); return future.get(); }
+        catch(Exception e) { return null; }
+    }
+
+    public long getBackTableSelf(final MainActivity activity) {
+        Fragment frag = getBack(activity);
+        if (frag == null || !(frag instanceof JListViewFragment)) return 0;
+        JListViewFragment jfrag = (JListViewFragment)frag;
+        return jfrag.lfl_self;
     }
 }

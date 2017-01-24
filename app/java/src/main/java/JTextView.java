@@ -34,14 +34,14 @@ public class JTextView extends JWidget {
     public String text;
 
     public JTextView(final MainActivity activity, String t, String v) {
-        super(activity);
+        super(JWidget.TYPE_TEXTVIEW, activity, "");
         title = t;
         text = v;
     }
 
     public void clear() {}
 
-    public ListViewFragment get(final MainActivity activity) {
+    public JListViewFragment get(final MainActivity activity) {
         return null;
     }
 

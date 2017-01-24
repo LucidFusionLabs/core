@@ -33,27 +33,29 @@ import android.app.ActionBar;
 import android.app.AlertDialog;
 
 public class JTable extends JWidget {
-    public ListAdapter model;
-    public ListViewFragment view;
+    public long lfl_self;
+    public JListAdapter model;
+    public JListViewFragment view;
+    public JModelItem nav_left, nav_right;
 
-    public JTable(final MainActivity activity, String t, ArrayList<JModelItem> m) {
-        super(activity);
-        title = t;
-        model = new ListAdapter(activity, m);
+    public JTable(final MainActivity activity, String t, ArrayList<JModelItem> m, long lsp) {
+        super(JWidget.TYPE_TABLE, activity, t);
+        model = new JListAdapter(activity, m);
+        lfl_self = lsp;
     }
 
     public void clear() { view = null; }
 
-    public ListViewFragment get(final MainActivity activity) {
+    public JListViewFragment get(final MainActivity activity) {
         if (view == null) {
-            view = new ListViewFragment(activity, title, model, null);
+            view = new JListViewFragment(activity, title, model, null, lfl_self);
         }
         return view;
     }
 
     public void show(final MainActivity activity, final boolean show_or_hide) {
         activity.runOnUiThread(new Runnable() { public void run() {
-            ListViewFragment table = get(activity);
+            JListViewFragment table = get(activity);
             if (show_or_hide) {
                 activity.action_bar.show();
                 activity.getFragmentManager().beginTransaction().replace(R.id.content_frame, table).commit();
@@ -147,7 +149,7 @@ public class JTable extends JWidget {
         FutureTask<ArrayList<Pair<String, String>>> future = new FutureTask<ArrayList<Pair<String, String>>>
             (new Callable<ArrayList<Pair<String, String>>>(){
                 public ArrayList<Pair<String, String>> call() throws Exception {
-                    ListViewFragment table = get(activity);
+                    JListViewFragment table = get(activity);
                     return table.data.getSectionText(table.listview, section);
                 }});
         try { activity.runOnUiThread(future); return future.get(); }

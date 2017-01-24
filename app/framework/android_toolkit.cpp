@@ -61,7 +61,7 @@ void SystemToolbarView::ToggleButton(const string &n) {
 void SystemToolbarView::Show(bool show_or_hide) {
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->jtoolbar_class, "show", "(Lcom/lucidfusionlabs/app/MainActivity;Z)V"));
-  jni->env->CallVoidMethod(jobject(impl.v), mid, jni->activity, true);
+  jni->env->CallVoidMethod(jobject(impl.v), mid, jni->activity, show_or_hide);
 }
 
 SystemMenuView::~SystemMenuView() { jni->env->DeleteGlobalRef(jobject(impl.v)); }
@@ -89,10 +89,11 @@ SystemTableView::~SystemTableView() { jni->env->DeleteGlobalRef(jobject(impl.v))
 SystemTableView::SystemTableView(const string &title, const string &style, TableItemVec items) {
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->jtable_class,
-                           "<init>", "(Lcom/lucidfusionlabs/app/MainActivity;Ljava/lang/String;Ljava/util/ArrayList;)V"));
+                           "<init>", "(Lcom/lucidfusionlabs/app/MainActivity;Ljava/lang/String;Ljava/util/ArrayList;J)V"));
+  jlong lsp = intptr_t(this);
   jstring tstr = jni->ToJString(title);
   jobject l = jni->ToJModelItemArrayList(move(items));
-  jobject v = jni->env->NewObject(jni->jtable_class, mid, jni->activity, tstr, l);
+  jobject v = jni->env->NewObject(jni->jtable_class, mid, jni->activity, tstr, l, lsp);
   impl.v = jni->env->NewGlobalRef(v);
   jni->env->DeleteLocalRef(v);
   jni->env->DeleteLocalRef(l);
@@ -100,19 +101,19 @@ SystemTableView::SystemTableView(const string &title, const string &style, Table
 }
 
 void SystemTableView::AddToolbar(SystemToolbarView *toolbar) { ERROR("not implemented"); }
-void SystemTableView::AddNavigationButton(int, const TableItem &item) {}
-void SystemTableView::DelNavigationButton(int) {}
+void SystemTableView::AddNavigationButton(int, const TableItem &item) { ERROR("not implemented"); }
+void SystemTableView::DelNavigationButton(int) { ERROR("not implemented"); }
 
 void SystemTableView::Show(bool show_or_hide) {
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->jtable_class, "show", "(Lcom/lucidfusionlabs/app/MainActivity;Z)V"));
-  jni->env->CallVoidMethod(jobject(impl.v), mid, jni->activity, true);
+  jni->env->CallVoidMethod(jobject(impl.v), mid, jni->activity, show_or_hide);
 }
 
 string SystemTableView::GetKey(int section, int row) {
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->jtable_class,
-                           "getKey", "(Lcom/lucidfusionlabs/app/MainActivity;II)I"));
+                           "getKey", "(Lcom/lucidfusionlabs/app/MainActivity;II)Ljava/lang/String;"));
   jstring v = jstring(jni->env->CallObjectMethod(jobject(impl.v), mid, jni->activity, jint(section), jint(row)));
   string ret = jni->GetJString(v);
   jni->env->DeleteLocalRef(v);
@@ -261,24 +262,49 @@ SystemNavigationView::SystemNavigationView() {
   jni->env->DeleteLocalRef(v);
 }
 
-SystemTableView *SystemNavigationView::Back() { return nullptr; }
+SystemTableView *SystemNavigationView::Back() {
+  static jmethodID mid = CheckNotNull
+    (jni->env->GetMethodID(jni->jnavigation_class,
+                           "getBackTableSelf", "(Lcom/lucidfusionlabs/app/MainActivity;)J"));
+  intptr_t v = jni->env->CallLongMethod(jobject(impl.v), mid, jni->activity);
+  return v ? static_cast<SystemTableView*>(Void(v)) : nullptr;
+}
 
 void SystemNavigationView::Show(bool show_or_hide) {
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->jnavigation_class, "show", "(Lcom/lucidfusionlabs/app/MainActivity;Z)V"));
-  jni->env->CallVoidMethod(jobject(impl.v), mid, jni->activity, true);
+  jni->env->CallVoidMethod(jobject(impl.v), mid, jni->activity, show_or_hide);
 }
 
 void SystemNavigationView::PushTableView(SystemTableView *t) {
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->jnavigation_class, "pushTable", "(Lcom/lucidfusionlabs/app/MainActivity;Lcom/lucidfusionlabs/app/JTable;)V"));
-    jni->env->CallVoidMethod(jobject(impl.v), mid, jni->activity, jobject(t->impl.v));
+  jni->env->CallVoidMethod(jobject(impl.v), mid, jni->activity, jobject(t->impl.v));
 }
 
-void SystemNavigationView::PushTextView(SystemTextView*) {}
-void SystemNavigationView::PopView(int n) {}
-void SystemNavigationView::PopToRoot() {}
-void SystemNavigationView::PopAll() {}
+void SystemNavigationView::PushTextView(SystemTextView *t) {
+  static jmethodID mid = CheckNotNull
+    (jni->env->GetMethodID(jni->jnavigation_class, "pushTextView", "(Lcom/lucidfusionlabs/app/MainActivity;Lcom/lucidfusionlabs/app/JTextView;)V"));
+  jni->env->CallVoidMethod(jobject(impl.v), mid, jni->activity, jobject(t->impl.v));
+}
+
+void SystemNavigationView::PopView(int n) {
+  static jmethodID mid = CheckNotNull
+    (jni->env->GetMethodID(jni->jnavigation_class, "popView", "(Lcom/lucidfusionlabs/app/MainActivity;I)V"));
+  jni->env->CallVoidMethod(jobject(impl.v), mid, jni->activity, jint(n));
+}
+
+void SystemNavigationView::PopToRoot() {
+  static jmethodID mid = CheckNotNull
+    (jni->env->GetMethodID(jni->jnavigation_class, "popToRoot", "(Lcom/lucidfusionlabs/app/MainActivity;)V"));
+  jni->env->CallVoidMethod(jobject(impl.v), mid, jni->activity);
+}
+
+void SystemNavigationView::PopAll() {
+  static jmethodID mid = CheckNotNull
+    (jni->env->GetMethodID(jni->jnavigation_class, "popAll", "(Lcom/lucidfusionlabs/app/MainActivity;)V"));
+  jni->env->CallVoidMethod(jobject(impl.v), mid, jni->activity);
+}
 
 SystemAdvertisingView::SystemAdvertisingView() {}
 void SystemAdvertisingView::Show() {

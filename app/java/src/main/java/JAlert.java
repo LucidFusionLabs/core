@@ -35,7 +35,7 @@ public class JAlert extends JWidget {
     public Pair<AlertDialog, EditText> view;
 
     public JAlert(final MainActivity activity, ArrayList<JModelItem> m) {
-        super(activity);
+        super(JWidget.TYPE_ALERT, activity, "");
         model = m;
     }
 

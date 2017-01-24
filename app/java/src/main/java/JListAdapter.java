@@ -31,7 +31,7 @@ import android.graphics.Rect;
 import android.app.ActionBar;
 import android.app.AlertDialog;
 
-public class ListAdapter extends BaseAdapter {
+public class JListAdapter extends BaseAdapter {
     public static class ViewHolder {
         public TextView textView;
         public EditText editText;
@@ -50,12 +50,11 @@ public class ListAdapter extends BaseAdapter {
     public long delete_row_cb = 0;
     public native void close();
 
-    public ListAdapter(final MainActivity activity, final ArrayList<JModelItem> v) {
+    public JListAdapter(final MainActivity activity, final ArrayList<JModelItem> v) {
         inflater = (LayoutInflater)activity.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
         data = v;
         beginUpdates();
-        if ((data.size() == 0 || data.get(0).type != JModelItem.TYPE_SEPARATOR))
-            data.add(0, new JModelItem("", "", JModelItem.TYPE_SEPARATOR, 0, 0, 0, 0, 0, false));
+        data.add(0, new JModelItem("", "", JModelItem.TYPE_SEPARATOR, 0, 0, 0, 0, 0, false));
         for (int i = 0, l = data.size(); i != l; ++i)
             if (data.get(i).type == JModelItem.TYPE_SEPARATOR) sections.add(new Section(i));
         endUpdates();
