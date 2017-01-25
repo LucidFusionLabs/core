@@ -88,4 +88,19 @@ public class JAlert extends JWidget {
             alert.first.show();
         }});
     }
+
+    public void showTextCB(final MainActivity activity, final String tstr, final String msg,
+                           final String arg, final long confirm_cb) {
+        activity.runOnUiThread(new Runnable() { public void run() {
+            JModelItem title = model.get(1), confirm = model.get(2);
+            title.key = tstr;
+            title.val = msg;
+            confirm.string_cb = confirm_cb;
+            clear();
+
+            Pair<AlertDialog, EditText> alert = get(activity);
+            if (alert.second != null) { alert.second.setText(arg); }
+            alert.first.show();
+        }});
+    }
 }

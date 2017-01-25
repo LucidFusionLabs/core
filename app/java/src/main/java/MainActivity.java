@@ -324,6 +324,10 @@ public class MainActivity extends android.app.Activity {
 
     public void hideAds() { if (advertising != null) advertising.hideAds(); }
     public void showAds() { if (advertising != null) advertising.showAds(); }
+
+    public int getDrawableResId(String n) { 
+      return getResources().getIdentifier(n, "drawable", getPackageName());
+    }
 }
 
 class MyGestureListener extends android.view.GestureDetector.SimpleOnGestureListener {

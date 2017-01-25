@@ -17,6 +17,8 @@ import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.BaseAdapter;
 import android.widget.ListView;
+import android.widget.ImageView;
+import android.widget.Switch;
 import android.media.*;
 import android.content.*;
 import android.content.res.Configuration;
@@ -33,8 +35,11 @@ import android.app.AlertDialog;
 
 public class JListAdapter extends BaseAdapter {
     public static class ViewHolder {
-        public TextView textView;
+        public TextView textView, label;
         public EditText editText;
+        public ImageView leftIcon, rightIcon;
+        public Button leftNav, rightNav;
+        public Switch toggle;
     }
 
     public static class Section {
@@ -54,7 +59,7 @@ public class JListAdapter extends BaseAdapter {
         inflater = (LayoutInflater)activity.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
         data = v;
         beginUpdates();
-        data.add(0, new JModelItem("", "", JModelItem.TYPE_SEPARATOR, 0, 0, 0, 0, 0, false));
+        data.add(0, new JModelItem("", "", "", JModelItem.TYPE_SEPARATOR, 0, 0, 0, 0, 0, false));
         for (int i = 0, l = data.size(); i != l; ++i)
             if (data.get(i).type == JModelItem.TYPE_SEPARATOR) sections.add(new Section(i));
         endUpdates();
@@ -85,24 +90,77 @@ public class JListAdapter extends BaseAdapter {
         if (convertView == null) {
             holder = new ViewHolder();
             switch (type) {
+                case JModelItem.TYPE_SEPARATOR:
+                    convertView = inflater.inflate(R.layout.listview_cell_separator, null);
+                    holder.textView = (TextView)convertView.findViewById(R.id.listview_cell_title);
+                    holder.label = null;
+                    holder.editText = null;
+                    holder.leftIcon = null;
+                    holder.rightIcon = null;
+                    holder.toggle = null;
+                    holder.leftNav = (Button)convertView.findViewById(R.id.listview_cell_nav_left);
+                    holder.rightNav = (Button)convertView.findViewById(R.id.listview_cell_nav_right);
+                    break;
+
+                case JModelItem.TYPE_TOGGLE:
+                    convertView = inflater.inflate(R.layout.listview_cell_toggle, null);
+                    holder.textView = (TextView)convertView.findViewById(R.id.listview_cell_title);
+                    holder.label = null;
+                    holder.editText = null;
+                    holder.leftIcon = (ImageView)convertView.findViewById(R.id.listview_cell_left_icon);
+                    holder.rightIcon = null;
+                    holder.toggle = (Switch)convertView.findViewById(R.id.listview_cell_toggle);
+                    holder.leftNav = null;
+                    holder.rightNav = null;
+                    break;
+
                 case JModelItem.TYPE_TEXTINPUT:
                 case JModelItem.TYPE_NUMBERINPUT:
                 case JModelItem.TYPE_PASSWORDINPUT:
                     convertView = inflater.inflate(R.layout.listview_cell_textinput, null);
                     holder.textView = (TextView)convertView.findViewById(R.id.listview_cell_title);
+                    holder.label = null;
                     holder.editText = (EditText)convertView.findViewById(R.id.listview_cell_textinput);
+                    holder.leftIcon = (ImageView)convertView.findViewById(R.id.listview_cell_left_icon);
+                    holder.rightIcon = null;
+                    holder.toggle = null;
+                    holder.leftNav = null;
+                    holder.rightNav = null;
                     break;
+
                 default:
                     convertView = inflater.inflate(R.layout.listview_cell, null);
                     holder.textView = (TextView)convertView.findViewById(R.id.listview_cell_title);
+                    holder.label = (TextView)convertView.findViewById(R.id.listview_cell_value);
                     holder.editText = null;
+                    holder.leftIcon = (ImageView)convertView.findViewById(R.id.listview_cell_left_icon);
+                    holder.rightIcon = null;
+                    holder.toggle = null;
+                    holder.leftNav = null;
+                    holder.rightNav = null;
                     break;
             }
             convertView.setTag(holder);
         } else {
             holder = (ViewHolder)convertView.getTag();
         }
-        holder.textView.setText(type == JModelItem.TYPE_SEPARATOR ? "" : data.get(position).key);
+
+        JModelItem item = data.get(position);
+        holder.textView.setText(item.key);
+        if (holder.leftIcon  != null) holder.leftIcon .setImageResource(item.left_icon);
+        if (holder.rightIcon != null) holder.rightIcon.setImageResource(item.right_icon);
+        if (holder.label     != null) holder.label.setText(item.right_text.length() > 0 ? item.right_text : item.val);
+
+        switch (type) {
+            case JModelItem.TYPE_SEPARATOR:
+                holder.leftNav .setVisibility(item.val       .length() > 0 ? View.VISIBLE : View.GONE);
+                holder.rightNav.setVisibility(item.right_text.length() > 0 ? View.VISIBLE : View.GONE);
+                break;
+
+            case JModelItem.TYPE_TOGGLE:
+                holder.toggle.setChecked(item.val.equals("1"));
+                break;
+        }
         return convertView;
     }
 
@@ -150,7 +208,7 @@ public class JListAdapter extends BaseAdapter {
 
     public void addSection() {
         sections.add(new Section(data.size()));
-        data.add(new JModelItem("", "", JModelItem.TYPE_SEPARATOR, 0, 0, 0, 0, 0, false));
+        data.add(new JModelItem("", "", "", JModelItem.TYPE_SEPARATOR, 0, 0, 0, 0, 0, false));
     }
 
     public void addRow(final int section, JModelItem row) {

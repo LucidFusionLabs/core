@@ -161,33 +161,36 @@ jobject JNI::ToJModelItemArrayList(TableItemVec items) {
 }
 
 jobject JNI::ToJModelItem(AlertItem item) {
-  jobject k = ToJString(item.first), v = ToJString(item.second);
+  jobject k = ToJString(item.first), v = ToJString(item.second), rt = ToJString("");
   jlong cb = item.cb ? intptr_t(new StringCB(move(item.cb))) : 0;
-  jobject ret = env->NewObject(jmodelitem_class, jmodelitem_construct, k, v, jint(0), jint(0), jint(0),
-                               jlong(0), jlong(0), cb, false);
-  env->DeleteLocalRef(k);
+  jobject ret = env->NewObject(jmodelitem_class, jmodelitem_construct, k, v, rt, jint(0), jint(0),
+                               jint(0), jlong(0), jlong(0), cb, false);
+  env->DeleteLocalRef(rt);
   env->DeleteLocalRef(v);
+  env->DeleteLocalRef(k);
   return ret;
 }
 
 jobject JNI::ToJModelItem(MenuItem item) {
-  jobject k = ToJString(item.shortcut), v = ToJString(item.name);
+  jobject k = ToJString(item.shortcut), v = ToJString(item.name), rt = ToJString("");
   jlong cb = item.cb ? intptr_t(new Callback(move(item.cb))) : 0;
-  jobject ret = env->NewObject(jmodelitem_class, jmodelitem_construct, k, v, jint(0), jint(0), jint(0),
-                               cb, jlong(0), jlong(0), false);
-  env->DeleteLocalRef(k);
+  jobject ret = env->NewObject(jmodelitem_class, jmodelitem_construct, k, v, rt, jint(0), jint(0),
+                               jint(0), cb, jlong(0), jlong(0), false);
+  env->DeleteLocalRef(rt);
   env->DeleteLocalRef(v);
+  env->DeleteLocalRef(k);
   return ret;
 }
 
 jobject JNI::ToJModelItem(TableItem item) {
-  jobject k = ToJString(item.key), v = ToJString(item.val);
+  jobject k = ToJString(item.key), v = ToJString(item.val), rt = ToJString(item.right_text);
   jlong cb = item.cb ? intptr_t(new Callback(move(item.cb))) : 0;
   jlong rcb = item.right_icon_cb ? intptr_t(new Callback(move(item.right_icon_cb))) : 0;
-  jobject ret = env->NewObject(jmodelitem_class, jmodelitem_construct, k, v, item.type,
+  jobject ret = env->NewObject(jmodelitem_class, jmodelitem_construct, k, v, rt, item.type,
                                item.left_icon, item.right_icon, cb, rcb, jlong(0), item.hidden);
-  env->DeleteLocalRef(k);
+  env->DeleteLocalRef(rt);
   env->DeleteLocalRef(v);
+  env->DeleteLocalRef(k);
   return ret;
 }
 

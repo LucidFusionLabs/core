@@ -735,7 +735,8 @@ void Application::ShowSystemContextMenu(const vector<MenuItem> &items) {
 }
 
 int Application::LoadSystemImage(const string &n) {
-  app_images.emplace_back(make_unique<QIcon>(MakeQString(StrCat(app->assetdir, "../", n))));
+  app_images.emplace_back(make_unique<QIcon>(MakeQString(StrCat(app->assetdir, "../drawable-xhdpi/",
+                                                                n, ".png"))));
   return app_images.size();
 }
 

@@ -813,7 +813,7 @@ void Application::ShowSystemContextMenu(const MenuItemVec &items) {
 
 void Application::UpdateSystemImage(int n, Texture&) {}
 int Application::LoadSystemImage(const string &n) {
-  NSImage *image = [[NSImage alloc] initWithContentsOfFile: MakeNSString(StrCat(app->assetdir, "../", n)) ];
+  NSImage *image = [[NSImage alloc] initWithContentsOfFile: MakeNSString(StrCat(app->assetdir, "../drawable-xhdpi/", n, ".png")) ];
   if (!image) return 0;
   app_images.push_back(image);
   return app_images.size();

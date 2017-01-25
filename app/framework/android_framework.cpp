@@ -286,7 +286,7 @@ extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppCreate(JNIEnv *e, j
   CHECK(jni->arraylist_size = e->GetMethodID(jni->arraylist_class, "size", "()I"));
   CHECK(jni->arraylist_get = e->GetMethodID(jni->arraylist_class, "get", "(I)Ljava/lang/Object;"));
   CHECK(jni->arraylist_add = e->GetMethodID(jni->arraylist_class, "add", "(Ljava/lang/Object;)Z"));
-  CHECK(jni->jmodelitem_construct = e->GetMethodID(jni->jmodelitem_class, "<init>", "(Ljava/lang/String;Ljava/lang/String;IIIJJJZ)V"));
+  CHECK(jni->jmodelitem_construct = e->GetMethodID(jni->jmodelitem_class, "<init>", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;IIIJJJZ)V"));
   CHECK(jni->pair_first  = e->GetFieldID(jni->pair_class, "first",  "Ljava/lang/Object;"));
   CHECK(jni->pair_second = e->GetFieldID(jni->pair_class, "second", "Ljava/lang/Object;"));
   if (jni->gplus) CHECK(jni->gplus_class = (jclass)e->NewGlobalRef(e->GetObjectClass(jni->gplus)));

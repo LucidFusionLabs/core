@@ -17,16 +17,17 @@ public final class JModelItem {
     public static final int TYPE_FONTPICKER    = 11;
     public static final int TYPE_COUNT         = 12;
 
-    public String key, val;
+    public String key, val, right_text;
     public int type, left_icon, right_icon, tag=0;
     public long cb, right_cb, string_cb;
     public boolean hidden;
     public native void close();
 
-    JModelItem(final String k, final String v, final int t, final int li, final int ri,
-                final long lcb, final long rcb, final long scb, final boolean h) {
+    JModelItem(final String k, final String v, final String rt, final int t, final int li,
+               final int ri, final long lcb, final long rcb, final long scb, final boolean h) {
         key = k;
         val = v;
+        right_text = rt;
         type = t;
         left_icon = li;
         right_icon = ri;

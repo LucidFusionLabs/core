@@ -1093,7 +1093,7 @@ int Application::LoadSystemImage(const string &n) {
     app_images.push_back(nullptr);
     return app_images.size();
   }
-  UIImage *image = [UIImage imageNamed:MakeNSString(n)];
+  UIImage *image = [UIImage imageNamed:MakeNSString(StrCat("drawable-xhdpi/", n, ".png"))];
   if (!image) return 0;
   [image retain];
   app_images.push_back(image);

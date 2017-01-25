@@ -41,6 +41,14 @@ void SystemAlertView::Show(const string &arg) {
 
 string SystemAlertView::RunModal(const string &arg) { return ERRORv(string(), "not implemented"); }
 void SystemAlertView::ShowCB(const string &title, const string &msg, const string &arg, StringCB confirm_cb) {
+  static jmethodID mid = CheckNotNull
+    (jni->env->GetMethodID(jni->jalert_class, "showTextCB", "(Lcom/lucidfusionlabs/app/MainActivity;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;J)V"));
+  jstring tstr = jni->ToJString(title), mstr = jni->ToJString(msg), astr = jni->ToJString(arg);
+  jlong cb = confirm_cb ? intptr_t(new StringCB(move(confirm_cb))) : 0;
+  jni->env->CallVoidMethod(jobject(impl.v), mid, jni->activity, tstr, mstr, astr, cb);
+  jni->env->DeleteLocalRef(astr);
+  jni->env->DeleteLocalRef(mstr);
+  jni->env->DeleteLocalRef(tstr);
 }
 
 SystemToolbarView::~SystemToolbarView() { jni->env->DeleteGlobalRef(jobject(impl.v)); }
@@ -321,7 +329,14 @@ void Application::ShowSystemFontChooser(const FontDesc &cur_font, const StringVe
 void Application::ShowSystemFileChooser(bool files, bool dirs, bool multi, const StringVecCB &cb) {}
 void Application::ShowSystemContextMenu(const MenuItemVec &items) {}
 
-int Application::LoadSystemImage(const string &n) { return 1; }
 void Application::UpdateSystemImage(int n, Texture &t) {}
+int Application::LoadSystemImage(const string &n) {
+  static jmethodID mid = CheckNotNull
+    (jni->env->GetMethodID(jni->activity_class, "getDrawableResId", "(Ljava/lang/String;)I"));
+  jstring nstr = jni->ToJString(n);
+  jint ret = jni->env->CallIntMethod(jni->activity, mid, nstr);
+  jni->env->DeleteLocalRef(nstr);
+  return ret;
+}
 
 }; // namespace LFL
