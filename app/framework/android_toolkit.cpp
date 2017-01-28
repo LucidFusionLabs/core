@@ -113,6 +113,7 @@ void SystemTableView::AddNavigationButton(int, const TableItem &item) { ERROR("n
 void SystemTableView::DelNavigationButton(int) { ERROR("not implemented"); }
 
 void SystemTableView::Show(bool show_or_hide) {
+  if (show_or_hide && show_cb) show_cb();
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->jtable_class, "show", "(Lcom/lucidfusionlabs/app/MainActivity;Z)V"));
   jni->env->CallVoidMethod(jobject(impl.v), mid, jni->activity, show_or_hide);
@@ -192,6 +193,8 @@ StringPairVec SystemTableView::GetSectionText(int section) {
     jstring ki = (jstring)jni->env->GetObjectField(pair, jni->pair_first);
     jstring vi = (jstring)jni->env->GetObjectField(pair, jni->pair_second);
     ret.emplace_back(jni->GetJString(ki), jni->GetJString(vi));
+    jni->env->DeleteLocalRef(vi);
+    jni->env->DeleteLocalRef(ki);
   }
   return ret;
 }
@@ -279,18 +282,22 @@ SystemTableView *SystemNavigationView::Back() {
 }
 
 void SystemNavigationView::Show(bool show_or_hide) {
+  shown == show_or_hide;
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->jnavigation_class, "show", "(Lcom/lucidfusionlabs/app/MainActivity;Z)V"));
   jni->env->CallVoidMethod(jobject(impl.v), mid, jni->activity, show_or_hide);
 }
 
 void SystemNavigationView::PushTableView(SystemTableView *t) {
+  if (!root) root = t;
+  if (t->show_cb) t->show_cb();
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->jnavigation_class, "pushTable", "(Lcom/lucidfusionlabs/app/MainActivity;Lcom/lucidfusionlabs/app/JTable;)V"));
   jni->env->CallVoidMethod(jobject(impl.v), mid, jni->activity, jobject(t->impl.v));
 }
 
 void SystemNavigationView::PushTextView(SystemTextView *t) {
+  if (t->show_cb) t->show_cb();
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->jnavigation_class, "pushTextView", "(Lcom/lucidfusionlabs/app/MainActivity;Lcom/lucidfusionlabs/app/JTextView;)V"));
   jni->env->CallVoidMethod(jobject(impl.v), mid, jni->activity, jobject(t->impl.v));

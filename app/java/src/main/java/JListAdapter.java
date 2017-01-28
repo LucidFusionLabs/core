@@ -32,6 +32,7 @@ import android.net.Uri;
 import android.graphics.Rect;
 import android.app.ActionBar;
 import android.app.AlertDialog;
+import android.text.InputType;
 
 public class JListAdapter extends BaseAdapter {
     public static class ViewHolder {
@@ -59,9 +60,12 @@ public class JListAdapter extends BaseAdapter {
         inflater = (LayoutInflater)activity.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
         data = v;
         beginUpdates();
-        data.add(0, new JModelItem("", "", "", JModelItem.TYPE_SEPARATOR, 0, 0, 0, 0, 0, false));
-        for (int i = 0, l = data.size(); i != l; ++i)
-            if (data.get(i).type == JModelItem.TYPE_SEPARATOR) sections.add(new Section(i));
+        data.add(0, new JModelItem("", "", "", "", JModelItem.TYPE_SEPARATOR, 0, 0, 0, 0, 0, 0, false));
+        data.add(new JModelItem("", "", "", "", JModelItem.TYPE_SEPARATOR, 0, 0, 0, 0, 0, 0, false));
+        for (int i = 0, l = data.size(); i != l; ++i) {
+            JModelItem item = data.get(i);
+            if (item.type == JModelItem.TYPE_SEPARATOR) sections.add(new Section(i));
+        }
         endUpdates();
     }
     
@@ -134,7 +138,7 @@ public class JListAdapter extends BaseAdapter {
                     holder.label = (TextView)convertView.findViewById(R.id.listview_cell_value);
                     holder.editText = null;
                     holder.leftIcon = (ImageView)convertView.findViewById(R.id.listview_cell_left_icon);
-                    holder.rightIcon = null;
+                    holder.rightIcon = (ImageView)convertView.findViewById(R.id.listview_cell_right_icon);
                     holder.toggle = null;
                     holder.leftNav = null;
                     holder.rightNav = null;
@@ -146,10 +150,26 @@ public class JListAdapter extends BaseAdapter {
         }
 
         JModelItem item = data.get(position);
+        convertView.setVisibility(item.hidden ? View.GONE : View.VISIBLE);
         holder.textView.setText(item.key);
         if (holder.leftIcon  != null) holder.leftIcon .setImageResource(item.left_icon);
-        if (holder.rightIcon != null) holder.rightIcon.setImageResource(item.right_icon);
+        if (holder.rightIcon != null) {
+            holder.rightIcon.setImageResource(item.right_icon);
+            if (item.right_cb == 0) holder.rightIcon.setClickable(false);
+            else {
+                final long rcb = item.right_cb;
+                holder.rightIcon.setClickable(true);
+                holder.rightIcon.setOnClickListener(new View.OnClickListener() { public void onClick(View v) {
+                    MainActivity.AppRunCallbackInMainThread(rcb);  
+                }});
+            }
+        }
         if (holder.label     != null) holder.label.setText(item.right_text.length() > 0 ? item.right_text : item.val);
+        if (holder.editText  != null) {
+            if (item.val.length() > 0 && item.val.charAt(0) == 1) { holder.editText.setText(""); holder.editText.setHint(item.val.substring(1)); }
+            else                                                  { holder.editText.setText(item.val); holder.editText.setHint(""); }
+            holder.editText.setInputType(InputType.TYPE_CLASS_TEXT | (type == JModelItem.TYPE_PASSWORDINPUT ? InputType.TYPE_TEXT_VARIATION_PASSWORD : 0));
+        }
 
         switch (type) {
             case JModelItem.TYPE_SEPARATOR:
@@ -208,7 +228,7 @@ public class JListAdapter extends BaseAdapter {
 
     public void addSection() {
         sections.add(new Section(data.size()));
-        data.add(new JModelItem("", "", "", JModelItem.TYPE_SEPARATOR, 0, 0, 0, 0, 0, false));
+        data.add(new JModelItem("", "", "", "", JModelItem.TYPE_SEPARATOR, 0, 0, 0, 0, 0, 0, false));
     }
 
     public void addRow(final int section, JModelItem row) {
@@ -233,7 +253,7 @@ public class JListAdapter extends BaseAdapter {
         int section_size = getSectionSize(section), section_row = getSectionBeginRowId(section);
         assert section_size == v.size();
         for (int i = 0; i < section_size; ++i) {
-            data.get(section_row + i).val = v.get(i);
+            data.get(section_row + 1 + i).val = v.get(i);
         }
     }
 
@@ -250,16 +270,20 @@ public class JListAdapter extends BaseAdapter {
     public void setHidden(final int s, final int r, final boolean v) { data.get(getCollapsedRowId(s, r)).hidden = v; }
 
     public ArrayList<Pair<String, String>> getSectionText(ListView listview, final int section) {
+        assert section < sections.size();
         ArrayList<Pair<String, String>> ret = new ArrayList<Pair<String, String>>();
-        final int start_section = section > 0               ? sections.get(section-1).start_row+1 : 0;
-        final int   end_section = section < sections.size() ? sections.get(section).start_row-1   : data.size();
-        for (int i = start_section; i < end_section; i++) {
-            String valtext = "";
-            View rowview = getViewByPosition(listview, i);
-            ViewHolder holder = (ViewHolder)rowview.getTag();
-            if (holder.editText != null)
-                valtext = holder.editText.getText().toString();
-            ret.add(new Pair<String, String>(data.get(i).key, (valtext.length() > 0) ? valtext : data.get(i).val));
+        int section_size = getSectionSize(section), section_row = getSectionBeginRowId(section);
+        for (int i = 0; i < section_size; ++i) {
+            String val = "";
+            JModelItem item = data.get(section_row + 1 + i);
+            if (listview != null) {
+                View itemview = getViewByPosition(listview, section_row + 1 + i);
+                ViewHolder holder = (ViewHolder)itemview.getTag();
+                if (holder.editText != null) val = holder.editText.getText().toString();
+            }
+            if (item.dropdown_key.length() > 0) ret.add(new Pair<String, String>(item.dropdown_key, item.key)); 
+            if (val.length() == 0 && item.val.length() > 0 && item.val.charAt(0) != 1) val = item.val;
+            ret.add(new Pair<String, String>(item.key, val));
         }
         return ret;
     }

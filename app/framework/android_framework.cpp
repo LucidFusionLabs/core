@@ -286,7 +286,7 @@ extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppCreate(JNIEnv *e, j
   CHECK(jni->arraylist_size = e->GetMethodID(jni->arraylist_class, "size", "()I"));
   CHECK(jni->arraylist_get = e->GetMethodID(jni->arraylist_class, "get", "(I)Ljava/lang/Object;"));
   CHECK(jni->arraylist_add = e->GetMethodID(jni->arraylist_class, "add", "(Ljava/lang/Object;)Z"));
-  CHECK(jni->jmodelitem_construct = e->GetMethodID(jni->jmodelitem_class, "<init>", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;IIIJJJZ)V"));
+  CHECK(jni->jmodelitem_construct = e->GetMethodID(jni->jmodelitem_class, "<init>", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;IIIIJJJZ)V"));
   CHECK(jni->pair_first  = e->GetFieldID(jni->pair_class, "first",  "Ljava/lang/Object;"));
   CHECK(jni->pair_second = e->GetFieldID(jni->pair_class, "second", "Ljava/lang/Object;"));
   if (jni->gplus) CHECK(jni->gplus_class = (jclass)e->NewGlobalRef(e->GetObjectClass(jni->gplus)));
@@ -383,15 +383,15 @@ extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppScroll(JNIEnv *e, j
 
 extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppAccel(JNIEnv *e, jobject a, jfloat x, jfloat y, jfloat z) {}
 
-extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppFocusedShellRun(JNIEnv *e, jobject a, jstring text) {
+extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppFocusedShellRun(JNIEnv *e, jstring text) {
   app->focused->shell->Run(e->GetStringUTFChars(text, 0));
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppRunCallbackInMainThread(JNIEnv *e, jobject a, jlong cb) {
+extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppRunCallbackInMainThread(JNIEnv *e, jlong cb) {
   app->RunCallbackInMainThread(new Callback(*static_cast<Callback*>(Void(cb))));
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppRunStringCBInMainThread(JNIEnv *e, jobject a, jlong cb, jstring text) {
+extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppRunStringCBInMainThread(JNIEnv *e, jlong cb, jstring text) {
   string t = JNI::GetEnvJString(e, text);
   app->RunCallbackInMainThread(new Callback([=](){ (*static_cast<StringCB*>(Void(cb)))(t); }));
 }

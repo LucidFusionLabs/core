@@ -48,9 +48,9 @@ public class MainActivity extends android.app.Activity {
     public native void AppFling(float x, float y, float vx, float vy);
     public native void AppScroll(float x, float y, float sx, float sy);
     public native void AppAccel(float x, float y, float z);
-    public native void AppFocusedShellRun(String text);
-    public native void AppRunCallbackInMainThread(long cb);
-    public native void AppRunStringCBInMainThread(long cb, String text);
+    public static native void AppFocusedShellRun(String text);
+    public static native void AppRunCallbackInMainThread(long cb);
+    public static native void AppRunStringCBInMainThread(long cb, String text);
 
     public static boolean app_created, app_init, disable_title;
     public static JWidgets jwidgets = new JWidgets();

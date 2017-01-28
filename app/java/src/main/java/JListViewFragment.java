@@ -52,7 +52,7 @@ public class JListViewFragment extends Fragment implements OnItemClickListener {
     public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
         JModelItem i = data.data.get(position);
         if (i.type == JModelItem.TYPE_COMMAND || i.type == JModelItem.TYPE_BUTTON) {
-            if (i.cb != 0) main_activity.AppRunCallbackInMainThread(i.cb);
+            if (i.cb != 0) MainActivity.AppRunCallbackInMainThread(i.cb);
         }
     }
 }
