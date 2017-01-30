@@ -43,7 +43,7 @@ public class JMenu extends JWidget {
 
     public JListViewFragment get(final MainActivity activity) {
         if (view == null) {
-            view = new JListViewFragment(activity, title, new JListAdapter(activity, model), null, 0);
+            view = new JListViewFragment(activity, this, new JListAdapter(activity, model), null, 0);
         }
         return view;
     }

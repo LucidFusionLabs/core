@@ -51,6 +51,7 @@ public class JListAdapter extends BaseAdapter {
     public LayoutInflater inflater = null;
     public ArrayList<JModelItem> data = new ArrayList<JModelItem>();
     public ArrayList<Section> sections = new ArrayList<Section>();
+    public JModelItem nav_left = null, nav_right = null;
     public int selected_section = 0, selected_row = 0;
     public int editable_section = -1, editable_start_row = -1;
     public long delete_row_cb = 0;
@@ -73,7 +74,10 @@ public class JListAdapter extends BaseAdapter {
     protected void finalize() throws Throwable { try { close(); } finally { super.finalize(); } }
 
     @Override
-    public int getItemViewType(int position) { return data.get(position).type; }
+    public int getItemViewType(int position) {
+        JModelItem item = data.get(position);
+        return item.hidden ? 0 : item.type;
+    }
 
     @Override
     public int getViewTypeCount() { return JModelItem.TYPE_COUNT; }
@@ -94,6 +98,18 @@ public class JListAdapter extends BaseAdapter {
         if (convertView == null) {
             holder = new ViewHolder();
             switch (type) {
+                case JModelItem.TYPE_NONE:
+                    convertView = inflater.inflate(R.layout.listview_cell_hidden, null);
+                    holder.textView = null;
+                    holder.label = null;
+                    holder.editText = null;
+                    holder.leftIcon = null;
+                    holder.rightIcon = null;
+                    holder.toggle = null;
+                    holder.leftNav = null;
+                    holder.rightNav = null;
+                    break;
+
                 case JModelItem.TYPE_SEPARATOR:
                     convertView = inflater.inflate(R.layout.listview_cell_separator, null);
                     holder.textView = (TextView)convertView.findViewById(R.id.listview_cell_title);
@@ -150,8 +166,7 @@ public class JListAdapter extends BaseAdapter {
         }
 
         JModelItem item = data.get(position);
-        convertView.setVisibility(item.hidden ? View.GONE : View.VISIBLE);
-        holder.textView.setText(item.key);
+        if (holder.textView  != null) holder.textView.setText(item.key);
         if (holder.leftIcon  != null) holder.leftIcon .setImageResource(item.left_icon);
         if (holder.rightIcon != null) {
             holder.rightIcon.setImageResource(item.right_icon);
@@ -224,6 +239,30 @@ public class JListAdapter extends BaseAdapter {
         editable_section = s;
         editable_start_row = start_row;
         delete_row_cb = intint_cb;
+    }
+
+    public void addNavButton(final int halign, final JModelItem row) {
+        switch (halign) {
+            case JModelItem.HALIGN_LEFT:
+                nav_left = row;
+                break;
+
+            case JModelItem.HALIGN_RIGHT:
+                nav_right = row;
+                break;
+        }
+    }
+    
+    public void delNavButton(final int halign) {
+        switch (halign) {
+            case JModelItem.HALIGN_LEFT:
+                nav_left = null;
+                break;
+
+            case JModelItem.HALIGN_RIGHT:
+                nav_right = null;
+                break;
+        }
     }
 
     public void addSection() {

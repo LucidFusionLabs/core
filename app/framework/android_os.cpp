@@ -83,6 +83,17 @@ string JNI::GetEnvJString(JNIEnv *e, jstring x) {
   return ret;
 }
 
+jstring JNI::ToJStringRaw(const string &x) {
+  static jmethodID mid = CheckNotNull(env->GetMethodID(string_class, "<init>", "([BLjava/lang/String;)V"));
+  jbyteArray array = env->NewByteArray(x.size());
+  env->SetByteArrayRegion(array, 0, x.size(), reinterpret_cast<const jbyte*>(x.data()));
+  jstring encoding = env->NewStringUTF("UTF-8");
+  jstring ret = (jstring)env->NewObject(string_class, mid, array, encoding);
+  env->DeleteLocalRef(encoding);
+  env->DeleteLocalRef(array);
+  return ret;
+}
+
 jobjectArray JNI::ToJStringArray(StringVec items) {
   jobjectArray v = env->NewObjectArray(items.size(), string_class, NULL);
   for (int i=0, l=items.size(); i != l; ++i) {

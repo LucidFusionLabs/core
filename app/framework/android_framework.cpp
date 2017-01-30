@@ -117,7 +117,8 @@ void Application::ReleaseMouseFocus() {}
 string Application::GetClipboardText() { return ""; }
 void Application::SetClipboardText(const string &s) {}
 
-void Application::OpenTouchKeyboard(bool) {
+void Application::OpenTouchKeyboard(bool enable_frame) {
+  if (enable_frame) frame_disabled = false;
   static jmethodID jni_activity_method_show_keyboard =
     CheckNotNull(jni->env->GetMethodID(jni->activity_class, "showKeyboard", "()V"));
   jni->env->CallVoidMethod(jni->activity, jni_activity_method_show_keyboard);
@@ -143,7 +144,11 @@ void Application::CloseTouchKeyboardAfterReturn(bool v) {
 #endif
 } 
 
-void Application::SetAppFrameEnabled(bool) {}
+void Application::SetAppFrameEnabled(bool v) {
+  if ((app->frame_disabled = !v)) DrawSplash(Color::black);
+  INFO("Application frame_disabled = ", app->frame_disabled);
+}
+
 void Application::SetAutoRotateOrientation(bool) {}
 void Application::SetVerticalSwipeRecognizer(int touches) {}
 void Application::SetHorizontalSwipeRecognizer(int touches) {}

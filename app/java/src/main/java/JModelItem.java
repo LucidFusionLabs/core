@@ -17,6 +17,10 @@ public final class JModelItem {
     public static final int TYPE_FONTPICKER    = 11;
     public static final int TYPE_COUNT         = 12;
 
+    public static final int HALIGN_LEFT   = 1;
+    public static final int HALIGN_CENTER = 2;
+    public static final int HALIGN_RIGHT  = 3;
+
     public String key, val, right_text, dropdown_key;
     public int type, flags, left_icon, right_icon, tag=0;
     public long cb, right_cb, string_cb;

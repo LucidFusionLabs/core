@@ -554,7 +554,7 @@ int Application::Init() {
       shaders = make_unique<Shaders>();
       focused->gd->Init(focused->Box());
 #ifdef LFL_WINDOWS
-      if (splash_color) DrawSplash();
+      if (splash_color) DrawSplash(*splash_color);
 #endif
     } else { windows[focused->id.v] = focused; }
   }
@@ -632,6 +632,7 @@ int Application::TimerDrivenFrame(bool got_wakeup) {
   if (!MainThread()) ERROR("MonolithicFrame() called from thread ", Thread::GetId());
   unsigned clicks = frame_time.GetTime(true).count();
   int events = HandleEvents(clicks) + got_wakeup;
+  if (frame_disabled) return clicks;
 
   for (auto i = windows.begin(); run && i != windows.end(); ++i) {
     auto w = i->second;
@@ -670,8 +671,8 @@ int Application::MainLoop() {
   return 0;
 }
 
-void Application::DrawSplash() {
-  focused->gd->ClearColor(*splash_color);
+void Application::DrawSplash(const Color &c) {
+  focused->gd->ClearColor(c);
   focused->gd->Clear();
   focused->gd->Flush();
   Video::Swap();

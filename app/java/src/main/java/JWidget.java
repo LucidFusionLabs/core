@@ -25,7 +25,8 @@ public class JWidget {
     }
 
     protected void finalize() throws Throwable {
-        try { parent.remove(this); } finally { super.finalize(); }
+        try { parent.remove(this); }
+        finally { super.finalize(); }
     }
 
     public void clear() {}

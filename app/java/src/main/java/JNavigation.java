@@ -32,6 +32,7 @@ import android.graphics.Rect;
 import android.app.ActionBar;
 import android.app.AlertDialog;
 import android.app.Fragment;
+import android.app.FragmentManager;
 
 public class JNavigation extends JWidget {
     public JNavigation(final MainActivity activity) {
@@ -40,23 +41,13 @@ public class JNavigation extends JWidget {
 
     public void clear() {}
 
-    public JListViewFragment get(final MainActivity activity) {
-        return null;
-    }
-
     public void show(final MainActivity activity, final boolean show_or_hide) {
         final JNavigation self = this;
         activity.runOnUiThread(new Runnable() { public void run() {
             if (show_or_hide) {
                 activity.jwidgets.navigations.add(self);
                 activity.action_bar.show();
-
-                int stack_size = activity.getFragmentManager().getBackStackEntryCount();
-                if (stack_size != 0) {
-                    String tag = Integer.toString(stack_size-1);
-                    Fragment frag = activity.getFragmentManager().findFragmentByTag(tag);
-                    activity.getFragmentManager().beginTransaction().replace(R.id.content_frame, frag, tag).commit();
-                }
+                activity.showBackFragment(true, true);
             } else {
                 int size = activity.jwidgets.navigations.size();
                 assert size != 0 && activity.jwidgets.navigations.get(size-1) == self;
@@ -74,36 +65,45 @@ public class JNavigation extends JWidget {
     public void pushTable(final MainActivity activity, final JTable x) {
         activity.runOnUiThread(new Runnable() { public void run() {
             String tag = Integer.toString(activity.getFragmentManager().getBackStackEntryCount());
-            JListViewFragment table = x.get(activity);
+            JListViewFragment frag = x.get(activity);
             activity.getFragmentManager().beginTransaction()
-                .replace(R.id.content_frame, table, tag).addToBackStack(tag).commit();
+                .replace(R.id.content_frame, frag, tag).addToBackStack(tag).commit();
+            activity.setTitle(frag.parent_widget.title);
         }});
     }
     
     public void pushTextView(final MainActivity activity, final JTextView x) {
+        activity.runOnUiThread(new Runnable() { public void run() {
+            String tag = Integer.toString(activity.getFragmentManager().getBackStackEntryCount());
+            JTextViewFragment frag = x.get(activity);
+            activity.getFragmentManager().beginTransaction()
+                .replace(R.id.content_frame, frag, tag).addToBackStack(tag).commit();
+            activity.setTitle(frag.parent_widget.title);
+        }});
     }
 
     public void popView(final MainActivity activity, final int n) {
         activity.runOnUiThread(new Runnable() { public void run() {
-            for (int i = 0; i < n && activity.getFragmentManager().getBackStackEntryCount() > 0; i++) {
-                activity.getFragmentManager().popBackStackImmediate(null, 0);
-            }
+            int stack_size = activity.getFragmentManager().getBackStackEntryCount();
+            if (stack_size <= 0 || n <= 0) return;
+            int target = Math.max(0, activity.getFragmentManager().getBackStackEntryCount() - n);
+            activity.getFragmentManager().popBackStackImmediate
+                ((target >= 0 ? Integer.toString(target) : null), FragmentManager.POP_BACK_STACK_INCLUSIVE);
+            activity.showBackFragment(false, true);
         }});
     }
 
     public void popToRoot(final MainActivity activity) {
         activity.runOnUiThread(new Runnable() { public void run() {
-            while (activity.getFragmentManager().getBackStackEntryCount() > 1) {
-                activity.getFragmentManager().popBackStackImmediate(null, 0);
-            }
+            if (activity.getFragmentManager().getBackStackEntryCount() < 2) return;
+            activity.getFragmentManager().popBackStackImmediate("1", FragmentManager.POP_BACK_STACK_INCLUSIVE);
+            activity.showBackFragment(false, true);
         }});
     }
 
     public void popAll(final MainActivity activity) {
         activity.runOnUiThread(new Runnable() { public void run() {
-            while (activity.getFragmentManager().getBackStackEntryCount() > 0) {
-                activity.getFragmentManager().popBackStackImmediate(null, 0);
-            }
+            activity.getFragmentManager().popBackStackImmediate(null, FragmentManager.POP_BACK_STACK_INCLUSIVE);
         }});
     }
 

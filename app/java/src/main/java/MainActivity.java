@@ -186,6 +186,19 @@ public class MainActivity extends android.app.Activity {
         if (gplus != null) gplus.onActivityResult(request, response, data);
     }
 
+    @Override
+    public void onBackPressed() {
+        if (getFragmentManager().getBackStackEntryCount() > 1) {
+            super.onBackPressed();
+            showBackFragment(false, true);
+        } else {
+            Fragment frag = getFragmentManager().findFragmentByTag("0");
+            if (frag == null || !(frag instanceof JListViewFragment)) return;
+            JModelItem nav_left = ((JListViewFragment)frag).data.nav_left;
+            if (nav_left != null && nav_left.cb != 0) AppRunCallbackInMainThread(nav_left.cb);
+        }
+    } 
+
     public void surfaceChanged(int format, int width, int height) {
         surface_width = width;
         surface_height = height;
@@ -327,6 +340,15 @@ public class MainActivity extends android.app.Activity {
 
     public int getDrawableResId(String n) { 
       return getResources().getIdentifier(n, "drawable", getPackageName());
+    }
+
+    public void showBackFragment(boolean show_content, boolean show_title) {
+        int stack_size = getFragmentManager().getBackStackEntryCount();
+        if (stack_size == 0) return;
+        String tag = Integer.toString(stack_size-1);
+        Fragment frag = getFragmentManager().findFragmentByTag(tag);
+        if (show_content) getFragmentManager().beginTransaction().replace(R.id.content_frame, frag, tag).commit();
+        if (show_title && frag instanceof JListViewFragment) setTitle(((JListViewFragment)frag).parent_widget.title);
     }
 }
 

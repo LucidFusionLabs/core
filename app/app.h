@@ -675,7 +675,7 @@ struct Application : public ::LFApp {
   Window *focused=0;
   unordered_map<string, StringPiece> asset_cache;
   const Color *splash_color = &Color::black;
-  bool log_pid=0;
+  bool log_pid=0, frame_disabled=0;
   Callback exit_cb;
 
   vector<Module*> modules;
@@ -718,7 +718,7 @@ struct Application : public ::LFApp {
   int TimerDrivenFrame(bool got_wakeup);
   int Main();
   int MainLoop();
-  void DrawSplash();
+  void DrawSplash(const Color &c);
   void ResetGL();
 
   void LoseFocus();

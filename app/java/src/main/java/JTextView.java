@@ -32,6 +32,8 @@ import android.app.AlertDialog;
 
 public class JTextView extends JWidget {
     public String text;
+    public JTextViewFragment view;
+    public long lfl_self = 0;
 
     public JTextView(final MainActivity activity, String t, String v) {
         super(JWidget.TYPE_TEXTVIEW, activity, "");
@@ -39,12 +41,25 @@ public class JTextView extends JWidget {
         text = v;
     }
 
-    public void clear() {}
+    public void clear() { view = null; }
 
-    public JListViewFragment get(final MainActivity activity) {
-        return null;
+    public JTextViewFragment get(final MainActivity activity) {
+        if (view == null) {
+            view = new JTextViewFragment(activity, this, text, lfl_self);
+        }
+        return view;
     }
 
     public void show(final MainActivity activity, final boolean show_or_hide) {
+        activity.runOnUiThread(new Runnable() { public void run() {
+            JTextViewFragment frag = get(activity);
+            if (show_or_hide) {
+                activity.action_bar.show();
+                activity.getFragmentManager().beginTransaction().replace(R.id.content_frame, frag).commit();
+            } else {
+                if (activity.disable_title) activity.action_bar.hide();
+                activity.getFragmentManager().beginTransaction().remove(frag).commit();
+            }
+        }});
     }
 }

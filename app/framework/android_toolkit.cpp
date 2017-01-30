@@ -109,8 +109,21 @@ SystemTableView::SystemTableView(const string &title, const string &style, Table
 }
 
 void SystemTableView::AddToolbar(SystemToolbarView *toolbar) { ERROR("not implemented"); }
-void SystemTableView::AddNavigationButton(int, const TableItem &item) { ERROR("not implemented"); }
-void SystemTableView::DelNavigationButton(int) { ERROR("not implemented"); }
+void SystemTableView::AddNavigationButton(int halign_type, const TableItem &item) {
+  static jmethodID mid = CheckNotNull
+    (jni->env->GetMethodID(jni->jtable_class,
+                           "addNavButton", "(Lcom/lucidfusionlabs/app/MainActivity;ILcom/lucidfusionlabs/app/JModelItem;)V"));
+  jobject v = jni->ToJModelItem(item);
+  jni->env->CallVoidMethod(jobject(impl.v), mid, jni->activity, jint(halign_type), v);
+  jni->env->DeleteLocalRef(v);
+}
+
+void SystemTableView::DelNavigationButton(int halign_type) {
+  static jmethodID mid = CheckNotNull
+    (jni->env->GetMethodID(jni->jtable_class,
+                           "delNavButton", "(Lcom/lucidfusionlabs/app/MainActivity;I)V"));
+  jni->env->CallVoidMethod(jobject(impl.v), mid, jni->activity, jint(halign_type));
+}
 
 void SystemTableView::Show(bool show_or_hide) {
   if (show_or_hide && show_cb) show_cb();
@@ -255,7 +268,7 @@ SystemTextView::SystemTextView(const string &title, const string &text) {
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->jtextview_class,
                            "<init>", "(Lcom/lucidfusionlabs/app/MainActivity;Ljava/lang/String;Ljava/lang/String;)V"));
-  jstring hstr = jni->ToJString(title), tstr = jni->ToJString(text);
+  jstring hstr = jni->ToJString(title), tstr = jni->ToJStringRaw(text);
   jobject v = jni->env->NewObject(jni->jtextview_class, mid, jni->activity, hstr, tstr);
   impl.v = jni->env->NewGlobalRef(v);
   jni->env->DeleteLocalRef(v);

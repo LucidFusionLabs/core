@@ -36,7 +36,6 @@ public class JTable extends JWidget {
     public long lfl_self;
     public JListAdapter model;
     public JListViewFragment view;
-    public JModelItem nav_left, nav_right;
 
     public JTable(final MainActivity activity, String t, ArrayList<JModelItem> m, long lsp) {
         super(JWidget.TYPE_TABLE, activity, t);
@@ -48,7 +47,7 @@ public class JTable extends JWidget {
 
     public JListViewFragment get(final MainActivity activity) {
         if (view == null) {
-            view = new JListViewFragment(activity, title, model, null, lfl_self);
+            view = new JListViewFragment(activity, this, model, null, lfl_self);
         }
         return view;
     }
@@ -64,6 +63,16 @@ public class JTable extends JWidget {
                 activity.getFragmentManager().beginTransaction().remove(table).commit();
             }
         }});
+    }
+
+    public void addNavButton(final MainActivity activity, final int halign, final JModelItem row) {
+        activity.runOnUiThread
+            (new Runnable() { public void run() { get(activity).data.addNavButton(halign, row); }});
+    }
+    
+    public void delNavButton(final MainActivity activity, final int halign) {
+        activity.runOnUiThread
+            (new Runnable() { public void run() { get(activity).data.delNavButton(halign); }});
     }
 
     public void beginUpdates(final MainActivity activity) {

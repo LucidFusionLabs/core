@@ -63,6 +63,9 @@ elseif(LFL_ANDROID)
     add_custom_target(${target}_debug_start WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${target}-android DEPENDS ${target}
       COMMAND ${LFL_ANDROID_SDK}/platform-tools/adb shell am start -n `${LFL_ANDROID_SDK}/build-tools/19.1.0/aapt dump badging ./build/outputs/apk/${target}-android-debug.apk | grep package | cut -d\\' -f2`/`${LFL_ANDROID_SDK}/build-tools/19.1.0/aapt dump badging ./build/outputs/apk/${target}-android-debug.apk | grep launchable-activity | cut -d\\' -f2`
       COMMAND ${LFL_ANDROID_SDK}/platform-tools/adb logcat | tee ${CMAKE_CURRENT_BINARY_DIR}/debug.txt)
+
+    add_custom_target(${target}_help WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+      COMMAND echo "Symbolicate with: ${LFL_ANDROID_NDK}/toolchains/arm-linux-androideabi-4.9/prebuilt/darwin-x86_64/bin/arm-linux-androideabi-addr2line -C -f -e libapp.so 008bd340")
   endfunction()
 
   function(lfl_add_package target)

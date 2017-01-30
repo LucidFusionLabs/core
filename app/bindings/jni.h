@@ -44,6 +44,7 @@ struct JNI {
   void LogException(jthrowable &exception);
   string GetJString(jstring x) { return GetEnvJString(env, x); }
   jstring ToJString(const string &x) { return env->NewStringUTF(x.c_str()); }
+  jstring ToJStringRaw(const string &x);
   jobjectArray ToJStringArray(StringVec items);
   pair<jobjectArray, jobjectArray> ToJStringArrays(StringPairVec items);
   jobject ToJStringArrayList(StringVec items);
