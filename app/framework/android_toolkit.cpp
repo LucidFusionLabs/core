@@ -42,10 +42,11 @@ void SystemAlertView::Show(const string &arg) {
 string SystemAlertView::RunModal(const string &arg) { return ERRORv(string(), "not implemented"); }
 void SystemAlertView::ShowCB(const string &title, const string &msg, const string &arg, StringCB confirm_cb) {
   static jmethodID mid = CheckNotNull
-    (jni->env->GetMethodID(jni->jalert_class, "showTextCB", "(Lcom/lucidfusionlabs/app/MainActivity;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;J)V"));
+    (jni->env->GetMethodID(jni->jalert_class, "showTextCB", "(Lcom/lucidfusionlabs/app/MainActivity;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lcom/lucidfusionlabs/app/LStringCB;)V"));
   jstring tstr = jni->ToJString(title), mstr = jni->ToJString(msg), astr = jni->ToJString(arg);
-  jlong cb = confirm_cb ? intptr_t(new StringCB(move(confirm_cb))) : 0;
+  jobject cb = confirm_cb ? jni->ToLStringCB(move(confirm_cb)) : nullptr;
   jni->env->CallVoidMethod(jobject(impl.v), mid, jni->activity, tstr, mstr, astr, cb);
+  if (cb) jni->env->DeleteLocalRef(cb);
   jni->env->DeleteLocalRef(astr);
   jni->env->DeleteLocalRef(mstr);
   jni->env->DeleteLocalRef(tstr);
@@ -215,9 +216,10 @@ StringPairVec SystemTableView::GetSectionText(int section) {
 PickerItem *SystemTableView::GetPicker(int section, int row) { return 0; }
 void SystemTableView::SetEditableSection(int section, int start_row, IntIntCB iicb) {
   static jmethodID mid = CheckNotNull
-    (jni->env->GetMethodID(jni->jtable_class, "setEditable", "(Lcom/lucidfusionlabs/app/MainActivity;IIJ)V"));
-  jlong cb = iicb ? intptr_t(new IntIntCB(move(iicb))) : 0;
+    (jni->env->GetMethodID(jni->jtable_class, "setEditable", "(Lcom/lucidfusionlabs/app/MainActivity;IILcom/lucidfusionlabs/app/LIntIntCB;)V"));
+  jobject cb = iicb ? jni->ToLIntIntCB(move(iicb)) : nullptr;
   jni->env->CallVoidMethod(jobject(impl.v), mid, jni->activity, jint(section), jint(start_row), cb);
+  if (cb) jni->env->DeleteLocalRef(cb);
 }
 
 void SystemTableView::BeginUpdates() {

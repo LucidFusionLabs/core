@@ -47,29 +47,28 @@ public class JAlert extends JWidget {
             AlertDialog.Builder alert = new AlertDialog.Builder(activity);
             alert.setTitle(model.get(1).key);
             alert.setMessage(model.get(1).val);
-            
-            final EditText input = model.get(0).val.equals("textinput") ? new EditText(activity) : null;
+
+            JModelItem style = model.get(0);
+            boolean pw = style.val.equals("pwinput");
+            final EditText input = (pw || style.val.equals("textinput")) ? new EditText(activity) : null;
             if (input != null) {
-                input.setInputType(android.text.InputType.TYPE_CLASS_TEXT);
+                input.setInputType(android.text.InputType.TYPE_CLASS_TEXT |
+                                   (pw ? android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD : 0));
                 alert.setView(input);
             }
             
-            alert.setPositiveButton(model.get(2).key, new DialogInterface.OnClickListener() {
+            alert.setPositiveButton(model.get(3).key, new DialogInterface.OnClickListener() {
                                     public void onClick(DialogInterface dialog, int which) {
-                JModelItem confirm = model.get(2);
-                if (confirm.string_cb != 0) {
-                    activity.AppRunStringCBInMainThread
-                        (confirm.string_cb, (input == null) ? confirm.val : (confirm.val + " " + input.getText().toString()));
-                }
+                JModelItem confirm = model.get(3);
+                if (confirm.string_cb != null)
+                    confirm.string_cb.run((input == null) ? confirm.val : (confirm.val + " " + input.getText().toString()));
             }});
 
-            alert.setNegativeButton(model.get(3).key, new DialogInterface.OnClickListener() {
+            alert.setNegativeButton(model.get(2).key, new DialogInterface.OnClickListener() {
                                     public void onClick(DialogInterface dialog, int which) {
-                JModelItem cancel = model.get(3);
-                if (cancel.string_cb != 0) {
-                    activity.AppRunStringCBInMainThread
-                        (cancel.string_cb, (input == null) ? cancel.val : (cancel.val + " " + input.getText().toString()));
-                }
+                JModelItem cancel = model.get(2);
+                if (cancel.string_cb != null)
+                    cancel.string_cb.run((input == null) ? cancel.val : (cancel.val + " " + input.getText().toString()));
             }});
 
             view = new Pair<AlertDialog, EditText>(alert.create(), input);
@@ -90,9 +89,9 @@ public class JAlert extends JWidget {
     }
 
     public void showTextCB(final MainActivity activity, final String tstr, final String msg,
-                           final String arg, final long confirm_cb) {
+                           final String arg, final LStringCB confirm_cb) {
         activity.runOnUiThread(new Runnable() { public void run() {
-            JModelItem title = model.get(1), confirm = model.get(2);
+            JModelItem title = model.get(1), confirm = model.get(3);
             title.key = tstr;
             title.val = msg;
             confirm.string_cb = confirm_cb;

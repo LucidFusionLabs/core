@@ -46,7 +46,7 @@ public class JToolbar extends JWidget {
             LinearLayout toolbar = new LinearLayout(activity);
             View.OnClickListener listener = new View.OnClickListener() { public void onClick(View bt) {
                 JModelItem r = model.get(bt.getId());
-                if (r != null && r.cb != 0) activity.AppRunCallbackInMainThread(r.cb);
+                if (r != null && r.cb != null) r.cb.run();
             }};
           
             for (int i = 0, l = model.size(); i != l; ++i) {

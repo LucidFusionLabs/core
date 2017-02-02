@@ -19,10 +19,12 @@ import android.widget.BaseAdapter;
 import android.widget.ListView;
 import android.widget.ImageView;
 import android.widget.Switch;
+import android.widget.NumberPicker;
 import android.media.*;
 import android.content.*;
 import android.content.res.Configuration;
 import android.content.res.Resources;
+import android.content.res.ColorStateList;
 import android.content.pm.ActivityInfo;
 import android.hardware.*;
 import android.util.Log;
@@ -30,6 +32,7 @@ import android.util.Pair;
 import android.util.TypedValue;
 import android.net.Uri;
 import android.graphics.Rect;
+import android.graphics.Paint;
 import android.app.ActionBar;
 import android.app.AlertDialog;
 import android.text.InputType;
@@ -37,10 +40,18 @@ import android.text.InputType;
 public class JListAdapter extends BaseAdapter {
     public static class ViewHolder {
         public TextView textView, label;
+        public ColorStateList textViewTextColors, textViewLinkColors;
         public EditText editText;
         public ImageView leftIcon, rightIcon;
         public Button leftNav, rightNav;
         public Switch toggle;
+        public NumberPicker picker;
+
+        public void setTextView(TextView v) {
+            textView = v;
+            textViewTextColors = textView.getTextColors();
+            textViewLinkColors = textView.getLinkTextColors();
+        }
     }
 
     public static class Section {
@@ -54,15 +65,14 @@ public class JListAdapter extends BaseAdapter {
     public JModelItem nav_left = null, nav_right = null;
     public int selected_section = 0, selected_row = 0;
     public int editable_section = -1, editable_start_row = -1;
-    public long delete_row_cb = 0;
-    public native void close();
+    public LIntIntCB delete_row_cb = null;
 
     public JListAdapter(final MainActivity activity, final ArrayList<JModelItem> v) {
         inflater = (LayoutInflater)activity.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
         data = v;
         beginUpdates();
-        data.add(0, new JModelItem("", "", "", "", JModelItem.TYPE_SEPARATOR, 0, 0, 0, 0, 0, 0, false));
-        data.add(new JModelItem("", "", "", "", JModelItem.TYPE_SEPARATOR, 0, 0, 0, 0, 0, 0, false));
+        data.add(0, new JModelItem("", "", "", "", JModelItem.TYPE_SEPARATOR, 0, 0, 0, null, null, null, false, null, null));
+        data.add(new JModelItem("", "", "", "", JModelItem.TYPE_SEPARATOR, 0, 0, 0, null, null, null, false, null, null));
         for (int i = 0, l = data.size(); i != l; ++i) {
             JModelItem item = data.get(i);
             if (item.type == JModelItem.TYPE_SEPARATOR) sections.add(new Section(i));
@@ -71,12 +81,9 @@ public class JListAdapter extends BaseAdapter {
     }
     
     @Override
-    protected void finalize() throws Throwable { try { close(); } finally { super.finalize(); } }
-
-    @Override
     public int getItemViewType(int position) {
         JModelItem item = data.get(position);
-        return item.hidden ? 0 : item.type;
+        return item.hidden ? JModelItem.TYPE_HIDDEN : item.type;
     }
 
     @Override
@@ -98,7 +105,7 @@ public class JListAdapter extends BaseAdapter {
         if (convertView == null) {
             holder = new ViewHolder();
             switch (type) {
-                case JModelItem.TYPE_NONE:
+                case JModelItem.TYPE_HIDDEN:
                     convertView = inflater.inflate(R.layout.listview_cell_hidden, null);
                     holder.textView = null;
                     holder.label = null;
@@ -108,23 +115,25 @@ public class JListAdapter extends BaseAdapter {
                     holder.toggle = null;
                     holder.leftNav = null;
                     holder.rightNav = null;
+                    holder.picker = null;
                     break;
 
                 case JModelItem.TYPE_SEPARATOR:
                     convertView = inflater.inflate(R.layout.listview_cell_separator, null);
-                    holder.textView = (TextView)convertView.findViewById(R.id.listview_cell_title);
+                    holder.setTextView((TextView)convertView.findViewById(R.id.listview_cell_title));
                     holder.label = null;
                     holder.editText = null;
-                    holder.leftIcon = null;
+                    holder.leftIcon = (ImageView)convertView.findViewById(R.id.listview_cell_left_icon);
                     holder.rightIcon = null;
                     holder.toggle = null;
                     holder.leftNav = (Button)convertView.findViewById(R.id.listview_cell_nav_left);
                     holder.rightNav = (Button)convertView.findViewById(R.id.listview_cell_nav_right);
+                    holder.picker = null;
                     break;
 
                 case JModelItem.TYPE_TOGGLE:
                     convertView = inflater.inflate(R.layout.listview_cell_toggle, null);
-                    holder.textView = (TextView)convertView.findViewById(R.id.listview_cell_title);
+                    holder.setTextView((TextView)convertView.findViewById(R.id.listview_cell_title));
                     holder.label = null;
                     holder.editText = null;
                     holder.leftIcon = (ImageView)convertView.findViewById(R.id.listview_cell_left_icon);
@@ -132,13 +141,27 @@ public class JListAdapter extends BaseAdapter {
                     holder.toggle = (Switch)convertView.findViewById(R.id.listview_cell_toggle);
                     holder.leftNav = null;
                     holder.rightNav = null;
+                    holder.picker = null;
+                    break;
+
+                case JModelItem.TYPE_PICKER:
+                    convertView = inflater.inflate(R.layout.listview_cell_picker, null);
+                    holder.textView = null;
+                    holder.label = null;
+                    holder.editText = null;
+                    holder.leftIcon = null;
+                    holder.rightIcon = null;
+                    holder.toggle = null;
+                    holder.leftNav = null;
+                    holder.rightNav = null;
+                    holder.picker = (NumberPicker)convertView.findViewById(R.id.listview_cell_picker);
                     break;
 
                 case JModelItem.TYPE_TEXTINPUT:
                 case JModelItem.TYPE_NUMBERINPUT:
                 case JModelItem.TYPE_PASSWORDINPUT:
                     convertView = inflater.inflate(R.layout.listview_cell_textinput, null);
-                    holder.textView = (TextView)convertView.findViewById(R.id.listview_cell_title);
+                    holder.setTextView((TextView)convertView.findViewById(R.id.listview_cell_title));
                     holder.label = null;
                     holder.editText = (EditText)convertView.findViewById(R.id.listview_cell_textinput);
                     holder.leftIcon = (ImageView)convertView.findViewById(R.id.listview_cell_left_icon);
@@ -146,11 +169,12 @@ public class JListAdapter extends BaseAdapter {
                     holder.toggle = null;
                     holder.leftNav = null;
                     holder.rightNav = null;
+                    holder.picker = null;
                     break;
 
                 default:
                     convertView = inflater.inflate(R.layout.listview_cell, null);
-                    holder.textView = (TextView)convertView.findViewById(R.id.listview_cell_title);
+                    holder.setTextView((TextView)convertView.findViewById(R.id.listview_cell_title));
                     holder.label = (TextView)convertView.findViewById(R.id.listview_cell_value);
                     holder.editText = null;
                     holder.leftIcon = (ImageView)convertView.findViewById(R.id.listview_cell_left_icon);
@@ -158,6 +182,7 @@ public class JListAdapter extends BaseAdapter {
                     holder.toggle = null;
                     holder.leftNav = null;
                     holder.rightNav = null;
+                    holder.picker = null;
                     break;
             }
             convertView.setTag(holder);
@@ -166,17 +191,29 @@ public class JListAdapter extends BaseAdapter {
         }
 
         JModelItem item = data.get(position);
-        if (holder.textView  != null) holder.textView.setText(item.key);
-        if (holder.leftIcon  != null) holder.leftIcon .setImageResource(item.left_icon);
+        if (holder.textView != null) {
+            if (item.dropdown_key.length() > 0 && item.key.length() > 0 && item.cb != null &&
+                (item.flags & JModelItem.TABLE_FLAG_FIXDROPDOWN) == 0) {
+                final LCallback cb = item.cb;
+                holder.textView.setText(item.key + " \u02C5");
+                holder.textView.setTextColor(holder.textViewLinkColors);
+                holder.textView.setPaintFlags(holder.textView.getPaintFlags() | Paint.UNDERLINE_TEXT_FLAG);
+                holder.textView.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { cb.run(); }});
+            } else {
+                holder.textView.setText(item.key);
+                holder.textView.setTextColor(holder.textViewTextColors);
+                holder.textView.setPaintFlags(holder.textView.getPaintFlags() & (~Paint.UNDERLINE_TEXT_FLAG));
+                holder.textView.setOnClickListener(null);
+            }
+        }
+        if (holder.leftIcon  != null) holder.leftIcon.setImageResource(item.left_icon);
         if (holder.rightIcon != null) {
             holder.rightIcon.setImageResource(item.right_icon);
-            if (item.right_cb == 0) holder.rightIcon.setClickable(false);
+            if (item.right_cb == null) holder.rightIcon.setClickable(false);
             else {
-                final long rcb = item.right_cb;
+                final LCallback rcb = item.right_cb;
                 holder.rightIcon.setClickable(true);
-                holder.rightIcon.setOnClickListener(new View.OnClickListener() { public void onClick(View v) {
-                    MainActivity.AppRunCallbackInMainThread(rcb);  
-                }});
+                holder.rightIcon.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { rcb.run(); }});
             }
         }
         if (holder.label     != null) holder.label.setText(item.right_text.length() > 0 ? item.right_text : item.val);
@@ -196,6 +233,18 @@ public class JListAdapter extends BaseAdapter {
                 holder.toggle.setChecked(item.val.equals("1"));
                 break;
         }
+
+        if (holder.picker != null && item.picker != null && item.picker.data.size() > 0) {
+            ArrayList<String> picker_items = item.picker.data.get(0);
+            if (picker_items.size() > 0) {
+                holder.picker.setMinValue(0);
+                holder.picker.setMaxValue(picker_items.size() - 1);
+                String[] arr = new String[picker_items.size()];
+                arr = picker_items.toArray(arr);
+                holder.picker.setDisplayedValues(arr);
+            }
+        }
+
         return convertView;
     }
 
@@ -235,7 +284,7 @@ public class JListAdapter extends BaseAdapter {
         selected_row = r;
     }
 
-    public void setEditable(final int s, final int start_row, final long intint_cb) {
+    public void setEditable(final int s, final int start_row, final LIntIntCB intint_cb) {
         editable_section = s;
         editable_start_row = start_row;
         delete_row_cb = intint_cb;
@@ -267,7 +316,7 @@ public class JListAdapter extends BaseAdapter {
 
     public void addSection() {
         sections.add(new Section(data.size()));
-        data.add(new JModelItem("", "", "", "", JModelItem.TYPE_SEPARATOR, 0, 0, 0, 0, 0, 0, false));
+        data.add(new JModelItem("", "", "", "", JModelItem.TYPE_SEPARATOR, 0, 0, 0, null, null, null, false, null, null));
     }
 
     public void addRow(final int section, JModelItem row) {
@@ -281,6 +330,9 @@ public class JListAdapter extends BaseAdapter {
         if (section == sections.size()) addSection();
         assert section < sections.size();
         int start_row = getSectionBeginRowId(section), old_section_size = getSectionSize(section);
+        JModelItem separator = data.get(start_row);
+        separator.key = h;
+        separator.left_icon = image;
         data.subList(start_row + 1, start_row + 1 + old_section_size).clear();
         data.addAll(start_row + 1, v);
         moveSectionsAfterBy(section, v.size() - getSectionSize(section));
@@ -300,13 +352,18 @@ public class JListAdapter extends BaseAdapter {
         for (int i = section + 1, l = sections.size(); i < l; i++) sections.get(i).start_row += delta;
     }
 
-    public String getKey(final int s, final int r) { return data.get(getCollapsedRowId(s, r)).val; }
+    public String getKey(final int s, final int r) { return data.get(getCollapsedRowId(s, r)).key; }
     public int    getTag(final int s, final int r) { return data.get(getCollapsedRowId(s, r)).tag; }
 
     public void setTag   (final int s, final int r, final int     v) { data.get(getCollapsedRowId(s, r)).tag = v; } 
-    public void setKey   (final int s, final int r, final String  v) { data.get(getCollapsedRowId(s, r)).key = v; }
     public void setValue (final int s, final int r, final String  v) { data.get(getCollapsedRowId(s, r)).val = v; }
     public void setHidden(final int s, final int r, final boolean v) { data.get(getCollapsedRowId(s, r)).hidden = v; }
+
+    public void setKey(final int s, final int r, final String  v) {
+        JModelItem item = data.get(getCollapsedRowId(s, r));
+        item.key = v; 
+        if (item.depends != null) JDependencyItem.applyList(item.depends, this, v);
+    }
 
     public ArrayList<Pair<String, String>> getSectionText(ListView listview, final int section) {
         assert section < sections.size();

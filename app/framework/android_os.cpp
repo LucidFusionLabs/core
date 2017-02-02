@@ -119,8 +119,8 @@ pair<jobjectArray, jobjectArray> JNI::ToJStringArrays(StringPairVec items) {
 
 jobject JNI::ToJStringArrayList(StringVec items) {
   jobject ret = env->NewObject(arraylist_class, arraylist_construct);
-  for (int i=0, l=items.size(); i != l; ++i) {
-    jobject v = ToJString(items[i]);
+  for (auto &i : items) {
+    jobject v = ToJString(i);
     CHECK(env->CallBooleanMethod(ret, arraylist_add, v));
     env->DeleteLocalRef(v);
   }
@@ -171,11 +171,29 @@ jobject JNI::ToJModelItemArrayList(TableItemVec items) {
   return ret;
 }
 
+jobject JNI::ToJDependencyItemHashMap(TableItem::Depends items) {
+  jobject ret = env->NewObject(hashmap_class, hashmap_construct);
+  for (auto &di : items) {
+    jstring k = ToJString(di.first);
+    jobject l = env->NewObject(arraylist_class, arraylist_construct);
+    for (auto &i : di.second) {
+      jobject v = ToJDependencyItem(move(i));
+      CHECK(env->CallBooleanMethod(l, arraylist_add, v));
+      env->DeleteLocalRef(v);
+    }
+    env->CallObjectMethod(ret, hashmap_put, k, l);
+    env->DeleteLocalRef(l);
+    env->DeleteLocalRef(k);
+  }
+  return ret;
+}
+
 jobject JNI::ToJModelItem(AlertItem item) {
-  jobject k = ToJString(item.first), v = ToJString(item.second), rt = ToJString(""), ddk = ToJString("");
-  jlong cb = item.cb ? intptr_t(new StringCB(move(item.cb))) : 0;
+  jobject k = ToJString(item.first), v = ToJString(item.second), rt = ToJString(""), ddk = ToJString(""), p = nullptr, dep = nullptr, lcb = nullptr, rcb = nullptr;
+  jobject cb = item.cb ? ToLStringCB(move(item.cb)) : nullptr;
   jobject ret = env->NewObject(jmodelitem_class, jmodelitem_construct, k, v, rt, ddk, jint(0), jint(0),
-                               jint(0), jint(0), jlong(0), jlong(0), cb, false);
+                               jint(0), jint(0), lcb, rcb, cb, false, p, dep);
+  if (cb) env->DeleteLocalRef(cb);
   env->DeleteLocalRef(ddk);
   env->DeleteLocalRef(rt);
   env->DeleteLocalRef(v);
@@ -184,10 +202,11 @@ jobject JNI::ToJModelItem(AlertItem item) {
 }
 
 jobject JNI::ToJModelItem(MenuItem item) {
-  jobject k = ToJString(item.shortcut), v = ToJString(item.name), rt = ToJString(""), ddk = ToJString("");
-  jlong cb = item.cb ? intptr_t(new Callback(move(item.cb))) : 0;
+  jobject k = ToJString(item.shortcut), v = ToJString(item.name), rt = ToJString(""), ddk = ToJString(""), p = nullptr, dep = nullptr, rcb = nullptr, scb = nullptr;
+  jobject cb = item.cb ? ToLCallback(move(item.cb)) : nullptr;
   jobject ret = env->NewObject(jmodelitem_class, jmodelitem_construct, k, v, rt, ddk, jint(0), jint(0),
-                               jint(0), jint(0), cb, jlong(0), jlong(0), false);
+                               jint(0), jint(0), cb, rcb, scb, false, p, dep);
+  if (cb) env->DeleteLocalRef(cb);
   env->DeleteLocalRef(ddk);
   env->DeleteLocalRef(rt);
   env->DeleteLocalRef(v);
@@ -196,16 +215,75 @@ jobject JNI::ToJModelItem(MenuItem item) {
 }
 
 jobject JNI::ToJModelItem(TableItem item) {
-  jobject k = ToJString(item.key), v = ToJString(item.val), rt = ToJString(item.right_text), ddk = ToJString(item.dropdown_key);
-  jlong cb = item.cb ? intptr_t(new Callback(move(item.cb))) : 0;
-  jlong rcb = item.right_icon_cb ? intptr_t(new Callback(move(item.right_icon_cb))) : 0;
+  jobject k = ToJString(item.key), v = ToJString(item.val), rt = ToJString(item.right_text),
+          ddk = ToJString(item.dropdown_key), picker = ToJPickerItem(item.picker),
+          dep = ToJDependencyItemHashMap(move(item.depends)), scb = nullptr;
+  jobject cb = item.cb ? ToLCallback(move(item.cb)) : nullptr;
+  jobject rcb = item.right_icon_cb ? ToLCallback(move(item.right_icon_cb)) : nullptr;
   jobject ret = env->NewObject(jmodelitem_class, jmodelitem_construct, k, v, rt, ddk, item.type, item.flags,
-                               item.left_icon, item.right_icon, cb, rcb, jlong(0), item.hidden);
+                               item.left_icon, item.right_icon, cb, rcb, scb, item.hidden, picker, dep);
+  if (rcb) env->DeleteLocalRef(rcb);
+  if (cb) env->DeleteLocalRef(cb);
+  if (dep) env->DeleteLocalRef(dep);
+  if (picker) env->DeleteLocalRef(picker);
   env->DeleteLocalRef(ddk);
   env->DeleteLocalRef(rt);
   env->DeleteLocalRef(v);
   env->DeleteLocalRef(k);
   return ret;
+}
+
+jobject JNI::ToJDependencyItem(TableItem::Dep item) {
+  jobject k = ToJString(item.key), v = ToJString(item.val);
+  jobject cb = item.cb ? ToLCallback(move(item.cb)) : nullptr;
+  jobject ret = env->NewObject(jdepitem_class, jdepitem_construct, jint(item.section), jint(item.row),
+                               jint(item.type), k, v, jint(item.left_icon), jint(item.right_icon),
+                               jint(item.flags), jboolean(item.hidden), cb);
+  if (cb) env->DeleteLocalRef(cb);
+  env->DeleteLocalRef(v);
+  env->DeleteLocalRef(k);
+  return ret;
+}
+
+jobject JNI::ToJPickerItem(PickerItem *picker_in) {
+  if (!picker_in) return nullptr;
+  const PickerItem *picker = picker_in;
+  jlong self = intptr_t(picker_in);
+  jobject cb = picker->cb ? ToLPickerItemCB(picker->cb) : nullptr;
+  jobject l = env->NewObject(arraylist_class, arraylist_construct);
+  for (auto &i : picker->data) {
+    jobject v = ToJStringArrayList(i);
+    CHECK(env->CallBooleanMethod(l, arraylist_add, v));
+    env->DeleteLocalRef(v);
+  }
+  jobject ret = env->NewObject(jpickeritem_class, jpickeritem_construct, l, cb, self);
+  env->DeleteLocalRef(l);
+  if (cb) env->DeleteLocalRef(cb);
+  return ret;
+}
+
+jobject JNI::ToLCallback(Callback c) {
+  static jmethodID mid = CheckNotNull(env->GetMethodID(lcallback_class, "<init>", "(J)V"));
+  jlong cb = intptr_t(new Callback(move(c)));
+  return env->NewObject(lcallback_class, mid, cb);
+}
+
+jobject JNI::ToLStringCB(StringCB c) {
+  static jmethodID mid = CheckNotNull(env->GetMethodID(lstringcb_class, "<init>", "(J)V"));
+  jlong cb = intptr_t(new StringCB(move(c)));
+  return env->NewObject(lstringcb_class, mid, cb);
+}
+
+jobject JNI::ToLIntIntCB(IntIntCB c) {
+  static jmethodID mid = CheckNotNull(env->GetMethodID(lintintcb_class, "<init>", "(J)V"));
+  jlong cb = intptr_t(new IntIntCB(move(c)));
+  return env->NewObject(lintintcb_class, mid, cb);
+}
+
+jobject JNI::ToLPickerItemCB(const PickerItem::CB &c) {
+  static jmethodID mid = CheckNotNull(env->GetMethodID(lpickeritemcb_class, "<init>", "(J)V"));
+  jlong cb = intptr_t(new PickerItem::CB(c));
+  return env->NewObject(lpickeritemcb_class, mid, cb);
 }
 
 BufferFile *JNI::OpenAsset(const string &fn) {

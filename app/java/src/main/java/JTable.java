@@ -90,7 +90,7 @@ public class JTable extends JWidget {
             (new Runnable() { public void run() { get(activity).data.selectRow(s, r); }});
     }
 
-    public void setEditable(final MainActivity activity, final int s, final int start_row, final long intint_cb) {
+    public void setEditable(final MainActivity activity, final int s, final int start_row, final LIntIntCB intint_cb) {
         activity.runOnUiThread
             (new Runnable() { public void run() { get(activity).data.setEditable(s, start_row, intint_cb); }});
     }

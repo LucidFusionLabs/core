@@ -246,14 +246,6 @@ unique_ptr<AssetLoaderInterface> CreateAssetLoader() { return make_unique<Androi
 
 extern "C" jint JNI_OnLoad(JavaVM* vm, void* reserved) { return JNI_VERSION_1_4; }
 
-extern "C" void Java_com_lucidfusionlabs_app_JModelItem_close(JNIEnv *e, jobject a) {
-  INFO("JModelItem close");
-}
-
-extern "C" void Java_com_lucidfusionlabs_app_JListAdapter_close(JNIEnv *e, jobject a) {
-  INFO("JListAdapter close");
-}
-
 extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppCreate(JNIEnv *e, jobject a) {
   CHECK(jni->env = e);
   CHECK(jni->activity_class = (jclass)e->NewGlobalRef(e->GetObjectClass(a)));
@@ -269,6 +261,7 @@ extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppCreate(JNIEnv *e, j
 
   CHECK(jni->view_class         = (jclass)e->NewGlobalRef(e->GetObjectClass(jni->view)));
   CHECK(jni->arraylist_class    = (jclass)e->NewGlobalRef(e->FindClass("java/util/ArrayList")));
+  CHECK(jni->hashmap_class      = (jclass)e->NewGlobalRef(e->FindClass("java/util/HashMap")));
   CHECK(jni->string_class       = (jclass)e->NewGlobalRef(e->FindClass("java/lang/String")));
   CHECK(jni->pair_class         = (jclass)e->NewGlobalRef(e->FindClass("android/util/Pair")));
   CHECK(jni->resources_class    = (jclass)e->NewGlobalRef(e->FindClass("android/content/res/Resources")));
@@ -280,20 +273,32 @@ extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppCreate(JNIEnv *e, j
   CHECK(jni->channels_class     = (jclass)e->NewGlobalRef(e->FindClass("java/nio/channels/Channels")));
   CHECK(jni->readbytechan_class = (jclass)e->NewGlobalRef(e->FindClass("java/nio/channels/ReadableByteChannel")));
   CHECK(jni->jmodelitem_class   = (jclass)e->NewGlobalRef(e->FindClass("com/lucidfusionlabs/app/JModelItem")));
+  CHECK(jni->jdepitem_class     = (jclass)e->NewGlobalRef(e->FindClass("com/lucidfusionlabs/app/JDependencyItem")));
+  CHECK(jni->jpickeritem_class  = (jclass)e->NewGlobalRef(e->FindClass("com/lucidfusionlabs/app/JPickerItem")));
   CHECK(jni->jalert_class       = (jclass)e->NewGlobalRef(e->FindClass("com/lucidfusionlabs/app/JAlert")));
   CHECK(jni->jtoolbar_class     = (jclass)e->NewGlobalRef(e->FindClass("com/lucidfusionlabs/app/JToolbar")));
   CHECK(jni->jmenu_class        = (jclass)e->NewGlobalRef(e->FindClass("com/lucidfusionlabs/app/JMenu")));
   CHECK(jni->jtable_class       = (jclass)e->NewGlobalRef(e->FindClass("com/lucidfusionlabs/app/JTable")));
   CHECK(jni->jtextview_class    = (jclass)e->NewGlobalRef(e->FindClass("com/lucidfusionlabs/app/JTextView")));
   CHECK(jni->jnavigation_class  = (jclass)e->NewGlobalRef(e->FindClass("com/lucidfusionlabs/app/JNavigation")));
+  CHECK(jni->lcallback_class    = (jclass)e->NewGlobalRef(e->FindClass("com/lucidfusionlabs/app/LCallback")));
+  CHECK(jni->lstringcb_class    = (jclass)e->NewGlobalRef(e->FindClass("com/lucidfusionlabs/app/LStringCB")));
+  CHECK(jni->lintintcb_class    = (jclass)e->NewGlobalRef(e->FindClass("com/lucidfusionlabs/app/LIntIntCB")));
+  CHECK(jni->lpickeritemcb_class= (jclass)e->NewGlobalRef(e->FindClass("com/lucidfusionlabs/app/LPickerItemCB")));
   jclass jmodelitem_class=0, jalert_class=0, jtoolbar_class=0, jtable_class=0, jnavigation_class=0;
   CHECK(jni->arraylist_construct = e->GetMethodID(jni->arraylist_class, "<init>", "()V"));
   CHECK(jni->arraylist_size = e->GetMethodID(jni->arraylist_class, "size", "()I"));
   CHECK(jni->arraylist_get = e->GetMethodID(jni->arraylist_class, "get", "(I)Ljava/lang/Object;"));
   CHECK(jni->arraylist_add = e->GetMethodID(jni->arraylist_class, "add", "(Ljava/lang/Object;)Z"));
-  CHECK(jni->jmodelitem_construct = e->GetMethodID(jni->jmodelitem_class, "<init>", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;IIIIJJJZ)V"));
+  CHECK(jni->hashmap_construct = e->GetMethodID(jni->hashmap_class, "<init>", "()V"));
+  CHECK(jni->hashmap_size = e->GetMethodID(jni->hashmap_class, "size", "()I"));
+  CHECK(jni->hashmap_get = e->GetMethodID(jni->hashmap_class, "get", "(Ljava/lang/Object;)Ljava/lang/Object;"));
+  CHECK(jni->hashmap_put = e->GetMethodID(jni->hashmap_class, "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"));
   CHECK(jni->pair_first  = e->GetFieldID(jni->pair_class, "first",  "Ljava/lang/Object;"));
   CHECK(jni->pair_second = e->GetFieldID(jni->pair_class, "second", "Ljava/lang/Object;"));
+  CHECK(jni->jmodelitem_construct = e->GetMethodID(jni->jmodelitem_class, "<init>", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;IIIILcom/lucidfusionlabs/app/LCallback;Lcom/lucidfusionlabs/app/LCallback;Lcom/lucidfusionlabs/app/LStringCB;ZLcom/lucidfusionlabs/app/JPickerItem;Ljava/util/HashMap;)V"));
+  CHECK(jni->jdepitem_construct = e->GetMethodID(jni->jdepitem_class, "<init>", "(IIILjava/lang/String;Ljava/lang/String;IIIZLcom/lucidfusionlabs/app/LCallback;)V"));
+  CHECK(jni->jpickeritem_construct = e->GetMethodID(jni->jpickeritem_class, "<init>", "(Ljava/util/ArrayList;Lcom/lucidfusionlabs/app/LPickerItemCB;J)V"));
   if (jni->gplus) CHECK(jni->gplus_class = (jclass)e->NewGlobalRef(e->GetObjectClass(jni->gplus)));
 
   static const char *argv[2] = { "LFLApp", 0 };
@@ -386,19 +391,40 @@ extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppScroll(JNIEnv *e, j
   // screen->gesture_swipe_up = screen->gesture_swipe_down = 0;
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppAccel(JNIEnv *e, jobject a, jfloat x, jfloat y, jfloat z) {}
+extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppAccel(JNIEnv *e, jobject a, jfloat x, jfloat y, jfloat z) {
+}
 
 extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppFocusedShellRun(JNIEnv *e, jstring text) {
   app->focused->shell->Run(e->GetStringUTFChars(text, 0));
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppRunCallbackInMainThread(JNIEnv *e, jlong cb) {
+extern "C" void Java_com_lucidfusionlabs_app_LCallback_RunCallbackInMainThread(JNIEnv *e, jlong cb) {
   app->RunCallbackInMainThread(new Callback(*static_cast<Callback*>(Void(cb))));
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppRunStringCBInMainThread(JNIEnv *e, jlong cb, jstring text) {
+extern "C" void Java_com_lucidfusionlabs_app_LStringCB_RunStringCBInMainThread(JNIEnv *e, jlong cb, jstring text) {
   string t = JNI::GetEnvJString(e, text);
   app->RunCallbackInMainThread(new Callback([=](){ (*static_cast<StringCB*>(Void(cb)))(t); }));
+}
+
+extern "C" void Java_com_lucidfusionlabs_app_LIntIntCB_RunIntIntCBInMainThread(JNIEnv *e, jlong cb, jint x, jint y) {
+  app->RunCallbackInMainThread(new Callback([=](){ (*static_cast<IntIntCB*>(Void(cb)))(x, y); }));
+}
+
+extern "C" void Java_com_lucidfusionlabs_app_LCallback_FreeCallback(JNIEnv *e, jlong cb) {
+  delete static_cast<Callback*>(Void(cb));
+}
+
+extern "C" void Java_com_lucidfusionlabs_app_LStringCB_FreeStringCB(JNIEnv *e, jlong cb) {
+  delete static_cast<StringCB*>(Void(cb));
+}
+
+extern "C" void Java_com_lucidfusionlabs_app_LIntIntCB_FreeIntIntCB(JNIEnv *e, jlong cb) {
+  delete static_cast<IntIntCB*>(Void(cb));
+}
+
+extern "C" void Java_com_lucidfusionlabs_app_LPickerItemCB_FreePickerItemCB(JNIEnv *e, jlong cb) {
+  delete static_cast<PickerItem::CB*>(Void(cb));
 }
 
 extern "C" void Java_com_lucidfusionlabs_app_GPlusClient_startGame(JNIEnv *e, jobject a, jboolean server, jstring pid) {

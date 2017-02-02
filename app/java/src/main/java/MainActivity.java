@@ -49,8 +49,6 @@ public class MainActivity extends android.app.Activity {
     public native void AppScroll(float x, float y, float sx, float sy);
     public native void AppAccel(float x, float y, float z);
     public static native void AppFocusedShellRun(String text);
-    public static native void AppRunCallbackInMainThread(long cb);
-    public static native void AppRunStringCBInMainThread(long cb, String text);
 
     public static boolean app_created, app_init, disable_title;
     public static JWidgets jwidgets = new JWidgets();
@@ -195,7 +193,7 @@ public class MainActivity extends android.app.Activity {
             Fragment frag = getFragmentManager().findFragmentByTag("0");
             if (frag == null || !(frag instanceof JListViewFragment)) return;
             JModelItem nav_left = ((JListViewFragment)frag).data.nav_left;
-            if (nav_left != null && nav_left.cb != 0) AppRunCallbackInMainThread(nav_left.cb);
+            if (nav_left != null && nav_left.cb != null) nav_left.cb.run();
         }
     } 
 

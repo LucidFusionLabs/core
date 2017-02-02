@@ -1,6 +1,8 @@
 package com.lucidfusionlabs.app;
 
 import android.util.Log;
+import java.util.ArrayList;
+import java.util.HashMap;
 
 public final class JModelItem {
     public static final int TYPE_NONE          = 0;
@@ -15,21 +17,27 @@ public final class JModelItem {
     public static final int TYPE_NUMBERINPUT   = 9;
     public static final int TYPE_PASSWORDINPUT = 10;
     public static final int TYPE_FONTPICKER    = 11;
-    public static final int TYPE_COUNT         = 12;
+    public static final int TYPE_HIDDEN        = 12;
+    public static final int TYPE_COUNT         = 13;
 
     public static final int HALIGN_LEFT   = 1;
     public static final int HALIGN_CENTER = 2;
     public static final int HALIGN_RIGHT  = 3;
 
+    public static final int TABLE_FLAG_FIXDROPDOWN = 1;
+
     public String key, val, right_text, dropdown_key;
     public int type, flags, left_icon, right_icon, tag=0;
-    public long cb, right_cb, string_cb;
+    public LCallback cb, right_cb;
+    public LStringCB string_cb;
     public boolean hidden;
-    public native void close();
+    public JPickerItem picker;
+    public HashMap<String, ArrayList<JDependencyItem>> depends;
 
     JModelItem(final String k, final String v, final String rt, final String ddk,
                final int t, final int f, final int li, final int ri,
-               final long lcb, final long rcb, final long scb, final boolean h) {
+               final LCallback lcb, final LCallback rcb, final LStringCB scb, final boolean h,
+               final JPickerItem p, final HashMap<String, ArrayList<JDependencyItem>> d) {
         key = k;
         val = v;
         right_text = rt;
@@ -42,7 +50,7 @@ public final class JModelItem {
         right_cb = rcb;
         string_cb = scb;
         hidden = h;
+        picker = p;
+        depends = d;
     }
-
-    protected void finalize() throws Throwable { try { close(); } finally { super.finalize(); } }
 }
