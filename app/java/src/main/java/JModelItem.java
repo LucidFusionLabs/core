@@ -27,7 +27,7 @@ public final class JModelItem {
     public static final int TABLE_FLAG_FIXDROPDOWN = 1;
 
     public String key, val, right_text, dropdown_key;
-    public int type, flags, left_icon, right_icon, tag=0;
+    public int type, flags, left_icon, right_icon, tag=0, checkedId=0;
     public LCallback cb, right_cb;
     public LStringCB string_cb;
     public boolean hidden;

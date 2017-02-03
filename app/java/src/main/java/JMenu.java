@@ -31,25 +31,41 @@ import android.app.ActionBar;
 import android.app.AlertDialog;
 
 public class JMenu extends JWidget {
-    public ArrayList<JModelItem> model;
-    public JListViewFragment view;
+    public ArrayList<JModelItem> data;
+    public AlertDialog view;
 
     public JMenu(final MainActivity activity, String t, ArrayList<JModelItem> m) {
         super(JWidget.TYPE_MENU, activity, t);
-        model = m;
+        data = m;
     }
 
     public void clear() { view = null; }
 
-    public JListViewFragment get(final MainActivity activity) {
+    public AlertDialog get(final MainActivity activity) {
         if (view == null) {
-            view = new JListViewFragment(activity, this, new JListAdapter(activity, model), null, 0);
+            AlertDialog.Builder builder = new AlertDialog.Builder(activity);
+            builder.setTitle(title);
+            if (data.size() > 0) { 
+                String[] items = new String[data.size()];
+                for (int i = 0; i < items.length; i++) items[i] = data.get(i).val;
+                builder.setItems(items, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        assert which < data.size();
+                        JModelItem item = data.get(which);
+                        if (item.cb != null) item.cb.run();
+                    }});
+            }
+            view = builder.create();
         }
         return view;
     }
 
     public void show(final MainActivity activity, final boolean show_or_hide) {
+        if (!show_or_hide) return;
         activity.runOnUiThread(new Runnable() { public void run() {
+            AlertDialog alert = get(activity);
+            alert.show();
         }});
     }
 }

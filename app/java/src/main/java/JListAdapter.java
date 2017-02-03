@@ -20,6 +20,8 @@ import android.widget.ListView;
 import android.widget.ImageView;
 import android.widget.Switch;
 import android.widget.NumberPicker;
+import android.widget.RadioGroup;
+import android.widget.RadioButton;
 import android.media.*;
 import android.content.*;
 import android.content.res.Configuration;
@@ -46,6 +48,7 @@ public class JListAdapter extends BaseAdapter {
         public Button leftNav, rightNav;
         public Switch toggle;
         public NumberPicker picker;
+        public RadioGroup radio;
 
         public void setTextView(TextView v) {
             textView = v;
@@ -116,6 +119,7 @@ public class JListAdapter extends BaseAdapter {
                     holder.leftNav = null;
                     holder.rightNav = null;
                     holder.picker = null;
+                    holder.radio = null;
                     break;
 
                 case JModelItem.TYPE_SEPARATOR:
@@ -129,6 +133,7 @@ public class JListAdapter extends BaseAdapter {
                     holder.leftNav = (Button)convertView.findViewById(R.id.listview_cell_nav_left);
                     holder.rightNav = (Button)convertView.findViewById(R.id.listview_cell_nav_right);
                     holder.picker = null;
+                    holder.radio = null;
                     break;
 
                 case JModelItem.TYPE_TOGGLE:
@@ -142,6 +147,7 @@ public class JListAdapter extends BaseAdapter {
                     holder.leftNav = null;
                     holder.rightNav = null;
                     holder.picker = null;
+                    holder.radio = null;
                     break;
 
                 case JModelItem.TYPE_PICKER:
@@ -155,6 +161,7 @@ public class JListAdapter extends BaseAdapter {
                     holder.leftNav = null;
                     holder.rightNav = null;
                     holder.picker = (NumberPicker)convertView.findViewById(R.id.listview_cell_picker);
+                    holder.radio = null;
                     break;
 
                 case JModelItem.TYPE_TEXTINPUT:
@@ -170,6 +177,21 @@ public class JListAdapter extends BaseAdapter {
                     holder.leftNav = null;
                     holder.rightNav = null;
                     holder.picker = null;
+                    holder.radio = null;
+                    break;
+
+                case JModelItem.TYPE_SELECTOR:
+                    convertView = inflater.inflate(R.layout.listview_cell_radio, null);
+                    holder.textView = null;
+                    holder.label = null;
+                    holder.editText = null;
+                    holder.leftIcon = null;
+                    holder.rightIcon = null;
+                    holder.toggle = null;
+                    holder.leftNav = null;
+                    holder.rightNav = null;
+                    holder.picker = null;
+                    holder.radio = (RadioGroup)convertView.findViewById(R.id.listview_cell_radio);
                     break;
 
                 default:
@@ -183,6 +205,7 @@ public class JListAdapter extends BaseAdapter {
                     holder.leftNav = null;
                     holder.rightNav = null;
                     holder.picker = null;
+                    holder.radio = null;
                     break;
             }
             convertView.setTag(holder);
@@ -190,15 +213,14 @@ public class JListAdapter extends BaseAdapter {
             holder = (ViewHolder)convertView.getTag();
         }
 
-        JModelItem item = data.get(position);
+        final JModelItem item = data.get(position);
         if (holder.textView != null) {
             if (item.dropdown_key.length() > 0 && item.key.length() > 0 && item.cb != null &&
                 (item.flags & JModelItem.TABLE_FLAG_FIXDROPDOWN) == 0) {
-                final LCallback cb = item.cb;
                 holder.textView.setText(item.key + " \u02C5");
                 holder.textView.setTextColor(holder.textViewLinkColors);
                 holder.textView.setPaintFlags(holder.textView.getPaintFlags() | Paint.UNDERLINE_TEXT_FLAG);
-                holder.textView.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { cb.run(); }});
+                holder.textView.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { item.cb.run(); }});
             } else {
                 holder.textView.setText(item.key);
                 holder.textView.setTextColor(holder.textViewTextColors);
@@ -211,9 +233,8 @@ public class JListAdapter extends BaseAdapter {
             holder.rightIcon.setImageResource(item.right_icon);
             if (item.right_cb == null) holder.rightIcon.setClickable(false);
             else {
-                final LCallback rcb = item.right_cb;
                 holder.rightIcon.setClickable(true);
-                holder.rightIcon.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { rcb.run(); }});
+                holder.rightIcon.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { item.right_cb.run(); }});
             }
         }
         if (holder.label     != null) holder.label.setText(item.right_text.length() > 0 ? item.right_text : item.val);
@@ -243,6 +264,36 @@ public class JListAdapter extends BaseAdapter {
                 arr = picker_items.toArray(arr);
                 holder.picker.setDisplayedValues(arr);
             }
+        }
+
+        if (holder.radio != null) {
+            final JListAdapter self = this;
+            holder.radio.removeAllViews();
+            String[] v = item.val.split(",");
+            for(int i = 0; i < v.length; i++) {
+                RadioGroup.LayoutParams layout = new RadioGroup.LayoutParams
+                    (RadioGroup.LayoutParams.MATCH_PARENT, RadioGroup.LayoutParams.WRAP_CONTENT);
+                layout.weight = 1;
+                RadioButton button = new RadioButton(parent.getContext());
+                button.setLayoutParams(layout);
+                button.setId(i);
+                button.setText(v[i]);  
+                button.setChecked(item.checkedId == i);
+                button.setBackgroundResource(R.drawable.listview_radio_selector);
+                holder.radio.addView(button);
+            }
+            if (item.depends != null)
+                holder.radio.setOnCheckedChangeListener(new RadioGroup.OnCheckedChangeListener() {
+                    @Override
+                    public void onCheckedChanged(RadioGroup group, int checkedId) {
+                        RadioButton button = (RadioButton)group.findViewById(checkedId);
+                        if (button != null) {
+                            self.beginUpdates();
+                            item.checkedId = checkedId;
+                            JDependencyItem.applyList(item.depends, self, button.getText().toString());
+                            self.endUpdates();
+                        }
+                    }});
         }
 
         return convertView;
