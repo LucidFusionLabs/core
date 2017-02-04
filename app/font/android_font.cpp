@@ -201,7 +201,8 @@ int AndroidFontEngine::InitGlyphs(Font *f, Glyph *g, int n) {
 
     Font *sub = ri->second->font.get();
     ttf_engine->InitGlyphs(sub, g, 1);
-    g->internal.freetype.substitute = sub;
+    if (g->internal.freetype.id) { g->internal.freetype.substitute = sub; continue; }
+    else { INFO("missing glyph ", g->id); continue; }
   }
   return ret;
 }

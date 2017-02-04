@@ -74,19 +74,41 @@ const char *Pixel::Name(int p) {
     case RGB24:   return "RGB24";      case RGB565:  return "RGB565";
     case BGR24:   return "BGR24";      case BGR565:  return "BGR565";
     case RGBA:    return "RGBA";       case BGRA:    return "BGRA";
+    case ARGB:    return "ARGB";       case LCD:     return "LCD";
     case YUV420P: return "YUV420P";    case YUYV422: return "YUYV422";
     case GRAY8:   return "GRAY8";      case GRAYA8:  return "GRAYA8";
-    case LCD:     return "LCD";
   }; return 0; 
 }
 
 int Pixel::Size(int p) {
   switch (p) {
-    case RGB32:   case BGR32:  case RGBA:   case BGRA:                return 4;
+    case RGB32:   case BGR32:  case RGBA:   case BGRA:   case ARGB:   return 4;
     case RGB24:   case BGR24:  case LCD:                              return 3;
     case RGB555:  case BGR555: case RGB565: case BGR565: case GRAYA8: return 2;
     case YUYV422: case GRAY8:                                         return 1;
     default:                                                          return 0;
+  }
+}
+
+int Pixel::GetNumComponents(int p) {
+  switch (p) {
+    case RGB32:  case BGR32:  case RGB24:  case BGR24: 
+    case RGB555: case BGR555: case RGB565: case BGR565: return 3;
+    case RGBA:   case BGRA:   case ARGB:                return 4;
+    case GRAY8:                                         return 1;
+    case GRAYA8:                                        return 2;
+    default:                                            return 0;
+  }
+}
+
+int Pixel::GetRGBAIndex(int p, int i) {
+  switch (p) {
+    case RGB32: case RGB24:  case RGB555: case RGB565: switch(i) { case Index::R: return 0; case Index::G: return 1; case Index::B: return 2; default: return -1; } break;
+    case BGR32: case BGR24:  case BGR555: case BGR565: switch(i) { case Index::R: return 2; case Index::G: return 1; case Index::B: return 0; default: return -1; } break;
+    case RGBA: switch(i) { case Index::R: return 0; case Index::G: return 1; case Index::B: return 2; case Index::A: return 3; default: return -1; } break;
+    case BGRA: switch(i) { case Index::R: return 2; case Index::G: return 1; case Index::B: return 0; case Index::A: return 3; default: return -1; } break;
+    case ARGB: switch(i) { case Index::R: return 1; case Index::G: return 2; case Index::B: return 3; case Index::A: return 0; default: return -1; } break;
+    default: return -1;
   }
 }
 
@@ -834,7 +856,7 @@ void SimpleVideoResampler::RGB2BGRCopyPixels(unsigned char *dst, const unsigned 
   for (int k = 0; k < l; k++) for (int i = 0; i < bpp; i++) dst[k*bpp+(!i?2:(i==2?0:i))] = src[k*bpp+i];
 }
 
-bool SimpleVideoResampler::Supports(int f) { return f == Pixel::RGB24 || f == Pixel::BGR24 || f == Pixel::RGB32 || f == Pixel::BGR32 || f == Pixel::RGBA; }
+bool SimpleVideoResampler::Supports(int f) { return f == Pixel::RGB24 || f == Pixel::BGR24 || f == Pixel::RGB32 || f == Pixel::BGR32 || f == Pixel::RGBA || f == Pixel::ARGB; }
 
 bool SimpleVideoResampler::Opened() const { return s_fmt && d_fmt && s_width && d_width && s_height && d_height; }
 
@@ -860,9 +882,11 @@ void SimpleVideoResampler::Resample(const unsigned char *sb, int sls, unsigned c
       }
     }
   } else {
-    for (int po=0; po<spw && po<dpw; po++) {
+    for (int poi=0; poi<4 && poi<4; poi++) {
+      int pi = Pixel::GetRGBAIndex(s_fmt, poi), po = Pixel::GetRGBAIndex(d_fmt, poi);
+      if (pi < 0 || po < 0) continue;
       Matrix M(s_height, s_width);
-      CopyColorChannelsToMatrix(sb, s_width, s_height, spw, sls, 0, 0, &M, po);
+      CopyColorChannelsToMatrix(sb, s_width, s_height, spw, sls, 0, 0, &M, pi);
       for (int y=0; y<d_height; y++) {
         for (int x=0; x<d_width; x++) {
           unsigned char *dp = (db + dls * (flip_y ? d_height-1-y : y) + (flip_x ? d_width-1-x : x) * dpw);
@@ -882,6 +906,7 @@ void SimpleVideoResampler::CopyPixel(int s_fmt, int d_fmt, const unsigned char *
     case Pixel::BGR32: r = *sp++; g = *sp++; b = *sp++; a=255; sp++; break;
     case Pixel::RGBA:  r = *sp++; g = *sp++; b = *sp++; a=*sp++; break;
     case Pixel::BGRA:  b = *sp++; g = *sp++; r = *sp++; a=*sp++; break;
+    case Pixel::ARGB:  a = *sp++; r = *sp++; g = *sp++; b=*sp++; break;
     case Pixel::GRAY8: r = 255;   g = 255;   b = 255;   a=*sp++; break;
     // case Pixel::GRAY8: r = g = b = a = *sp++; break;
     case Pixel::LCD: 
@@ -899,6 +924,7 @@ void SimpleVideoResampler::CopyPixel(int s_fmt, int d_fmt, const unsigned char *
     case Pixel::BGR32: *dp++ = b; *dp++ = g; *dp++ = r; *dp++ = a; break;
     case Pixel::RGBA:  *dp++ = r; *dp++ = g; *dp++ = b; *dp++ = a; break;
     case Pixel::BGRA:  *dp++ = b; *dp++ = g; *dp++ = r; *dp++ = a; break;
+    case Pixel::ARGB:  *dp++ = a; *dp++ = r; *dp++ = g; *dp++ = b; break;
     default: return ERROR("d_fmt ", d_fmt, " not supported");
   }
 }

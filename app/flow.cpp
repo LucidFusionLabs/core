@@ -77,7 +77,7 @@ point DrawableBoxArray::Position(int o) const {
 }
 
 int DrawableBoxArray::BoundingWidth(const DrawableBox &b, const DrawableBox &e) const {
-  CHECK_LE(b.box.x, e.box.x);
+  if (b.box.x > e.box.x) return ERRORv(0, "negative BoundingWidth ", b.box.DebugString(), " ", e.box.DebugString());
   return e.RightBound(attr.GetAttr(e.attr_id)) - b.LeftBound(attr.GetAttr(b.attr_id));
 }
 
@@ -105,6 +105,7 @@ void DrawableBoxArray::OverwriteAt(int o, const vector<DrawableBox> &x) {
   point p(BoundingWidth(x.front(), x.back()) - (data.size() ? BoundingWidth(*i, *(e-1)) : 0), 0);
   for (auto xi = x.begin(); i != e; ++i, ++xi) *i = *xi;
   if (p.x) for (i = e, e = data.end(); i != e; ++i) i->box += p;
+  // CHECK_LE(data.begin()->box.x, data.rbegin()->box.x);
 }
 
 void DrawableBoxArray::Erase(int o, size_t l, bool shift) { 

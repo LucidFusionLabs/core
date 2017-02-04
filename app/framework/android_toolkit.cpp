@@ -351,7 +351,18 @@ void Application::ShowSystemFontChooser(const FontDesc &cur_font, const StringVe
 void Application::ShowSystemFileChooser(bool files, bool dirs, bool multi, const StringVecCB &cb) {}
 void Application::ShowSystemContextMenu(const MenuItemVec &items) {}
 
-void Application::UpdateSystemImage(int n, Texture &t) {}
+void Application::UpdateSystemImage(int n, Texture &t) {
+  if (!t.buf) return;
+  static jmethodID mid = CheckNotNull
+    (jni->env->GetMethodID(jni->activity_class, "updateBitmap", "(IIII[I)V"));
+  int arr_size = t.BufferSize() / sizeof(jint);
+  CHECK_EQ(t.width * t.height, arr_size) << t.DebugString();
+  jintArray arr = jni->env->NewIntArray(arr_size);
+  jni->env->SetIntArrayRegion(arr, 0, arr_size, reinterpret_cast<const jint*>(t.buf));
+  jni->env->CallVoidMethod(jni->activity, mid, jint(n), jint(t.width), jint(t.height), jint(t.pf), arr);
+  jni->env->DeleteLocalRef(arr);
+}
+
 int Application::LoadSystemImage(const string &n) {
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->activity_class, "getDrawableResId", "(Ljava/lang/String;)I"));

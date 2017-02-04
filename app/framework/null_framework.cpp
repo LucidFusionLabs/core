@@ -53,6 +53,8 @@ const int Key::Home       = -33;
 const int Key::End        = -34;
 const int Key::Insert     = -35;
 
+const int Texture::updatesystemimage_pf = Pixel::RGB24;
+
 struct NullFrameworkModule : public Module {
   int Init() {
     INFO("NullFrameworkModule::Init()");

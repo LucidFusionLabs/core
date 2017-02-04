@@ -450,6 +450,8 @@ const int Key::Home = 0xB3;
 const int Key::End = 0xB7;
 const int Key::Insert = -1;
 
+const int Texture::updatesystemimage_pf = Pixel::RGB24;
+
 struct OSXFrameworkModule : public Module {
   int Init() {
     INFO("OSXFrameworkModule::Init()");

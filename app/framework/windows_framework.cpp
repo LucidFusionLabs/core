@@ -56,6 +56,8 @@ const int Key::Home       = 0xf00 | VK_HOME;
 const int Key::End        = 0xf00 | VK_END;
 const int Key::Insert     = 0xf00 | VK_INSERT;
 
+const int Texture::updatesystemimage_pf = Pixel::RGB24;
+
 struct WinApp {
   HINSTANCE hInst = 0;
   int nCmdShow = 0;

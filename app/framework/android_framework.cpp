@@ -59,6 +59,8 @@ const int Key::Home       = -33;
 const int Key::End        = -34;
 const int Key::Insert     = -35;
 
+const int Texture::updatesystemimage_pf = Pixel::BGRA;
+
 struct AndroidFrameworkModule : public Module {
   bool frame_on_keyboard_input = 0, frame_on_mouse_input = 0;
 

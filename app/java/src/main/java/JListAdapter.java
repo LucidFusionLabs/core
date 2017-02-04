@@ -228,7 +228,15 @@ public class JListAdapter extends BaseAdapter {
                 holder.textView.setOnClickListener(null);
             }
         }
-        if (holder.leftIcon  != null) holder.leftIcon.setImageResource(item.left_icon);
+        if (holder.leftIcon != null) {
+            if (item.left_icon < 0) {
+                holder.leftIcon.setImageBitmap(MainActivity.bitmaps.get(-item.left_icon-1));
+                holder.leftIcon.setLayoutParams(new LinearLayout.LayoutParams
+                    (LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+            } else {
+                holder.leftIcon.setImageResource(item.left_icon);
+            }
+        }
         if (holder.rightIcon != null) {
             holder.rightIcon.setImageResource(item.right_icon);
             if (item.right_cb == null) holder.rightIcon.setClickable(false);

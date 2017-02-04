@@ -6,6 +6,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.HashMap;
+import java.util.concurrent.Callable;
+import java.util.concurrent.FutureTask;
 
 import android.os.*;
 import android.view.*;
@@ -28,6 +30,7 @@ import android.util.Pair;
 import android.util.TypedValue;
 import android.net.Uri;
 import android.graphics.Rect;
+import android.graphics.Bitmap;
 import android.app.ActionBar;
 import android.app.AlertDialog;
 import android.app.Fragment;
@@ -52,6 +55,7 @@ public class MainActivity extends android.app.Activity {
 
     public static boolean app_created, app_init, disable_title;
     public static JWidgets jwidgets = new JWidgets();
+    public static ArrayList<Bitmap> bitmaps = new ArrayList<Bitmap>();
 
     public Resources resources;
     public FrameLayout frame_layout;
@@ -336,8 +340,26 @@ public class MainActivity extends android.app.Activity {
     public void hideAds() { if (advertising != null) advertising.hideAds(); }
     public void showAds() { if (advertising != null) advertising.showAds(); }
 
-    public int getDrawableResId(String n) { 
-      return getResources().getIdentifier(n, "drawable", getPackageName());
+    public int getDrawableResId(final String n) { 
+        if (n.length() == 0) {
+            FutureTask<Integer> future = new FutureTask<Integer>(new Callable<Integer>(){
+                public Integer call() throws Exception {
+                    bitmaps.add(null);
+                    return -bitmaps.size();
+                }});
+            try { runOnUiThread(future); return future.get(); }
+            catch(Exception e) { return 0; }
+        } else {
+            return getResources().getIdentifier(n, "drawable", getPackageName());
+        }
+    }
+
+    public void updateBitmap(final int encoded_id, final int width, final int height, final int fmt, final int[] pixels) {
+        runOnUiThread(new Runnable() { public void run() {
+            final int id = -encoded_id - 1;
+            assert id < bitmaps.size();
+            bitmaps.set(id, Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888));
+        }});
     }
 
     public void showBackFragment(boolean show_content, boolean show_title) {

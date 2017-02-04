@@ -46,15 +46,18 @@ struct ColorChannel {
 };
 
 struct Pixel {
-  enum { RGB32=1, BGR32=2, RGBA=3, BGRA=4,
-    RGB24=5, BGR24=6, 
-    RGB555=7, BGR555=8, RGB565=9, BGR565=10,
-    YUV410P=11, YUV420P=12, YUYV422=13, YUVJ420P=14, YUVJ422P=15, YUVJ444P=16,
-    ALPHA8=17, GRAY8=18, GRAYA8=19, LCD=20 };
+  enum { RGB32=1, BGR32=2, RGBA=3, BGRA=4, ARGB=5,
+    RGB24=6, BGR24=7, 
+    RGB555=8, BGR555=9, RGB565=10, BGR565=11,
+    YUV410P=12, YUV420P=13, YUYV422=14, YUVJ420P=15, YUVJ422P=16, YUVJ444P=17,
+    ALPHA8=18, GRAY8=19, GRAYA8=20, LCD=21 };
+  struct Index { enum { R=0, G=1, B=2, A=3 }; };
 
   static const char *Name(int id);
   static int Size(int p);
   static int OpenGLID(int p);
+  static int GetNumComponents(int p);
+  static int GetRGBAIndex(int p, int i);
 };
 
 struct Color {
@@ -175,7 +178,7 @@ struct DrawableNop : public Drawable {
 };
 
 struct Texture : public Drawable {
-  static const int preferred_pf;
+  static const int preferred_pf, updatesystemimage_pf;
   GraphicsDevice *gd;
   unsigned ID;
   unsigned char *buf;
