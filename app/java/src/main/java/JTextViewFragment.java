@@ -16,18 +16,13 @@ import android.widget.TextView;
 import android.widget.LinearLayout;
 import android.util.Log;
 
-public class JTextViewFragment extends Fragment implements OnItemClickListener {
-    public MainActivity main_activity;
-    public JWidget parent_widget;
+public class JTextViewFragment extends JFragment implements OnItemClickListener {
     public String data;
-    public TextView textview;
-    public long lfl_self;
+    public TextView textview = null;
 
-    JTextViewFragment(final MainActivity activity, final JWidget p, final String d, final long lsp) {
-        main_activity = activity;
-        parent_widget = p;
+    JTextViewFragment(final MainActivity activity, final JWidget p, final String d) {
+        super(activity, p);
         data = d;
-        lfl_self = lsp;
     }
 
     @Override

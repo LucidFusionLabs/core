@@ -35,12 +35,14 @@ import android.util.TypedValue;
 import android.net.Uri;
 import android.graphics.Rect;
 import android.graphics.Paint;
+import android.graphics.Color;
 import android.app.ActionBar;
 import android.app.AlertDialog;
 import android.text.InputType;
 
 public class JListAdapter extends BaseAdapter {
     public static class ViewHolder {
+        public View root;
         public TextView textView, label;
         public ColorStateList textViewTextColors, textViewLinkColors;
         public EditText editText;
@@ -69,9 +71,11 @@ public class JListAdapter extends BaseAdapter {
     public int selected_section = 0, selected_row = 0;
     public int editable_section = -1, editable_start_row = -1;
     public LIntIntCB delete_row_cb = null;
+    public final JWidget parent_widget;
 
-    public JListAdapter(final MainActivity activity, final ArrayList<JModelItem> v) {
+    public JListAdapter(final MainActivity activity, final ArrayList<JModelItem> v, final JWidget p) {
         inflater = (LayoutInflater)activity.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
+        parent_widget = p;
         data = v;
         beginUpdates();
         data.add(0, new JModelItem("", "", "", "", JModelItem.TYPE_SEPARATOR, 0, 0, 0, null, null, null, false, null, null));
@@ -110,6 +114,7 @@ public class JListAdapter extends BaseAdapter {
             switch (type) {
                 case JModelItem.TYPE_HIDDEN:
                     convertView = inflater.inflate(R.layout.listview_cell_hidden, null);
+                    holder.root = convertView.findViewById(R.id.listview_cell_root);
                     holder.textView = null;
                     holder.label = null;
                     holder.editText = null;
@@ -124,6 +129,7 @@ public class JListAdapter extends BaseAdapter {
 
                 case JModelItem.TYPE_SEPARATOR:
                     convertView = inflater.inflate(R.layout.listview_cell_separator, null);
+                    holder.root = convertView.findViewById(R.id.listview_cell_root);
                     holder.setTextView((TextView)convertView.findViewById(R.id.listview_cell_title));
                     holder.label = null;
                     holder.editText = null;
@@ -138,6 +144,7 @@ public class JListAdapter extends BaseAdapter {
 
                 case JModelItem.TYPE_TOGGLE:
                     convertView = inflater.inflate(R.layout.listview_cell_toggle, null);
+                    holder.root = convertView.findViewById(R.id.listview_cell_root);
                     holder.setTextView((TextView)convertView.findViewById(R.id.listview_cell_title));
                     holder.label = null;
                     holder.editText = null;
@@ -152,6 +159,7 @@ public class JListAdapter extends BaseAdapter {
 
                 case JModelItem.TYPE_PICKER:
                     convertView = inflater.inflate(R.layout.listview_cell_picker, null);
+                    holder.root = convertView.findViewById(R.id.listview_cell_root);
                     holder.textView = null;
                     holder.label = null;
                     holder.editText = null;
@@ -168,6 +176,7 @@ public class JListAdapter extends BaseAdapter {
                 case JModelItem.TYPE_NUMBERINPUT:
                 case JModelItem.TYPE_PASSWORDINPUT:
                     convertView = inflater.inflate(R.layout.listview_cell_textinput, null);
+                    holder.root = convertView.findViewById(R.id.listview_cell_root);
                     holder.setTextView((TextView)convertView.findViewById(R.id.listview_cell_title));
                     holder.label = null;
                     holder.editText = (EditText)convertView.findViewById(R.id.listview_cell_textinput);
@@ -182,6 +191,7 @@ public class JListAdapter extends BaseAdapter {
 
                 case JModelItem.TYPE_SELECTOR:
                     convertView = inflater.inflate(R.layout.listview_cell_radio, null);
+                    holder.root = convertView.findViewById(R.id.listview_cell_root);
                     holder.textView = null;
                     holder.label = null;
                     holder.editText = null;
@@ -196,6 +206,7 @@ public class JListAdapter extends BaseAdapter {
 
                 default:
                     convertView = inflater.inflate(R.layout.listview_cell, null);
+                    holder.root = convertView.findViewById(R.id.listview_cell_root);
                     holder.setTextView((TextView)convertView.findViewById(R.id.listview_cell_title));
                     holder.label = (TextView)convertView.findViewById(R.id.listview_cell_value);
                     holder.editText = null;
@@ -233,6 +244,8 @@ public class JListAdapter extends BaseAdapter {
                 holder.leftIcon.setImageBitmap(MainActivity.bitmaps.get(-item.left_icon-1));
                 holder.leftIcon.setLayoutParams(new LinearLayout.LayoutParams
                     (LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+                if (getCollapsedRowId(selected_section, selected_row) == position) holder.root.setBackgroundColor(Color.GRAY);
+                else                                                               holder.root.setBackgroundColor(Color.TRANSPARENT);
             } else {
                 holder.leftIcon.setImageResource(item.left_icon);
             }
@@ -271,6 +284,24 @@ public class JListAdapter extends BaseAdapter {
                 String[] arr = new String[picker_items.size()];
                 arr = picker_items.toArray(arr);
                 holder.picker.setDisplayedValues(arr);
+                if (parent instanceof ListView &&
+                    position > 1 && data.get(position-1).type == JModelItem.TYPE_LABEL) {
+                    String v = data.get(position-1).val;
+                    for (int i = 0; i < arr.length; i++)
+                        if (v.equals(arr[i])) { holder.picker.setValue(i); break; }
+
+                    final ListView par = (ListView)parent;
+                    final int pos = position;
+                    holder.picker.setOnValueChangedListener(new NumberPicker.OnValueChangeListener() {
+                        @Override
+                        public void onValueChange(NumberPicker numberPicker, int i, int i2) {
+                            parent_widget.changed = true;
+                            String v = numberPicker.getDisplayedValues()[numberPicker.getValue()];
+                            ViewHolder h = (ViewHolder)getViewByPosition(par, pos-1).getTag();
+                            h.label.setText(v);
+                            data.get(pos-1).val = v;
+                        }});
+                } else holder.picker.setValue(0);
             }
         }
 
@@ -290,18 +321,19 @@ public class JListAdapter extends BaseAdapter {
                 button.setBackgroundResource(R.drawable.listview_radio_selector);
                 holder.radio.addView(button);
             }
-            if (item.depends != null)
-                holder.radio.setOnCheckedChangeListener(new RadioGroup.OnCheckedChangeListener() {
-                    @Override
-                    public void onCheckedChanged(RadioGroup group, int checkedId) {
-                        RadioButton button = (RadioButton)group.findViewById(checkedId);
-                        if (button != null) {
-                            self.beginUpdates();
-                            item.checkedId = checkedId;
-                            JDependencyItem.applyList(item.depends, self, button.getText().toString());
-                            self.endUpdates();
-                        }
-                    }});
+
+            holder.radio.setOnCheckedChangeListener(new RadioGroup.OnCheckedChangeListener() {
+                @Override
+                public void onCheckedChanged(RadioGroup group, int checkedId) {
+                    parent_widget.changed = true;
+                    RadioButton button = (RadioButton)group.findViewById(checkedId);
+                    if (button != null && item.depends != null) {
+                        self.beginUpdates();
+                        item.checkedId = checkedId;
+                        JDependencyItem.applyList(item.depends, self, button.getText().toString());
+                        self.endUpdates();
+                    }
+                }});
         }
 
         return convertView;
@@ -422,6 +454,12 @@ public class JListAdapter extends BaseAdapter {
         JModelItem item = data.get(getCollapsedRowId(s, r));
         item.key = v; 
         if (item.depends != null) JDependencyItem.applyList(item.depends, this, v);
+    }
+
+    public Pair<Long, ArrayList<Integer>> getPicked(final int s, final int r) {
+        JPickerItem picker = data.get(getCollapsedRowId(s, r)).picker;
+        if (picker == null) return null;
+        return new Pair<Long, ArrayList<Integer>>(picker.lfl_self, picker.picked);
     }
 
     public ArrayList<Pair<String, String>> getSectionText(ListView listview, final int section) {

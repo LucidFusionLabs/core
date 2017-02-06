@@ -287,6 +287,8 @@ extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppCreate(JNIEnv *e, j
   CHECK(jni->lstringcb_class    = (jclass)e->NewGlobalRef(e->FindClass("com/lucidfusionlabs/app/LStringCB")));
   CHECK(jni->lintintcb_class    = (jclass)e->NewGlobalRef(e->FindClass("com/lucidfusionlabs/app/LIntIntCB")));
   CHECK(jni->lpickeritemcb_class= (jclass)e->NewGlobalRef(e->FindClass("com/lucidfusionlabs/app/LPickerItemCB")));
+  CHECK(jni->int_class          = (jclass)e->NewGlobalRef(e->FindClass("java/lang/Integer")));
+  CHECK(jni->long_class         = (jclass)e->NewGlobalRef(e->FindClass("java/lang/Long")));
   jclass jmodelitem_class=0, jalert_class=0, jtoolbar_class=0, jtable_class=0, jnavigation_class=0;
   CHECK(jni->arraylist_construct = e->GetMethodID(jni->arraylist_class, "<init>", "()V"));
   CHECK(jni->arraylist_size = e->GetMethodID(jni->arraylist_class, "size", "()I"));
@@ -301,6 +303,8 @@ extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppCreate(JNIEnv *e, j
   CHECK(jni->jmodelitem_construct = e->GetMethodID(jni->jmodelitem_class, "<init>", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;IIIILcom/lucidfusionlabs/app/LCallback;Lcom/lucidfusionlabs/app/LCallback;Lcom/lucidfusionlabs/app/LStringCB;ZLcom/lucidfusionlabs/app/JPickerItem;Ljava/util/HashMap;)V"));
   CHECK(jni->jdepitem_construct = e->GetMethodID(jni->jdepitem_class, "<init>", "(IIILjava/lang/String;Ljava/lang/String;IIIZLcom/lucidfusionlabs/app/LCallback;)V"));
   CHECK(jni->jpickeritem_construct = e->GetMethodID(jni->jpickeritem_class, "<init>", "(Ljava/util/ArrayList;Lcom/lucidfusionlabs/app/LPickerItemCB;J)V"));
+  CHECK(jni->int_intval = e->GetMethodID(jni->int_class, "intValue", "()I"));
+  CHECK(jni->long_longval = e->GetMethodID(jni->int_class, "longValue", "()J"));
   if (jni->gplus) CHECK(jni->gplus_class = (jclass)e->NewGlobalRef(e->GetObjectClass(jni->gplus)));
 
   static const char *argv[2] = { "LFLApp", 0 };
@@ -427,6 +431,15 @@ extern "C" void Java_com_lucidfusionlabs_app_LIntIntCB_FreeIntIntCB(JNIEnv *e, j
 
 extern "C" void Java_com_lucidfusionlabs_app_LPickerItemCB_FreePickerItemCB(JNIEnv *e, jlong cb) {
   delete static_cast<PickerItem::CB*>(Void(cb));
+}
+
+extern "C" void Java_com_lucidfusionlabs_app_JTable_RunHideCB(JNIEnv *e, jobject a) {
+  static jfieldID self_fid    = CheckNotNull(e->GetFieldID(jni->jtable_class, "lfl_self", "J"));
+  static jfieldID changed_fid = CheckNotNull(e->GetFieldID(jni->jtable_class, "changed",  "Z"));
+  intptr_t self = CheckNotNull(e->GetLongField(a, self_fid));
+  SystemTableView *view = static_cast<SystemTableView*>(Void(self));
+  view->changed = e->GetBooleanField(a, changed_fid);
+  if (view->hide_cb) app->RunCallbackInMainThread(new Callback(view->hide_cb));
 }
 
 extern "C" void Java_com_lucidfusionlabs_app_GPlusClient_startGame(JNIEnv *e, jobject a, jboolean server, jstring pid) {

@@ -16,20 +16,15 @@ import android.widget.ListView;
 import android.widget.LinearLayout;
 import android.util.Log;
 
-public class JListViewFragment extends Fragment implements OnItemClickListener {
-    public MainActivity main_activity;
-    public JWidget parent_widget;
+public class JListViewFragment extends JFragment implements OnItemClickListener {
     public JListAdapter data;
-    public ListView listview;
     public View toolbar;
-    public long lfl_self;
+    public ListView listview = null;
 
-    JListViewFragment(final MainActivity activity, final JWidget p, final JListAdapter d, final View tb, final long lsp) {
-        main_activity = activity;
-        parent_widget = p;
+    JListViewFragment(final MainActivity activity, final JWidget p, final JListAdapter d, final View tb) {
+        super(activity, p);
         data = d;
         toolbar = tb;
-        lfl_self = lsp;
     }
 
     @Override

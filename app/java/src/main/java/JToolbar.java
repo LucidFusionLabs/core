@@ -35,7 +35,7 @@ public class JToolbar extends JWidget {
     public View view;
 
     public JToolbar(final MainActivity activity, ArrayList<JModelItem> m) {
-        super(JWidget.TYPE_TOOLBAR, activity, "");
+        super(JWidget.TYPE_TOOLBAR, activity, "", 0);
         model = m;
     }
 

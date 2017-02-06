@@ -35,7 +35,7 @@ public class JMenu extends JWidget {
     public AlertDialog view;
 
     public JMenu(final MainActivity activity, String t, ArrayList<JModelItem> m) {
-        super(JWidget.TYPE_MENU, activity, t);
+        super(JWidget.TYPE_MENU, activity, t, 0);
         data = m;
     }
 

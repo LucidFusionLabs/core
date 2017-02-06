@@ -33,10 +33,9 @@ import android.app.AlertDialog;
 public class JTextView extends JWidget {
     public String text;
     public JTextViewFragment view;
-    public long lfl_self = 0;
 
     public JTextView(final MainActivity activity, String t, String v) {
-        super(JWidget.TYPE_TEXTVIEW, activity, "");
+        super(JWidget.TYPE_TEXTVIEW, activity, "", 0);
         title = t;
         text = v;
     }
@@ -45,7 +44,7 @@ public class JTextView extends JWidget {
 
     public JTextViewFragment get(final MainActivity activity) {
         if (view == null) {
-            view = new JTextViewFragment(activity, this, text, lfl_self);
+            view = new JTextViewFragment(activity, this, text);
         }
         return view;
     }

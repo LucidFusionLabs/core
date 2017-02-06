@@ -33,21 +33,20 @@ import android.app.ActionBar;
 import android.app.AlertDialog;
 
 public class JTable extends JWidget {
-    public long lfl_self;
     public JListAdapter model;
     public JListViewFragment view;
+    public native void RunHideCB();
 
     public JTable(final MainActivity activity, String t, ArrayList<JModelItem> m, long lsp) {
-        super(JWidget.TYPE_TABLE, activity, t);
-        model = new JListAdapter(activity, m);
-        lfl_self = lsp;
+        super(JWidget.TYPE_TABLE, activity, t, lsp);
+        model = new JListAdapter(activity, m, this);
     }
 
     public void clear() { view = null; }
 
     public JListViewFragment get(final MainActivity activity) {
         if (view == null) {
-            view = new JListViewFragment(activity, this, model, null, lfl_self);
+            view = new JListViewFragment(activity, this, model, null);
         }
         return view;
     }
@@ -152,6 +151,17 @@ public class JTable extends JWidget {
             }});
         try { activity.runOnUiThread(future); return future.get(); }
         catch(Exception e) { return 0; }
+    }
+    
+    public Pair<Long, ArrayList<Integer>> getPicked(final MainActivity activity, final int section, final int row) {
+        FutureTask<Pair<Long, ArrayList<Integer>>> future = new FutureTask<Pair<Long, ArrayList<Integer>>>
+            (new Callable<Pair<Long, ArrayList<Integer>>>(){
+                public Pair<Long, ArrayList<Integer>> call() throws Exception {
+                    JListViewFragment table = get(activity);
+                    return table.data.getPicked(section, row);
+                }});
+        try { activity.runOnUiThread(future); return future.get(); }
+        catch(Exception e) { return null; }
     }
 
     public ArrayList<Pair<String, String>> getSectionText(final MainActivity activity, final int section) {

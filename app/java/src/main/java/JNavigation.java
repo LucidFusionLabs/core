@@ -36,7 +36,7 @@ import android.app.FragmentManager;
 
 public class JNavigation extends JWidget {
     public JNavigation(final MainActivity activity) {
-        super(JWidget.TYPE_NAVIGATION, activity, "");
+        super(JWidget.TYPE_NAVIGATION, activity, "", 0);
     }
 
     public void clear() {}
@@ -64,6 +64,7 @@ public class JNavigation extends JWidget {
 
     public void pushTable(final MainActivity activity, final JTable x) {
         activity.runOnUiThread(new Runnable() { public void run() {
+            x.changed = false;
             String tag = Integer.toString(activity.getFragmentManager().getBackStackEntryCount());
             JListViewFragment frag = x.get(activity);
             activity.getFragmentManager().beginTransaction()
@@ -74,6 +75,7 @@ public class JNavigation extends JWidget {
     
     public void pushTextView(final MainActivity activity, final JTextView x) {
         activity.runOnUiThread(new Runnable() { public void run() {
+            x.changed = false;
             String tag = Integer.toString(activity.getFragmentManager().getBackStackEntryCount());
             JTextViewFragment frag = x.get(activity);
             activity.getFragmentManager().beginTransaction()
@@ -121,8 +123,8 @@ public class JNavigation extends JWidget {
 
     public long getBackTableSelf(final MainActivity activity) {
         Fragment frag = getBack(activity);
-        if (frag == null || !(frag instanceof JListViewFragment)) return 0;
-        JListViewFragment jfrag = (JListViewFragment)frag;
-        return jfrag.lfl_self;
+        if (frag == null || !(frag instanceof JFragment)) return 0;
+        JFragment jfrag = (JListViewFragment)frag;
+        return (jfrag.parent_widget instanceof JTable) ? jfrag.parent_widget.lfl_self : 0;
     }
 }

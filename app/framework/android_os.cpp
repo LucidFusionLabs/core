@@ -319,7 +319,13 @@ BufferFile *JNI::OpenAsset(const string &fn) {
   return ret.release();
 }
 
-string Application::GetVersion() { return "1.0"; }
+string Application::GetVersion() {
+  static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "getVersionName", "()Ljava/lang/String;"));
+  jstring str = (jstring)jni->env->CallObjectMethod(jni->activity, mid);
+  string ret = jni->GetJString(str);
+  jni->env->DeleteLocalRef(str);
+  return ret;
+}
 
 void Application::OpenSystemBrowser(const string &url_text) {
   static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "openBrowser", "(Ljava/lang/String;)V"));
@@ -330,8 +336,10 @@ void Application::OpenSystemBrowser(const string &url_text) {
 
 string Application::GetSystemDeviceName() {
   static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "getModelName", "()Ljava/lang/String;"));
-  jstring ret = (jstring)jni->env->CallObjectMethod(jni->activity, mid);
-  return jni->GetJString(ret);
+  jstring str = (jstring)jni->env->CallObjectMethod(jni->activity, mid);
+  string ret = jni->GetJString(str);
+  jni->env->DeleteLocalRef(str);
+  return ret;
 }
 
 bool Application::OpenSystemAppPreferences() {
@@ -347,8 +355,10 @@ string Application::GetLocalizedString(const char *key) {
   static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->resources_class, "getString", "(I)Ljava/lang/String;"));
   jfieldID fid = CheckNotNull(jni->env->GetStaticFieldID(jni->r_string_class, key, "I"));
   int resource_id = jni->env->GetStaticIntField(jni->r_string_class, fid);
-  jstring ret = (jstring)jni->env->CallObjectMethod(jni->resources, mid, resource_id);
-  return jni->GetJString(ret);
+  jstring str = (jstring)jni->env->CallObjectMethod(jni->resources, mid, resource_id);
+  string ret = jni->GetJString(str);
+  jni->env->DeleteLocalRef(str);
+  return ret;
 }
 
 String16 Application::GetLocalizedInteger16(int number) { return String16(); }

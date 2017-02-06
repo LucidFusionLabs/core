@@ -36,10 +36,11 @@ struct JNI {
          pair_class=0, inputstream_class=0, channels_class=0, readbytechan_class=0, r_string_class=0,
          jmodelitem_class=0, jdepitem_class=0, jpickeritem_class=0, jalert_class=0, jtoolbar_class=0,
          jmenu_class=0, jtable_class=0, jtextview_class=0, jnavigation_class=0, lcallback_class=0,
-         lstringcb_class=0, lintintcb_class=0, lpickeritemcb_class=0;
+         lstringcb_class=0, lintintcb_class=0, lpickeritemcb_class=0, int_class=0, long_class=0;
   jmethodID arraylist_construct=0, arraylist_size=0, arraylist_get=0, arraylist_add=0,
             hashmap_construct=0, hashmap_size=0, hashmap_get=0, hashmap_put=0,
-            jmodelitem_construct=0, jdepitem_construct=0, jpickeritem_construct=0;
+            jmodelitem_construct=0, jdepitem_construct=0, jpickeritem_construct=0,
+            int_intval=0, long_longval=0;
   jfieldID activity_resources=0, activity_view=0, activity_gplus=0, pair_first=0, pair_second=0;
   string package_name;
 

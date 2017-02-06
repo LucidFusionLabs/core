@@ -190,10 +190,13 @@ public class MainActivity extends android.app.Activity {
 
     @Override
     public void onBackPressed() {
-        if (getFragmentManager().getBackStackEntryCount() > 1) {
+        int back_count = getFragmentManager().getBackStackEntryCount();
+        if (back_count > 1) {
+            runBackFragmentHideCB();
             super.onBackPressed();
             showBackFragment(false, true);
-        } else {
+        } else if (back_count == 1) {
+            runBackFragmentHideCB();
             Fragment frag = getFragmentManager().findFragmentByTag("0");
             if (frag == null || !(frag instanceof JListViewFragment)) return;
             JModelItem nav_left = ((JListViewFragment)frag).data.nav_left;
@@ -249,7 +252,7 @@ public class MainActivity extends android.app.Activity {
         imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
     }
 
-    public void hideKeyboardAfteEnter() {
+    public void hideKeyboardAfterEnter() {
         android.view.inputmethod.InputMethodManager imm = (android.view.inputmethod.InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
         imm.hideSoftInputFromWindow(view.getWindowToken(), android.view.inputmethod.InputMethodManager.HIDE_NOT_ALWAYS); 
     }
@@ -362,13 +365,29 @@ public class MainActivity extends android.app.Activity {
         }});
     }
 
+    public void runBackFragmentHideCB() {
+        int stack_size = getFragmentManager().getBackStackEntryCount();
+        if (stack_size == 0) return;
+        String tag = Integer.toString(stack_size-1);
+        Fragment frag = getFragmentManager().findFragmentByTag(tag);
+        if (frag == null || !(frag instanceof JFragment)) return;
+        JFragment jfrag = (JFragment)frag;
+        if (jfrag.parent_widget.lfl_self == 0) return;
+        if (jfrag.parent_widget instanceof JTable) ((JTable)jfrag.parent_widget).RunHideCB();
+    }
+
     public void showBackFragment(boolean show_content, boolean show_title) {
         int stack_size = getFragmentManager().getBackStackEntryCount();
         if (stack_size == 0) return;
         String tag = Integer.toString(stack_size-1);
         Fragment frag = getFragmentManager().findFragmentByTag(tag);
         if (show_content) getFragmentManager().beginTransaction().replace(R.id.content_frame, frag, tag).commit();
-        if (show_title && frag instanceof JListViewFragment) setTitle(((JListViewFragment)frag).parent_widget.title);
+        if (show_title && frag instanceof JFragment) setTitle(((JFragment)frag).parent_widget.title);
+    }
+
+    public String getVersionName() {
+        try { return getPackageManager().getPackageInfo(getPackageName(), 0).versionName; }
+        catch(Exception e) { return ""; }
     }
 }
 

@@ -14,12 +14,15 @@ public class JWidget {
     public static final int TYPE_COUNT      = 7;
 
     public int widgetType;
+    public long lfl_self;
     public String title = "";
+    public boolean changed = false;
     public HashSet<JWidget> parent;
 
-    public JWidget(int wt, final MainActivity activity, String t) {
+    public JWidget(final int wt, final MainActivity activity, final String t, final long lsp) {
         widgetType = wt;
         title = t;
+        lfl_self = lsp;
         parent = activity.jwidgets.widgets;
         parent.add(this);
     }

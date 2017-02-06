@@ -213,7 +213,25 @@ StringPairVec SystemTableView::GetSectionText(int section) {
   return ret;
 }
 
-PickerItem *SystemTableView::GetPicker(int section, int row) { return 0; }
+PickerItem *SystemTableView::GetPicker(int section, int row) {
+  static jmethodID mid = CheckNotNull
+    (jni->env->GetMethodID(jni->jtable_class, "getPicked", "(Lcom/lucidfusionlabs/app/MainActivity;II)Landroid/util/Pair;"));
+  jobject a = jni->env->CallObjectMethod(jobject(impl.v), mid, jni->activity, section, row);
+  if (a == nullptr) return nullptr;
+
+  jobject al = CheckNotNull(jni->env->GetObjectField(a, jni->pair_second));
+  jobject pl = CheckNotNull(jni->env->GetObjectField(a, jni->pair_first));
+  intptr_t pp = CheckNotNull(jni->env->CallLongMethod(pl, jni->long_longval));
+  auto picker = static_cast<PickerItem*>(Void(pp));
+  if (picker->picked.size() != picker->data.size()) picker->picked.resize(picker->data.size());
+  for (int i = 0, l = jni->env->CallIntMethod(al, jni->arraylist_size), l2 = picker->picked.size();
+       i < l && i < l2; i++) picker->picked[i] = jni->env->CallIntMethod(al, jni->arraylist_get, i);
+  jni->env->DeleteLocalRef(pl);
+  jni->env->DeleteLocalRef(al);
+  jni->env->DeleteLocalRef(a);
+  return picker; 
+}
+
 void SystemTableView::SetEditableSection(int section, int start_row, IntIntCB iicb) {
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->jtable_class, "setEditable", "(Lcom/lucidfusionlabs/app/MainActivity;IILcom/lucidfusionlabs/app/LIntIntCB;)V"));
