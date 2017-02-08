@@ -38,7 +38,7 @@ struct JNI {
          jmenu_class=0, jtable_class=0, jtextview_class=0, jnavigation_class=0, lcallback_class=0,
          lstringcb_class=0, lintintcb_class=0, lpickeritemcb_class=0, int_class=0, long_class=0;
   jmethodID arraylist_construct=0, arraylist_size=0, arraylist_get=0, arraylist_add=0,
-            hashmap_construct=0, hashmap_size=0, hashmap_get=0, hashmap_put=0,
+            hashmap_construct=0, hashmap_size=0, hashmap_get=0, hashmap_put=0, pair_construct=0,
             jmodelitem_construct=0, jdepitem_construct=0, jpickeritem_construct=0,
             int_intval=0, long_longval=0;
   jfieldID activity_resources=0, activity_view=0, activity_gplus=0, pair_first=0, pair_second=0;
@@ -51,10 +51,10 @@ struct JNI {
   string GetJString(jstring x) { return GetEnvJString(env, x); }
   jstring ToJString(const string &x) { return env->NewStringUTF(x.c_str()); }
   jstring ToJStringRaw(const string &x);
-  jobjectArray ToJStringArray(StringVec items);
-  pair<jobjectArray, jobjectArray> ToJStringArrays(StringPairVec items);
-  jobject ToJStringArrayList(StringVec items);
-  jobject ToJStringPairArrayList(StringPairVec items);
+  jobjectArray ToJStringArray(const StringVec &items);
+  pair<jobjectArray, jobjectArray> ToJStringArrays(const StringPairVec &items);
+  jobject ToJStringArrayList(const StringVec &items);
+  jobject ToJStringPairArrayList(const StringPairVec &items);
   jobject ToJModelItemArrayList(AlertItemVec items);
   jobject ToJModelItemArrayList(MenuItemVec items);
   jobject ToJModelItemArrayList(TableItemVec items);

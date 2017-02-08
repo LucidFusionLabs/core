@@ -8,7 +8,7 @@
     <ImageView android:id="@+id/listview_cell_left_icon"
        android:layout_width="wrap_content"
        android:layout_height="fill_parent"
-       android:gravity="center_vertical"
+       android:layout_gravity="center_vertical"
        android:layout_alignParentTop="true"
        android:layout_alignParentBottom="true"
        android:layout_marginRight="15dp"
@@ -19,6 +19,7 @@
         android:id="@+id/listview_cell_title"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_gravity="center_vertical"
         android:layout_margin="10dp"
         android:textSize="18dp"
         android:textColor="@color/white"/>
@@ -31,5 +32,6 @@
     <Switch
         android:id="@+id/listview_cell_toggle"
         android:layout_width="wrap_content"
-        android:layout_height="wrap_content"/>
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_vertical"/>
 </LinearLayout>

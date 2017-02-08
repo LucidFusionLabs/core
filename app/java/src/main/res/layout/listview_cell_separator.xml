@@ -20,7 +20,8 @@
     android:id="@+id/listview_cell_root"
     android:orientation="horizontal" 
     android:layout_width="fill_parent"
-    android:layout_height="wrap_content">
+    android:layout_height="wrap_content"
+    android:layout_marginTop="15dip">
     <Button 
         android:id="@+id/listview_cell_nav_left"
         android:layout_width="wrap_content"

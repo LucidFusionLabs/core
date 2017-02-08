@@ -58,13 +58,14 @@ public class JToolbar extends JWidget {
                     bt = b;
                 } else {
                     Button b = new Button(activity);
+                    b.setSingleLine(true);
                     b.setText(r.key);
                     bt = b;
                 }
                 bt.setId(i);
                 bt.setTag(r.val);
                 bt.setOnClickListener(listener);
-                bt.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f)); 
+                bt.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f)); 
                 toolbar.addView(bt);
             }
             view = toolbar;

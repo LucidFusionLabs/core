@@ -298,6 +298,7 @@ extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppCreate(JNIEnv *e, j
   CHECK(jni->hashmap_size = e->GetMethodID(jni->hashmap_class, "size", "()I"));
   CHECK(jni->hashmap_get = e->GetMethodID(jni->hashmap_class, "get", "(Ljava/lang/Object;)Ljava/lang/Object;"));
   CHECK(jni->hashmap_put = e->GetMethodID(jni->hashmap_class, "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"));
+  CHECK(jni->pair_construct = e->GetMethodID(jni->pair_class, "<init>", "(Ljava/lang/Object;Ljava/lang/Object;)V"));
   CHECK(jni->pair_first  = e->GetFieldID(jni->pair_class, "first",  "Ljava/lang/Object;"));
   CHECK(jni->pair_second = e->GetFieldID(jni->pair_class, "second", "Ljava/lang/Object;"));
   CHECK(jni->jmodelitem_construct = e->GetMethodID(jni->jmodelitem_class, "<init>", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;IIIILcom/lucidfusionlabs/app/LCallback;Lcom/lucidfusionlabs/app/LCallback;Lcom/lucidfusionlabs/app/LStringCB;ZLcom/lucidfusionlabs/app/JPickerItem;Ljava/util/HashMap;)V"));

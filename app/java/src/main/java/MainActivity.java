@@ -34,6 +34,7 @@ import android.graphics.Bitmap;
 import android.app.ActionBar;
 import android.app.AlertDialog;
 import android.app.Fragment;
+import android.preference.PreferenceManager;
 
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.egl.*;
@@ -71,7 +72,9 @@ public class MainActivity extends android.app.Activity {
     public int surface_width, surface_height, egl_version;
     public int attr_listPreferredItemHeight, attr_scrollbarSize;
     public float display_density;
-    public PreferenceFragment preferences;
+    public PreferenceFragment preference_fragment;
+    public HashMap<String, String> preference_default = new HashMap<String, String>();
+    public SharedPreferences preferences;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -127,6 +130,8 @@ public class MainActivity extends android.app.Activity {
                 // Log.i("lfl", "onGlobalLayout(" + r.left + ", " + r.top + ", " + r.right + ", " + r.bottom + ", " + actionbar_h + ") = " + h);
                 AppReshaped(r.left, surface_height - h, r.right - r.left, h); 
             }});
+
+        preferences = PreferenceManager.getDefaultSharedPreferences(this);
     }
 
     @Override
@@ -192,15 +197,22 @@ public class MainActivity extends android.app.Activity {
     public void onBackPressed() {
         int back_count = getFragmentManager().getBackStackEntryCount();
         if (back_count > 1) {
-            runBackFragmentHideCB();
+            runBackFragmentHideCB(1);
             super.onBackPressed();
             showBackFragment(false, true);
         } else if (back_count == 1) {
-            runBackFragmentHideCB();
+            runBackFragmentHideCB(1);
             Fragment frag = getFragmentManager().findFragmentByTag("0");
-            if (frag == null || !(frag instanceof JListViewFragment)) return;
-            JModelItem nav_left = ((JListViewFragment)frag).data.nav_left;
-            if (nav_left != null && nav_left.cb != null) nav_left.cb.run();
+            if (frag != null && frag instanceof JListViewFragment) {
+                JModelItem nav_left = ((JListViewFragment)frag).data.nav_left;
+                if (nav_left != null && nav_left.cb != null) {
+                    nav_left.cb.run();
+                    return;
+                }
+            }
+            moveTaskToBack(true);
+        } else {
+            super.onBackPressed();
         }
     } 
 
@@ -324,9 +336,9 @@ public class MainActivity extends android.app.Activity {
     }
 
     public boolean openPreferences() {
-        if (preferences == null) return false;
+        if (preference_fragment == null) return false;
         getFragmentManager().beginTransaction()
-            .replace(R.id.content_frame, preferences).addToBackStack("Preferences").commit();
+            .replace(R.id.content_frame, preference_fragment).addToBackStack("Preferences").commit();
         return true;
     }
 
@@ -365,15 +377,18 @@ public class MainActivity extends android.app.Activity {
         }});
     }
 
-    public void runBackFragmentHideCB() {
+    public int runBackFragmentHideCB(int n) {
         int stack_size = getFragmentManager().getBackStackEntryCount();
-        if (stack_size == 0) return;
-        String tag = Integer.toString(stack_size-1);
-        Fragment frag = getFragmentManager().findFragmentByTag(tag);
-        if (frag == null || !(frag instanceof JFragment)) return;
-        JFragment jfrag = (JFragment)frag;
-        if (jfrag.parent_widget.lfl_self == 0) return;
-        if (jfrag.parent_widget instanceof JTable) ((JTable)jfrag.parent_widget).RunHideCB();
+        if (stack_size == 0) return stack_size;
+        for (int i = 0, l = Math.min(n, stack_size); i < l; i++) {
+            String tag = Integer.toString(stack_size-1-i);
+            Fragment frag = getFragmentManager().findFragmentByTag(tag);
+            if (frag == null || !(frag instanceof JFragment)) continue;
+            JFragment jfrag = (JFragment)frag;
+            if (jfrag.parent_widget.lfl_self == 0) continue;
+            if (jfrag.parent_widget instanceof JTable) ((JTable)jfrag.parent_widget).RunHideCB();
+        }
+        return stack_size;
     }
 
     public void showBackFragment(boolean show_content, boolean show_title) {
@@ -388,6 +403,22 @@ public class MainActivity extends android.app.Activity {
     public String getVersionName() {
         try { return getPackageManager().getPackageInfo(getPackageName(), 0).versionName; }
         catch(Exception e) { return ""; }
+    }
+
+    public void setDefaultPreferences(final ArrayList<Pair<String, String>> prefs) {
+        for (Pair<String, String> i : prefs) preference_default.put(i.first, i.second);
+    }
+
+    public void updatePreferences(final ArrayList<Pair<String, String>> prefs) {
+        SharedPreferences.Editor editor = preferences.edit();
+        for (Pair<String, String> i : prefs) editor.putString(i.first, i.second);
+        editor.apply();
+    }
+
+    public String getPreference(final String key) {
+        String dp = preference_default.get(key);
+        try { return preferences.getString(key, dp != null ? dp : ""); }
+        catch(Exception e) { return dp != null ? dp : ""; }
     }
 }
 

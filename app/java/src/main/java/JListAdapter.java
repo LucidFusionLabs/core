@@ -239,6 +239,7 @@ public class JListAdapter extends BaseAdapter {
                 holder.textView.setOnClickListener(null);
             }
         }
+
         if (holder.leftIcon != null) {
             if (item.left_icon < 0) {
                 holder.leftIcon.setImageBitmap(MainActivity.bitmaps.get(-item.left_icon-1));
@@ -250,6 +251,7 @@ public class JListAdapter extends BaseAdapter {
                 holder.leftIcon.setImageResource(item.left_icon);
             }
         }
+
         if (holder.rightIcon != null) {
             holder.rightIcon.setImageResource(item.right_icon);
             if (item.right_cb == null) holder.rightIcon.setClickable(false);
@@ -258,7 +260,19 @@ public class JListAdapter extends BaseAdapter {
                 holder.rightIcon.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { item.right_cb.run(); }});
             }
         }
-        if (holder.label     != null) holder.label.setText(item.right_text.length() > 0 ? item.right_text : item.val);
+
+        if (holder.label != null) {
+            holder.label.setText(item.right_text.length() > 0 ? item.right_text : item.val);
+            if (holder.textView != null) {
+                if (type == JModelItem.TYPE_BUTTON || type == JModelItem.TYPE_COMMAND ||
+                    type == JModelItem.TYPE_NONE) {
+                  holder.label.setTextColor(holder.textViewLinkColors);
+                } else {
+                  holder.label.setTextColor(holder.textViewTextColors);
+                }
+            }
+        }
+
         if (holder.editText  != null) {
             if (item.val.length() > 0 && item.val.charAt(0) == 1) { holder.editText.setText(""); holder.editText.setHint(item.val.substring(1)); }
             else                                                  { holder.editText.setText(item.val); holder.editText.setHint(""); }
@@ -472,7 +486,12 @@ public class JListAdapter extends BaseAdapter {
             if (listview != null) {
                 View itemview = getViewByPosition(listview, section_row + 1 + i);
                 ViewHolder holder = (ViewHolder)itemview.getTag();
-                if (holder.editText != null) val = holder.editText.getText().toString();
+                if (holder.toggle != null) val = holder.toggle.isChecked() ? "1" : "";
+                else if (holder.radio != null) {
+                    int checked = holder.radio.getCheckedRadioButtonId();
+                    RadioButton button = (RadioButton)holder.radio.findViewById(checked);
+                    val = button.getText().toString();
+                } else if (holder.editText != null) val = holder.editText.getText().toString();
             }
             if (item.dropdown_key.length() > 0) ret.add(new Pair<String, String>(item.dropdown_key, item.key)); 
             if (val.length() == 0 && item.val.length() > 0 && item.val.charAt(0) != 1) val = item.val;

@@ -94,7 +94,7 @@ jstring JNI::ToJStringRaw(const string &x) {
   return ret;
 }
 
-jobjectArray JNI::ToJStringArray(StringVec items) {
+jobjectArray JNI::ToJStringArray(const StringVec &items) {
   jobjectArray v = env->NewObjectArray(items.size(), string_class, NULL);
   for (int i=0, l=items.size(); i != l; ++i) {
     jstring vi = ToJString(items[i]);
@@ -104,7 +104,7 @@ jobjectArray JNI::ToJStringArray(StringVec items) {
   return v;
 }
 
-pair<jobjectArray, jobjectArray> JNI::ToJStringArrays(StringPairVec items) {
+pair<jobjectArray, jobjectArray> JNI::ToJStringArrays(const StringPairVec &items) {
   jobjectArray k = env->NewObjectArray(items.size(), string_class, NULL);
   jobjectArray v = env->NewObjectArray(items.size(), string_class, NULL);
   for (int i=0, l=items.size(); i != l; ++i) {
@@ -117,7 +117,7 @@ pair<jobjectArray, jobjectArray> JNI::ToJStringArrays(StringPairVec items) {
   return make_pair(k, v);
 }
 
-jobject JNI::ToJStringArrayList(StringVec items) {
+jobject JNI::ToJStringArrayList(const StringVec &items) {
   jobject ret = env->NewObject(arraylist_class, arraylist_construct);
   for (auto &i : items) {
     jobject v = ToJString(i);
@@ -127,16 +127,15 @@ jobject JNI::ToJStringArrayList(StringVec items) {
   return ret;
 }
 
-jobject JNI::ToJStringPairArrayList(StringPairVec items) {
-  static jmethodID string_pair_construct = CheckNotNull
-    (env->GetMethodID(pair_class, "<init>", "(Ljava/lang/String;Ljava/lang/String;)V"));
+jobject JNI::ToJStringPairArrayList(const StringPairVec &items) {
   jobject ret = env->NewObject(arraylist_class, arraylist_construct);
-  for (int i=0, l=items.size(); i != l; ++i) {
-    jstring ki = ToJString(items[i].first), vi = ToJString(items[i].second);
-    jobject v = env->NewObject(pair_class, string_pair_construct, ki, vi);
+  for (auto &i : items) {
+    jstring ki = ToJString(i.first), vi = ToJString(i.second);
+    jobject v = env->NewObject(pair_class, jni->pair_construct, ki, vi);
+    CHECK(env->CallBooleanMethod(ret, arraylist_add, v));
     env->DeleteLocalRef(v);
-    env->DeleteLocalRef(ki);
     env->DeleteLocalRef(vi);
+    env->DeleteLocalRef(ki);
   }
   return ret;
 }
@@ -366,9 +365,29 @@ string Application::GetLocalizedInteger(int number) {
   return StrCat(number);
 }
 
-void Application::LoadDefaultSettings(const StringPairVec &v) {}
-string Application::GetSetting(const string &key) { return string(); }
-void Application::SaveSettings(const StringPairVec &v) {}
+void Application::LoadDefaultSettings(const StringPairVec &v) {
+  static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "setDefaultPreferences", "(Ljava/util/ArrayList;)V"));
+  jobject prefs = jni->ToJStringPairArrayList(v);
+  jni->env->CallVoidMethod(jni->activity, mid, prefs);
+  jni->env->DeleteLocalRef(prefs);
+}
+
+string Application::GetSetting(const string &key) {
+  static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "getPreference", "(Ljava/lang/String;)Ljava/lang/String;"));
+  jstring jkey = jni->ToJString(key);
+  jstring jval = (jstring)jni->env->CallObjectMethod(jni->activity, mid, jkey);
+  string ret = jval ? jni->GetJString(jval) : "";
+  jni->env->DeleteLocalRef(jval);
+  jni->env->DeleteLocalRef(jkey);
+  return ret;
+}
+
+void Application::SaveSettings(const StringPairVec &v) {
+  static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "updatePreferences", "(Ljava/util/ArrayList;)V"));
+  jobject prefs = jni->ToJStringPairArrayList(v);
+  jni->env->CallVoidMethod(jni->activity, mid, prefs);
+  jni->env->DeleteLocalRef(prefs);
+}
 
 Connection *Application::ConnectTCP(const string &hostport, int default_port, Connection::CB *connected_cb, bool background_services) {
   INFO("Application::ConnectTCP ", hostport, " (default_port = ", default_port, ") background_services = false"); 

@@ -86,9 +86,9 @@ public class JNavigation extends JWidget {
 
     public void popView(final MainActivity activity, final int n) {
         activity.runOnUiThread(new Runnable() { public void run() {
-            int stack_size = activity.getFragmentManager().getBackStackEntryCount();
+            int stack_size = activity.runBackFragmentHideCB(n);
             if (stack_size <= 0 || n <= 0) return;
-            int target = Math.max(0, activity.getFragmentManager().getBackStackEntryCount() - n);
+            int target = Math.max(0, stack_size - n);
             activity.getFragmentManager().popBackStackImmediate
                 ((target >= 0 ? Integer.toString(target) : null), FragmentManager.POP_BACK_STACK_INCLUSIVE);
             activity.showBackFragment(false, true);
@@ -97,7 +97,9 @@ public class JNavigation extends JWidget {
 
     public void popToRoot(final MainActivity activity) {
         activity.runOnUiThread(new Runnable() { public void run() {
-            if (activity.getFragmentManager().getBackStackEntryCount() < 2) return;
+            int stack_size = activity.getFragmentManager().getBackStackEntryCount();
+            if (stack_size < 2) return;
+            activity.runBackFragmentHideCB(stack_size - 1);
             activity.getFragmentManager().popBackStackImmediate("1", FragmentManager.POP_BACK_STACK_INCLUSIVE);
             activity.showBackFragment(false, true);
         }});
@@ -105,6 +107,8 @@ public class JNavigation extends JWidget {
 
     public void popAll(final MainActivity activity) {
         activity.runOnUiThread(new Runnable() { public void run() {
+            int stack_size = activity.getFragmentManager().getBackStackEntryCount();
+            activity.runBackFragmentHideCB(stack_size);
             activity.getFragmentManager().popBackStackImmediate(null, FragmentManager.POP_BACK_STACK_INCLUSIVE);
         }});
     }
