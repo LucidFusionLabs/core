@@ -1,11 +1,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.lucidfusionlabs.app"
+    package="com.lucidfusionlabs.game"
     android:versionCode="1"
     android:versionName="1.0" >
 
     <uses-sdk
-        android:minSdkVersion="9"
-        android:targetSdkVersion="20" />
+        android:minSdkVersion="19"
+        android:targetSdkVersion="23" />
 
     <application android:allowBackup="true">
     </application>

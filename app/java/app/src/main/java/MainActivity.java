@@ -66,8 +66,6 @@ public class MainActivity extends android.app.Activity {
     public MainView view;
     public Thread thread;
     public AudioManager audio;
-    public GPlusClient gplus;
-    public Advertising advertising;
     public boolean waiting_activity_result;
     public int surface_width, surface_height, egl_version;
     public int attr_listPreferredItemHeight, attr_scrollbarSize;
@@ -76,13 +74,22 @@ public class MainActivity extends android.app.Activity {
     public HashMap<String, String> preference_default = new HashMap<String, String>();
     public SharedPreferences preferences;
 
+    protected void onCreated() {}
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         Log.i("lfl", "MainActivity.onCreate() app_created=" + app_created);
         super.onCreate(savedInstanceState);
+
+        if (!isTaskRoot()) {
+            Log.i("lfl", "MainActivity.onCreate() isTaskRoot() == false");
+            finish();
+            return;
+        }
+
+        onCreated();
         Context context = getApplication();
         LayoutInflater inflater = (LayoutInflater)context.getSystemService(LAYOUT_INFLATER_SERVICE);
-
         frame_layout = (FrameLayout)inflater.inflate(R.layout.main, null);
         root_window = getWindow();
         resources = getResources();
@@ -138,7 +145,7 @@ public class MainActivity extends android.app.Activity {
     protected void onStart() {
         Log.i("lfl", "MainActivity.onStart()");
         super.onStart();
-        if (gplus != null) gplus.onStart(this);
+        // if (gplus != null) gplus.onStart(this);
     }
 
     @Override
@@ -168,14 +175,14 @@ public class MainActivity extends android.app.Activity {
     protected void onStop() {
         Log.i("lfl", "MainActivity.onStop()");
         super.onStop();
-        if (gplus != null) gplus.onStop();
+        // if (gplus != null) gplus.onStop();
     }
 
     @Override
     protected void onDestroy() {
         Log.i("lfl", "MainActivity.onDestroy()");
         jwidgets.onDestroy();
-        if (advertising != null) advertising.onDestroy();
+        // if (advertising != null) advertising.onDestroy();
         super.onDestroy();
     }
 
@@ -190,7 +197,7 @@ public class MainActivity extends android.app.Activity {
         Log.i("lfl", "MainActivity.onActivityResult(" + request + ", " + response + ")");
         waiting_activity_result = false;
         super.onActivityResult(request, response, data);
-        if (gplus != null) gplus.onActivityResult(request, response, data);
+        // if (gplus != null) gplus.onActivityResult(request, response, data);
     }
 
     @Override
@@ -239,9 +246,6 @@ public class MainActivity extends android.app.Activity {
         Log.i("lfl", "MainActivity.froceExit()");
         android.os.Process.killProcess(android.os.Process.myPid());
     }
-
-    public void createAdvertising() { advertising = new Advertising(this, frame_layout); }
-    public void createGPLus()       { gplus       = new GPlusClient(this); }
 
     public String getFilesDirCanonicalPath() {
         try {
@@ -351,9 +355,6 @@ public class MainActivity extends android.app.Activity {
         final Intent intent = new Intent(this, com.lucidfusionlabs.app.JListViewActivity.class);
         startActivity(intent);
     }
-
-    public void hideAds() { if (advertising != null) advertising.hideAds(); }
-    public void showAds() { if (advertising != null) advertising.showAds(); }
 
     public int getDrawableResId(final String n) { 
         if (n.length() == 0) {

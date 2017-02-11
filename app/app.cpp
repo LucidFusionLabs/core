@@ -299,25 +299,27 @@ void Application::Log(int level, const char *file, int line, const char *message
 }
 
 void Application::WriteLogLine(const char *tbuf, const char *message, const char *file, int line) {
-  if (app->logout) {
-    fprintf(app->logout, "%s %s (%s:%d)\r\n", tbuf, message, file, line);
-    fflush(app->logout);
-  }
-  if (app && app->logfile) {
-    fprintf(app->logfile, "%s %s (%s:%d)\r\n", tbuf, message, file, line);
-    fflush(app->logfile);
+  if (app) {
+    if (app->logout) {
+      fprintf(app->logout, "%s %s (%s:%d)\r\n", tbuf, message, file, line);
+      fflush(app->logout);
+    }
+    if (app->logfile) {
+      fprintf(app->logfile, "%s %s (%s:%d)\r\n", tbuf, message, file, line);
+      fflush(app->logfile);
+    }
   }
 #ifdef LFL_IOS
   NSLogString(StringPrintf("%s (%s:%d)", message, file, line));
 #endif
 #ifdef LFL_ANDROID
-  __android_log_print(ANDROID_LOG_INFO, app ? app->name.c_str() : "", "%s (%s:%d)", message, file, line);
+  __android_log_print(ANDROID_LOG_INFO, app ? app->name.c_str() : "lfl", "%s (%s:%d)", message, file, line);
 #endif
 }
 
 void Application::WriteDebugLine(const char *message, const char *file, int line) {
   bool write_to_logfile = false;
-  if (app->logerr) fprintf(app->logerr, "%s (%s:%d)\n", message, file, line);
+  if (app && app->logerr) fprintf(app->logerr, "%s (%s:%d)\n", message, file, line);
 #ifdef LFL_IOS
   write_to_logfile = true;
   NSLogString(StringPrintf("%s (%s:%d)", message, file, line));

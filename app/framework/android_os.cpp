@@ -23,8 +23,8 @@ void JNI::Init(jobject a, bool first) {
   if      (1)           CHECK(activity  = env->NewGlobalRef(a));
   if      (1)           CHECK(resources = env->NewGlobalRef(env->GetObjectField(activity, activity_resources)));
   if      (1)           CHECK(view      = env->NewGlobalRef(env->GetObjectField(activity, activity_view)));
-  if      (first)             gplus     = env->NewGlobalRef(env->GetObjectField(activity, activity_gplus));
-  else if (gplus_class) CHECK(gplus     = env->NewGlobalRef(env->GetObjectField(activity, activity_gplus)));
+  // if      (first)             gplus     = env->NewGlobalRef(env->GetObjectField(activity, activity_gplus));
+  // else if (gplus_class) CHECK(gplus     = env->NewGlobalRef(env->GetObjectField(activity, activity_gplus)));
 }
 
 void JNI::Free() {

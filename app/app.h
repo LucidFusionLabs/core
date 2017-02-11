@@ -522,7 +522,7 @@ struct FrameScheduler {
   mutex frame_mutex, wait_mutex;
   SocketWakeupThread wakeup_thread;
   SelectSocketSet wait_forever_sockets;
-  Socket system_event_socket = -1, wait_forever_wakeup_socket = -1;
+  Socket system_event_socket = InvalidSocket, wait_forever_wakeup_socket = InvalidSocket, iter_socket = InvalidSocket;
   bool rate_limit = 1, wait_forever = 1, wait_forever_thread = 1, synchronize_waits = 1;
   bool monolithic_frame = 1, run_main_loop = 1;
   FrameScheduler() : maxfps(&FLAGS_target_fps), wakeup_thread(&frame_mutex, &wait_mutex) { Setup(); }

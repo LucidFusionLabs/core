@@ -205,10 +205,12 @@ void FrameScheduler::Setup() {
 bool FrameScheduler::DoMainWait() {
   bool ret = false;
   wait_forever_sockets.Select(-1);
-  for (auto &s : wait_forever_sockets.socket) {
-    if (auto f = static_cast<function<bool()>*>(s.second.second)) 
-      if ((*f)()) ret = true;
+  for (auto i = wait_forever_sockets.socket.begin(); i != wait_forever_sockets.socket.end(); /**/) {
+    iter_socket = i->first;
+    auto f = static_cast<function<bool()>*>(i++->second.second);
+    if (f) if ((*f)()) ret = true;
   }
+  iter_socket = InvalidSocket;
   if (wait_forever_sockets.GetReadable(system_event_socket)) {
     char buf[512];
     read(system_event_socket, buf, sizeof(buf));
@@ -237,6 +239,8 @@ void FrameScheduler::AddMainWaitSocket(Window *w, Socket fd, int flag, function<
 
 void FrameScheduler::DelMainWaitSocket(Window*, Socket fd) {
   if (fd == InvalidSocket) return;
+  if (iter_socket != InvalidSocket)
+    CHECK_EQ(iter_socket, fd) << "Can only remove current socket from wait callback";
   auto it = wait_forever_sockets.socket.find(fd);
   if (it == wait_forever_sockets.socket.end()) return;
   if (auto f = static_cast<function<bool()>*>(it->second.second)) delete f;
@@ -253,7 +257,7 @@ extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppCreate(JNIEnv *e, j
   CHECK(jni->activity_class = (jclass)e->NewGlobalRef(e->GetObjectClass(a)));
   CHECK(jni->activity_resources = e->GetFieldID(jni->activity_class, "resources", "Landroid/content/res/Resources;"));
   CHECK(jni->activity_view      = e->GetFieldID(jni->activity_class, "view",      "Lcom/lucidfusionlabs/app/MainView;"));
-  CHECK(jni->activity_gplus     = e->GetFieldID(jni->activity_class, "gplus",     "Lcom/lucidfusionlabs/app/GPlusClient;"));
+  // CHECK(jni->activity_gplus     = e->GetFieldID(jni->activity_class, "gplus",     "Lcom/lucidfusionlabs/app/GPlusClient;"));
   static jmethodID activity_getpkgname_mid =
     CheckNotNull(jni->env->GetMethodID(jni->activity_class, "getPackageName", "()Ljava/lang/String;"));
 

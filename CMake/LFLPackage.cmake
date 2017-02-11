@@ -53,6 +53,13 @@ elseif(LFL_ANDROID)
       COMMAND if [ $$\(find ${CMAKE_CURRENT_SOURCE_DIR}/assets -name "*.wav" | wc -l\) != "0" ]; then cp ${CMAKE_CURRENT_SOURCE_DIR}/assets/*.wav ../res/raw\; fi
       COMMAND if [ $$\(find ${CMAKE_CURRENT_SOURCE_DIR}/assets -name "*.mp3" | wc -l\) != "0" ]; then cp ${CMAKE_CURRENT_SOURCE_DIR}/assets/*.mp3 ../res/raw\; fi
       COMMAND if [ $$\(find ${CMAKE_CURRENT_SOURCE_DIR}/assets -name "*.ogg" | wc -l\) != "0" ]; then cp ${CMAKE_CURRENT_SOURCE_DIR}/assets/*.ogg ../res/raw\; fi)
+    
+    add_custom_target(${target}_release WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${target}-android DEPENDS ${target}
+      COMMAND "ANDROID_HOME=${LFL_ANDROID_SDK}" ${LFL_GRADLE_BIN} uninstallRelease
+      COMMAND "ANDROID_HOME=${LFL_ANDROID_SDK}" ${LFL_GRADLE_BIN} assembleRelease
+      COMMAND ${LFL_ANDROID_SDK}/platform-tools/adb install ./build/outputs/apk/${target}-android-release.apk
+      COMMAND ${LFL_ANDROID_SDK}/platform-tools/adb shell am start -n `${LFL_ANDROID_SDK}/build-tools/19.1.0/aapt dump badging ./build/outputs/apk/${target}-android-release.apk | grep package | cut -d\\' -f2`/`${LFL_ANDROID_SDK}/build-tools/19.1.0/aapt dump badging ./build/outputs/apk/${target}-android-release.apk | grep launchable-activity | cut -d\\' -f2`
+      COMMAND ${LFL_ANDROID_SDK}/platform-tools/adb logcat | tee ${CMAKE_CURRENT_BINARY_DIR}/debug.txt)
 
     add_custom_target(${target}_debug WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${target}-android DEPENDS ${target}
       COMMAND "ANDROID_HOME=${LFL_ANDROID_SDK}" ${LFL_GRADLE_BIN} uninstallDebug
