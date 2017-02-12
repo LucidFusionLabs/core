@@ -151,11 +151,19 @@ void Application::SetAppFrameEnabled(bool v) {
   INFO("Application frame_disabled = ", app->frame_disabled);
 }
 
+void Application::SetPanRecognizer(bool enabled) {
+  static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "enablePanRecognizer", "(Z)V"));
+  jni->env->CallVoidMethod(jni->activity, mid, enabled);
+}
+
+void Application::SetPinchRecognizer(bool enabled) {
+  static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "enablePinchRecognizer", "(Z)V"));
+  jni->env->CallVoidMethod(jni->activity, mid, enabled);
+}
+
 void Application::SetAutoRotateOrientation(bool) {}
 void Application::SetVerticalSwipeRecognizer(int touches) {}
 void Application::SetHorizontalSwipeRecognizer(int touches) {}
-void Application::SetPanRecognizer(bool enabled) {}
-void Application::SetPinchRecognizer(bool enabled) {}
 void Application::SetTouchKeyboardTiled(bool v) {}
 int  Application::SetMultisample(bool v) {}
 int  Application::SetExtraScale(bool v) {}
@@ -170,10 +178,8 @@ void Application::SetTitleBar(bool v) {
 }
 
 void Application::SetKeepScreenOn(bool v) {
-  if (v) {
-    static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "enableKeepScreenOn", "()V"));
-    jni->env->CallVoidMethod(jni->activity, mid);
-  }
+  static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "enableKeepScreenOn", "(Z)V"));
+  jni->env->CallVoidMethod(jni->activity, mid, v);
 }
 
 void Window::SetCaption(const string &text) {
@@ -376,6 +382,9 @@ extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppTouch(JNIEnv *e, jo
     // screen->gesture_dpad_x[dpind] = 0;
     // screen->gesture_dpad_y[dpind] = 0;
   } else if (action == AndroidEvent::ACTION_MOVE) {
+    point p(screen->x + x, screen->y + screen->height - y);
+    app->input->QueueMouseMovement(p, p - screen->mouse);
+    LFAppWakeup();
     float vx = x - lx[dpind];
     float vy = y - ly[dpind];
     lx[dpind] = x;
@@ -403,6 +412,11 @@ extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppScroll(JNIEnv *e, j
 }
 
 extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppAccel(JNIEnv *e, jobject a, jfloat x, jfloat y, jfloat z) {
+}
+
+extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppScale(JNIEnv *e, jobject a, jfloat x, jfloat y, jfloat dx, jfloat dy, jboolean begin) {
+  app->input->QueueMouseZoom(point(x, y), point(dx, dy), begin); 
+  LFAppWakeup();
 }
 
 extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppFocusedShellRun(JNIEnv *e, jstring text) {

@@ -33,6 +33,7 @@ import android.app.AlertDialog;
 public class JToolbar extends JWidget {
     public ArrayList<JModelItem> model;
     public View view;
+    public int shown_index = -1;
 
     public JToolbar(final MainActivity activity, ArrayList<JModelItem> m) {
         super(JWidget.TYPE_TOOLBAR, activity, "", 0);
@@ -78,15 +79,22 @@ public class JToolbar extends JWidget {
         activity.runOnUiThread(new Runnable() { public void run() {
             View toolbar = get(activity);
             if (show_or_hide) {
-                activity.jwidgets.toolbar_bottom.add(self);
-                activity.frame_layout.addView(toolbar, new LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,
-                                                                        FrameLayout.LayoutParams.WRAP_CONTENT,
-                                                                        Gravity.BOTTOM));
+                if (shown_index >= 0) Log.i("lfl", "Show already shown toolbar");
+                else {
+                    activity.jwidgets.toolbar_bottom.add(self);
+                    activity.frame_layout.addView(toolbar, new LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,
+                                                                            FrameLayout.LayoutParams.WRAP_CONTENT,
+                                                                            Gravity.BOTTOM));
+                    shown_index = activity.jwidgets.toolbar_bottom.size()-1;
+                }
             } else {
-                int size = activity.jwidgets.toolbar_bottom.size();
-                assert size != 0 && activity.jwidgets.toolbar_bottom.get(size-1) == self;
-                activity.jwidgets.toolbar_bottom.remove(size-1);
-                activity.frame_layout.removeView(toolbar);
+                if (shown_index < 0) Log.i("lfl", "Hide unshown toolbar");
+                else {
+                    int size = activity.jwidgets.toolbar_bottom.size();
+                    if (shown_index < size) activity.jwidgets.toolbar_bottom.remove(shown_index);
+                    activity.frame_layout.removeView(toolbar);
+                    shown_index = -1;
+                }
             }
         }});
     }

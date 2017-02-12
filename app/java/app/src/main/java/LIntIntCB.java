@@ -9,7 +9,7 @@ public final class LIntIntCB {
 
     LIntIntCB(final long c) {
         cb = c;
-        assert cb != 0;
+        if (cb == 0) throw new java.lang.IllegalArgumentException();
     }
 
     protected void finalize() throws Throwable {

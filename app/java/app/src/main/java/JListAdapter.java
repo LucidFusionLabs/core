@@ -22,6 +22,7 @@ import android.widget.Switch;
 import android.widget.NumberPicker;
 import android.widget.RadioGroup;
 import android.widget.RadioButton;
+import android.widget.CompoundButton;
 import android.media.*;
 import android.content.*;
 import android.content.res.Configuration;
@@ -39,6 +40,7 @@ import android.graphics.Color;
 import android.app.ActionBar;
 import android.app.AlertDialog;
 import android.text.InputType;
+import android.text.TextWatcher;
 
 public class JListAdapter extends BaseAdapter {
     public static class ViewHolder {
@@ -72,6 +74,23 @@ public class JListAdapter extends BaseAdapter {
     public int editable_section = -1, editable_start_row = -1;
     public LIntIntCB delete_row_cb = null;
     public final JWidget parent_widget;
+
+    CompoundButton.OnCheckedChangeListener checked_listener = new CompoundButton.OnCheckedChangeListener() {
+        public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+            parent_widget.changed = true;
+        }
+    };
+
+    TextWatcher text_listener = new TextWatcher() {
+        @Override
+        public void onTextChanged(CharSequence s, int start, int before, int count) {
+            parent_widget.changed = true;
+        }
+        @Override
+        public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+        @Override
+        public void afterTextChanged(android.text.Editable s) {}
+    };
 
     public JListAdapter(final MainActivity activity, final ArrayList<JModelItem> v, final JWidget p) {
         inflater = (LayoutInflater)activity.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
@@ -273,10 +292,12 @@ public class JListAdapter extends BaseAdapter {
             }
         }
 
-        if (holder.editText  != null) {
+        if (holder.editText != null) {
+            holder.editText.removeTextChangedListener(text_listener);
             if (item.val.length() > 0 && item.val.charAt(0) == 1) { holder.editText.setText(""); holder.editText.setHint(item.val.substring(1)); }
             else                                                  { holder.editText.setText(item.val); holder.editText.setHint(""); }
             holder.editText.setInputType(InputType.TYPE_CLASS_TEXT | (type == JModelItem.TYPE_PASSWORDINPUT ? InputType.TYPE_TEXT_VARIATION_PASSWORD : 0));
+            holder.editText.addTextChangedListener(text_listener);
         }
 
         switch (type) {
@@ -286,13 +307,16 @@ public class JListAdapter extends BaseAdapter {
                 break;
 
             case JModelItem.TYPE_TOGGLE:
+                holder.toggle.setOnCheckedChangeListener(null);
                 holder.toggle.setChecked(item.val.equals("1"));
+                holder.toggle.setOnCheckedChangeListener(checked_listener);
                 break;
         }
 
         if (holder.picker != null && item.picker != null && item.picker.data.size() > 0) {
             ArrayList<String> picker_items = item.picker.data.get(0);
             if (picker_items.size() > 0) {
+                holder.picker.setOnValueChangedListener(null);
                 holder.picker.setMinValue(0);
                 holder.picker.setMaxValue(picker_items.size() - 1);
                 String[] arr = new String[picker_items.size()];
@@ -321,7 +345,9 @@ public class JListAdapter extends BaseAdapter {
 
         if (holder.radio != null) {
             final JListAdapter self = this;
+            holder.radio.setOnCheckedChangeListener(null);
             holder.radio.removeAllViews();
+
             String[] v = item.val.split(",");
             for(int i = 0; i < v.length; i++) {
                 RadioGroup.LayoutParams layout = new RadioGroup.LayoutParams
@@ -426,14 +452,14 @@ public class JListAdapter extends BaseAdapter {
 
     public void addRow(final int section, JModelItem row) {
         if (section == sections.size()) addSection();
-        assert section < sections.size();
+        if (section >= sections.size()) throw new java.lang.IllegalArgumentException();
         data.add(getSectionEndRowId(section), row);
         moveSectionsAfterBy(section, 1);
     }
 
     public void replaceSection(final String h, final int image, final int flag, final int section, ArrayList<JModelItem> v) {
         if (section == sections.size()) addSection();
-        assert section < sections.size();
+        if (section >= sections.size()) throw new java.lang.IllegalArgumentException();
         int start_row = getSectionBeginRowId(section), old_section_size = getSectionSize(section);
         JModelItem separator = data.get(start_row);
         separator.key = h;
@@ -445,9 +471,9 @@ public class JListAdapter extends BaseAdapter {
 
     public void setSectionValues(final int section, ArrayList<String> v) {
         if (section == sections.size()) addSection();
-        assert section < sections.size();
+        if (section >= sections.size()) throw new java.lang.IllegalArgumentException();
         int section_size = getSectionSize(section), section_row = getSectionBeginRowId(section);
-        assert section_size == v.size();
+        if (section_size != v.size()) throw new java.lang.IllegalArgumentException();
         for (int i = 0; i < section_size; ++i) {
             data.get(section_row + 1 + i).val = v.get(i);
         }
@@ -477,7 +503,7 @@ public class JListAdapter extends BaseAdapter {
     }
 
     public ArrayList<Pair<String, String>> getSectionText(ListView listview, final int section) {
-        assert section < sections.size();
+        if (section >= sections.size()) throw new java.lang.IllegalArgumentException();
         ArrayList<Pair<String, String>> ret = new ArrayList<Pair<String, String>>();
         int section_size = getSectionSize(section), section_row = getSectionBeginRowId(section);
         for (int i = 0; i < section_size; ++i) {
@@ -486,7 +512,7 @@ public class JListAdapter extends BaseAdapter {
             if (listview != null) {
                 View itemview = getViewByPosition(listview, section_row + 1 + i);
                 ViewHolder holder = (ViewHolder)itemview.getTag();
-                if (holder.toggle != null) val = holder.toggle.isChecked() ? "1" : "";
+                if (holder.toggle != null) val = holder.toggle.isChecked() ? "1" : "0";
                 else if (holder.radio != null) {
                     int checked = holder.radio.getCheckedRadioButtonId();
                     RadioButton button = (RadioButton)holder.radio.findViewById(checked);

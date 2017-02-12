@@ -46,6 +46,7 @@ elseif(LFL_ANDROID)
 
   function(lfl_post_build_start target binname pkgname)
     add_custom_command(TARGET ${target} POST_BUILD WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${target}-android/jni
+      COMMAND echo LFL_BIN_DIR := `basename ${LFL_BINARY_DIR}` > LFL_BIN_DIR.mk
       COMMAND ${LFL_ANDROID_NDK}/ndk-build
       COMMAND mkdir -p ${CMAKE_CURRENT_SOURCE_DIR}/${target}-android/res/raw
       COMMAND cp ${LFL_APP_ASSET_FILES} ${CMAKE_CURRENT_SOURCE_DIR}/assets

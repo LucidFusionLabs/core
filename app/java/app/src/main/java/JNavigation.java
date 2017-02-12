@@ -35,6 +35,8 @@ import android.app.Fragment;
 import android.app.FragmentManager;
 
 public class JNavigation extends JWidget {
+    public int shown_index = -1;
+
     public JNavigation(final MainActivity activity) {
         super(JWidget.TYPE_NAVIGATION, activity, "", 0);
     }
@@ -45,18 +47,24 @@ public class JNavigation extends JWidget {
         final JNavigation self = this;
         activity.runOnUiThread(new Runnable() { public void run() {
             if (show_or_hide) {
-                activity.jwidgets.navigations.add(self);
-                activity.action_bar.show();
-                activity.showBackFragment(true, true);
+                if (shown_index >= 0) Log.i("lfl", "Show already shown navbar");
+                else {
+                    activity.jwidgets.navigations.add(self);
+                    activity.action_bar.show();
+                    activity.showBackFragment(true, true);
+                    shown_index = activity.jwidgets.navigations.size()-1;
+                }
             } else {
-                int size = activity.jwidgets.navigations.size();
-                assert size != 0 && activity.jwidgets.navigations.get(size-1) == self;
-                activity.jwidgets.navigations.remove(size-1);
-
-                if (activity.disable_title) activity.action_bar.hide();
-                if (activity.getFragmentManager().findFragmentById(R.id.content_frame) != null) {
-                    Fragment frag = activity.getFragmentManager().findFragmentById(R.id.content_frame);
-                    activity.getFragmentManager().beginTransaction().remove(frag).commit();
+                if (shown_index < 0) Log.i("lfl", "Hide unshown navbar");
+                else {
+                    int size = activity.jwidgets.navigations.size();
+                    if (shown_index < size) activity.jwidgets.navigations.remove(shown_index);
+                    if (activity.disable_title) activity.action_bar.hide();
+                    if (activity.getFragmentManager().findFragmentById(R.id.content_frame) != null) {
+                        Fragment frag = activity.getFragmentManager().findFragmentById(R.id.content_frame);
+                        activity.getFragmentManager().beginTransaction().remove(frag).commit();
+                    }
+                    shown_index = -1;
                 }
             }
         }});

@@ -52,6 +52,7 @@ public class MainActivity extends android.app.Activity {
     public native void AppFling(float x, float y, float vx, float vy);
     public native void AppScroll(float x, float y, float sx, float sy);
     public native void AppAccel(float x, float y, float z);
+    public native void AppScale(float x, float y, float dx, float dy, boolean begin);
     public static native void AppFocusedShellRun(String text);
 
     public static boolean app_created, app_init, disable_title;
@@ -87,7 +88,9 @@ public class MainActivity extends android.app.Activity {
             return;
         }
 
+        preferences = PreferenceManager.getDefaultSharedPreferences(this);
         onCreated();
+
         Context context = getApplication();
         LayoutInflater inflater = (LayoutInflater)context.getSystemService(LAYOUT_INFLATER_SERVICE);
         frame_layout = (FrameLayout)inflater.inflate(R.layout.main, null);
@@ -137,8 +140,6 @@ public class MainActivity extends android.app.Activity {
                 // Log.i("lfl", "onGlobalLayout(" + r.left + ", " + r.top + ", " + r.right + ", " + r.bottom + ", " + actionbar_h + ") = " + h);
                 AppReshaped(r.left, surface_height - h, r.right - r.left, h); 
             }});
-
-        preferences = PreferenceManager.getDefaultSharedPreferences(this);
     }
 
     @Override
@@ -279,28 +280,33 @@ public class MainActivity extends android.app.Activity {
         // requestWindowFeature(Window.FEATURE_NO_TITLE);
     }
 
-    public void enableKeepScreenOn() {
-        root_window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+    public void enableKeepScreenOn(boolean enabled) {
+        if (enabled) root_window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+    }
+
+    public void enablePanRecognizer(boolean enabled) {
+    }
+
+    public void enablePinchRecognizer(final boolean enabled) {
+        final MainActivity self = this;
+        runOnUiThread(new Runnable() { public void run() {
+            if (!enabled) view.scale_gesture = null;
+            else view.scale_gesture = new ScaleGestureDetector
+                (self, new ScaleGestureDetector.SimpleOnScaleGestureListener() {
+                    @Override
+                    public boolean onScale(ScaleGestureDetector g) {
+                        AppScale(g.getFocusX(), g.getFocusY(),
+                                 g.getCurrentSpanX() - g.getPreviousSpanX(),
+                                 g.getCurrentSpanY() - g.getPreviousSpanY(), !g.isInProgress());
+                        return true;
+                    }});
+        }});
     }
 
     public void setCaption(final String text) {
         runOnUiThread(new Runnable() { public void run() { setTitle(text); } });
     }
 
-    public MediaPlayer loadMusicResource(String filename) {
-        String package_name = getPackageName();
-        int soundId = resources.getIdentifier(filename, "raw", getPackageName());
-        Log.i("lfl", "loadMusicAsset " + package_name + " " + filename + " " + soundId);
-        return MediaPlayer.create(this, soundId);
-    }
-
-    public void playMusic(MediaPlayer mp) { mp.start(); }
-    public void playBackgroundMusic(MediaPlayer mp) { mp.setLooping(true); mp.start(); }
-
-    public int maxVolume() { return audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC); }
-    public int getVolume() { return audio.getStreamVolume(AudioManager.STREAM_MUSIC); }
-    public void setVolume(int v) { audio.setStreamVolume(AudioManager.STREAM_MUSIC, v, 0); }
-    
     public String getModelName() {
         return android.os.Build.MANUFACTURER + " " + android.os.Build.MODEL;
     }
@@ -373,7 +379,7 @@ public class MainActivity extends android.app.Activity {
     public void updateBitmap(final int encoded_id, final int width, final int height, final int fmt, final int[] pixels) {
         runOnUiThread(new Runnable() { public void run() {
             final int id = -encoded_id - 1;
-            assert id < bitmaps.size();
+            if (id < 0 || id >= bitmaps.size()) throw new java.lang.IllegalArgumentException();
             bitmaps.set(id, Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888));
         }});
     }
@@ -421,6 +427,20 @@ public class MainActivity extends android.app.Activity {
         try { return preferences.getString(key, dp != null ? dp : ""); }
         catch(Exception e) { return dp != null ? dp : ""; }
     }
+
+    public int maxVolume() { return audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC); }
+    public int getVolume() { return audio.getStreamVolume(AudioManager.STREAM_MUSIC); }
+    public void setVolume(int v) { audio.setStreamVolume(AudioManager.STREAM_MUSIC, v, 0); }
+
+    public MediaPlayer loadMusicResource(String filename) {
+        String package_name = getPackageName();
+        int soundId = resources.getIdentifier(filename, "raw", getPackageName());
+        Log.i("lfl", "loadMusicAsset " + package_name + " " + filename + " " + soundId);
+        return MediaPlayer.create(this, soundId);
+    }
+
+    public void playMusic(MediaPlayer mp) { mp.start(); }
+    public void playBackgroundMusic(MediaPlayer mp) { mp.setLooping(true); mp.start(); }
 }
 
 class MyGestureListener extends android.view.GestureDetector.SimpleOnGestureListener {
@@ -439,6 +459,7 @@ class MainView extends android.view.SurfaceView implements SurfaceHolder.Callbac
     public EGLSurface egl_surface;
     public EGLDisplay egl_display;
     public GestureDetector gesture;
+    public ScaleGestureDetector scale_gesture = null;
     public SensorManager sensor;
     public boolean have_surface;
 
@@ -549,10 +570,13 @@ class MainView extends android.view.SurfaceView implements SurfaceHolder.Callbac
 
     public boolean onTouch(View v, MotionEvent event) {
         // gesture.onTouchEvent(event);
+        if (scale_gesture != null) scale_gesture.onTouchEvent(event);
         final int action = event.getAction() & MotionEvent.ACTION_MASK;
         if (action == MotionEvent.ACTION_MOVE) {
-            for (int i = 0; i < event.getPointerCount(); i++) {
-                main_activity.AppTouch(action, event.getX(i), event.getY(i), event.getPressure(i));
+            if (scale_gesture == null || !scale_gesture.isInProgress()) {
+                for (int i = 0; i < event.getPointerCount(); i++) {
+                    main_activity.AppTouch(action, event.getX(i), event.getY(i), event.getPressure(i));
+                }
             }
         } else {
             int action_index = (action == MotionEvent.ACTION_POINTER_DOWN || action == MotionEvent.ACTION_POINTER_UP) ? event.getActionIndex() : 0;

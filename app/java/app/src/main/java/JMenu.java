@@ -51,7 +51,7 @@ public class JMenu extends JWidget {
                 builder.setItems(items, new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialog, int which) {
-                        assert which < data.size();
+                        if (which >= data.size()) throw new java.lang.IllegalArgumentException();
                         JModelItem item = data.get(which);
                         if (item.cb != null) item.cb.run();
                     }});

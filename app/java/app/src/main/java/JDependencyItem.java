@@ -41,7 +41,7 @@ public final class JDependencyItem {
         if (dv == null) return;
         for (JDependencyItem i : dv) {
             int row_id = target.getCollapsedRowId(i.section, i.row);
-            assert row_id < target.data.size();
+            if (row_id >= target.data.size()) throw new java.lang.IllegalArgumentException();
             i.apply(target.data.get(row_id));
         }
     }
