@@ -11,9 +11,6 @@
 [submodule "imports/jsoncpp"]
 	path = imports/jsoncpp
 	url = https://github.com/open-source-parsers/jsoncpp
-[submodule "imports/OpenSSL-for-Android-Prebuilt"]
-	path = imports/OpenSSL-for-Android-Prebuilt
-	url = https://github.com/emileb/OpenSSL-for-Android-Prebuilt
 [submodule "imports/flatbuffers"]
 	path = imports/flatbuffers
 	url = https://github.com/google/flatbuffers
@@ -117,3 +114,6 @@
 [submodule "imports/Stockfish"]
 	path = imports/Stockfish
 	url = https://github.com/official-stockfish/Stockfish
+[submodule "imports/openssl_prebuilt_for_android"]
+	path = imports/openssl_prebuilt_for_android
+	url = https://github.com/felipejfc/openssl_prebuilt_for_android

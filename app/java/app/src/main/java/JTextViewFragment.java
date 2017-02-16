@@ -20,7 +20,12 @@ public class JTextViewFragment extends JFragment implements OnItemClickListener 
     public String data;
     public TextView textview = null;
 
-    JTextViewFragment(final MainActivity activity, final JWidget p, final String d) {
+    public JTextViewFragment() {
+        super(null, null);
+        data = null;
+    }
+
+    public JTextViewFragment(final MainActivity activity, final JWidget p, final String d) {
         super(activity, p);
         data = d;
     }

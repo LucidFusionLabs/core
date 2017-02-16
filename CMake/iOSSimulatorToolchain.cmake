@@ -1,6 +1,7 @@
 set(LFL_APPLE_DEVELOPER "/Applications/Xcode.app/Contents/Developer")
 set(LFL_IOS_ROOT "${LFL_APPLE_DEVELOPER}/Platforms/iPhoneSimulator.platform/Developer")
 set(LFL_IOS_SDK "${LFL_IOS_ROOT}/SDKs/iPhoneSimulator.sdk")
+set(LFL_IOS_FIREBASE "$ENV{HOME}/Firebase")
 set(LFL_IOS TRUE)
 set(LFL_IOS_SIM TRUE)
 set(LFL_USE_LIBCPP ON)

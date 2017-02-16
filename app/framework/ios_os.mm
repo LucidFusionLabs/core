@@ -58,10 +58,6 @@
 @end
 
 namespace LFL {
-SystemAdvertisingView::SystemAdvertisingView() {}
-void SystemAdvertisingView::Show() {}
-void SystemAdvertisingView::Hide() {}
-
 void Application::OpenSystemBrowser(const string &url_text) {
   NSString *url_string = [[NSString alloc] initWithUTF8String: url_text.c_str()];
   NSURL *url = [NSURL URLWithString: url_string];

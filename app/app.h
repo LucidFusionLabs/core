@@ -432,9 +432,9 @@ struct PerformanceTimers {
 struct HAlign { enum { Left  =1, Center=2, Right=3 }; };
 struct VAlign { enum { Bottom=1, Center=2, Top  =3 }; };
 
-struct MenuItem { string shortcut, name; Callback cb; };
-struct AlertItem { string first, second; StringCB cb; };
-struct PanelItem { string type; Box box; StringCB cb; };
+struct MenuItem { string shortcut, name; Callback cb; int image; };
+struct AlertItem { string first, second; StringCB cb; int image; };
+struct PanelItem { string type; Box box; StringCB cb; int image; };
 
 struct PickerItem {
   typedef function<bool(PickerItem*)> CB;
@@ -450,7 +450,7 @@ struct TableItem {
   struct Dep { int section, row; string val; bool hidden; int left_icon, right_icon, type; string key; Callback cb; int flags; };
   enum { None=0, Label=1, Separator=2, Command=3, Button=4, Toggle=5, Selector=6, Picker=7, TextInput=8,
     NumberInput=9, PasswordInput=10, FontPicker=11 }; 
-  struct Flag { enum { FixDropdown=1 }; };
+  struct Flag { enum { LeftText=1, SubText=2, FixDropdown=4, HighlightBackground=8 }; };
   typedef unordered_map<string, vector<Dep>> Depends;
   string key;
   int type, flags=0;
@@ -889,10 +889,17 @@ struct SystemNavigationView {
 };
 
 struct SystemAdvertisingView {
-  VoidPtr impl;
-  SystemAdvertisingView();
-  void Show();
-  void Hide();
+  struct Type { enum { BANNER=1 }; };
+  static unique_ptr<SystemAdvertisingView> Create(int type, int placement);
+  virtual ~SystemAdvertisingView() {}
+  virtual void Show(bool show_or_hide) = 0;
+};
+
+struct SystemPurchases {
+  static unique_ptr<SystemPurchases> Create();
+  virtual ~SystemPurchases() {}
+  virtual bool MakePuchase(const string&, IntCB result) = 0;
+  virtual bool HavePurchase(const string&, bool *out) = 0;
 };
 
 unique_ptr<Module> CreateFrameworkModule();

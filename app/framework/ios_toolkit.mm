@@ -137,27 +137,37 @@ static std::vector<UIImage*> app_images;
     _toolbar2 = [self createUIToolbar: [self getToolbarFrame] first:false];
     return self;
   }
-
-  - (UIToolbar*)createUIToolbar:(CGRect)rect first:(BOOL)first {
+  
+  - (NSMutableArray*)createUIToolbarItems:(BOOL)first {
     NSMutableArray *items = [[NSMutableArray alloc] init];
     UIBarButtonItem *spacer = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil];
     for (int i=0, l=data.size(); i<l; i++) {
       if (i) [items addObject: spacer];
       NSString *K = [NSString stringWithUTF8String: data[i].shortcut.c_str()];
-      UIBarButtonItem *item =
-        [[UIBarButtonItem alloc] initWithTitle:(([K length] && LFL::isascii([K characterAtIndex:0])) ? [NSString stringWithFormat:@"%@", K] : [NSString stringWithFormat:@"%@\U0000FE0E", K])
-        style:UIBarButtonItemStylePlain target:self action:(first ? @selector(onClick:) : @selector(onClick2:))];
+      UIBarButtonItem *item;
+      if (int icon = data[i].image) {
+          CHECK_LE(icon, app_images.size());
+          item = [[UIBarButtonItem alloc] initWithImage: app_images[icon - 1]
+            style:UIBarButtonItemStylePlain target:self action:(first ? @selector(onClick:) : @selector(onClick2:))];
+      } else {
+        item = [[UIBarButtonItem alloc] initWithTitle:(([K length] && LFL::isascii([K characterAtIndex:0])) ? [NSString stringWithFormat:@"%@", K] : [NSString stringWithFormat:@"%@\U0000FE0E", K])
+          style:UIBarButtonItemStylePlain target:self action:(first ? @selector(onClick:) : @selector(onClick2:))];
+      }
       [item setTag:i];
       [items addObject:item];
       [item release];
     }
+    [spacer release];
+    return items;
+  }
 
+  - (UIToolbar*)createUIToolbar:(CGRect)rect first:(BOOL)first {
+    NSMutableArray *items = [self createUIToolbarItems: first];
     UIToolbar *tb = [[UIToolbar alloc] initWithFrame: rect];
     // [tb setBarStyle:UIBarStyleBlackTranslucent];
     tb.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleTopMargin;
     [tb setItems:items];
     [items release];
-    [spacer release];
     return tb;
   }
 
@@ -344,7 +354,6 @@ static std::vector<UIImage*> app_images;
 @interface IOSTable : UITableViewController
   @property (nonatomic, retain) UIView *header;
   @property (nonatomic, retain) UILabel *header_label;
-  @property (nonatomic, assign) IOSToolbar *toolbar;
   @property (nonatomic, assign) LFL::SystemTableView *lfl_self;
   @property (nonatomic, assign) LFL::IntIntCB delete_row_cb;
   @property (nonatomic)         std::string style;
@@ -486,14 +495,19 @@ static std::vector<UIImage*> app_images;
       int row = path.row, section = path.section;
       CHECK_LT(section, data.size());
       CHECK_LT(row, data[section].item.size());
-      cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:cellIdentifier];
-      cell.selectionStyle = UITableViewCellSelectionStyleNone;
-
       auto &ci = data[section].item[row];
       ci.gui_loaded = true;
+      bool subtext      = ci.flags & LFL::TableItem::Flag::SubText;
+      bool highlight_bg = ci.flags & LFL::TableItem::Flag::HighlightBackground;
       bool is_selected_row = section == _selected_section && row == _selected_row;
-      UIColor *blue = [UIColor colorWithRed:0.0/255 green:122.0/255 blue:255.0/255 alpha:1];
-      if (change_selected_row_background && is_selected_row) [cell setBackgroundColor:[UIColor lightGrayColor]];
+      UIColor *blue  = [UIColor colorWithRed: 0.0/255 green:122.0/255 blue:255.0/255 alpha:1];
+      UIColor *green = [UIColor colorWithRed:76.0/255 green:217.0/255 blue:100.0/255 alpha:1];
+
+      cell = [[UITableViewCell alloc] initWithStyle: (subtext ? UITableViewCellStyleSubtitle : UITableViewCellStyleDefault)
+        reuseIdentifier:cellIdentifier];
+      cell.selectionStyle = UITableViewCellSelectionStyleNone;
+      if      (highlight_bg)                                      [cell setBackgroundColor:green];
+      else if (change_selected_row_background && is_selected_row) [cell setBackgroundColor:[UIColor lightGrayColor]];
 
       if (ci.type != LFL::TableItem::Button) {
         if (int icon = ci.left_icon) {
@@ -617,14 +631,19 @@ static std::vector<UIImage*> app_images;
 
       } else if (ci.type == LFL::TableItem::Label) {
         cell.textLabel.text = LFL::MakeNSString(ci.key);
-        [cell.textLabel sizeToFit];
-
-        UILabel *label = [[UILabel alloc] initWithFrame: [self getCellFrame: cell.textLabel.frame.size.width]];
-        label.text = LFL::MakeNSString(ci.val);
-        label.adjustsFontSizeToFitWidth = TRUE;
-        label.textAlignment = NSTextAlignmentRight;
-        cell.accessoryView = label;
-        [label release];
+        if (subtext) {
+          cell.detailTextLabel.text = LFL::MakeNSString(ci.val);
+          cell.detailTextLabel.lineBreakMode = NSLineBreakByWordWrapping;
+          cell.detailTextLabel.numberOfLines = 0;
+        } else {
+          [cell.textLabel sizeToFit];
+          UILabel *label = [[UILabel alloc] initWithFrame: [self getCellFrame: cell.textLabel.frame.size.width]];
+          label.text = LFL::MakeNSString(ci.val);
+          label.adjustsFontSizeToFitWidth = TRUE;
+          label.textAlignment = NSTextAlignmentRight;
+          cell.accessoryView = label;
+          [label release];
+        }
 
       } else {
         cell.textLabel.text = LFL::MakeNSString(ci.key);
@@ -709,6 +728,8 @@ static std::vector<UIImage*> app_images;
       label.text = LFL::MakeNSString(data[section].header);
       label.textAlignment = NSTextAlignmentCenter;
       label.autoresizingMask = UIViewAutoresizingFlexibleRightMargin | UIViewAutoresizingFlexibleLeftMargin;
+      label.lineBreakMode = NSLineBreakByWordWrapping;
+      label.numberOfLines = 0;
       [headerView addSubview:label];
       [label release];
     }
@@ -782,8 +803,8 @@ static std::vector<UIImage*> app_images;
     if (parent == nil && _lfl_self && _lfl_self->hide_cb) _lfl_self->hide_cb();
   }
 
-  - (void)viewWillAppear:   (BOOL)animated { [super viewWillAppear:    animated]; if (_toolbar) [_toolbar show: true];  }
-  - (void)viewWillDisappear:(BOOL)animated { [super viewWillDisappear: animated]; if (_toolbar) [_toolbar show: false]; }
+  - (void)viewWillAppear:   (BOOL)animated { [super viewWillAppear:    animated]; }
+  - (void)viewWillDisappear:(BOOL)animated { [super viewWillDisappear: animated]; }
 
   - (void)textFieldDidChange:(IOSTextField*)sender {
     _lfl_self->changed = true;
@@ -951,8 +972,7 @@ SystemTableView::SystemTableView(const string &title, const string &style, Table
 void SystemTableView::DelNavigationButton(int align) { return [FromVoid<IOSTable*>(impl) clearNavigationButton:align]; }
 void SystemTableView::AddNavigationButton(int align, const TableItem &item) { return [FromVoid<IOSTable*>(impl) loadNavigationButton:item withAlign:align]; }
 void SystemTableView::AddToolbar(SystemToolbarView *t) {
-  [FromVoid<IOSTable*>(impl) setToolbar: FromVoid<IOSToolbar*>(t->impl)];
-  [FromVoid<IOSTable*>(impl).toolbar.toolbar setNeedsLayout];
+  [FromVoid<IOSTable*>(impl) setToolbarItems: [FromVoid<IOSToolbar*>(t->impl) createUIToolbarItems: TRUE]];
 }
 
 void SystemTableView::Show(bool show_or_hide) {
@@ -996,7 +1016,7 @@ SystemTextView::SystemTextView(const string &title, const string &text) :
 SystemNavigationView::~SystemNavigationView() { if (auto nav = FromVoid<IOSNavigation*>(impl)) [nav release]; }
 SystemNavigationView::SystemNavigationView() : impl([[IOSNavigation alloc] initWithNavigationBarClass:nil toolbarClass:nil]) {
   auto nav = FromVoid<IOSNavigation*>(impl);
-  [nav setToolbarHidden:YES animated:NO];
+  [nav setToolbarHidden:NO animated:NO];
 }
 
 void SystemNavigationView::Show(bool show_or_hide) {

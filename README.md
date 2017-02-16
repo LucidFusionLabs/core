@@ -147,8 +147,8 @@ then cmake -DCMAKE_INSTALL_PREFIX=~/llvm -P cmake_install.cmake
 * Install Android Developer Console, Android SDK (android-20 + PlayServices),
   Android NDK, and Gradle
 
-* $HOME/android-ndk-r10d/build/tools/make-standalone-toolchain.sh \
-  --platform=android-9 --toolchain=arm-linux-androideabi-4.8 --install-dir=$HOME/android-toolchain
+* $HOME/android-ndk-r13b/build/tools/make_standalone_toolchain.py \
+  --arch arm --api 9 --install-dir $HOME/android-toolchain
 
         cd lfl
         mkdir android && cd android
@@ -156,8 +156,7 @@ then cmake -DCMAKE_INSTALL_PREFIX=~/llvm -P cmake_install.cmake
         cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=../core/CMake/AndroidToolchain.cmake ..
 
         cd term
-        make lterm_debug
-        make lterm_pkg
+        make lterm_release
 
 ## Contribute
 

@@ -21,7 +21,13 @@ public class JListViewFragment extends JFragment implements OnItemClickListener 
     public View toolbar;
     public ListView listview = null;
 
-    JListViewFragment(final MainActivity activity, final JWidget p, final JListAdapter d, final View tb) {
+    public JListViewFragment() {
+       super(null, null);
+       data = null;
+       toolbar = null;
+    }
+
+    public JListViewFragment(final MainActivity activity, final JWidget p, final JListAdapter d, final View tb) {
         super(activity, p);
         data = d;
         toolbar = tb;
