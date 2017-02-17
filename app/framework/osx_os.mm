@@ -22,10 +22,6 @@
 #include "core/app/framework/osx_common.h"
 
 namespace LFL {
-SystemAdvertisingView::SystemAdvertisingView() {}
-void SystemAdvertisingView::Show() {}
-void SystemAdvertisingView::Hide() {}
-
 void Application::OpenSystemBrowser(const string &url_text) {
   CFURLRef url = CFURLCreateWithBytes(0, MakeUnsigned(url_text.c_str()), url_text.size(), kCFStringEncodingASCII, 0);
   if (url) { LSOpenCFURLRef(url, 0); CFRelease(url); }

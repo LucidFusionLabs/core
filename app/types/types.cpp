@@ -169,7 +169,7 @@ vector<Table> Table::Convert(vector<TableItem> in) {
   vector<Table> ret;
   ret.emplace_back();
   for (auto &i : in) {
-    if (i.type == LFL::TableItem::Separator) ret.emplace_back(i.key);
+    if (i.type == LFL::TableItem::Separator) ret.emplace_back(i.key, i.left_icon, (i.flags & TableItem::Flag::SubText) ? Flag::SubText : 0);
     else                                     ret.back().item.emplace_back(move(i));
   }
   return ret;

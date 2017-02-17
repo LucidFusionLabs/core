@@ -475,6 +475,7 @@ struct TableItem {
 };
 
 struct Table {
+  struct Flag { enum { EditButton=1, EditableIfHasTag=2, SubText=4 }; };
   string header;
   int image=0, flag=0, header_height=0, start_row=0;
   Callback add_cb;
@@ -798,99 +799,89 @@ struct Application : public ::LFApp {
 };
 
 struct SystemAlertView {
-  VoidPtr impl;
-  virtual ~SystemAlertView();
-  SystemAlertView(AlertItemVec items);
-  void Show(const string &arg);
-  void ShowCB(const string &title, const string &msg, const string &arg, StringCB confirm_cb);
-  string RunModal(const string &arg);
+  static unique_ptr<SystemAlertView> Create(AlertItemVec items);
+  virtual ~SystemAlertView() {}
+  virtual void Show(const string &arg) = 0;
+  virtual void ShowCB(const string &title, const string &msg, const string &arg, StringCB confirm_cb) = 0;
+  virtual string RunModal(const string &arg) = 0;
 };
 
 struct SystemPanelView {
-  VoidPtr impl;
-  virtual ~SystemPanelView();
-  SystemPanelView(const Box&, const string &title, PanelItemVec);
-  void Show();
-  void SetTitle(const string &title);
+  static unique_ptr<SystemPanelView> Create(const Box&, const string &title, PanelItemVec);
+  virtual ~SystemPanelView() {}
+  virtual void Show() = 0;
+  virtual void SetTitle(const string &title) = 0;
 };
 
 struct SystemToolbarView {
-  VoidPtr impl;
-  virtual ~SystemToolbarView();
-  SystemToolbarView(MenuItemVec items);
-  void Show(bool show_or_hide);
-  void ToggleButton(const string &n);
+  static unique_ptr<SystemToolbarView> Create(MenuItemVec items);
+  virtual ~SystemToolbarView() {}
+  virtual void Show(bool show_or_hide) = 0;
+  virtual void ToggleButton(const string &n) = 0;
 };
 
 struct SystemMenuView {
-  VoidPtr impl;
-  virtual ~SystemMenuView();
-  SystemMenuView(VoidPtr i) : impl(i) {}
-  SystemMenuView(const string &title, MenuItemVec items);
+  static unique_ptr<SystemMenuView> Create(const string &title, MenuItemVec items);
   static unique_ptr<SystemMenuView> CreateEditMenu(MenuItemVec items);
-  void Show();
+  virtual ~SystemMenuView() {}
+  virtual void Show() = 0;
 };
 
 struct SystemTableView {
-  enum { EditButton=1, EditableIfHasTag=2 };
-  VoidPtr impl;
+  static unique_ptr<SystemTableView> Create(const string &title, const string &style, TableItemVec items);
   bool changed=0;
   Callback hide_cb, show_cb = [=](){ changed=0; }; 
-  virtual ~SystemTableView();
-  SystemTableView(const string &title, const string &style, TableItemVec items);
+  virtual ~SystemTableView() {}
 
-  void DelNavigationButton(int id);
-  void AddNavigationButton(int id, const TableItem &item);
-  void AddToolbar(SystemToolbarView*);
-  void Show(bool show_or_hide);
+  virtual void DelNavigationButton(int id) = 0;
+  virtual void AddNavigationButton(int id, const TableItem &item) = 0;
+  virtual void AddToolbar(SystemToolbarView*) = 0;
+  virtual void Show(bool show_or_hide) = 0;
 
-  string GetKey(int section, int row);
-  int GetTag(int section, int row);
-  void SetTag(int section, int row, int val);
-  void SetKey(int seciton, int row, const string &key);
-  void SetValue(int section, int row, const string &val);
-  void SetHidden(int section, int row, bool val);
-  void SetTitle(const string &title);
-  PickerItem *GetPicker(int section, int row);
-  void SelectRow(int section, int row);
-  StringPairVec GetSectionText(int section);
+  virtual string GetKey(int section, int row) = 0;
+  virtual int GetTag(int section, int row) = 0;
+  virtual void SetTag(int section, int row, int val) = 0;
+  virtual void SetKey(int seciton, int row, const string &key) = 0;
+  virtual void SetValue(int section, int row, const string &val) = 0;
+  virtual void SetHidden(int section, int row, bool val) = 0;
+  virtual void SetTitle(const string &title) = 0;
+  virtual PickerItem *GetPicker(int section, int row) = 0;
+  virtual void SelectRow(int section, int row) = 0;
+  virtual void SetEditableSection(int section, int start_row, IntIntCB cb=IntIntCB()) = 0;
+  virtual StringPairVec GetSectionText(int section) = 0;
   bool GetSectionText(int section, vector<string*> out, bool check=1) { return GetPairValues(GetSectionText(section), move(out), check); }
-  void SetEditableSection(int section, int start_row, IntIntCB cb=IntIntCB());
 
-  void BeginUpdates();
-  void EndUpdates();
-  void AddRow(int section, TableItem item);
-  void SetSectionValues(int section, const StringVec&);
-  void ReplaceSection(int section, const string &h, int image, int flag, TableItemVec item, Callback add_button=Callback());
+  virtual void BeginUpdates() = 0;
+  virtual void EndUpdates() = 0;
+  virtual void AddRow(int section, TableItem item) = 0;
+  virtual void SetSectionValues(int section, const StringVec&) = 0;
+  virtual void ReplaceSection(int section, const string &h, int image, int flag, TableItemVec item, Callback add_button=Callback()) = 0;
 };
 
 struct SystemTextView {
-  VoidPtr impl;
+  static unique_ptr<SystemTextView> Create(const string &title, File *file);
+  static unique_ptr<SystemTextView> Create(const string &title, const string &text);
   Callback hide_cb, show_cb;
-  virtual ~SystemTextView();
-  SystemTextView(const string &title, File *file);
-  SystemTextView(const string &title, const string &text);
+  virtual ~SystemTextView() {}
 };
 
 struct SystemNavigationView {
-  VoidPtr impl;
+  static unique_ptr<SystemNavigationView> Create();
   bool shown=0;
   SystemTableView *root=0, *last_root=0;
-  virtual ~SystemNavigationView();
-  SystemNavigationView();
-
-  SystemTableView *Back();
-  void Show(bool show_or_hide);
-  void PushTableView(SystemTableView*);
-  void PushTextView(SystemTextView*);
-  void PopView(int num=1);
-  void PopToRoot();
-  void PopAll();
+  virtual ~SystemNavigationView() {}
+  virtual SystemTableView *Back() = 0;
+  virtual void Show(bool show_or_hide) = 0;
+  virtual void PushTableView(SystemTableView*) = 0;
+  virtual void PushTextView(SystemTextView*) = 0;
+  virtual void PopView(int num=1) = 0;
+  virtual void PopToRoot() = 0;
+  virtual void PopAll() = 0;
 };
 
 struct SystemAdvertisingView {
   struct Type { enum { BANNER=1 }; };
-  static unique_ptr<SystemAdvertisingView> Create(int type, int placement);
+  static unique_ptr<SystemAdvertisingView> Create(int type, int placement, const string &id);
   virtual ~SystemAdvertisingView() {}
   virtual void Show(bool show_or_hide) = 0;
 };

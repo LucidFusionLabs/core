@@ -278,6 +278,7 @@ int Application::SetExtraScale(bool v) { return false; }
 void Application::SetDownScale(bool v) {}
 void Application::SetTitleBar(bool v) {}
 void Application::SetKeepScreenOn(bool v) {}
+void Application::SetAppFrameEnabled(bool v) {}
 void Application::SetAutoRotateOrientation(bool v) {}
 void Application::SetPanRecognizer(bool enabled) {}
 void Application::SetPinchRecognizer(bool enabled) {}
@@ -317,7 +318,7 @@ extern "C" int main(int argc, const char *argv[]) {
   app->focused->gd = CreateGraphicsDevice(app->focused, 2).release();
   Video::CreateWindow(app->focused);
   auto w = GetTyped<QtWindow*>(app->focused->impl);
-  if ((w->init = true)) { w->MyWindowInit(); if (app->splash_color) app->DrawSplash(app->splash_color); }
+  if ((w->init = true)) { w->MyWindowInit(); if (app->splash_color) app->DrawSplash(*app->splash_color); }
   return qapp->exec();
 }
 

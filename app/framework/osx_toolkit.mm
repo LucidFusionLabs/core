@@ -550,12 +550,12 @@ static std::vector<NSImage*> app_images;
   }
 @end
 
-@interface OSXTextView : NSViewController<NSTextViewDelegate>
+@interface OSXText : NSViewController<NSTextViewDelegate>
   @property (nonatomic, retain) NSTextView *textView;
   @property (nonatomic, retain) NSString *text;
 @end
 
-@implementation OSXTextView
+@implementation OSXText
   - (id)initWithTitle:(NSString*)title andText:(NSString*)t {
     self = [super init];
     self.title = title;
@@ -585,186 +585,187 @@ static void AddNSMenuItems(NSMenu *menu, vector<MenuItem> items) {
   }
 }
 
-SystemAlertView::~SystemAlertView() { if (auto alert = FromVoid<OSXAlert*>(impl)) [alert release]; }
-SystemAlertView::SystemAlertView(AlertItemVec items) { impl = [[OSXAlert alloc] init: move(items)]; }
+struct OSXAlertView : public SystemAlertView {
+  OSXAlert *alert;
+  ~OSXAlertView() { [alert release]; }
+  OSXAlertView(AlertItemVec items) : alert([[OSXAlert alloc] init: move(items)]) {}
 
-void SystemAlertView::Show(const string &arg) {
-  auto alert = FromVoid<OSXAlert*>(impl);
-  if (alert.add_text) [alert.input setStringValue: MakeNSString(arg)];
-  [alert.alert beginSheetModalForWindow:[GetTyped<GameView*>(app->focused->id) window] modalDelegate:alert
-    didEndSelector:@selector(alertDidEnd:returnCode:contextInfo:) contextInfo:nil];
-  [GetTyped<GameView*>(app->focused->id) clearKeyModifiers];
-}
-
-void SystemAlertView::ShowCB(const string &title, const string &msg, const string &arg, StringCB confirm_cb) {
-  auto alert = FromVoid<OSXAlert*>(impl);
-  alert.confirm_cb = move(confirm_cb);
-  [alert.alert setMessageText: MakeNSString(title)];
-  [alert.alert setInformativeText: MakeNSString(msg)];
-  [alert.alert beginSheetModalForWindow:[GetTyped<GameView*>(app->focused->id) window] modalDelegate:alert
-    didEndSelector:@selector(alertDidEnd:returnCode:contextInfo:) contextInfo:nil];
-  [GetTyped<GameView*>(app->focused->id) clearKeyModifiers];
-}
-
-string SystemAlertView::RunModal(const string &arg) {
-  auto alert = FromVoid<OSXAlert*>(impl);
-  NSWindow *window = [GetTyped<GameView*>(app->focused->id) window];
-  if (alert.add_text) [alert.input setStringValue: MakeNSString(arg)];
-  [alert.alert beginSheetModalForWindow:window modalDelegate:alert
-    didEndSelector:@selector(modalAlertDidEnd:returnCode:contextInfo:) contextInfo:nil];
-  [NSApp runModalForWindow: window];
-  return alert.add_text ? GetNSString([alert.input stringValue]) : "";
-}
-
-SystemMenuView::~SystemMenuView() { if (auto menu = FromVoid<NSMenu*>(impl)) [menu release]; }
-SystemMenuView::SystemMenuView(const string &title_text, MenuItemVec items) {
-  NSString *title = [NSString stringWithUTF8String: title_text.c_str()];
-  NSMenu *menu = [[NSMenu alloc] initWithTitle: title];
-  AddNSMenuItems(menu, move(items));
-  NSMenuItem *item = [[NSMenuItem alloc] initWithTitle:title action:nil keyEquivalent:@""];
-  [item setSubmenu: menu];
-  [[NSApp mainMenu] addItem: item];
-  [menu release];
-  [item release];
-}
-
-void SystemMenuView::Show() {}
-unique_ptr<SystemMenuView> SystemMenuView::CreateEditMenu(MenuItemVec items) {
-  NSMenuItem *item; 
-  NSMenu *menu = [[NSMenu alloc] initWithTitle:@"Edit"];
-  item = [menu addItemWithTitle:@"Copy"  action:@selector(copy:)  keyEquivalent:@"c"];
-  item = [menu addItemWithTitle:@"Paste" action:@selector(paste:) keyEquivalent:@"v"];
-  AddNSMenuItems(menu, move(items));
-  item = [[NSMenuItem alloc] initWithTitle:@"Edit" action:nil keyEquivalent:@""];
-  [item setSubmenu: menu];
-  [[NSApp mainMenu] addItem: item];
-  [menu release];
-  [item release];
-  return make_unique<SystemMenuView>(nullptr);
-}
-
-SystemPanelView::~SystemPanelView() { if (auto panel = FromVoid<OSXPanel*>(impl)) [panel release]; }
-SystemPanelView::SystemPanelView(const Box &b, const string &title, PanelItemVec items) {
-  OSXPanel *panel = [[OSXPanel alloc] initWithBox: b];
-  [[panel window] setTitle: [NSString stringWithUTF8String: title.c_str()]];
-  for (auto &i : items) {
-    const Box &b = i.box;
-    const string &t = i.type;
-    if (t == "textbox") {
-      NSTextField *textfield = [[NSTextField alloc] initWithFrame:NSMakeRect(b.x, b.y, b.w, b.h)];
-      [panel addTextField: textfield withCB: move(i.cb)];
-      [[[panel window] contentView] addSubview: textfield];
-    } else if (PrefixMatch(t, "button:")) {
-      NSButton *button = [[[NSButton alloc] initWithFrame:NSMakeRect(b.x, b.y, b.w, b.h)] autorelease];
-      [panel addButton: button withCB: move(i.cb)];
-      [[[panel window] contentView] addSubview: button];
-      [button setTitle: [NSString stringWithUTF8String: t.substr(7).c_str()]];
-      [button setButtonType:NSMomentaryLightButton];
-      [button setBezelStyle:NSRoundedBezelStyle];
-    } else ERROR("unknown panel item ", t);
+  void Show(const string &arg) {
+    if (alert.add_text) [alert.input setStringValue: MakeNSString(arg)];
+    [alert.alert beginSheetModalForWindow:[GetTyped<GameView*>(app->focused->id) window] modalDelegate:alert
+      didEndSelector:@selector(alertDidEnd:returnCode:contextInfo:) contextInfo:nil];
+    [GetTyped<GameView*>(app->focused->id) clearKeyModifiers];
   }
-  impl = panel;
-}
 
-void SystemPanelView::Show() { [FromVoid<OSXPanel*>(impl) show]; }
-void SystemPanelView::SetTitle(const string &title) { 
-  [[FromVoid<OSXPanel*>(impl) window] setTitle: [NSString stringWithUTF8String: title.c_str()]];
-}
+  void ShowCB(const string &title, const string &msg, const string &arg, StringCB confirm_cb) {
+    alert.confirm_cb = move(confirm_cb);
+    [alert.alert setMessageText: MakeNSString(title)];
+    [alert.alert setInformativeText: MakeNSString(msg)];
+    [alert.alert beginSheetModalForWindow:[GetTyped<GameView*>(app->focused->id) window] modalDelegate:alert
+      didEndSelector:@selector(alertDidEnd:returnCode:contextInfo:) contextInfo:nil];
+    [GetTyped<GameView*>(app->focused->id) clearKeyModifiers];
+  }
 
-SystemToolbarView::~SystemToolbarView() {}
-SystemToolbarView::SystemToolbarView(MenuItemVec items) : impl(0) {}
-void SystemToolbarView::Show(bool show_or_hide) {}
-void SystemToolbarView::ToggleButton(const string &n) {}
+  string RunModal(const string &arg) {
+    NSWindow *window = [GetTyped<GameView*>(app->focused->id) window];
+    if (alert.add_text) [alert.input setStringValue: MakeNSString(arg)];
+    [alert.alert beginSheetModalForWindow:window modalDelegate:alert
+      didEndSelector:@selector(modalAlertDidEnd:returnCode:contextInfo:) contextInfo:nil];
+    [NSApp runModalForWindow: window];
+    return alert.add_text ? GetNSString([alert.input stringValue]) : "";
+  }
+};
 
-SystemTableView::~SystemTableView() { if (auto table = FromVoid<OSXTable*>(impl)) [table release]; }
-SystemTableView::SystemTableView(const string &title, const string &style, TableItemVec items) :
-  impl([[OSXTable alloc] init:this withTitle:title andStyle:style items:Table::Convert(move(items))]) {}
+struct OSXMenuView : public SystemMenuView {
+  NSMenu *menu;
+  ~OSXMenuView() { [menu release]; }
+  OSXMenuView(const string &title, MenuItemVec items) :
+    menu([[NSMenu alloc] initWithTitle: MakeNSString(title)]) {
+    AddNSMenuItems(menu, move(items));
+    NSMenuItem *item = [[NSMenuItem alloc] initWithTitle: MakeNSString(title) action:nil keyEquivalent:@""];
+    [item setSubmenu: menu];
+    [[NSApp mainMenu] addItem: item];
+    [menu release];
+    [item release];
+  }
+  void Show() {}
+};
 
-void SystemTableView::DelNavigationButton(int align) {}
-void SystemTableView::AddNavigationButton(int align, const TableItem &item) {}
-void SystemTableView::AddToolbar(SystemToolbarView *t) {
-}
+struct OSXPanelView : public SystemPanelView {
+  OSXPanel *panel;
+  ~OSXPanelView() { [panel release]; }
+  OSXPanelView(const Box &b, const string &title, PanelItemVec items) :
+    panel([[OSXPanel alloc] initWithBox: b]) {
+    [[panel window] setTitle: [NSString stringWithUTF8String: title.c_str()]];
+    for (auto &i : items) {
+      const Box &b = i.box;
+      const string &t = i.type;
+      if (t == "textbox") {
+        NSTextField *textfield = [[NSTextField alloc] initWithFrame:NSMakeRect(b.x, b.y, b.w, b.h)];
+        [panel addTextField: textfield withCB: move(i.cb)];
+        [[[panel window] contentView] addSubview: textfield];
+      } else if (PrefixMatch(t, "button:")) {
+        NSButton *button = [[[NSButton alloc] initWithFrame:NSMakeRect(b.x, b.y, b.w, b.h)] autorelease];
+        [panel addButton: button withCB: move(i.cb)];
+        [[[panel window] contentView] addSubview: button];
+        [button setTitle: [NSString stringWithUTF8String: t.substr(7).c_str()]];
+        [button setButtonType:NSMomentaryLightButton];
+        [button setBezelStyle:NSRoundedBezelStyle];
+      } else ERROR("unknown panel item ", t);
+    }
+  }
 
-void SystemTableView::Show(bool show_or_hide) {
-  auto table = FromVoid<OSXTable*>(impl);
-  NSView *contentView = LFL::GetTyped<GameView*>(LFL::app->focused->id).window.contentView;
-  if (show_or_hide) {
-    [[contentView animator] addSubview:table.tableContainer];
-    [table.tableContainer setFrameOrigin:CGPointMake(0, 0)];
-  } else 
-    [table.tableContainer removeFromSuperview];
-}
+  void Show() { [panel show]; }
+  void SetTitle(const string &title) { 
+    [[panel window] setTitle: [NSString stringWithUTF8String: title.c_str()]];
+  }
+};
 
-void SystemTableView::AddRow(int section, TableItem item) { return [FromVoid<OSXTable*>(impl) addRow:section withItem:move(item)]; }
-string SystemTableView::GetKey(int section, int row) { return [FromVoid<OSXTable*>(impl) getKey:section row:row]; }
-int SystemTableView::GetTag(int section, int row) { return [FromVoid<OSXTable*>(impl) getTag:section row:row]; }
-void SystemTableView::SetTag(int section, int row, int val) { [FromVoid<OSXTable*>(impl) setTag:section row:row val:val]; }
-void SystemTableView::SetKey(int section, int row, const string &val) { [FromVoid<OSXTable*>(impl) setKey:section row:row val:val]; }
-void SystemTableView::SetValue(int section, int row, const string &val) { [FromVoid<OSXTable*>(impl) setValue:section row:row val:val]; }
-void SystemTableView::SetHidden(int section, int row, bool val) { [FromVoid<OSXTable*>(impl) setHidden:section row:row val:val]; }
-void SystemTableView::SetTitle(const string &title) { FromVoid<OSXTable*>(impl).title = LFL::MakeNSString(title); }
-PickerItem *SystemTableView::GetPicker(int section, int row) { return [FromVoid<OSXTable*>(impl) getPicker:section row:row]; }
-StringPairVec SystemTableView::GetSectionText(int section) { return [FromVoid<OSXTable*>(impl) dumpDataForSection:section]; }
-void SystemTableView::SetEditableSection(int section, int start_row, LFL::IntIntCB cb) {
-  FromVoid<OSXTable*>(impl).delete_row_cb = move(cb);
-  FromVoid<OSXTable*>(impl).editable_section = section;
-  FromVoid<OSXTable*>(impl).editable_start_row = start_row;
-}
+struct OSXToolbarView : public SystemToolbarView {
+  ~OSXToolbarView() {}
+  OSXToolbarView(MenuItemVec items) {}
+  void Show(bool show_or_hide) {}
+  void ToggleButton(const string &n) {}
+};
 
-void SystemTableView::SelectRow(int section, int row) {
-} 
+struct OSXTableView : public SystemTableView {
+  OSXTable *table;
+  ~OSXTableView() { [table release]; }
+  OSXTableView(const string &title, const string &style, TableItemVec items) :
+    table([[OSXTable alloc] init:this withTitle:title andStyle:style items:Table::Convert(move(items))]) {}
 
-void SystemTableView::BeginUpdates() { [FromVoid<OSXTable*>(impl).tableView beginUpdates]; }
-void SystemTableView::EndUpdates() { [FromVoid<OSXTable*>(impl).tableView endUpdates]; }
-void SystemTableView::SetSectionValues(int section, const StringVec &item) { [FromVoid<OSXTable*>(impl) setSectionValues:section items:item]; }
-void SystemTableView::ReplaceSection(int section, const string &h, int image, int flag, TableItemVec item, Callback add_button)
-{ [FromVoid<OSXTable*>(impl) replaceSection:section items:move(item) header:h image:image flag:flag addbutton:move(add_button)]; }
+  void DelNavigationButton(int align) {}
+  void AddNavigationButton(int align, const TableItem &item) {}
+  void AddToolbar(SystemToolbarView *t) {
+  }
 
-SystemTextView::~SystemTextView() { if (auto view = FromVoid<OSXTextView*>(impl)) [view release]; }
-SystemTextView::SystemTextView(const string &title, File *f) : SystemTextView(title, f ? f->Contents() : "") {}
-SystemTextView::SystemTextView(const string &title, const string &text) :
-  impl([[OSXTextView alloc] initWithTitle:MakeNSString(title) andText:[[[NSString alloc]
-       initWithBytes:text.data() length:text.size() encoding:NSASCIIStringEncoding] autorelease]]) {}
+  void Show(bool show_or_hide) {
+    NSView *contentView = LFL::GetTyped<GameView*>(LFL::app->focused->id).window.contentView;
+    if (show_or_hide) {
+      [[contentView animator] addSubview:table.tableContainer];
+      [table.tableContainer setFrameOrigin:CGPointMake(0, 0)];
+    } else 
+      [table.tableContainer removeFromSuperview];
+  }
 
-SystemNavigationView::~SystemNavigationView() { if (auto nav = FromVoid<OSXNavigation*>(impl)) [nav release]; }
-SystemNavigationView::SystemNavigationView() : impl([[OSXNavigation alloc] init]) {}
-void SystemNavigationView::Show(bool show_or_hide) {
-  auto nav = FromVoid<OSXNavigation*>(impl);
-  GameContainerView *contentView = LFL::GetTyped<GameView*>(LFL::app->focused->id).window.contentView;
-  if ((shown = show_or_hide)) {
-    [contentView.gameView removeFromSuperview];
-    [[contentView animator] addSubview:nav.view];
-    [nav.view setFrameOrigin:CGPointMake(0, 0)];
-  } else 
-    [nav.view removeFromSuperview];
-}
+  void AddRow(int section, TableItem item) { return [table addRow:section withItem:move(item)]; }
+  string GetKey(int section, int row) { return [table getKey:section row:row]; }
+  int GetTag(int section, int row) { return 0; }
+  int SetTag(int section, int row) { return [table getTag:section row:row]; }
+  void SetTag(int section, int row, int val) { [table setTag:section row:row val:val]; }
+  void SetKey(int section, int row, const string &val) { [table setKey:section row:row val:val]; }
+  void SetValue(int section, int row, const string &val) { [table setValue:section row:row val:val]; }
+  void SetHidden(int section, int row, bool val) { [table setHidden:section row:row val:val]; }
+  void SetTitle(const string &title) { table.title = LFL::MakeNSString(title); }
+  PickerItem *GetPicker(int section, int row) { return [table getPicker:section row:row]; }
+  StringPairVec GetSectionText(int section) { return [table dumpDataForSection:section]; }
+  void SetEditableSection(int section, int start_row, LFL::IntIntCB cb) {
+    table.delete_row_cb = move(cb);
+    table.editable_section = section;
+    table.editable_start_row = start_row;
+  }
 
-SystemTableView *SystemNavigationView::Back() {
-  for (NSViewController *c in [FromVoid<OSXNavigation*>(impl).viewControllers reverseObjectEnumerator]) {
-    if ([c isKindOfClass:[OSXTable class]])
-      if (auto lself = static_cast<OSXTable*>(c).lfl_self) return lself;
+  void SelectRow(int section, int row) {
   } 
-  return nullptr;
-}
 
-void SystemNavigationView::PushTableView(SystemTableView *t) {
-  if (!root) root = t;
-  if (t->show_cb) t->show_cb();
-  [FromVoid<OSXNavigation*>(impl) pushViewController: FromVoid<OSXTable*>(t->impl) animated: YES];
-}
+  void BeginUpdates() { [table.tableView beginUpdates]; }
+  void EndUpdates() { [table.tableView endUpdates]; }
+  void SetSectionValues(int section, const StringVec &item) { [table setSectionValues:section items:item]; }
+  void ReplaceSection(int section, const string &h, int image, int flag, TableItemVec item, Callback add_button)
+  { [table replaceSection:section items:move(item) header:h image:image flag:flag addbutton:move(add_button)]; }
+};
 
-void SystemNavigationView::PushTextView(SystemTextView *t) {
-  if (t->show_cb) t->show_cb();
-  [FromVoid<OSXNavigation*>(impl) pushViewController: FromVoid<OSXTextView*>(t->impl) animated: YES];
-}
+struct OSXTextView : public SystemTextView {
+  OSXText *view;
+  ~OSXTextView() { [view release]; }
+  OSXTextView(const string &title, File *f) : OSXTextView(title, f ? f->Contents() : "") {}
+  OSXTextView(const string &title, const string &text) :
+    view([[OSXText alloc] initWithTitle:MakeNSString(title) andText:[[[NSString alloc]
+         initWithBytes:text.data() length:text.size() encoding:NSASCIIStringEncoding] autorelease]]) {}
+};
 
-void SystemNavigationView::PopToRoot() {}
-void SystemNavigationView::PopAll() {}
+struct OSXNavigationView : public SystemNavigationView {
+  OSXNavigation *nav;
+  ~OSXNavigationView() { [nav release]; }
+  OSXNavigationView() : nav([[OSXNavigation alloc] init]) {}
 
-void SystemNavigationView::PopView(int n) {
-  for (int i = 0; i != n; ++i)
-    [FromVoid<OSXNavigation*>(impl) popViewControllerAnimated: (i == n - 1)];
-}
+  void Show(bool show_or_hide) {
+    GameContainerView *contentView = LFL::GetTyped<GameView*>(LFL::app->focused->id).window.contentView;
+    if ((shown = show_or_hide)) {
+      [contentView.gameView removeFromSuperview];
+      [[contentView animator] addSubview:nav.view];
+      [nav.view setFrameOrigin:CGPointMake(0, 0)];
+    } else 
+      [nav.view removeFromSuperview];
+  }
+
+  SystemTableView *Back() {
+    for (NSViewController *c in [nav.viewControllers reverseObjectEnumerator]) {
+      if ([c isKindOfClass:[OSXTable class]])
+        if (auto lself = static_cast<OSXTable*>(c).lfl_self) return lself;
+    } 
+    return nullptr;
+  }
+
+  void PushTableView(SystemTableView *t) {
+    if (!root) root = t;
+    if (t->show_cb) t->show_cb();
+    [nav pushViewController: dynamic_cast<OSXTableView*>(t)->table animated: YES];
+  }
+
+  void PushTextView(SystemTextView *t) {
+    if (t->show_cb) t->show_cb();
+    [nav pushViewController: dynamic_cast<OSXTextView*>(t)->view animated: YES];
+  }
+
+  void PopToRoot() {}
+  void PopAll() {}
+
+  void PopView(int n) {
+    for (int i = 0; i != n; ++i)
+      [nav popViewControllerAnimated: (i == n - 1)];
+  }
+};
 
 void Application::ShowSystemFontChooser(const FontDesc &cur_font, const StringVecCB &choose_cb) {
   static OSXFontChooser *font_chooser = [OSXFontChooser alloc];
@@ -818,5 +819,30 @@ int Application::LoadSystemImage(const string &n) {
   app_images.push_back(image);
   return app_images.size();
 }
+
+
+unique_ptr<SystemAlertView> SystemAlertView::Create(AlertItemVec items) { return make_unique<OSXAlertView>(move(items)); }
+unique_ptr<SystemPanelView> SystemPanelView::Create(const Box &b, const string &title, PanelItemVec items) { return make_unique<OSXPanelView>(b, title, move(items)); }
+unique_ptr<SystemToolbarView> SystemToolbarView::Create(MenuItemVec items) { return make_unique<OSXToolbarView>(move(items)); }
+
+unique_ptr<SystemMenuView> SystemMenuView::Create(const string &title, MenuItemVec items) { return make_unique<OSXMenuView>(title, move(items)); }
+unique_ptr<SystemMenuView> SystemMenuView::CreateEditMenu(MenuItemVec items) {
+  NSMenuItem *item; 
+  NSMenu *menu = [[NSMenu alloc] initWithTitle:@"Edit"];
+  item = [menu addItemWithTitle:@"Copy"  action:@selector(copy:)  keyEquivalent:@"c"];
+  item = [menu addItemWithTitle:@"Paste" action:@selector(paste:) keyEquivalent:@"v"];
+  AddNSMenuItems(menu, move(items));
+  item = [[NSMenuItem alloc] initWithTitle:@"Edit" action:nil keyEquivalent:@""];
+  [item setSubmenu: menu];
+  [[NSApp mainMenu] addItem: item];
+  [menu release];
+  [item release];
+  return make_unique<OSXMenuView>("", MenuItemVec());
+}
+
+unique_ptr<SystemTableView> SystemTableView::Create(const string &title, const string &style, TableItemVec items) { return make_unique<OSXTableView>(title, style, move(items)); }
+unique_ptr<SystemTextView> SystemTextView::Create(const string &title, File *file) { return make_unique<OSXTextView>(title, file); }
+unique_ptr<SystemTextView> SystemTextView::Create(const string &title, const string &text) { return make_unique<OSXTextView>(title, text); }
+unique_ptr<SystemNavigationView> SystemNavigationView::Create() { return make_unique<OSXNavigationView>(); }
 
 }; // namespace LFL

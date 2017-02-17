@@ -4,6 +4,8 @@ lfl_add_target(app_null_framework STATIC_LIBRARY SOURCES null_framework.cpp)
 lfl_add_target(app_null_os STATIC_LIBRARY SOURCES null_os.cpp)
 lfl_add_target(app_null_toolkit STATIC_LIBRARY SOURCES null_toolkit.cpp)
 lfl_add_target(app_null_crashreporting STATIC_LIBRARY SOURCES null_crashreporting.cpp)
+lfl_add_target(app_null_billing STATIC_LIBRARY SOURCES null_billing.cpp)
+lfl_add_target(app_null_advertising STATIC_LIBRARY SOURCES null_advertising.cpp)
 
 if(LFL_ANDROID)
   lfl_add_target(app_android_os STATIC_LIBRARY SOURCES android_os.cpp LINK_LIBRARIES -llog -lz ${C_LIBRARY})

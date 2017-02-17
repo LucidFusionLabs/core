@@ -19,57 +19,55 @@
 #import <GoogleMobileAds/GoogleMobileAds.h>
 
 #include "core/app/app.h"
+#include "core/app/framework/apple_common.h"
 
 @interface IOSAdMob : NSObject
 @end
 
 @implementation IOSAdMob
-  static GADBannerView *bannerView;
-  static UIView *senderView;
-  static UIView *containerView;
-  static UIView *bannerContainerView;
-  static float bannerHeight;
+  float bannerHeight;
+  UIView *bannerContainerView;
+  GADBannerView *bannerView;
 
-  + (void)createBanner:(UIViewController *)sender {
+  - (id)initWithFrame:(CGRect)r adUnitID:(NSString*)adid {
+    self = [super init];
     if ([UIDevice currentDevice].userInterfaceIdiom == UIUserInterfaceIdiomPhone) bannerHeight = 50;
     else bannerHeight = 90;
+    bannerContainerView = [[UIView alloc] initWithFrame:CGRectMake(0, r.size.height, r.size.width, bannerHeight)];
 
-    GADRequest *request = [GADRequest request];
-    // request.testDevices = [NSArray arrayWithObjects:GAD_SIMULATOR_ID, nil];
     bannerView = [[GADBannerView alloc] initWithAdSize:kGADAdSizeBanner];
-    bannerView.adUnitID = @"ca-app-pub-xxxxxxxxxxxxxxxx/xxxxxxxxxx";
+    bannerView.adUnitID = adid;
     bannerView.rootViewController = (id)self;
     bannerView.delegate = (id<GADBannerViewDelegate>)self;
-    senderView = sender.view;
-    bannerView.frame = CGRectMake(0, 0, senderView.frame.size.width, bannerHeight);
+    bannerView.frame = CGRectMake(0, 0, r.size.width, bannerHeight);
+
+    GADRequest *request = [GADRequest request];
+    request.testDevices = [NSArray arrayWithObjects:kGADSimulatorID, nil];
     [bannerView loadRequest:request];
-    containerView = [[UIView alloc] initWithFrame:senderView.frame];
-    bannerContainerView = [[UIView alloc] initWithFrame:CGRectMake(0, senderView.frame.size.height, senderView.frame.size.width, bannerHeight)];
-
-    for (id object in sender.view.subviews) {
-        [object removeFromSuperview];
-        [containerView addSubview:object];
-    }
-
-    [senderView addSubview:containerView];
-    [senderView addSubview:bannerContainerView];
+    return self;
   }
 
   + (void)adViewDidReceiveAd:(GADBannerView *)view {
+  #if 0
     [UIView animateWithDuration:0.5 animations:^{
       containerView.frame = CGRectMake(0, 0, senderView.frame.size.width, senderView.frame.size.height - bannerHeight);
       bannerContainerView.frame = CGRectMake(0, senderView.frame.size.height - bannerHeight, senderView.frame.size.width, bannerHeight);
       [bannerContainerView addSubview:bannerView];
     }];
+    #endif
   }
 @end
 
 namespace LFL {
 struct iOSAdvertisingView : public SystemAdvertisingView {
-  iOSAdvertisingView(int type, int placement) {}
+  IOSAdMob *admob;
+  virtual ~iOSAdvertisingView() { [admob release]; }
+  iOSAdvertisingView(int type, int placement, const string &adid) :
+    admob([[IOSAdMob alloc] initWithFrame: [[UIScreen mainScreen] bounds] adUnitID: MakeNSString(adid)]) {}
+
   void Show(bool show_or_hide) {
   }
 };
 
-unique_ptr<SystemAdvertisingView> SystemAdvertisingView::Create(int type, int placement) { return make_unique<iOSAdvertisingView>(type, placement); }
+unique_ptr<SystemAdvertisingView> SystemAdvertisingView::Create(int type, int placement, const string &adid) { return make_unique<iOSAdvertisingView>(type, placement, adid); }
 }; // namespace LFL
