@@ -495,7 +495,7 @@ struct QtMenuView : public SystemMenuView {
   QMenu *menu;
   ~QtMenuView() { delete menu; }
   QtMenuView(const string &title_text, MenuItemVec v) {
-    auto mb = GetTyped<QtWindowInterface*>(app->focused->id)->window->menuBar();
+    auto mb = dynamic_cast<QtWindowInterface*>(app->focused)->window->menuBar();
     menu = new QMenu(MakeQString(title_text), mb);
     for (auto b = v.begin(), e = v.end(), i = b; i != e; ++i) {
       QAction *action = menu->addAction(MakeQString(i->name));
@@ -538,7 +538,7 @@ struct QtToolbarView : public SystemToolbarView {
   void ToggleButton(const string &n) {}
   void Show(bool show_or_hide) {  
     if (!tb->init && (tb->init=1)) 
-      GetTyped<QtWindowInterface*>(app->focused->id)->layout->setMenuBar(tb->toolbar.get());
+      dynamic_cast<QtWindowInterface*>(app->focused)->layout->setMenuBar(tb->toolbar.get());
     if (show_or_hide) tb->toolbar->show();
     else              tb->toolbar->hide();
   }
@@ -588,7 +588,7 @@ struct QtTableView : public SystemTableView {
   }
 
   void Show(bool show_or_hide) {
-    auto w = GetTyped<QtWindowInterface*>(app->focused->id);
+    auto w = dynamic_cast<QtWindowInterface*>(app->focused);
     if (show_or_hide) {
       if (show_cb) show_cb();
       w->layout->addWidget(table->table.get());
@@ -666,7 +666,7 @@ struct QtNavigationView : public SystemNavigationView {
   QtNavigationView() : nav(new QtNavigation()) {}
 
   void Show(bool show_or_hide) {
-    auto w = GetTyped<QtWindowInterface*>(app->focused->id);
+    auto w = dynamic_cast<QtWindowInterface*>(app->focused);
     if (show_or_hide) {
       w->layout->addWidget(nav->content_widget.get());
       w->layout->setCurrentWidget(nav->content_widget.get());
@@ -738,7 +738,7 @@ void Application::ShowSystemContextMenu(const vector<MenuItem> &items) {
     QAction *action = menu->addAction(MakeQString(i.name));
     if (i.cb) menu->connect(action, &QAction::triggered, i.cb);
   }
-  menu->popup(GetTyped<QtWindowInterface*>(screen->id)->opengl_window->mapToGlobal
+  menu->popup(dynamic_cast<QtWindowInterface*>(screen)->opengl_window->mapToGlobal
               (MakeQPoint(Input::TransformMouseCoordinate(screen->mouse))));
 }
 

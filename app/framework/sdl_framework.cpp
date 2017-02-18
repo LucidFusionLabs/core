@@ -65,6 +65,16 @@ const int Key::F12        = SDLK_F12;
 const int Key::Home       = SDLK_HOME;
 const int Key::End        = SDLK_END;
 
+struct SDLWindow : public Window {
+  SDL_Window *window=0;
+  SDL_GLContext gl=0;
+  ~SDLWindow() { ClearChildren(); }
+  void SetCaption(const string &v) {}
+  void SetResizeIncrements(float x, float y) {}
+  void SetTransparency(float v) {}
+  bool Reshape(int w, int h) { SDL_SetWindowSize(window, w, h); return true; }
+};
+
 struct SDLFrameworkModule : public Module {
   int Init() {
     INFO("SDLFrameworkModule::Init");
@@ -118,7 +128,7 @@ struct SDLFrameworkModule : public Module {
 
 #if 0 // ndef __APPLE__
     if (mouse_moved && screen->cursor_grabbed) {
-      SDL_WarpMouseInWindow(GetTyped<SDL_Window*>(screen->id), screen->width/2, screen->height/2);
+      SDL_WarpMouseInWindow(dyamic_cast<SDLWindow*>(screen)->window, screen->width/2, screen->height/2);
       while(SDL_PollEvent(&ev)) { /* do nothing */ }
     }
 #endif
@@ -139,26 +149,22 @@ struct SDLFrameworkModule : public Module {
   }
 };
 
-void Window::SetCaption(const string &v) {}
-void Window::SetResizeIncrements(float x, float y) {}
-void Window::SetTransparency(float v) {}
-bool Window::Reshape(int w, int h) { SDL_SetWindowSize(GetTyped<SDL_Window*>(id), w, h); return true; }
-
 void Application::MakeCurrentWindow(Window *W) {
-  if (SDL_GL_MakeCurrent(GetTyped<SDL_Window*>(W->id), GetTyped<SDL_GLContext>(W->gl)) < 0)
+  auto w = dynamic_cast<SDLWindow*>(W);
+  if (SDL_GL_MakeCurrent(w->window, w->gl) < 0)
     ERROR("SDL_GL_MakeCurrent: ", SDL_GetError());
   screen = W; 
 }
 
 void Application::CloseWindow(Window *W) {
-  auto w = GetTyped<SDL_Window*>(W->id);
+  auto w = dynamic_cast<SDLWindow*>(W);
   SDL_GL_MakeCurrent(NULL, NULL);
-  windows.erase(Void(size_t(SDL_GetWindowID(w))));
+  windows.erase(Void(size_t(SDL_GetWindowID(w->window))));
   if (windows.empty()) {
     app->run = false;
-    SDL_GL_DeleteContext(GetTyped<SDL_GLContext>(W->gl));
+    SDL_GL_DeleteContext(dynamic_cast<SDLWindow*>(W)->window);
   }
-  SDL_DestroyWindow(w);
+  SDL_DestroyWindow(w->window);
   if (app->window_closed_cb) app->window_closed_cb(W);
   screen = 0;
 }
@@ -167,18 +173,18 @@ string Application::GetClipboardText() { return SDL_GetClipboardText(); }
 void Application::SetClipboardText(const string &s) { SDL_SetClipboardText(s.c_str()); }
 void Application::CloseTouchKeyboard() {
 #ifdef LFL_IOS
-  SDL_iPhoneKeyboardHide((SDL_Window*)screen->id);
+  SDL_iPhoneKeyboardHide(dynamic_cast<SDLWindow*>(screen)->window);
 #endif
 }
 void Application::OpenTouchKeyboard(bool) {
 #ifdef LFL_IOS
-  SDL_iPhoneKeyboardShow((SDL_Window*)screen->id);
+  SDL_iPhoneKeyboardShow(dynamic_cast<SDLWindow*>(screen)->window);
 #endif
 }
 
 void Application::LoseFocus() {}
-void Application::GrabMouseFocus()    { SDL_ShowCursor(0); SDL_SetWindowGrab(GetTyped<SDL_Window*>(screen->id), SDL_TRUE);  SDL_SetRelativeMouseMode(SDL_TRUE);  app->grab_mode.On();  screen->cursor_grabbed=true; }
-void Application::ReleaseMouseFocus() { SDL_ShowCursor(1); SDL_SetWindowGrab(GetTyped<SDL_Window*>(screen->id), SDL_FALSE); SDL_SetRelativeMouseMode(SDL_FALSE); app->grab_mode.Off(); screen->cursor_grabbed=false; }
+void Application::GrabMouseFocus()    { SDL_ShowCursor(0); SDL_SetWindowGrab(dynamic_cast<SDLWindow*>(screen)->window, SDL_TRUE);  SDL_SetRelativeMouseMode(SDL_TRUE);  app->grab_mode.On();  screen->cursor_grabbed=true; }
+void Application::ReleaseMouseFocus() { SDL_ShowCursor(1); SDL_SetWindowGrab(dynamic_cast<SDLWindow*>(screen)->window, SDL_FALSE); SDL_SetRelativeMouseMode(SDL_FALSE); app->grab_mode.Off(); screen->cursor_grabbed=false; }
 
 bool Video::CreateWindow(Window *W) {
   int createflag = SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN;
@@ -197,21 +203,21 @@ bool Video::CreateWindow(Window *W) {
                                            SDL_WINDOWPOS_UNDEFINED, W->width, W->height, createflag))).v)
     return ERRORv(false, "SDL_CreateWindow: ", SDL_GetError());
 
-  auto w = GetTyped<SDL_Window*>(W->id);
+  auto w = dynamic_cast<SDLWindow*>(W);
   if (!app->windows.empty()) W->gl = app->windows.begin()->second->gl;
-  else if (!(W->gl = MakeTyped(SDL_GL_CreateContext(w))).v)
+  else if (!(W->gl = MakeTyped(SDL_GL_CreateContext(w->window))).v)
     return ERRORv(false, "SDL_GL_CreateContext: ", SDL_GetError());
 
   SDL_Surface* icon = SDL_LoadBMP(Asset::FileName("icon.bmp").c_str());
   SDL_SetWindowIcon(w, icon);
-  app->windows[Void(size_t(SDL_GetWindowID(w)))] = W;
+  app->windows[Void(size_t(SDL_GetWindowID(w->window)))] = W;
   return true;
 }
 
 void Video::StartWindow(Window *W) {}
 int Video::Swap() {
   screen->gd->Flush();
-  SDL_GL_SwapWindow(GetTyped<SDL_Window*>(screen->id));
+  SDL_GL_SwapWindow(dynamic_cast<SDLWindow*>(W)->window);
   screen->gd->CheckForError(__FILE__, __LINE__);
   return 0;
 }

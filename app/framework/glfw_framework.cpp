@@ -59,6 +59,15 @@ const int Key::F12        = GLFW_KEY_F12;
 const int Key::Home       = GLFW_KEY_HOME;
 const int Key::End        = GLFW_KEY_END;
 
+struct GLFWWindow : public Window {
+  GLFWwindow *window=0;
+  ~GLFWWindow() { ClearChildren(); }
+  void SetCaption(const string &v) {}
+  void SetResizeIncrements(float x, float y) {}
+  void SetTransparency(float v) {}
+  bool Reshape(int w, int h) { glfwSetWindowSize(window, w, h); return true; }
+};
+
 struct GLFWFrameworkModule : public Module {
   int Init() {
     INFO("GLFWVideoModule::Init");
@@ -72,7 +81,7 @@ struct GLFWFrameworkModule : public Module {
     return 0;
   }
 
-  int Init(Window *W) { InitWindow(GetTyped<GLFWwindow*>(screen->id)); return 0; }
+  int Init(Window *W) { InitWindow(dynamic_cast<GLFW~window*>(screen)->window); return 0; }
   int Frame(unsigned clicks) { glfwPollEvents(); return 0; }
 
   static void InitWindow(GLFWwindow *W) {
@@ -125,16 +134,16 @@ struct GLFWFrameworkModule : public Module {
   }
 };
 
-string Application::GetClipboardText()                { return glfwGetClipboardString(GetTyped<GLFWwindow*>(screen->id)); }
-void   Application::SetClipboardText(const string &s) {        glfwSetClipboardString(GetTyped<GLFWwindow*>(screen->id), s.c_str()); }
-void Application::GrabMouseFocus()    { glfwSetInputMode(GetTyped<GLFWwindow*>(screen->id), GLFW_CURSOR, GLFW_CURSOR_DISABLED); app->grab_mode.On();  screen->cursor_grabbed=true;  }
-void Application::ReleaseMouseFocus() { glfwSetInputMode(GetTyped<GLFWwindow*>(screen->id), GLFW_CURSOR, GLFW_CURSOR_NORMAL);   app->grab_mode.Off(); screen->cursor_grabbed=false; }
+string Application::GetClipboardText()                { return glfwGetClipboardString(dynamic_cast<GLFWWindow*>(screen)->window); }
+void   Application::SetClipboardText(const string &s) {        glfwSetClipboardString(dynamic_cast<GLFWWindow*>(screen)->window, s.c_str()); }
+void Application::GrabMouseFocus()    { glfwSetInputMode(dynamic_cast<GLFWWindow*>(screen)->window, GLFW_CURSOR, GLFW_CURSOR_DISABLED); app->grab_mode.On();  screen->cursor_grabbed=true;  }
+void Application::ReleaseMouseFocus() { glfwSetInputMode(dynamic_cast<GLFWWindow*>(screen)->window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);   app->grab_mode.Off(); screen->cursor_grabbed=false; }
 void Application::SetTouchKeyboardTiled(bool v) {}
 void Application::OpenTouchKeyboard(bool) {}
 void Application::LoseFocus() {}
 
 void Application::MakeCurrentWindow(Window *W) {
-  glfwMakeContextCurrent(GetTyped<GLFWwindow*>(W->id));
+  glfwMakeContextCurrent(dynamic_cast<GLFWWindow*>(W)->window);
   screen = W;
 }
 
@@ -142,26 +151,22 @@ void Application::CloseWindow(Window *W) {
   windows.erase(W->id.v);
   if (windows.empty()) run = false;
   if (app->window_closed_cb) app->window_closed_cb(W);
-  glfwDestroyWindow(GetTyped<GLFWwindow*>(W->id));
+  glfwDestroyWindow(dynamic_cast<GLFWWindow*>(W)->window);
   screen = 0;
 }
 
-void Window::SetCaption(const string &v) {}
-void Window::SetResizeIncrements(float x, float y) {}
-void Window::SetTransparency(float v) {}
-bool Window::Reshape(int w, int h) { glfwSetWindowSize(GetTyped<GLFWwindow*>(id), w, h); return true; }
-
 bool Video::CreateWindow(Window *W) {
-  GLFWwindow *share = app->windows.empty() ? 0 : GetTyped<GLFWwindow*>(app->windows.begin()->second->id);
-  if (!(W->id = MakeTyped(glfwCreateWindow(W->width, W->height, W->caption.c_str(), 0, share))).v) return ERRORv(false, "glfwCreateWindow");
-  app->windows[W->id.v] = W;
+  auto w = dynamic_cast<GLFWWindow*>(W);
+  GLFWwindow *share = app->windows.empty() ? 0 : dynamic_cast<GLFWWindow*>(app->windows.begin()->second)->window;
+  if (!(W->id = (w->window = glfwCreateWindow(W->width, W->height, W->caption.c_str(), 0, share)))) return ERRORv(false, "glfwCreateWindow");
+  app->windows[W->id] = W;
   return true;
 }
 
 void Video::StartWindow(Window *W) {}
 int Video::Swap() {
   screen->gd->Flush();
-  glfwSwapBuffers(GetTyped<GLFWwindow*>(screen->id));
+  glfwSwapBuffers(dynamic_cast<GLFWWindow*>(screen));
   screen->gd->CheckForError(__FILE__, __LINE__);
   return 0;
 }

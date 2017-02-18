@@ -25,20 +25,12 @@
 
 static std::vector<UIImage*> app_images;
 
-@interface IOSButton : UIButton 
-  @property (nonatomic, assign) LFL::Callback cb;
-  - (void)buttonClicked:(IOSButton*)sender;
-@end
 @implementation IOSButton
   - (void)buttonClicked:(IOSButton*)sender {
     if (sender.cb) sender.cb();
   }
 @end
 
-@interface IOSBarButtonItem : UIBarButtonItem
-  @property (nonatomic, assign) LFL::Callback cb;
-  - (IBAction)buttonClicked:(IOSBarButtonItem*)sender;
-@end
 @implementation IOSBarButtonItem
   - (IBAction)buttonClicked:(IOSBarButtonItem*)sender {
     if (sender.cb) sender.cb();
@@ -57,13 +49,6 @@ static std::vector<UIImage*> app_images;
 @end
 @implementation IOSTextField
   - (void)textFieldDidChange:(IOSTextField*)sender { _modified = true; }
-@end
-
-@interface IOSAlert : NSObject<UIAlertViewDelegate>
-  @property (nonatomic, retain) UIAlertView *alert;
-  @property (nonatomic)         bool         add_text, done;
-  @property (nonatomic)         std::string  style;
-  @property (nonatomic, assign) LFL::StringCB cancel_cb, confirm_cb;
 @end
 
 @implementation IOSAlert
@@ -334,9 +319,6 @@ static std::vector<UIImage*> app_images;
   }
 @end
 
-@interface IOSNavigation : UINavigationController<UINavigationControllerDelegate>
-@end
-
 @implementation IOSNavigation
   - (void) viewDidLoad {
     [super viewDidLoad];
@@ -350,15 +332,6 @@ static std::vector<UIImage*> app_images;
 
   - (BOOL)shouldAutorotate { return self.topViewController.shouldAutorotate; }
   - (NSUInteger)supportedInterfaceOrientations { return self.topViewController.supportedInterfaceOrientations; }
-@end
-
-@interface IOSTable : UITableViewController
-  @property (nonatomic, retain) UIView *header;
-  @property (nonatomic, retain) UILabel *header_label;
-  @property (nonatomic, assign) LFL::SystemTableView *lfl_self;
-  @property (nonatomic, assign) LFL::IntIntCB delete_row_cb;
-  @property (nonatomic)         std::string style;
-  @property (nonatomic)         int editable_section, editable_start_row, selected_section, selected_row;
 @end
 
 @implementation IOSTable
@@ -972,53 +945,6 @@ struct iOSToolbarView : public SystemToolbarView {
   void ToggleButton(const string &n) { [toolbar toggleButtonNamed: n]; }
 };
 
-struct iOSTableView : public SystemTableView {
-  IOSTable *table;
-  ~iOSTableView() { [table release]; }
-  iOSTableView(const string &title, const string &style, TableItemVec items) :
-    table([[IOSTable alloc] initWithStyle: UITableViewStyleGrouped]) {
-    [table load:this withTitle:title withStyle:style items:Table::Convert(move(items))];
-  }
-
-  void DelNavigationButton(int align) { return [table clearNavigationButton:align]; }
-  void AddNavigationButton(int align, const TableItem &item) { return [table loadNavigationButton:item withAlign:align]; }
-  void AddToolbar(SystemToolbarView *t) {
-    [table setToolbarItems: [dynamic_cast<iOSToolbarView*>(t)->toolbar createUIToolbarItems: TRUE]];
-  }
-
-  void Show(bool show_or_hide) {
-    if (show_or_hide && show_cb) show_cb();
-    [table show:show_or_hide];
-  }
-
-  void AddRow(int section, TableItem item) { return [table addRow:section withItem:move(item)]; }
-  string GetKey(int section, int row) { return [table getKey:section row:row]; }
-  int GetTag(int section, int row) { return [table getTag:section row:row]; }
-  void SetTag(int section, int row, int val) { [table setTag:section row:row val:val]; }
-  void SetKey(int section, int row, const string &val) { [table setKey:section row:row val:val]; }
-  void SetValue(int section, int row, const string &val) { [table setValue:section row:row val:val]; }
-  void SetHidden(int section, int row, bool val) { [table setHidden:section row:row val:val]; }
-  void SetTitle(const string &title) { table.title = LFL::MakeNSString(title); }
-  PickerItem *GetPicker(int section, int row) { return [table getPicker:section row:row]; }
-  StringPairVec GetSectionText(int section) { return [table dumpDataForSection:section]; }
-  void SetEditableSection(int section, int start_row, LFL::IntIntCB cb) {
-    table.delete_row_cb = move(cb);
-    table.editable_section = section;
-    table.editable_start_row = start_row;
-  }
-
-  void SelectRow(int section, int row) {
-    table.selected_section = section;
-    table.selected_row = row;
-  } 
-
-  void BeginUpdates() { [table.tableView beginUpdates]; }
-  void EndUpdates() { [table.tableView endUpdates]; }
-  void SetSectionValues(int section, const StringVec &item) { [table setSectionValues:section items:item]; }
-  void ReplaceSection(int section, const string &h, int image, int flag, TableItemVec item, Callback add_button)
-  { [table replaceSection:section items:move(item) header:h image:image flag:flag addbutton:move(add_button)]; }
-};
-
 struct iOSTextView : public SystemTextView {
   IOSTextView *view;
   ~iOSTextView() { [view release]; }
@@ -1119,7 +1045,7 @@ void Application::ShowSystemContextMenu(const MenuItemVec &items) {
   auto w = app->focused;
   float s = [uiapp getScale];
   CGRect rect = CGRectMake(w->mouse.x / s, (w->height + w->y - w->mouse.y) / s, w->default_font->Height(), 100);
-  [mc setTargetRect:rect inView:GetTyped<GLKView*>(w->id)];
+  [mc setTargetRect:rect inView:dynamic_cast<iOSWindow*>(w)->glkview];
   [mc setMenuVisible:![mc isMenuVisible] animated:TRUE];
 }
 
@@ -1142,6 +1068,50 @@ void Application::UpdateSystemImage(int n, Texture &t) {
   if (!(app_images[n-1] = [[UIImage alloc] initWithCGImage:image])) ERROR("UpdateSystemImage failed");
   CGImageRelease(image);
 }
+
+iOSTableView::~iOSTableView() { [table release]; }
+iOSTableView::iOSTableView(const string &title, const string &style, TableItemVec items) :
+  table([[IOSTable alloc] initWithStyle: UITableViewStyleGrouped]) {
+    [table load:this withTitle:title withStyle:style items:Table::Convert(move(items))];
+  }
+
+void iOSTableView::DelNavigationButton(int align) { return [table clearNavigationButton:align]; }
+void iOSTableView::AddNavigationButton(int align, const TableItem &item) { return [table loadNavigationButton:item withAlign:align]; }
+void iOSTableView::AddToolbar(SystemToolbarView *t) {
+  [table setToolbarItems: [dynamic_cast<iOSToolbarView*>(t)->toolbar createUIToolbarItems: TRUE]];
+}
+
+void iOSTableView::Show(bool show_or_hide) {
+  if (show_or_hide && show_cb) show_cb();
+  [table show:show_or_hide];
+}
+
+void iOSTableView::AddRow(int section, TableItem item) { return [table addRow:section withItem:move(item)]; }
+string iOSTableView::GetKey(int section, int row) { return [table getKey:section row:row]; }
+int iOSTableView::GetTag(int section, int row) { return [table getTag:section row:row]; }
+void iOSTableView::SetTag(int section, int row, int val) { [table setTag:section row:row val:val]; }
+void iOSTableView::SetKey(int section, int row, const string &val) { [table setKey:section row:row val:val]; }
+void iOSTableView::SetValue(int section, int row, const string &val) { [table setValue:section row:row val:val]; }
+void iOSTableView::SetHidden(int section, int row, bool val) { [table setHidden:section row:row val:val]; }
+void iOSTableView::SetTitle(const string &title) { table.title = LFL::MakeNSString(title); }
+PickerItem *iOSTableView::GetPicker(int section, int row) { return [table getPicker:section row:row]; }
+StringPairVec iOSTableView::GetSectionText(int section) { return [table dumpDataForSection:section]; }
+void iOSTableView::SetEditableSection(int section, int start_row, LFL::IntIntCB cb) {
+  table.delete_row_cb = move(cb);
+  table.editable_section = section;
+  table.editable_start_row = start_row;
+}
+
+void iOSTableView::SelectRow(int section, int row) {
+  table.selected_section = section;
+  table.selected_row = row;
+} 
+
+void iOSTableView::BeginUpdates() { [table.tableView beginUpdates]; }
+void iOSTableView::EndUpdates() { [table.tableView endUpdates]; }
+void iOSTableView::SetSectionValues(int section, const StringVec &item) { [table setSectionValues:section items:item]; }
+void iOSTableView::ReplaceSection(int section, const string &h, int image, int flag, TableItemVec item, Callback add_button)
+{ [table replaceSection:section items:move(item) header:h image:image flag:flag addbutton:move(add_button)]; }
 
 unique_ptr<SystemAlertView> SystemAlertView::Create(AlertItemVec items) { return make_unique<iOSAlertView>(move(items)); }
 unique_ptr<SystemPanelView> SystemPanelView::Create(const Box &b, const string &title, PanelItemVec items) { return nullptr; }

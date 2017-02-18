@@ -67,13 +67,36 @@ struct WinApp {
   static LRESULT APIENTRY WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 };
 
-struct WinWindow {
+struct WinWindow : public Window {
+  HWND hwnd = 0;
+  HGLRC gl = 0;
+  HDC surface = 0;
   bool menubar = 0, frame_on_keyboard_input = 0, frame_on_mouse_input = 0;
   point prev_mouse_pos, resize_increment;
   int start_msg_id = WM_USER + 100;
   HMENU menu = 0, context_menu = 0;
   vector<string> menu_cmds;
+  ~WinWindow() { ClearChildren(); }
+
   bool RestrictResize(int m, RECT*);
+  void SetCaption(const string &v) { SetWindowText(hwnd, v.c_str()); }
+  void SetResizeIncrements(float x, float y) { resize_increment = point(x, y); }
+
+  void SetTransparency(float v) {
+    if (v <= 0) SetWindowLong(hwnd, GWL_EXSTYLE, GetWindowLong(hwnd, GWL_EXSTYLE) & (~WS_EX_LAYERED));
+    else {
+      SetWindowLong(hwnd, GWL_EXSTYLE, GetWindowLong(hwnd, GWL_EXSTYLE) | (WS_EX_LAYERED));
+      SetLayeredWindowAttributes(hwnd, 0, BYTE(max(1.0, (1 - v)*255.0)), LWA_ALPHA);
+    }
+  }
+
+  bool Reshape(int w, int h) {
+    long lStyle = GetWindowLong(hwnd, GWL_STYLE);
+    RECT r = { 0, 0, w, h };
+    AdjustWindowRect(&r, lStyle, win->menubar);
+    SetWindowPos(hwnd, 0, 0, 0, r.right - r.left, r.bottom - r.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+    return true;
+  }
 };
 
 struct WinFrameworkModule : public Module {
@@ -154,7 +177,7 @@ struct WinFrameworkModule : public Module {
   }
 
   static void UpdateMousePosition(const LPARAM &lParam, point *p, point *d) {
-    WinWindow *win = GetTyped<WinWindow*>(screen->impl);
+    WinWindow *win = dynamic_cast<WinWindow*>(screen);
     *p = point(GET_X_LPARAM(lParam), screen->height - GET_Y_LPARAM(lParam));
     *d = *p - win->prev_mouse_pos;
     win->prev_mouse_pos = *p;
@@ -192,7 +215,7 @@ int WinApp::MessageLoop() {
 }
 
 LRESULT APIENTRY WinApp::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
-  WinWindow *win = GetTyped<WinWindow*>(screen->impl);
+  WinWindow *win = dynamic_cast<WinWindow*>(screen);
   PAINTSTRUCT ps;
   POINT cursor;
   point p, d;
@@ -210,7 +233,7 @@ LRESULT APIENTRY WinApp::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
   case WM_MOUSEMOVE:                   WinFrameworkModule::UpdateMousePosition(lParam, &p, &d); if (MouseMove(p.x, p.y, d.x, d.y) && win->frame_on_mouse_input) app->scheduler.Wakeup(screen); return 0;
   case WM_COMMAND:                     if ((ind = wParam - win->start_msg_id) >= 0) if (ind < win->menu_cmds.size()) ShellRun(win->menu_cmds[ind].c_str()); return 0;
   case WM_CONTEXTMENU:                 if (win->menu) { GetCursorPos(&cursor); TrackPopupMenu(win->context_menu, TPM_LEFTALIGN | TPM_TOPALIGN, cursor.x, cursor.y, 0, hWnd, NULL); } return 0;
-  case WM_PAINT:                       BeginPaint(GetTyped<HWND>(screen->id), &ps); if (!FLAGS_target_fps) LFAppFrame(true); EndPaint(GetTyped<HWND>(screen->id), &ps); return 0;
+  case WM_PAINT:                       BeginPaint(dynamic_cast<WinWindow*>(screen)->hwnd, &ps); if (!FLAGS_target_fps) LFAppFrame(true); EndPaint(dynamic_cast<WinWindow*>(screen)->hwnd, &ps); return 0;
   case WM_SIZING:                      return win->resize_increment.Zero() ? 0 : win->RestrictResize(wParam, reinterpret_cast<LPRECT>(lParam));
   case WM_USER:                        if (!FLAGS_target_fps) LFAppFrame(true); return 0;
   case WM_KILLFOCUS:                   app->input->ClearButtonsDown(); return 0;
@@ -222,7 +245,7 @@ LRESULT APIENTRY WinApp::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 bool WinWindow::RestrictResize(int m, RECT *r) {
   point in(r->right - r->left, r->bottom - r->top);
   RECT w = { 0, 0, in.x, in.y };
-  AdjustWindowRect(&w, GetWindowLong(GetTyped<HWND>(screen->id), GWL_STYLE), menubar);
+  AdjustWindowRect(&w, GetWindowLong(dynamic_cast<WinWindow*>(screen)->hwnd, GWL_STYLE), menubar);
   point extra((w.right - w.left) - in.x, (w.bottom - w.top) - in.y), content = in - extra;
   switch (m) {
     case WMSZ_TOP:         r->top    -= (NextMultipleOfN(content.y, resize_increment.y) - content.y); break;
@@ -241,10 +264,9 @@ bool WinWindow::RestrictResize(int m, RECT *r) {
   return true;
 }
 
-void Application::MakeCurrentWindow(Window *W) { if (W) wglMakeCurrent(GetTyped<HDC>(W->surface), GetTyped<HGLRC>(W->gl)); }
+void Application::MakeCurrentWindow(Window *W) { if (auto w = dynamic_cast<WinWindow*>(W)) wglMakeCurrent(w->surface, w->gl); }
 void Application::CloseWindow(Window *W) {
-  delete GetTyped<WinWindow*>(W->impl);
-  windows.erase(GetTyped<HWND>(W->id));
+  windows.erase(W->id);
   if (windows.empty()) app->run = false;
   if (app->window_closed_cb) app->window_closed_cb(W);
   screen = 0;
@@ -280,30 +302,6 @@ string Application::GetClipboardText() {
   return ret;
 }
 
-void Window::SetCaption(const string &v) { SetWindowText(GetTyped<HWND>(screen->id), v.c_str()); }
-void Window::SetResizeIncrements(float x, float y) {
-  WinWindow *win = GetTyped<WinWindow*>(screen->impl);
-  win->resize_increment = point(x, y);
-}
-
-void Window::SetTransparency(float v) {
-  HWND hwnd = GetTyped<HWND>(screen->id);
-  if (v <= 0) SetWindowLong(hwnd, GWL_EXSTYLE, GetWindowLong(hwnd, GWL_EXSTYLE) & (~WS_EX_LAYERED));
-  else {
-    SetWindowLong(hwnd, GWL_EXSTYLE, GetWindowLong(hwnd, GWL_EXSTYLE) | (WS_EX_LAYERED));
-    SetLayeredWindowAttributes(hwnd, 0, BYTE(max(1.0, (1 - v)*255.0)), LWA_ALPHA);
-  }
-}
-
-bool Window::Reshape(int w, int h) {
-  WinWindow *win = GetTyped<WinWindow*>(impl);
-  long lStyle = GetWindowLong(GetTyped<HWND>(id), GWL_STYLE);
-  RECT r = { 0, 0, w, h };
-  AdjustWindowRect(&r, lStyle, win->menubar);
-  SetWindowPos(GetTyped<HWND>(id), 0, 0, 0, r.right - r.left, r.bottom - r.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
-  return true;
-}
-
 void Video::StartWindow(Window *W) {}
 bool Video::CreateWindow(Window *W) {
   static WinApp *winapp = Singleton<WinApp>::Get();
@@ -332,7 +330,7 @@ bool Video::CreateWindow(Window *W) {
 
 int Video::Swap() {
   screen->gd->Flush();
-  SwapBuffers(GetTyped<HDC>(screen->surface));
+  SwapBuffers(dynamic_cast<WinWindow*>(screen)->surface);
   screen->gd->CheckForError(__FILE__, __LINE__);
   return 0;
 }
@@ -340,24 +338,25 @@ int Video::Swap() {
 bool FrameScheduler::DoMainWait() { return false;  }
 void FrameScheduler::UpdateWindowTargetFPS(Window*) {}
 void FrameScheduler::Setup() { synchronize_waits = wait_forever_thread = run_main_loop = 0; }
-void FrameScheduler::Wakeup(Window *w) { 
-  InvalidateRect(GetTyped<HWND>(w->id), NULL, 0);
-  // PostMessage(GetTyped<HWND>(w->id), WM_USER, 0, 0);
+void FrameScheduler::Wakeup(Window *W) { 
+  auto w = dynamic_cast<WinWindow*>(W);
+  InvalidateRect(w->hwnd, NULL, 0);
+  // PostMessage(w->hwnd, WM_USER, 0, 0);
 }
 
-void FrameScheduler::AddMainWaitMouse(Window *w) { GetTyped<WinWindow*>(w->impl)->frame_on_mouse_input = true; }
-void FrameScheduler::DelMainWaitMouse(Window *w) { GetTyped<WinWindow*>(w->impl)->frame_on_mouse_input = false; }
-void FrameScheduler::AddMainWaitKeyboard(Window *w) { GetTyped<WinWindow*>(w->impl)->frame_on_keyboard_input = true; }
-void FrameScheduler::DelMainWaitKeyboard(Window *w) { GetTyped<WinWindow*>(w->impl)->frame_on_keyboard_input = false; }
+void FrameScheduler::AddMainWaitMouse(Window *w) { dynamic_cast<WinWindow*>(w)->frame_on_mouse_input = true; }
+void FrameScheduler::DelMainWaitMouse(Window *w) { dynamic_cast<WinWindow*>(w)->frame_on_mouse_input = false; }
+void FrameScheduler::AddMainWaitKeyboard(Window *w) { dynamic_cast<WinWindow*>(w)->frame_on_keyboard_input = true; }
+void FrameScheduler::DelMainWaitKeyboard(Window *w) { dynamic_cast<WinWindow*>(w)->frame_on_keyboard_input = false; }
 void FrameScheduler::AddMainWaitSocket(Window *w, Socket fd, int flag, function<bool()>) {
   if (fd == InvalidSocket) return;
   if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, w);
-  WSAAsyncSelect(fd, GetTyped<HWND>(w->id), WM_USER, FD_READ | FD_CLOSE);
+  WSAAsyncSelect(fd, dynamic_cast<WinWindow*>(w)->hwnd, WM_USER, FD_READ | FD_CLOSE);
 }
 void FrameScheduler::DelMainWaitSocket(Window *w, Socket fd) {
   if (fd == InvalidSocket) return;
   if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd);
-  WSAAsyncSelect(fd, GetTyped<HWND>(w->id), WM_USER, 0);
+  WSAAsyncSelect(fd, dynamic_cast<WinWindow*>(w)->hwnd, WM_USER, 0);
 }
 
 unique_ptr<Module> CreateFrameworkModule() { return make_unique<WinFrameworkModule>(); }

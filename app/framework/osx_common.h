@@ -29,3 +29,15 @@
 @interface GameContainerView : NSView<NSWindowDelegate, ObjcWindow>
   @property (nonatomic, retain) GameView *gameView;
 @end
+
+namespace LFL {
+struct OSXWindow : public Window {
+  GameView *view=0;
+  NSOpenGLContext *gl=0;
+  ~OSXWindow() { ClearChildren(); }
+  void SetCaption(const string &c);
+  void SetResizeIncrements(float x, float y);
+  void SetTransparency(float v);
+  bool Reshape(int w, int h);
+};
+}; // namespace LFL

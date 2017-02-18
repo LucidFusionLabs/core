@@ -64,7 +64,7 @@ static std::vector<NSImage*> app_images;
   }
   
   - (void)modalAlertDidEnd:(NSAlert *)alert returnCode:(NSInteger)returnCode contextInfo:(void *)contextInfo {
-    NSWindow *window = [LFL::GetTyped<GameView*>(LFL::app->focused->id) window];
+    NSWindow *window = [dynamic_cast<LFL::OSXWindow*>(LFL::app->focused)->view window];
     [NSApp endSheet: window];
   }
 
@@ -179,7 +179,7 @@ static std::vector<NSImage*> app_images;
   - (id)init { 
     self = [super init];
     _header_height = 30;
-    NSView *contentView = LFL::GetTyped<GameView*>(LFL::app->focused->id).window.contentView;
+    NSView *contentView = dynamic_cast<LFL::OSXWindow*>(LFL::app->focused)->view.window.contentView;
     _view = [[NSView alloc] initWithFrame: contentView.frame];
     _view.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
     _viewControllers = [[NSMutableArray alloc] init];
@@ -308,7 +308,7 @@ static std::vector<NSImage*> app_images;
       [OSXTable addHiddenIndices:i to:hide_indices];
     }
 
-    NSView *contentView = LFL::GetTyped<GameView*>(LFL::app->focused->id).window.contentView;
+    NSView *contentView = dynamic_cast<LFL::OSXWindow*>(LFL::app->focused)->view.window.contentView;
     _tableContainer = [[NSScrollView alloc] initWithFrame: contentView.frame];
     self.view = [_tableContainer autorelease];
     self.view.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
@@ -592,22 +592,22 @@ struct OSXAlertView : public SystemAlertView {
 
   void Show(const string &arg) {
     if (alert.add_text) [alert.input setStringValue: MakeNSString(arg)];
-    [alert.alert beginSheetModalForWindow:[GetTyped<GameView*>(app->focused->id) window] modalDelegate:alert
+    [alert.alert beginSheetModalForWindow:[dynamic_cast<OSXWindow*>(app->focused)->view window] modalDelegate:alert
       didEndSelector:@selector(alertDidEnd:returnCode:contextInfo:) contextInfo:nil];
-    [GetTyped<GameView*>(app->focused->id) clearKeyModifiers];
+    [dynamic_cast<OSXWindow*>(app->focused)->view  clearKeyModifiers];
   }
 
   void ShowCB(const string &title, const string &msg, const string &arg, StringCB confirm_cb) {
     alert.confirm_cb = move(confirm_cb);
     [alert.alert setMessageText: MakeNSString(title)];
     [alert.alert setInformativeText: MakeNSString(msg)];
-    [alert.alert beginSheetModalForWindow:[GetTyped<GameView*>(app->focused->id) window] modalDelegate:alert
+    [alert.alert beginSheetModalForWindow:[dynamic_cast<OSXWindow*>(app->focused)->view  window] modalDelegate:alert
       didEndSelector:@selector(alertDidEnd:returnCode:contextInfo:) contextInfo:nil];
-    [GetTyped<GameView*>(app->focused->id) clearKeyModifiers];
+    [dynamic_cast<OSXWindow*>(app->focused)->view  clearKeyModifiers];
   }
 
   string RunModal(const string &arg) {
-    NSWindow *window = [GetTyped<GameView*>(app->focused->id) window];
+    NSWindow *window = [dynamic_cast<OSXWindow*>(app->focused)->view  window];
     if (alert.add_text) [alert.input setStringValue: MakeNSString(arg)];
     [alert.alert beginSheetModalForWindow:window modalDelegate:alert
       didEndSelector:@selector(modalAlertDidEnd:returnCode:contextInfo:) contextInfo:nil];
@@ -676,11 +676,10 @@ struct OSXTableView : public SystemTableView {
 
   void DelNavigationButton(int align) {}
   void AddNavigationButton(int align, const TableItem &item) {}
-  void AddToolbar(SystemToolbarView *t) {
-  }
+  void AddToolbar(SystemToolbarView *t) {}
 
   void Show(bool show_or_hide) {
-    NSView *contentView = LFL::GetTyped<GameView*>(LFL::app->focused->id).window.contentView;
+    NSView *contentView = dynamic_cast<OSXWindow*>(app->focused)->view.window.contentView;
     if (show_or_hide) {
       [[contentView animator] addSubview:table.tableContainer];
       [table.tableContainer setFrameOrigin:CGPointMake(0, 0)];
@@ -730,7 +729,7 @@ struct OSXNavigationView : public SystemNavigationView {
   OSXNavigationView() : nav([[OSXNavigation alloc] init]) {}
 
   void Show(bool show_or_hide) {
-    GameContainerView *contentView = LFL::GetTyped<GameView*>(LFL::app->focused->id).window.contentView;
+    GameContainerView *contentView = dynamic_cast<OSXWindow*>(app->focused)->view.window.contentView;
     if ((shown = show_or_hide)) {
       [contentView.gameView removeFromSuperview];
       [[contentView animator] addSubview:nav.view];
@@ -791,8 +790,8 @@ void Application::ShowSystemContextMenu(const MenuItemVec &items) {
                             location:           NSMakePoint(app->focused->mouse.x, app->focused->mouse.y)
                             modifierFlags:      NSLeftMouseDownMask
                             timestamp:          0
-                            windowNumber:       [[LFL::GetTyped<GameView*>(app->focused->id) window] windowNumber]
-                            context:            [[LFL::GetTyped<GameView*>(app->focused->id) window] graphicsContext]
+                            windowNumber:       [[dynamic_cast<OSXWindow*>(app->focused)->view window] windowNumber]
+                            context:            [[dynamic_cast<OSXWindow*>(app->focused)->view window] graphicsContext]
                             eventNumber:        0
                             clickCount:         1
                             pressure:           1];
@@ -808,8 +807,8 @@ void Application::ShowSystemContextMenu(const MenuItemVec &items) {
     if (i.cb) [item setRepresentedObject: [[ObjcCallback alloc] initWithCB: i.cb]];
   }
 
-  [NSMenu popUpContextMenu:menu withEvent:event forView:LFL::GetTyped<GameView*>(app->focused->id)];
-  [LFL::GetTyped<GameView*>(app->focused->id) clearKeyModifiers];
+  [NSMenu popUpContextMenu:menu withEvent:event forView:dynamic_cast<OSXWindow*>(app->focused)->view];
+  [dynamic_cast<OSXWindow*>(app->focused)->view clearKeyModifiers];
 }
 
 void Application::UpdateSystemImage(int n, Texture&) {}

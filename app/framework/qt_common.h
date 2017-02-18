@@ -26,11 +26,13 @@ QImage MakeQImage(Texture &t);
 QImage::Format PixelToQImageFormat(int pf);
 int PixelFromQImageFormat(QImage::Format fmt);
 
-struct QtWindowInterface {
+struct QtWindowInterface : public Window {
   QMainWindow *window=0;
   QStackedLayout *layout=0;
   QWindow *opengl_window=0;
   QWidget *opengl_container=0;
+  QOpenGLContext *glc=0;
+  ~QtWindowInterface() { ClearChildren(); }
 };
 
 }; // namespace LFL

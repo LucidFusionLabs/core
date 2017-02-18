@@ -255,7 +255,7 @@ struct LFApp {
 };
 
 struct LFAppWindow {
-  typed_ptr id, gl, surface, glew_context, impl, user1, user2, user3;
+  void *id;
   int x, y, width, height, target_fps;
   bool started, minimized, cursor_grabbed, frame_init, animating;
   short resize_increment_x, resize_increment_y;

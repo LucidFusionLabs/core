@@ -694,11 +694,11 @@ namespace LFL {
 struct iOSFrameworkModule : public Module {
   int Init() {
     INFO("iOSFrameworkModule::Init()");
-    if (auto s = app->focused) {
-      CHECK(!s->id.v);
-      s->id = LFL::MakeTyped([[LFUIApplication sharedAppDelegate] glk_view]);
-      CHECK(s->id.v);
-      app->windows[s->id.v] = s;
+    if (auto s = dynamic_cast<iOSWindow*>(app->focused)) {
+      CHECK(!s->id);
+      s->id = (s->glkview = [[LFUIApplication sharedAppDelegate] glk_view]);
+      CHECK(s->id);
+      app->windows[s->id] = s;
     }
     LFUIApplication *uiapp = [LFUIApplication sharedAppDelegate];
     CGFloat scale = [uiapp getScale];
@@ -759,11 +759,10 @@ void Application::SetPanRecognizer(bool enabled) { [[LFUIApplication sharedAppDe
 void Application::SetPinchRecognizer(bool enabled) { [[LFUIApplication sharedAppDelegate].controller initPinchGestureRecognizers]; }
 void Application::ShowSystemStatusBar(bool v) { [[LFUIApplication sharedAppDelegate].controller showStatusBar:v]; }
 
-void Window::SetResizeIncrements(float x, float y) {}
-void Window::SetTransparency(float v) {}
-bool Window::Reshape(int w, int h) { return false; }
-
-void Window::SetCaption(const string &v) {
+void iOSWindow::SetResizeIncrements(float x, float y) {}
+void iOSWindow::SetTransparency(float v) {}
+bool iOSWindow::Reshape(int w, int h) { return false; }
+void iOSWindow::SetCaption(const string &v) {
   auto title_bar = [LFUIApplication sharedAppDelegate].title_bar;
   if (!title_bar) return;
   UINavigationItem *newItem = title_bar.items[0];
@@ -784,7 +783,7 @@ int Video::Swap() {
 bool FrameScheduler::DoMainWait() { return false; }
 void FrameScheduler::Setup() { rate_limit = synchronize_waits = wait_forever_thread = monolithic_frame = run_main_loop = 0; }
 void FrameScheduler::Wakeup(Window *w) {
-  dispatch_async(dispatch_get_main_queue(), ^{ [GetTyped<GLKView*>(w->id) setNeedsDisplay]; });
+  dispatch_async(dispatch_get_main_queue(), ^{ [dynamic_cast<iOSWindow*>(w)->glkview setNeedsDisplay]; });
 }
 
 bool FrameScheduler::WakeupIn(Window*, Time interval, bool force) { return false; }
@@ -823,6 +822,7 @@ void FrameScheduler::DelMainWaitSocket(Window *w, Socket fd) {
   [[LFUIApplication sharedAppDelegate] delMainWaitSocket: fd];
 }
 
+Window *Window::Create() { return new iOSWindow(); }
 unique_ptr<Module> CreateFrameworkModule() { return make_unique<iOSFrameworkModule>(); }
 unique_ptr<AssetLoaderInterface> CreateAssetLoader() { return make_unique<iOSAssetLoader>(); }
 

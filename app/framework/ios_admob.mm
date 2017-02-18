@@ -16,10 +16,13 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#import <UIKit/UIKit.h>
+#import <GLKit/GLKit.h>
 #import <GoogleMobileAds/GoogleMobileAds.h>
 
 #include "core/app/app.h"
 #include "core/app/framework/apple_common.h"
+#include "core/app/framework/ios_common.h"
 
 @interface IOSAdMob : NSObject
 @end
@@ -47,6 +50,9 @@
     return self;
   }
 
+  - (void)show: (BOOL)show_or_hide withTable:(IOSTable*)table {
+  }
+
   + (void)adViewDidReceiveAd:(GADBannerView *)view {
   #if 0
     [UIView animateWithDuration:0.5 animations:^{
@@ -65,7 +71,9 @@ struct iOSAdvertisingView : public SystemAdvertisingView {
   iOSAdvertisingView(int type, int placement, const string &adid) :
     admob([[IOSAdMob alloc] initWithFrame: [[UIScreen mainScreen] bounds] adUnitID: MakeNSString(adid)]) {}
 
-  void Show(bool show_or_hide) {
+  void Show(bool show_or_hide) {}
+  void Show(SystemTableView *t, bool show_or_hide) {
+    [admob show: show_or_hide withTable: dynamic_cast<iOSTableView*>(t)->table];
   }
 };
 

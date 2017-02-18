@@ -334,7 +334,7 @@ void Application::WriteDebugLine(const char *message, const char *file, int line
 }
 
 void Application::CreateNewWindow() {
-  Window *orig_window = focused, *new_window = new Window();
+  Window *orig_window = focused, *new_window = Window::Create();
   if (window_init_cb) window_init_cb(new_window);
   new_window->gd = CreateGraphicsDevice(new_window, opengles_version).release();
   CHECK(Video::CreateWindow(new_window));
@@ -558,7 +558,7 @@ int Application::Init() {
 #ifdef LFL_WINDOWS
       if (splash_color) DrawSplash(*splash_color);
 #endif
-    } else { windows[focused->id.v] = focused; }
+    } else { windows[focused->id] = focused; }
   }
 
   if (FLAGS_enable_audio) {
@@ -718,7 +718,7 @@ Application::~Application() {
 
 Window::Window() : caption(app->name), fps(128), tex_mode(2, 1, 0), grab_mode(2, 0, 1),
   fill_mode(3, GraphicsDevice::Fill, GraphicsDevice::Line, GraphicsDevice::Point) {
-  id = gl = surface = glew_context = impl = user1 = user2 = user3 = typed_ptr{0, nullptr};
+  id = 0;
   started = minimized = cursor_grabbed = frame_init = animating = 0;
   resize_increment_x = resize_increment_y = 0;
   target_fps = FLAGS_target_fps;
@@ -727,11 +727,16 @@ Window::Window() : caption(app->name), fps(128), tex_mode(2, 1, 0), grab_mode(2,
 }
 
 Window::~Window() {
-  dialogs.clear();
-  my_gui.clear();
+  ClearChildren();
   if (console) console->WriteHistory(app->savedir, StrCat(app->name, "_console"), "");
   console.reset();
   delete gd;
+}
+
+void Window::ClearChildren() {
+  dialogs.clear();
+  my_gui.clear();
+  my_input.clear();
 }
 
 Box Window::Box(float xp, float yp, float xs, float ys, float xbl, float ybt, float xbr, float ybb) const {
@@ -741,6 +746,11 @@ Box Window::Box(float xp, float yp, float xs, float ys, float xbl, float ybt, fl
                   y + height * (yp + ybb),
                   width  * xs - width  * (xbl + xbr),
                   height * ys - height * (ybt + ybb), false);
+}
+
+void Window::SetBox(const LFL::Box &b) {
+  Assign(&x, &y, b.x, b.y);
+  Assign(&width, &height, b.w, b.h);
 }
 
 void Window::InitConsole(const Callback &animating_cb) {
@@ -780,11 +790,6 @@ void Window::DrawDialogs() {
     glIntersect(gd, mouse.x, mouse.y, &c);
     default_font->Draw(StrCat("draw_grid ", mouse.x, " , ", mouse.y), point(0,0));
   }
-}
-
-void Window::SetBox(const LFL::Box &b) {
-  Assign(&x, &y, b.x, b.y);
-  Assign(&width, &height, b.w, b.h);
 }
 
 void Window::Reshaped(const LFL::Box &b) {
@@ -892,7 +897,7 @@ void FrameScheduler::UpdateTargetFPS(Window *w, int fps) {
     for (const auto &wi : app->windows) Max(&next_target_fps, wi.second->target_fps);
     FLAGS_target_fps = next_target_fps;
   }
-  CHECK(w->id.v);
+  CHECK(w->id);
   UpdateWindowTargetFPS(w);
 }
 

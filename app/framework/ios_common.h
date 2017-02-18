@@ -71,10 +71,74 @@
   + (int)getBottomHeight;
 @end
 
+@interface IOSButton : UIButton 
+  @property (nonatomic, assign) LFL::Callback cb;
+  - (void)buttonClicked:(IOSButton*)sender;
+@end
+
+@interface IOSBarButtonItem : UIBarButtonItem
+  @property (nonatomic, assign) LFL::Callback cb;
+  - (IBAction)buttonClicked:(IOSBarButtonItem*)sender;
+@end
+
+@interface IOSAlert : NSObject<UIAlertViewDelegate>
+  @property (nonatomic, retain) UIAlertView *alert;
+  @property (nonatomic)         bool         add_text, done;
+  @property (nonatomic)         std::string  style;
+  @property (nonatomic, assign) LFL::StringCB cancel_cb, confirm_cb;
+@end
+
+@interface IOSTable : UITableViewController
+  @property (nonatomic, retain) UIView *header;
+  @property (nonatomic, retain) UILabel *header_label;
+  @property (nonatomic, assign) LFL::SystemTableView *lfl_self;
+  @property (nonatomic, assign) LFL::IntIntCB delete_row_cb;
+  @property (nonatomic)         std::string style;
+  @property (nonatomic)         int editable_section, editable_start_row, selected_section, selected_row;
+@end
+
+@interface IOSNavigation : UINavigationController<UINavigationControllerDelegate>
+@end
+
 namespace LFL {
-  UIAlertView            *GetUIAlertView(SystemAlertView*);
-  UIActionSheet          *GetUIActionSheet(SystemMenuView*);
-  UIToolbar              *GetUIToolbar(SystemToolbarView*);
-  UITableViewController  *GetUITableViewController(SystemTableView*);
-  UINavigationController *GetUINavigationController(SystemNavigationView*);
+struct iOSWindow : public Window {
+  GLKView *glkview=0;
+  ~iOSWindow() { ClearChildren(); }
+  void SetCaption(const string &c);
+  void SetResizeIncrements(float x, float y);
+  void SetTransparency(float v);
+  bool Reshape(int w, int h);
 };
+
+struct iOSTableView : public SystemTableView {
+  IOSTable *table;
+  ~iOSTableView();
+  iOSTableView(const string &title, const string &style, TableItemVec items);
+  void DelNavigationButton(int align);
+  void AddNavigationButton(int align, const TableItem &item);
+  void AddToolbar(SystemToolbarView *t);
+  void Show(bool show_or_hide);
+  void AddRow(int section, TableItem item);
+  string GetKey(int section, int row);
+  int GetTag(int section, int row);
+  void SetTag(int section, int row, int val);
+  void SetKey(int section, int row, const string &val);
+  void SetValue(int section, int row, const string &val);
+  void SetHidden(int section, int row, bool val);
+  void SetTitle(const string &title);
+  PickerItem *GetPicker(int section, int row);
+  StringPairVec GetSectionText(int section);
+  void SetEditableSection(int section, int start_row, LFL::IntIntCB cb);
+  void SelectRow(int section, int row);
+  void BeginUpdates();
+  void EndUpdates();
+  void SetSectionValues(int section, const StringVec &item);
+  void ReplaceSection(int section, const string &h, int image, int flag, TableItemVec item, Callback add_button);
+};
+
+UIAlertView            *GetUIAlertView(SystemAlertView*);
+UIActionSheet          *GetUIActionSheet(SystemMenuView*);
+UIToolbar              *GetUIToolbar(SystemToolbarView*);
+UITableViewController  *GetUITableViewController(SystemTableView*);
+UINavigationController *GetUINavigationController(SystemNavigationView*);
+}; // namespace LFL

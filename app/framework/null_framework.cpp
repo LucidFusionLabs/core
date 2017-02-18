@@ -55,18 +55,25 @@ const int Key::Insert     = -35;
 
 const int Texture::updatesystemimage_pf = Pixel::RGB24;
 
+struct NullWindow : public Window {
+  void SetCaption(const string &c) {}
+  void SetResizeIncrements(float x, float y) {}
+  void SetTransparency(float v) {}
+  bool Reshape(int w, int h) { return false; }
+};
+
 struct NullFrameworkModule : public Module {
   int Init() {
     INFO("NullFrameworkModule::Init()");
-    app->focused->id = MakeTyped(app->focused);
-    app->windows[app->focused->id.v] = app->focused;
+    app->focused->id = app->focused;
+    app->windows[app->focused->id] = app->focused;
     return 0;
   }
 };
 
 void Application::MakeCurrentWindow(Window *W) {}
 void Application::CloseWindow(Window *W) {
-  windows.erase(W->id.v);
+  windows.erase(W->id);
   if (windows.empty()) app->run = false;
   if (app->window_closed_cb) app->window_closed_cb(W);
   app->focused = 0;
@@ -88,13 +95,8 @@ void Application::SetTouchKeyboardTiled(bool v) {}
 void Application::SetAutoRotateOrientation(bool v) {}
 void Application::ShowSystemStatusBar(bool v) {}
 
-void Window::SetCaption(const string &v) {}
-void Window::SetResizeIncrements(float x, float y) {}
-void Window::SetTransparency(float v) {}
-bool Window::Reshape(int w, int h) { return false; }
-
 bool Video::CreateWindow(Window *W) { 
-  app->windows[W->id.v] = W;
+  app->windows[W->id] = W;
   return true;
 }
 void Video::StartWindow(Window*) {}
@@ -116,6 +118,7 @@ extern "C" int main(int argc, const char *argv[]) {
   return MyAppMain();
 }
 
+Window *Window::Create() { return new NullWindow(); }
 unique_ptr<Module> CreateFrameworkModule() { return unique_ptr<NullFrameworkModule>(); }
 
 }; // namespace LFL

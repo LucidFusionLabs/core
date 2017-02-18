@@ -105,14 +105,14 @@
   - (NSOpenGLContext *)openGLContext {
     if (context == nil) {
       context = [self createGLContext];
-      _screen->gl = LFL::MakeTyped(context);
+      dynamic_cast<LFL::OSXWindow*>(_screen)->gl = context;
       needs_reshape = YES;
     }
     return context;
   }
 
   - (NSOpenGLContext *)createGLContext {
-    NSOpenGLContext *prev_context = LFL::GetTyped<NSOpenGLContext*>(GetLFAppWindow()->gl);
+    NSOpenGLContext *prev_context = dynamic_cast<LFL::OSXWindow*>(LFL::app->focused)->gl;
     NSOpenGLContext *ret = [[NSOpenGLContext alloc] initWithFormat:pixel_format shareContext:prev_context];
     [ret setView:self];
     return ret;
@@ -461,19 +461,52 @@ struct OSXFrameworkModule : public Module {
   }
 };
 
+void OSXWindow::SetCaption(const string &v) { 
+  [view window].title = [NSString stringWithUTF8String:v.c_str()];
+}
+
+void OSXWindow::SetResizeIncrements(float x, float y) {
+  [[view window] setContentResizeIncrements:
+    NSMakeSize((resize_increment_x = x), (resize_increment_y = y))];
+}
+
+void OSXWindow::SetTransparency(float v) { 
+  [[view window] setAlphaValue: 1.0 - v];
+}
+
+bool OSXWindow::Reshape(int w, int h) {
+  NSWindow *window = [view window];
+  NSRect frame = [window frame], x;
+  LFL::Box b(frame.origin.x, frame.origin.y, w, h);
+  if (resize_increment_x || resize_increment_y) {
+    NSUInteger styleMask = [window styleMask];
+    x = [NSWindow frameRectForContentRect: NSMakeRect(b.x, b.y, b.w, b.h) styleMask: styleMask];
+    x = [window constrainFrameRect: x toScreen: [NSScreen mainScreen]];
+    x = [NSWindow contentRectForFrameRect: x styleMask: styleMask];
+    LFL::Box constrained(x.origin.x, x.origin.y, x.size.width, x.size.height); 
+    if (b != constrained) {
+      b = constrained;
+      if (resize_increment_x) b.w -= (b.w % resize_increment_x);
+      if (resize_increment_y) b.h -= (b.h % resize_increment_y);
+    }
+  }
+  [window setContentSize:NSMakeSize(b.w, b.h)];
+  return true;
+}
+
 void Application::MakeCurrentWindow(Window *W) { 
-  if (W) [[GetTyped<GameView*>((focused = W)->id) openGLContext] makeCurrentContext];
+  if ((focused = W)) [[dynamic_cast<OSXWindow*>(W)->view openGLContext] makeCurrentContext];
 }
 
 void Application::CloseWindow(Window *W) {
-  windows.erase(W->id.v);
+  windows.erase(W->id);
   if (windows.empty()) run = false;
   if (app->window_closed_cb) app->window_closed_cb(W);
-  // [static_cast<AppDelegate*>([NSApp delegate]) destroyWindow: [GetTyped<GameView*>(W->id) window]];
+  // [static_cast<AppDelegate*>([NSApp delegate]) destroyWindow: [dynamic_cast<OSXWindow*>(W)->view window]];
   focused = 0;
 }
 
-void Application::LoseFocus() { [GetTyped<GameView*>(GetLFAppWindow()->id) clearKeyModifiers]; }
+void Application::LoseFocus() { [dynamic_cast<OSXWindow*>(focused)->view clearKeyModifiers]; }
 
 void Application::ReleaseMouseFocus() { 
   CGDisplayShowCursor(kCGDirectMainDisplay);
@@ -488,7 +521,7 @@ void Application::GrabMouseFocus() {
   focused->grab_mode.On(); 
   focused->cursor_grabbed = 1;
   CGWarpMouseCursorPosition
-    (NSPointToCGPoint([[GetTyped<GameView*>(focused->id) window] convertRectToScreen:
+    (NSPointToCGPoint([[dynamic_cast<OSXWindow*>(focused)->view window] convertRectToScreen:
                       NSMakeRect(focused->width / 2, focused->height / 2, 0, 0)].origin));
 }
 
@@ -522,59 +555,26 @@ void Application::SetPanRecognizer(bool enabled) {}
 void Application::SetPinchRecognizer(bool enabled) {}
 void Application::ShowSystemStatusBar(bool v) {}
 
-void Window::SetCaption(const string &v) { 
-  [GetTyped<GameView*>(id) window].title = [NSString stringWithUTF8String:v.c_str()];
-}
-
-void Window::SetResizeIncrements(float x, float y) {
-  [[GetTyped<GameView*>(id) window] setContentResizeIncrements:
-    NSMakeSize((resize_increment_x = x), (resize_increment_y = y))];
-}
-
-void Window::SetTransparency(float v) { 
-  [[GetTyped<GameView*>(id) window] setAlphaValue: 1.0 - v];
-}
-
-bool Window::Reshape(int w, int h) {
-  NSWindow *window = [GetTyped<GameView*>(id) window];
-  NSRect frame = [window frame], x;
-  LFL::Box b(frame.origin.x, frame.origin.y, w, h);
-  if (resize_increment_x || resize_increment_y) {
-    NSUInteger styleMask = [window styleMask];
-    x = [NSWindow frameRectForContentRect: NSMakeRect(b.x, b.y, b.w, b.h) styleMask: styleMask];
-    x = [window constrainFrameRect: x toScreen: [NSScreen mainScreen]];
-    x = [NSWindow contentRectForFrameRect: x styleMask: styleMask];
-    LFL::Box constrained(x.origin.x, x.origin.y, x.size.width, x.size.height); 
-    if (b != constrained) {
-      b = constrained;
-      if (resize_increment_x) b.w -= (b.w % resize_increment_x);
-      if (resize_increment_y) b.h -= (b.h % resize_increment_y);
-    }
-  }
-  [window setContentSize:NSMakeSize(b.w, b.h)];
-  return true;
-}
-
 bool Video::CreateWindow(Window *W) { 
-  [GetTyped<GameView*>(GetLFAppWindow()->id) clearKeyModifiers];
-  W->id = MakeTyped([static_cast<AppDelegate*>([NSApp delegate])
-                    createWindow:W->width height:W->height nativeWindow:W]);
-  if (W->id.v) app->windows[W->id.v] = W;
+  [dynamic_cast<OSXWindow*>(app->focused)->view clearKeyModifiers];
+  W->id = (dynamic_cast<OSXWindow*>(W)->view =
+           [static_cast<AppDelegate*>([NSApp delegate]) createWindow:W->width height:W->height nativeWindow:W]);
+  if (W->id) app->windows[W->id] = W;
   W->SetCaption(W->caption);
   return true; 
 }
 
-void Video::StartWindow(Window *W) { [GetTyped<GameView*>(W->id) startThread:true]; }
+void Video::StartWindow(Window *W) { [dynamic_cast<OSXWindow*>(W)->view startThread:true]; }
 void *Video::BeginGLContextCreate(Window *W) { return 0; }
 void *Video::CompleteGLContextCreate(Window *W, void *gl_context) {
-  return MakeTyped([GetTyped<GameView*>(W->id) createGLContext]).v;
+  return [dynamic_cast<OSXWindow*>(W)->view createGLContext];
 }
 
 int Video::Swap() {
   auto screen = app->focused;
   screen->gd->Flush();
-  // [[GetTyped<GameView*>(screen->id) openGLContext] flushBuffer];
-  CGLFlushDrawable([[GetTyped<GameView*>(screen->id) openGLContext] CGLContextObj]);
+  // [[dynamic_cast<OSXWindow*>(screen)->view openGLContext] flushBuffer];
+  CGLFlushDrawable([[dynamic_cast<OSXWindow*>(screen)->view openGLContext] CGLContextObj]);
   screen->gd->CheckForError(__FILE__, __LINE__);
   return 0;
 }
@@ -584,37 +584,38 @@ bool FrameScheduler::DoMainWait() { return false; }
 
 void FrameScheduler::Wakeup(Window *w) {
   if (wait_forever && w)
-    [GetTyped<GameView*>(w->id) performSelectorOnMainThread:@selector(setNeedsDisplay:) withObject:@YES waitUntilDone:NO];
+    [dynamic_cast<OSXWindow*>(w)->view performSelectorOnMainThread:@selector(setNeedsDisplay:) withObject:@YES waitUntilDone:NO];
 }
 
 bool FrameScheduler::WakeupIn(Window *w, Time interval, bool force) { 
-  return [GetTyped<GameView*>(w->id) triggerFrameIn:interval.count() force:force];
+  return [dynamic_cast<OSXWindow*>(w)->view triggerFrameIn:interval.count() force:force];
 }
 
-void FrameScheduler::ClearWakeupIn(Window *w) { [GetTyped<GameView*>(w->id) clearTriggerTimer]; }
+void FrameScheduler::ClearWakeupIn(Window *w) { [dynamic_cast<OSXWindow*>(w)->view clearTriggerTimer]; }
 void FrameScheduler::UpdateWindowTargetFPS(Window *w) { 
-  [GetTyped<GameView*>(w->id) stopThread];
-  [GetTyped<GameView*>(w->id) startThread:false];
+  [dynamic_cast<OSXWindow*>(w)->view stopThread];
+  [dynamic_cast<OSXWindow*>(w)->view startThread:false];
 }
 
-void FrameScheduler::AddMainWaitMouse(Window *w) { GetTyped<GameView*>(w->id).frame_on_mouse_input = 1; }
-void FrameScheduler::DelMainWaitMouse(Window *w) { GetTyped<GameView*>(w->id).frame_on_mouse_input = 0; }
-void FrameScheduler::AddMainWaitKeyboard(Window *w) { GetTyped<GameView*>(w->id).frame_on_keyboard_input = 1; }
-void FrameScheduler::DelMainWaitKeyboard(Window *w) { GetTyped<GameView*>(w->id).frame_on_keyboard_input = 0; }
+void FrameScheduler::AddMainWaitMouse(Window *w) { dynamic_cast<OSXWindow*>(w)->view.frame_on_mouse_input = 1; }
+void FrameScheduler::DelMainWaitMouse(Window *w) { dynamic_cast<OSXWindow*>(w)->view.frame_on_mouse_input = 0; }
+void FrameScheduler::AddMainWaitKeyboard(Window *w) { dynamic_cast<OSXWindow*>(w)->view.frame_on_keyboard_input = 1; }
+void FrameScheduler::DelMainWaitKeyboard(Window *w) { dynamic_cast<OSXWindow*>(w)->view.frame_on_keyboard_input = 0; }
 void FrameScheduler::AddMainWaitSocket(Window *w, Socket fd, int flag, function<bool()> cb) {
   if (fd == InvalidSocket) return;
   if (!wait_forever_thread) {
     CHECK_EQ(SocketSet::READABLE, flag);
-    [GetTyped<GameView*>(w->id) addMainWaitSocket:fd callback:move(cb)];
+    [dynamic_cast<OSXWindow*>(w)->view addMainWaitSocket:fd callback:move(cb)];
   }
 }
 
 void FrameScheduler::DelMainWaitSocket(Window *w, Socket fd) {
   if (fd == InvalidSocket) return;
-  CHECK(w->id.v);
-  [GetTyped<GameView*>(w->id) delMainWaitSocket: fd];
+  CHECK(w->id);
+  [dynamic_cast<OSXWindow*>(w)->view delMainWaitSocket: fd];
 }
 
+Window *Window::Create() { return new OSXWindow(); }
 unique_ptr<Module> CreateFrameworkModule() { return make_unique<OSXFrameworkModule>(); }
 
 }; // namespace LFL

@@ -605,22 +605,24 @@ struct Window : public ::LFAppWindow {
 
   Window();
   virtual ~Window();
+  static Window *Create();
+
+  virtual void SetCaption(const string &c)           = 0;
+  virtual void SetResizeIncrements(float x, float y) = 0;
+  virtual void SetTransparency(float v)              = 0;
+  virtual bool Reshape(int w, int h)                 = 0;
 
   LFL::Box Box()                   const { return LFL::Box(x, y, width, height); }
   LFL::Box Box(float xs, float ys) const { return LFL::Box(width*xs, height*ys); }
   LFL::Box Box(float xp, float yp, float xs, float ys,
                float xbl=0, float ybt=0, float xbr=-INFINITY, float ybb=-INFINITY) const;
-
   void SetBox(const LFL::Box &b);
-  void SetCaption(const string &c);
-  void SetResizeIncrements(float x, float y);
-  void SetTransparency(float v);
-  bool Reshape(int w, int h);
   void Reshaped(const LFL::Box&);
   void Minimized()   { minimized=1; }
   void UnMinimized() { minimized=0; }
   void ResetGL();
   void SwapAxis();
+  void ClearChildren();
   int  Frame(unsigned clicks, int flag);
   void RenderToFrameBuffer(FrameBuffer *fb);
   void InitConsole(const Callback &animating_cb);
@@ -671,7 +673,7 @@ struct Application : public ::LFApp {
   unique_ptr<SocketServicesThread> network_thread;
   unique_ptr<ProcessAPIClient> render_process;
   unique_ptr<ProcessAPIServer> main_process;
-  unordered_map<void*, Window*> windows;
+  unordered_map<const void*, Window*> windows;
   function<void(Window*)> window_init_cb, window_start_cb, window_closed_cb = [](Window *w){ delete w; };
   Window *focused=0;
   unordered_map<string, StringPiece> asset_cache;
@@ -884,6 +886,7 @@ struct SystemAdvertisingView {
   static unique_ptr<SystemAdvertisingView> Create(int type, int placement, const string &id);
   virtual ~SystemAdvertisingView() {}
   virtual void Show(bool show_or_hide) = 0;
+  virtual void Show(SystemTableView*, bool show_or_hide) = 0;
 };
 
 struct SystemPurchases {

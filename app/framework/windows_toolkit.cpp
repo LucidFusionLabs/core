@@ -22,7 +22,7 @@
 namespace LFL {
 SystemMenuView::~SystemMenuView() {}
 SystemMenuView::SystemMenuView(const string &title_text, const vector<MenuItem>&items) {
-  WinWindow *win = GetTyped<WinWindow*>(screen->impl);
+  WinWindow *win = dynamic_cast<WinWindow*>(screen);
   if (!win->menu) { win->menu = CreateMenu(); win->context_menu = CreatePopupMenu(); }
   HMENU hAddMenu = CreatePopupMenu();
   for (auto &i : items) {
@@ -32,7 +32,7 @@ SystemMenuView::SystemMenuView(const string &title_text, const vector<MenuItem>&
   }
   AppendMenu(win->menu, MF_STRING | MF_POPUP, (UINT)hAddMenu, title.c_str());
   AppendMenu(win->context_menu, MF_STRING | MF_POPUP, (UINT)hAddMenu, title.c_str());
-  if (win->menubar) SetMenu(GetTyped<HWND>(screen->id), win->menu);
+  if (win->menubar) SetMenu(dynamic_cast<WinWindow*>(screen)->hwnd, win->menu);
 }
 
 unique_ptr<SystemMenuView> SystemMenuView::CreateEditMenu(const vector<MenuItem>&items) { return nullptr; }
@@ -50,7 +50,7 @@ void Application::ShowSystemFontChooser(const FontDesc &cur_font, const string &
   memzero(cf);
   cf.lpLogFont = &lf;
   cf.lStructSize = sizeof(cf);
-  cf.hwndOwner = GetTyped<HWND>(screen->id);
+  cf.hwndOwner = dynamic_cast<WinWindow*>(screen)->hwnd;
   cf.Flags = CF_SCREENFONTS | CF_INITTOLOGFONTSTRUCT;
   if (!ChooseFont(&cf)) return;
   int flag = FontDesc::Mono | (lf.lfWeight > FW_NORMAL ? FontDesc::Bold : 0) | (lf.lfItalic ? FontDesc::Italic : 0);

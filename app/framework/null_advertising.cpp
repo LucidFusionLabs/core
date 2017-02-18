@@ -19,6 +19,7 @@
 namespace LFL {
 struct NullAdvertisingView : public SystemAdvertisingView {
   void Show(bool show_or_hide) {}
+  void Show(SystemTableView *t, bool show_or_hide) {}
 };
 
 unique_ptr<SystemAdvertisingView> SystemAdvertisingView::Create(int type, int placement, const string &adid) { return make_unique<NullAdvertisingView>(); }
