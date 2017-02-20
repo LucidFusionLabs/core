@@ -98,6 +98,11 @@ bool Application::LoadKeychain(const string &keyname, string *val_out) {
 }
 
 string Application::GetSystemDeviceName() { return GetNSString([[UIDevice currentDevice] name]); }
+string Application::GetSystemDeviceId() {
+  string ret(16, 0);
+  [[[UIDevice currentDevice] identifierForVendor] getUUIDBytes: MakeUnsigned(&ret[0])];
+  return ret;
+}
 
 Connection *Application::ConnectTCP(const string &hostport, int default_port, Connection::CB *connected_cb, bool background_services) {
   static bool ios9_or_later = kCFCoreFoundationVersionNumber >= kCFCoreFoundationVersionNumber_iOS_9_0;

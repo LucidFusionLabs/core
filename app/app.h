@@ -730,6 +730,7 @@ struct Application : public ::LFApp {
   string GetClipboardText();
   void SetClipboardText(const string &s);
   void OpenSystemBrowser(const string &url);
+  string GetSystemDeviceId();
   string GetSystemDeviceName();
   void ShowSystemContextMenu(const MenuItemVec &items);
   void ShowSystemFontChooser(const FontDesc &cur_font, const StringVecCB&);
@@ -889,11 +890,25 @@ struct SystemAdvertisingView {
   virtual void Show(SystemTableView*, bool show_or_hide) = 0;
 };
 
+struct SystemProduct {
+  string id;
+  SystemProduct(const string &i) : id(i) {}
+  virtual ~SystemProduct() {}
+  virtual string Name() = 0;
+  virtual string Description() = 0;
+  virtual string Price() = 0;
+};
+
 struct SystemPurchases {
+  typedef function<void(unique_ptr<SystemProduct>)> ProductCB;
   static unique_ptr<SystemPurchases> Create();
   virtual ~SystemPurchases() {}
-  virtual bool MakePuchase(const string&, IntCB result) = 0;
-  virtual bool HavePurchase(const string&, bool *out) = 0;
+  virtual bool CanPurchase() = 0;
+  virtual void LoadPurchases() = 0;
+  virtual bool HavePurchase(const string&) = 0;
+  virtual void RestorePurchases(Callback done_cb) = 0;
+  virtual void PreparePurchase(const StringVec&, Callback done_cb, ProductCB product_cb) = 0;
+  virtual bool MakePurchase(SystemProduct*, IntCB result_cb) = 0;
 };
 
 unique_ptr<Module> CreateFrameworkModule();

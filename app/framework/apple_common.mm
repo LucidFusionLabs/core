@@ -182,6 +182,12 @@ NSArray *MakeNSStringArray(const vector<string> &v) {
   return [NSArray arrayWithObjects:&vs[0] count:vs.size()];
 }
 
+NSSet *MakeNSStringSet(const vector<string> &v) {
+  vector<NSString*> vs;
+  for (auto &vi : v) vs.push_back(MakeNSString(vi));
+  return [NSSet setWithObjects:&vs[0] count:vs.size()];
+}
+
 void CleanUpTextureCGImageData(void *info, const void *data, size_t size) {
   delete [] static_cast<unsigned char *>(info);
 }

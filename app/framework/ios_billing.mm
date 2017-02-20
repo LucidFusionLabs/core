@@ -16,16 +16,134 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#import <StoreKit/StoreKit.h>
+
 #include "core/app/app.h"
+#include "core/app/framework/apple_common.h"
+
+namespace LFL {
+struct iOSProduct : public SystemProduct {
+  SKProduct *product;
+  ~iOSProduct() { [product release]; }
+  iOSProduct(const string &i, SKProduct *p) : SystemProduct(i), product(p) { [product retain]; }
+  string Name() { return GetNSString(product.localizedTitle); }
+  string Description() { return GetNSString(product.localizedDescription); }
+  string Price() {
+    NSNumberFormatter *numberFormatter = [[NSNumberFormatter alloc] init];
+    [numberFormatter setFormatterBehavior:NSNumberFormatterBehavior10_4];
+    [numberFormatter setNumberStyle:NSNumberFormatterCurrencyStyle];
+    [numberFormatter setLocale:product.priceLocale];
+    string ret = GetNSString([numberFormatter stringFromNumber:product.price]);
+    [numberFormatter release];
+    return ret;
+  }
+};
+}; // namespace LFL
+
+@interface IOSProductRequest : NSObject<SKProductsRequestDelegate>
+  @property (nonatomic, retain) SKProductsRequest *productsRequest;
+@end
+
+@implementation IOSProductRequest
+  {
+    LFL::Callback done_cb;
+    LFL::SystemPurchases::ProductCB product_cb;
+  }
+
+  - (id)initWithProducts:(NSSet*)products doneCB:(LFL::Callback)dcb productCB:(LFL::SystemPurchases::ProductCB)pcb {
+    done_cb = LFL::move(dcb);
+    product_cb = LFL::move(pcb);
+    _productsRequest = [[SKProductsRequest alloc] initWithProductIdentifiers:products];
+    _productsRequest.delegate = self;
+    [_productsRequest start];
+    return self;
+  }
+
+  - (void)productsRequest:(SKProductsRequest *)request didReceiveResponse:(SKProductsResponse *)response {
+    for (SKProduct *product in response.products)
+      product_cb(LFL::make_unique<LFL::iOSProduct>(LFL::GetNSString(product.productIdentifier), product));
+    done_cb();
+    [self release];
+  }
+@end
+
+@interface IOSPurchaseManager : NSObject<SKPaymentTransactionObserver>
+@end
+
+@implementation IOSPurchaseManager
+  {
+    LFL::unordered_map<LFL::string, LFL::IntCB> outstanding_purchase;
+  }
+
+  - (id) init {
+    self = [super init];
+    [[SKPaymentQueue defaultQueue] addTransactionObserver:self];
+    return self;
+  }
+
+  - (void)paymentQueue:(SKPaymentQueue *)queue updatedTransactions:(NSArray *)transactions {
+    for (SKPaymentTransaction *transaction in transactions) {
+      switch (transaction.transactionState) {
+        case SKPaymentTransactionStatePurchased:
+          [self finishTransaction:transaction wasSuccessful:YES];
+          break;
+        case SKPaymentTransactionStateFailed:
+          if (transaction.error.code == SKErrorPaymentCancelled)
+            [[SKPaymentQueue defaultQueue] finishTransaction:transaction];
+          else 
+            [self finishTransaction:transaction wasSuccessful:NO];
+          break;
+        case SKPaymentTransactionStateRestored:
+          [self finishTransaction:transaction wasSuccessful:YES];
+          break;
+        default:
+          break;
+      }
+    }
+  }
+
+  - (bool)makePurchase:(const LFL::string&)product_id withCB:(LFL::IntCB)cb {
+    if (LFL::Contains(outstanding_purchase, product_id)) return false;
+    outstanding_purchase[product_id] = LFL::move(cb);
+    SKPayment *payment = [SKPayment paymentWithProductIdentifier: LFL::MakeNSString(product_id)];
+    [[SKPaymentQueue defaultQueue] addPayment:payment];
+    return true;
+  }
+
+  - (void)finishTransaction:(SKPaymentTransaction *)transaction wasSuccessful:(BOOL)wasSuccessful {
+    LFL::string product_id = LFL::GetNSString(transaction.payment.productIdentifier);
+    [[SKPaymentQueue defaultQueue] finishTransaction:transaction];
+    auto it = outstanding_purchase.find(product_id);
+    if (it != outstanding_purchase.end()) {
+      it->second(wasSuccessful);
+      outstanding_purchase.erase(it);
+    }
+  }
+@end
 
 namespace LFL {
 struct iOSPurchases : public SystemPurchases {
-  bool HavePurchase(const string&, bool *out) {
-    return false;
+  IOSPurchaseManager *purchaser;
+  unordered_set<string> purchases;
+  ~iOSPurchases() { [purchaser release]; }
+  iOSPurchases() : purchaser([[IOSPurchaseManager alloc] init]) { LoadPurchases(); }
+
+  bool CanPurchase() { return [SKPaymentQueue canMakePayments]; }
+  bool HavePurchase(const string &product_id) { return Contains(purchases, product_id); }
+
+  void PreparePurchase(const StringVec &products, Callback done_cb, ProductCB product_cb) {
+    [[IOSProductRequest alloc] initWithProducts:MakeNSStringSet(products) doneCB:move(done_cb) productCB:move(product_cb)];
   }
 
-  bool MakePuchase(const string&, IntCB result) {
-    return false;
+  bool MakePurchase(SystemProduct *product, IntCB result_cb) {
+    return [purchaser makePurchase:product->id withCB:result_cb];
+  }
+
+  void RestorePurchases(Callback cb) {
+  }
+
+  void LoadPurchases() {
+    purchases.clear();
   }
 };
 

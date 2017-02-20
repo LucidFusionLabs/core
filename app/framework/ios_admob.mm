@@ -24,43 +24,56 @@
 #include "core/app/framework/apple_common.h"
 #include "core/app/framework/ios_common.h"
 
-@interface IOSAdMob : NSObject
+@interface IOSAdMob : NSObject<GADBannerViewDelegate>
+  @property (nonatomic, retain) GADBannerView *banner;
+  @property (nonatomic)         BOOL started, displayed;
 @end
 
 @implementation IOSAdMob
-  float bannerHeight;
-  UIView *bannerContainerView;
-  GADBannerView *bannerView;
-
-  - (id)initWithFrame:(CGRect)r adUnitID:(NSString*)adid {
+  - (id)initWithAdUnitID:(NSString*)adid {
     self = [super init];
-    if ([UIDevice currentDevice].userInterfaceIdiom == UIUserInterfaceIdiomPhone) bannerHeight = 50;
-    else bannerHeight = 90;
-    bannerContainerView = [[UIView alloc] initWithFrame:CGRectMake(0, r.size.height, r.size.width, bannerHeight)];
-
-    bannerView = [[GADBannerView alloc] initWithAdSize:kGADAdSizeBanner];
-    bannerView.adUnitID = adid;
-    bannerView.rootViewController = (id)self;
-    bannerView.delegate = (id<GADBannerViewDelegate>)self;
-    bannerView.frame = CGRectMake(0, 0, r.size.width, bannerHeight);
-
-    GADRequest *request = [GADRequest request];
-    request.testDevices = [NSArray arrayWithObjects:kGADSimulatorID, nil];
-    [bannerView loadRequest:request];
+    _banner = [[GADBannerView alloc] initWithAdSize:kGADAdSizeBanner];
+    _banner.adUnitID = adid;
+    _banner.delegate = self;
+    [_banner setAutoresizingMask:UIViewAutoresizingFlexibleTopMargin|UIViewAutoresizingFlexibleWidth];
     return self;
   }
 
-  - (void)show: (BOOL)show_or_hide withTable:(IOSTable*)table {
+  - (void)updateBannerFrame {
+    int bh = _banner.frame.size.height;
+    CGRect frame = _banner.rootViewController.view.frame;
+    [_banner setFrame: CGRectMake(frame.origin.x, frame.origin.y+frame.size.height-bh, frame.size.width, bh)];
   }
 
-  + (void)adViewDidReceiveAd:(GADBannerView *)view {
-  #if 0
-    [UIView animateWithDuration:0.5 animations:^{
-      containerView.frame = CGRectMake(0, 0, senderView.frame.size.width, senderView.frame.size.height - bannerHeight);
-      bannerContainerView.frame = CGRectMake(0, senderView.frame.size.height - bannerHeight, senderView.frame.size.width, bannerHeight);
-      [bannerContainerView addSubview:bannerView];
-    }];
-    #endif
+  - (void)show: (BOOL)show_or_hide withTable:(UIViewController*)table {
+    if (show_or_hide) {
+      _displayed = NO;
+      _banner.rootViewController = table;
+      [self updateBannerFrame];
+      if (!_started && (_started = YES)) {
+        GADRequest *request = [GADRequest request];
+        request.testDevices = @[ kGADSimulatorID ];
+        [_banner loadRequest:request];
+      }
+      [_banner.rootViewController.view addSubview:_banner];
+    }
+  }
+
+  - (void)adViewDidReceiveAd:(GADBannerView *)view {
+    [self updateBannerFrame];
+    if (!_displayed && (_displayed = YES)) {
+      if (auto table = LFL::objc_dynamic_cast<IOSTable>(_banner.rootViewController)) {
+         int bh = _banner.frame.size.height;
+         CGRect frame = table.tableView.frame;
+         frame.size.height -= bh;
+         table.tableView.frame = frame;
+         if (table.toolbar) {
+            frame = table.toolbar.frame;
+            frame.origin.y -= bh;
+            table.toolbar.frame = frame;
+         }
+      }
+    }
   }
 @end
 
@@ -69,7 +82,7 @@ struct iOSAdvertisingView : public SystemAdvertisingView {
   IOSAdMob *admob;
   virtual ~iOSAdvertisingView() { [admob release]; }
   iOSAdvertisingView(int type, int placement, const string &adid) :
-    admob([[IOSAdMob alloc] initWithFrame: [[UIScreen mainScreen] bounds] adUnitID: MakeNSString(adid)]) {}
+    admob([[IOSAdMob alloc] initWithAdUnitID: MakeNSString(adid)]) {}
 
   void Show(bool show_or_hide) {}
   void Show(SystemTableView *t, bool show_or_hide) {

@@ -109,7 +109,7 @@ static const char* const* ios_argv = 0;
 
     MyAppCreate(LFL::ios_argc, LFL::ios_argv);
     self.window = [[[LFUIWindow alloc] initWithFrame:wbounds] autorelease];
-      
+
     if (_show_title) {
       _title_bar = [[UINavigationBar alloc] initWithFrame:CGRectMake(0, 0, CGRectGetWidth(wbounds), 44)];
       [_title_bar setTintColor:[UIColor whiteColor]];

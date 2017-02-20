@@ -88,13 +88,16 @@
   @property (nonatomic, assign) LFL::StringCB cancel_cb, confirm_cb;
 @end
 
-@interface IOSTable : UITableViewController
+@interface IOSTable : UIViewController<UITableViewDataSource, UITableViewDelegate>
+  @property (nonatomic, retain) UITableView *tableView;
   @property (nonatomic, retain) UIView *header;
   @property (nonatomic, retain) UILabel *header_label;
+  @property (nonatomic, retain) UIToolbar *toolbar;
   @property (nonatomic, assign) LFL::SystemTableView *lfl_self;
   @property (nonatomic, assign) LFL::IntIntCB delete_row_cb;
   @property (nonatomic)         std::string style;
   @property (nonatomic)         int editable_section, editable_start_row, selected_section, selected_row;
+  - (id)initWithStyle: (UITableViewStyle)style;
 @end
 
 @interface IOSNavigation : UINavigationController<UINavigationControllerDelegate>

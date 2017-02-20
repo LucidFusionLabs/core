@@ -338,7 +338,17 @@ static std::vector<UIImage*> app_images;
   {
     std::vector<LFL::Table> data;
     int double_section_row_height;
-    bool change_selected_row_background;
+    bool has_appeared, change_selected_row_background;
+  }
+
+  - (id)initWithStyle: (UITableViewStyle)style {
+    self = [super initWithNibName:nil bundle:nil];
+    _tableView = [[UITableView alloc] initWithFrame: [LFUIApplication sharedAppDelegate].controller.view.frame style:style];
+    _tableView.autoresizingMask = UIViewAutoresizingFlexibleHeight | UIViewAutoresizingFlexibleWidth;
+    _tableView.delegate = self;
+    _tableView.dataSource = self;
+    [self.view addSubview: _tableView];
+    return self;
   }
 
   - (void)load:(LFL::SystemTableView*)lself withTitle:(const std::string&)title withStyle:(const std::string&)sty items:(std::vector<LFL::Table>)item {
@@ -780,8 +790,11 @@ static std::vector<UIImage*> app_images;
     if (parent == nil && _lfl_self && _lfl_self->hide_cb) _lfl_self->hide_cb();
   }
 
-  - (void)viewWillAppear:   (BOOL)animated { [super viewWillAppear:    animated]; }
   - (void)viewWillDisappear:(BOOL)animated { [super viewWillDisappear: animated]; }
+  - (void)viewWillAppear:(BOOL)animated {
+    if (!has_appeared && (has_appeared = true)) [_tableView reloadData];
+    [super viewWillAppear:animated];
+  }
 
   - (void)textFieldDidChange:(IOSTextField*)sender {
     _lfl_self->changed = true;
@@ -958,7 +971,7 @@ struct iOSNavigationView : public SystemNavigationView {
   IOSNavigation *nav;
   ~iOSNavigationView() { [nav release]; }
   iOSNavigationView() : nav([[IOSNavigation alloc] initWithNavigationBarClass:nil toolbarClass:nil]) {
-    [nav setToolbarHidden:NO animated:NO];
+    [nav setToolbarHidden:YES animated:NO];
   }
 
   void Show(bool show_or_hide) {
@@ -1077,8 +1090,15 @@ iOSTableView::iOSTableView(const string &title, const string &style, TableItemVe
 
 void iOSTableView::DelNavigationButton(int align) { return [table clearNavigationButton:align]; }
 void iOSTableView::AddNavigationButton(int align, const TableItem &item) { return [table loadNavigationButton:item withAlign:align]; }
+
 void iOSTableView::AddToolbar(SystemToolbarView *t) {
-  [table setToolbarItems: [dynamic_cast<iOSToolbarView*>(t)->toolbar createUIToolbarItems: TRUE]];
+  int toolbar_height = 44;
+  CGRect frame = table.tableView.frame;
+  table.toolbar = [dynamic_cast<iOSToolbarView*>(t)->toolbar createUIToolbar:
+    CGRectMake(frame.origin.x, frame.origin.y+frame.size.height-toolbar_height, frame.size.width, toolbar_height) first: YES];
+  [table.view addSubview: table.toolbar];
+  frame.size.height -= toolbar_height;
+  table.tableView.frame = frame;
 }
 
 void iOSTableView::Show(bool show_or_hide) {

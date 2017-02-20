@@ -50,6 +50,7 @@ inline CGPoint MakeCGPoint(const v2 &p) { return CGPointMake(p.x, p.y); }
 inline v2 GetCGPoint(CGPoint p) { return v2(p.x, p.y); }
 inline Box GetCGRect(CGRect r) { return Box(r.origin.x, r.origin.y, r.size.width, r.size.height); }
 NSArray *MakeNSStringArray(const vector<string>&);
+NSSet *MakeNSStringSet(const vector<string>&);
 CGImageRef MakeCGImage(Texture&);
 
 template<typename T> inline T* objc_dynamic_cast(id from) {
