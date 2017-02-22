@@ -20,8 +20,12 @@
 
 namespace LFL {
 struct NullPurchases : public SystemPurchases {
-  bool HavePurchase(const string&, bool *out) { return false; }
-  bool MakePuchase(const string&, IntCB result) { return false; }
+  bool CanPurchase() { return false; };
+  void LoadPurchases() {}
+  bool HavePurchase(const string&) { return false; }
+  void RestorePurchases(Callback done_cb) {}
+  void PreparePurchase(const StringVec&, Callback done_cb, ProductCB product_cb) { done_cb(); }
+  bool MakePurchase(SystemProduct*, IntCB result_cb) { return false; };
 };
 
 unique_ptr<SystemPurchases> SystemPurchases::Create() { return make_unique<NullPurchases>(); }

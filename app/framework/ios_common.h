@@ -136,7 +136,7 @@ struct iOSTableView : public SystemTableView {
   void BeginUpdates();
   void EndUpdates();
   void SetSectionValues(int section, const StringVec &item);
-  void ReplaceSection(int section, const string &h, int image, int flag, TableItemVec item, Callback add_button);
+  void ReplaceSection(int section, TableItem h, int flag, TableItemVec item);
 };
 
 UIAlertView            *GetUIAlertView(SystemAlertView*);

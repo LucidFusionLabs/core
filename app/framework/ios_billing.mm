@@ -51,18 +51,53 @@ struct iOSProduct : public SystemProduct {
   }
 
   - (id)initWithProducts:(NSSet*)products doneCB:(LFL::Callback)dcb productCB:(LFL::SystemPurchases::ProductCB)pcb {
+    self = [super init];
     done_cb = LFL::move(dcb);
     product_cb = LFL::move(pcb);
+    for (NSString *p in products) INFO("request product '", LFL::GetNSString(p), "'");
     _productsRequest = [[SKProductsRequest alloc] initWithProductIdentifiers:products];
+
     _productsRequest.delegate = self;
     [_productsRequest start];
     return self;
   }
 
   - (void)productsRequest:(SKProductsRequest *)request didReceiveResponse:(SKProductsResponse *)response {
-    for (SKProduct *product in response.products)
+    INFO("product request response");
+    for (SKProduct *product in response.products) {
+      INFO("omg calling product");
       product_cb(LFL::make_unique<LFL::iOSProduct>(LFL::GetNSString(product.productIdentifier), product));
-    done_cb();
+    }
+    if (done_cb) done_cb();
+    [self release];
+  }
+@end
+
+@interface IOSReceiptRequest : NSObject<SKRequestDelegate>
+  @property (nonatomic, retain) SKReceiptRefreshRequest *receiptRequest;
+@end
+
+@implementation IOSReceiptRequest
+  {
+    LFL::Callback done_cb;
+  }
+
+  - (id)initWithDoneCB:(LFL::Callback)dcb {
+    self = [super init];
+    done_cb = LFL::move(dcb);
+    _receiptRequest = [[SKReceiptRefreshRequest alloc] init];
+    _receiptRequest.delegate = self;
+    [_receiptRequest start];
+    return self;
+  }
+
+  - (void)requestDidFinish:(SKRequest *)request {
+    if (done_cb) done_cb();
+    [self release];
+  }
+
+  - (void)request:(SKRequest *)request didFailWithError:(NSError *)error {
+    if (done_cb) done_cb();
     [self release];
   }
 @end
@@ -102,10 +137,10 @@ struct iOSProduct : public SystemProduct {
     }
   }
 
-  - (bool)makePurchase:(const LFL::string&)product_id withCB:(LFL::IntCB)cb {
-    if (LFL::Contains(outstanding_purchase, product_id)) return false;
-    outstanding_purchase[product_id] = LFL::move(cb);
-    SKPayment *payment = [SKPayment paymentWithProductIdentifier: LFL::MakeNSString(product_id)];
+  - (bool)makePurchase:(LFL::iOSProduct*)product withCB:(LFL::IntCB)cb {
+    if (LFL::Contains(outstanding_purchase, product->id)) return false;
+    outstanding_purchase[product->id] = LFL::move(cb);
+    SKPayment *payment = [SKPayment paymentWithProduct: product->product];
     [[SKPaymentQueue defaultQueue] addPayment:payment];
     return true;
   }
@@ -136,14 +171,16 @@ struct iOSPurchases : public SystemPurchases {
   }
 
   bool MakePurchase(SystemProduct *product, IntCB result_cb) {
-    return [purchaser makePurchase:product->id withCB:result_cb];
+    return [purchaser makePurchase:dynamic_cast<iOSProduct*>(product) withCB:result_cb];
   }
 
-  void RestorePurchases(Callback cb) {
+  void RestorePurchases(Callback done_cb) {
+    [[IOSReceiptRequest alloc] initWithDoneCB:move(done_cb)];
   }
 
   void LoadPurchases() {
     purchases.clear();
+    NSURL *url = [NSBundle mainBundle].appStoreReceiptURL;
   }
 };
 

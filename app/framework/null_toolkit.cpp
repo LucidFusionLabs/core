@@ -38,9 +38,9 @@ struct NullToolbarView : public SystemToolbarView {
 };
 
 struct NullTableView : public SystemTableView {
-  vector<Table> data;
+  vector<TableSection> data;
   NullTableView(const string &title, const string &style, TableItemVec items) :
-    data(Table::Convert(move(items))) {}
+    data(TableSection::Convert(move(items))) {}
 
   StringPairVec GetSectionText(int section) {
     StringPairVec ret;
@@ -73,7 +73,7 @@ struct NullTableView : public SystemTableView {
   void SelectRow(int section, int row) {} 
   void BeginUpdates() {}
   void EndUpdates() {}
-  void ReplaceSection(int section, const string &h, int image, int flag, TableItemVec item, Callback add_button) {}
+  void ReplaceSection(int section, TableItem h, int flag, TableItemVec item) {}
 };
 
 struct NullTextView : public SystemTextView {

@@ -288,10 +288,10 @@ static std::vector<NSImage*> app_images;
 @implementation OSXTable
   {
     int data_rows;
-    std::vector<LFL::Table> data;
+    std::vector<LFL::TableSection> data;
   }
 
-  - (id)init: (LFL::SystemTableView*)lself withTitle:(const std::string&)title andStyle:(const std::string&)style items:(std::vector<LFL::Table>)item { 
+  - (id)init: (LFL::SystemTableView*)lself withTitle:(const std::string&)title andStyle:(const std::string&)style items:(std::vector<LFL::TableSection>)item { 
     self = [super init];
     self.title = LFL::MakeNSString(title);
     _lfl_self = lself;
@@ -339,7 +339,7 @@ static std::vector<NSImage*> app_images;
     [_tableView reloadData];
   }
 
-  - (void)replaceSection:(int)section items:(std::vector<LFL::TableItem>)item header:(const std::string&)h image:(int)im flag:(int)f addbutton:(LFL::Callback)addb {
+  - (void)replaceSection:(int)section items:(std::vector<LFL::TableItem>)item header:(LFL::TableItem)h flag:(int)f {
     bool added = section == data.size();
     if (added) data.emplace_back(data_rows + data.size());
     CHECK_LT(section, data.size());
@@ -348,7 +348,7 @@ static std::vector<NSImage*> app_images;
     [OSXTable addHiddenIndices:data[section] to:show_indices];
     [_tableView unhideRowsAtIndexes:show_indices withAnimation:NSTableViewAnimationEffectNone];
 
-    data[section] = LFL::Table(h, im, f, move(addb), data[section].start_row);
+    data[section] = LFL::TableSection(move(h), f, data[section].start_row);
     data[section].item = move(item);
     data_rows += size_delta;
     if (size_delta) for (int i=section+1, e=data.size(); i < e; ++i) data[i].start_row += size_delta;
@@ -415,7 +415,7 @@ static std::vector<NSImage*> app_images;
   }
 
   - (void)applyItemDeps:(const LFL::TableItem&)compiled_item withDep:(const std::string&)v {
-    LFL::Table::ApplyItemDepends(compiled_item, v, &data, [=](const LFL::TableItem::Dep &d){
+    LFL::TableSection::ApplyItemDepends(compiled_item, v, &data, [=](const LFL::TableItem::Dep &d){
     #if 0
       NSIndexPath *p = [NSIndexPath indexPathForRow:d.row inSection:d.section];
       [self.tableView reloadRowsAtIndexPaths:@[p] withRowAnimation:UITableViewRowAnimationNone];
@@ -431,7 +431,7 @@ static std::vector<NSImage*> app_images;
 
   - (CGFloat)tableView:(NSTableView *)tableView heightOfRow:(NSInteger)collapsed_row {
     int section = -1, row = -1;
-    LFL::Table::FindSectionOffset(data, collapsed_row, &section, &row);
+    LFL::TableSection::FindSectionOffset(data, collapsed_row, &section, &row);
     if (section < 0 || section >= data.size() || row < 0 || row >= data[section].item.size()) return _row_height;
     const auto &ci = data[section].item[row];
     if (ci.gui_loaded &&
@@ -451,7 +451,7 @@ static std::vector<NSImage*> app_images;
     OSXTableCellView *cellView = [tableView makeViewWithIdentifier:identifier owner:self];
     if (cellView == nil) {
       int section = -1, row = -1;
-      LFL::Table::FindSectionOffset(data, collapsed_row, &section, &row);
+      LFL::TableSection::FindSectionOffset(data, collapsed_row, &section, &row);
       if (row < 0) return (cellView = [self headerForSection: section]);
 
       [self checkExists:section row:row];
@@ -517,7 +517,7 @@ static std::vector<NSImage*> app_images;
 
   - (BOOL)tableView:(NSTableView *)tableView shouldSelectRow:(NSInteger)collapsed_row {
     int section = -1, row = -1;
-    LFL::Table::FindSectionOffset(data, collapsed_row, &section, &row);
+    LFL::TableSection::FindSectionOffset(data, collapsed_row, &section, &row);
     if (row < 0) return NO;
     [self checkExists:section row:row];
     _selected_section = section;
@@ -544,7 +544,7 @@ static std::vector<NSImage*> app_images;
     return ret;
   }
 
-  + (void)addHiddenIndices:(const LFL::Table&)in to:(NSMutableIndexSet*)out {
+  + (void)addHiddenIndices:(const LFL::TableSection&)in to:(NSMutableIndexSet*)out {
     for (auto b = in.item.begin(), e = in.item.end(), j = b; j != e; ++j) 
       if (j->hidden) [out addIndex: in.start_row + (j - b) + 1];
   }
@@ -672,7 +672,7 @@ struct OSXTableView : public SystemTableView {
   OSXTable *table;
   ~OSXTableView() { [table release]; }
   OSXTableView(const string &title, const string &style, TableItemVec items) :
-    table([[OSXTable alloc] init:this withTitle:title andStyle:style items:Table::Convert(move(items))]) {}
+    table([[OSXTable alloc] init:this withTitle:title andStyle:style items:TableSection::Convert(move(items))]) {}
 
   void DelNavigationButton(int align) {}
   void AddNavigationButton(int align, const TableItem &item) {}
@@ -710,8 +710,8 @@ struct OSXTableView : public SystemTableView {
   void BeginUpdates() { [table.tableView beginUpdates]; }
   void EndUpdates() { [table.tableView endUpdates]; }
   void SetSectionValues(int section, const StringVec &item) { [table setSectionValues:section items:item]; }
-  void ReplaceSection(int section, const string &h, int image, int flag, TableItemVec item, Callback add_button)
-  { [table replaceSection:section items:move(item) header:h image:image flag:flag addbutton:move(add_button)]; }
+  void ReplaceSection(int section, TableItem h, int flag, TableItemVec item)
+  { [table replaceSection:section items:move(item) header:h flag:flag]; }
 };
 
 struct OSXTextView : public SystemTextView {

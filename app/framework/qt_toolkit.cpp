@@ -98,10 +98,10 @@ struct QtToolbar {
 };
 
 struct QtTableInterface {
-  vector<Table> data;
+  vector<TableSection> data;
   int data_rows=0;
   virtual ~QtTableInterface() {}
-  QtTableInterface(vector<Table> d) : data(move(d)) {}
+  QtTableInterface(vector<TableSection> d) : data(move(d)) {}
 
   void CheckExists(int section, int r) {
     CHECK_LT(section, data.size());
@@ -125,7 +125,7 @@ class QtStyledItemDelegate : public QStyledItemDelegate {
     if (1)                painter->drawLine(rect.bottomLeft(), rect.bottomRight());
     if (col == 1) {
       int section = -1, row = -1;
-      LFL::Table::FindSectionOffset(table->data, index.row(), &section, &row);
+      LFL::TableSection::FindSectionOffset(table->data, index.row(), &section, &row);
       if (row >= 0) {
         table->CheckExists(section, row);
         auto &ci = table->data[section].item[row];
@@ -164,7 +164,7 @@ class QtStyledItemDelegate : public QStyledItemDelegate {
     } else if (event->type() == QEvent::MouseButtonRelease) {
       int section = -1, row = -1;
       if (!(index.flags() & Qt::ItemIsEnabled)) return false;
-      LFL::Table::FindSectionOffset(table->data, index.row(), &section, &row);
+      LFL::TableSection::FindSectionOffset(table->data, index.row(), &section, &row);
       if (row < 0) return false;
       auto &ci = table->data[section].item[row];
 
@@ -188,7 +188,7 @@ class QtStyledItemDelegate : public QStyledItemDelegate {
     auto editor = static_cast<QLineEdit*>(editor_widget);
     editor->setPlaceholderText("");
     int section = -1, row = -1;
-    LFL::Table::FindSectionOffset(table->data, index.row(), &section, &row);
+    LFL::TableSection::FindSectionOffset(table->data, index.row(), &section, &row);
     if (row < 0) return;
     table->CheckExists(section, row);
     auto &ci = table->data[section].item[row];
@@ -206,12 +206,12 @@ class QtStyledItemDelegate : public QStyledItemDelegate {
 
 class QtTableModel : public QStandardItemModel {
   public:
-  vector<Table> *v;
-  QtTableModel(vector<Table> *V) : v(V) {}
+  vector<TableSection> *v;
+  QtTableModel(vector<TableSection> *V) : v(V) {}
   QVariant data(const QModelIndex &index, int role) const override {
     if (role == Qt::ForegroundRole) {
       int section = -1, row = -1;
-      Table::FindSectionOffset(*v, index.row(), &section, &row);
+      TableSection::FindSectionOffset(*v, index.row(), &section, &row);
       if (section >= 0 && row < (*v)[section].item.size()) {
         auto &ci = (*v)[section].item[row];
         if ((index.column() == 0 && ci.dropdown_key.size()) ||
@@ -239,7 +239,7 @@ struct QtTable : public QtTableInterface {
   int editable_section=-1, editable_start_row=-1, selected_section=0, selected_row=0, row_height=30;
   QtStyledItemDelegate item_delegate;
 
-  QtTable(SystemTableView *lself, const string &title, string sty, vector<Table> item) :
+  QtTable(SystemTableView *lself, const string &title, string sty, vector<TableSection> item) :
     QtTableInterface(move(item)), table(make_unique<QtTableWidget>(this)),
     model(make_unique<QtTableModel>(&data)), lfl_self(lself), style(move(sty)),
     item_delegate(nullptr, this) {
@@ -269,8 +269,8 @@ struct QtTable : public QtTableInterface {
     QObject::connect(model.get(), &QStandardItemModel::itemChanged, bind(&QtTable::HandleCellChanged, this, _1));
   }
 
-  QList<QStandardItem*> MakeRow(const Table &s) {
-    auto key = make_unique<QStandardItem>(MakeQString(s.header));
+  QList<QStandardItem*> MakeRow(const TableSection &s) {
+    auto key = make_unique<QStandardItem>(MakeQString(s.header.key));
     auto val = make_unique<QStandardItem>();
     key->setTextAlignment(Qt::AlignRight | Qt::AlignBottom);
     key->setFlags(Qt::ItemIsEnabled);
@@ -341,14 +341,14 @@ struct QtTable : public QtTableInterface {
   }
 
   void HideIndices(const vector<int> &ind, bool v) { for (auto &i : ind) table->setRowHidden(i, v); }
-  void HideHiddenRows(const Table &s, bool v) {
+  void HideHiddenRows(const TableSection &s, bool v) {
     for (auto rb = s.item.begin(), re = s.item.end(), r = rb; r != re; ++r)
       if (r->hidden) table->setRowHidden(s.start_row + 1 + (r - rb), v);
   }
 
   void HandleCellClicked(const QModelIndex &index) {
     int section = -1, row = -1;
-    LFL::Table::FindSectionOffset(data, index.row(), &section, &row);
+    LFL::TableSection::FindSectionOffset(data, index.row(), &section, &row);
     if (row < 0) return;
     CheckExists(section, row);
     selected_section = section;
@@ -371,7 +371,7 @@ struct QtTable : public QtTableInterface {
   void HandleCellChanged(QStandardItem *item) {
     if (item->column() != 1) return;
     int section = -1, row = -1;
-    LFL::Table::FindSectionOffset(data, item->row(), &section, &row);
+    LFL::TableSection::FindSectionOffset(data, item->row(), &section, &row);
     if (row < 0) return;
     CheckExists(section, row);
     auto &ci = data[section].item[row];
@@ -385,7 +385,7 @@ struct QtTable : public QtTableInterface {
   }
 
   void ApplyItemDeps(const TableItem &ci, const string &v) {
-    Table::ApplyItemDepends(ci, v, &data, [=](const LFL::TableItem::Dep &d){
+    TableSection::ApplyItemDepends(ci, v, &data, [=](const LFL::TableItem::Dep &d){
       int section_start_row = data[d.section].start_row;
       auto row = MakeRow(&data[d.section].item[d.row]);
       model->blockSignals(true);
@@ -548,7 +548,7 @@ struct QtTableView : public SystemTableView {
   QtTable *table;
   ~QtTableView() { delete table; }
   QtTableView(const string &title, const string &style, TableItemVec items) :
-    table(new QtTable(this, title, style, Table::Convert(move(items)))) {}
+    table(new QtTable(this, title, style, TableSection::Convert(move(items)))) {}
 
   StringPairVec GetSectionText(int ind) {
     StringPairVec ret;
@@ -623,7 +623,7 @@ struct QtTableView : public SystemTableView {
     table->editable_start_row = start_row;
   }
 
-  void ReplaceSection(int section, const string &h, int image, int flag, TableItemVec item, Callback add_button) {
+  void ReplaceSection(int section, TableItem h, int flag, TableItemVec item) {
     bool added = section == table->data.size();
     if (added) table->AddSection();
     CHECK_LT(section, table->data.size());
@@ -631,7 +631,7 @@ struct QtTableView : public SystemTableView {
     int size_delta = item_size - old_item_size, section_start_row = table->data[section].start_row;
     table->HideHiddenRows(table->data[section], false);
 
-    table->data[section] = LFL::Table(h, image, flag, move(add_button), section_start_row);
+    table->data[section] = LFL::TableSection(move(h), flag, section_start_row);
     table->data[section].item = move(item);
     table->data_rows += size_delta;
     for (int i=0; i < item_size; ++i) {

@@ -19,13 +19,16 @@
 #import <UIKit/UIKit.h>
 #import <GLKit/GLKit.h>
 #import <GoogleMobileAds/GoogleMobileAds.h>
+#import <AdSupport/ASIdentifierManager.h>
 
 #include "core/app/app.h"
+#include "core/app/crypto.h"
 #include "core/app/framework/apple_common.h"
 #include "core/app/framework/ios_common.h"
 
 @interface IOSAdMob : NSObject<GADBannerViewDelegate>
   @property (nonatomic, retain) GADBannerView *banner;
+  @property (nonatomic, retain) NSMutableArray *testDevices;
   @property (nonatomic)         BOOL started, displayed;
 @end
 
@@ -36,6 +39,8 @@
     _banner.adUnitID = adid;
     _banner.delegate = self;
     [_banner setAutoresizingMask:UIViewAutoresizingFlexibleTopMargin|UIViewAutoresizingFlexibleWidth];
+    _testDevices = [[NSMutableArray alloc] init];
+    [_testDevices addObject: kGADSimulatorID];
     return self;
   }
 
@@ -52,7 +57,7 @@
       [self updateBannerFrame];
       if (!_started && (_started = YES)) {
         GADRequest *request = [GADRequest request];
-        request.testDevices = @[ kGADSimulatorID ];
+        request.testDevices = _testDevices;
         [_banner loadRequest:request];
       }
       [_banner.rootViewController.view addSubview:_banner];
@@ -81,14 +86,25 @@ namespace LFL {
 struct iOSAdvertisingView : public SystemAdvertisingView {
   IOSAdMob *admob;
   virtual ~iOSAdvertisingView() { [admob release]; }
-  iOSAdvertisingView(int type, int placement, const string &adid) :
-    admob([[IOSAdMob alloc] initWithAdUnitID: MakeNSString(adid)]) {}
+  iOSAdvertisingView(int type, int placement, const string &adid, const StringVec &test_devices) :
+    admob([[IOSAdMob alloc] initWithAdUnitID: MakeNSString(adid)]) {
+    // INFO("Starting iOS AdMob with DeviceId = ", DeviceId());
+    for (auto id : test_devices) [admob.testDevices addObject: MakeNSString(id)];
+  }
 
   void Show(bool show_or_hide) {}
   void Show(SystemTableView *t, bool show_or_hide) {
     [admob show: show_or_hide withTable: dynamic_cast<iOSTableView*>(t)->table];
   }
+
+  static string DeviceId() {
+    return HexEscape
+      (Crypto::MD5(GetNSString([[ASIdentifierManager sharedManager] advertisingIdentifier].UUIDString)), "");
+  }
 };
 
-unique_ptr<SystemAdvertisingView> SystemAdvertisingView::Create(int type, int placement, const string &adid) { return make_unique<iOSAdvertisingView>(type, placement, adid); }
+unique_ptr<SystemAdvertisingView> SystemAdvertisingView::Create(int type, int placement, const string &adid, const StringVec &test_devices) {
+  return make_unique<iOSAdvertisingView>(type, placement, adid, test_devices);
+}
+
 }; // namespace LFL

@@ -336,7 +336,7 @@ static std::vector<UIImage*> app_images;
 
 @implementation IOSTable
   {
-    std::vector<LFL::Table> data;
+    std::vector<LFL::TableSection> data;
     int double_section_row_height;
     bool has_appeared, change_selected_row_background;
   }
@@ -351,7 +351,7 @@ static std::vector<UIImage*> app_images;
     return self;
   }
 
-  - (void)load:(LFL::SystemTableView*)lself withTitle:(const std::string&)title withStyle:(const std::string&)sty items:(std::vector<LFL::Table>)item {
+  - (void)load:(LFL::SystemTableView*)lself withTitle:(const std::string&)title withStyle:(const std::string&)sty items:(std::vector<LFL::TableSection>)item {
     _lfl_self = lself;
     _style = sty;
     _editable_section = _editable_start_row = double_section_row_height = -1;
@@ -374,10 +374,10 @@ static std::vector<UIImage*> app_images;
     [self.tableView insertRowsAtIndexPaths:@[path] withRowAnimation:UITableViewRowAnimationNone];
   }
 
-  - (void)replaceSection:(int)section items:(std::vector<LFL::TableItem>)item header:(const std::string&)h image:(int)im flag:(int)f addbutton:(LFL::Callback)addb {
+  - (void)replaceSection:(int)section items:(std::vector<LFL::TableItem>)item header:(LFL::TableItem)h flag:(int)f {
     if (section == data.size()) data.emplace_back();
     CHECK_LT(section, data.size());
-    data[section] = LFL::Table(h, im, f, move(addb));
+    data[section] = LFL::TableSection(move(h), f);
     data[section].item = move(item);
     [self.tableView reloadSections:[NSIndexSet indexSetWithIndex: section]
       withRowAnimation:UITableViewRowAnimationNone];
@@ -677,13 +677,13 @@ static std::vector<UIImage*> app_images;
 
   - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
     CHECK_LT(section, data.size());
-    return LFL::MakeNSString(data[section].header);
+    return LFL::MakeNSString(data[section].header.key);
   }
 
   - (CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section {
     CHECK_LT(section, data.size());
     if (int h = data[section].header_height) return h;
-    if (int image = data[section].image) {
+    if (int image = data[section].header.left_icon) {
       UIImageView *image_view = [[UIImageView alloc] initWithImage: app_images[image - 1]];
       data[section].header_height = 44 + image_view.frame.size.height;
       [image_view release];
@@ -696,8 +696,9 @@ static std::vector<UIImage*> app_images;
     CHECK_LT(section, data.size());
     UIView *headerView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, tableView.frame.size.width, 44)];
     headerView.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+    if (data[section].header.hidden) return headerView;
 
-    if (int image = data[section].image) {
+    if (int image = data[section].header.left_icon) {
       UIImageView *image_view = [[UIImageView alloc] initWithImage: app_images[image - 1]];
       data[section].header_height = 44 + image_view.frame.size.height;
       image_view.contentMode = UIViewContentModeCenter;
@@ -708,11 +709,12 @@ static std::vector<UIImage*> app_images;
       [image_view release];
     }
 
-    if (data[section].header.size()) {
+    int key_size = data[section].header.key.size();
+    if (key_size) {
       UILabel *label = [[UILabel alloc] initWithFrame:
         CGRectMake(50, headerView.frame.size.height-1-21-11, headerView.frame.size.width-100,
-                   (data[section].flag & LFL::Table::Flag::SubText) ? 44 : 21)];
-      label.text = LFL::MakeNSString(data[section].header);
+                   (data[section].header.flags & LFL::TableItem::Flag::SubText) ? 44 : 21)];
+      label.text = LFL::MakeNSString(data[section].header.key);
       label.textAlignment = NSTextAlignmentCenter;
       label.autoresizingMask = UIViewAutoresizingFlexibleRightMargin | UIViewAutoresizingFlexibleLeftMargin;
       label.lineBreakMode = NSLineBreakByWordWrapping;
@@ -721,22 +723,21 @@ static std::vector<UIImage*> app_images;
       [label release];
     }
 
-    if (data[section].add_cb) {
+    bool edit_button = data[section].flag & LFL::TableSection::Flag::EditButton;
+    if (edit_button || data[section].header.right_text.size()) {
       IOSButton *button = [IOSButton buttonWithType:UIButtonTypeSystem];
-      [button addTarget:button action:@selector(buttonClicked:) forControlEvents:UIControlEventTouchUpInside];
-      [button setTitle:@"Add" forState:UIControlStateNormal];
+      if (edit_button) {
+        [button setTitle:@"Edit" forState:UIControlStateNormal];
+        [button addTarget:self action:@selector(toggleEditMode:) forControlEvents:UIControlEventTouchUpInside];
+      } else {
+        button.showsTouchWhenHighlighted = TRUE;
+        button.cb = [=](){ auto &item = data[section].header; if (item.right_icon_cb) item.right_icon_cb(); };
+        [button setTitle:LFL::MakeNSString(data[section].header.right_text) forState:UIControlStateNormal];
+        [button addTarget:button action:@selector(buttonClicked:) forControlEvents:UIControlEventTouchUpInside];
+      }
       [button sizeToFit];
-      [button setFrame:CGRectMake(11, 11, button.frame.size.width, 21)];
-      button.autoresizingMask = UIViewAutoresizingFlexibleRightMargin;
-      [headerView addSubview:button];
-    }
-
-    if (data[section].flag & LFL::Table::Flag::EditButton) {
-      UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
-      [button addTarget:self action:@selector(toggleEditMode:) forControlEvents:UIControlEventTouchUpInside];
-      [button setTitle:@"Edit" forState:UIControlStateNormal];
-      [button sizeToFit];
-      [button setFrame:CGRectMake(tableView.frame.size.width - button.frame.size.width - 11, 11, button.frame.size.width, 21)];
+      [button setFrame:CGRectMake(tableView.frame.size.width - button.frame.size.width - 11,
+                                  key_size ? 11 : -11, button.frame.size.width, 21)];
       button.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin;
       [headerView addSubview:button];
     }
@@ -758,7 +759,7 @@ static std::vector<UIImage*> app_images;
   - (UITableViewCellEditingStyle)tableView:(UITableView *)tableView editingStyleForRowAtIndexPath:(NSIndexPath *)path {
     if (path.section != _editable_section || path.row < _editable_start_row) return UITableViewCellEditingStyleNone;
     [self checkExists:path.section row:path.row];
-    return (data[path.section].flag & LFL::Table::Flag::EditableIfHasTag && !data[path.section].item[path.row].tag) ?
+    return (data[path.section].flag & LFL::TableSection::Flag::EditableIfHasTag && !data[path.section].item[path.row].tag) ?
       UITableViewCellEditingStyleNone : UITableViewCellEditingStyleDelete;
   }
 
@@ -876,7 +877,7 @@ static std::vector<UIImage*> app_images;
   }
 
   - (void)applyItemDeps:(const LFL::TableItem&)ci withDep:(const std::string&)v {
-    LFL::Table::ApplyItemDepends(ci, v, &data, [=](const LFL::TableItem::Dep &d){
+    LFL::TableSection::ApplyItemDepends(ci, v, &data, [=](const LFL::TableItem::Dep &d){
       NSIndexPath *p = [NSIndexPath indexPathForRow:d.row inSection:d.section];
       [self.tableView reloadRowsAtIndexPaths:@[p] withRowAnimation:UITableViewRowAnimationNone];
     });
@@ -1085,7 +1086,7 @@ void Application::UpdateSystemImage(int n, Texture &t) {
 iOSTableView::~iOSTableView() { [table release]; }
 iOSTableView::iOSTableView(const string &title, const string &style, TableItemVec items) :
   table([[IOSTable alloc] initWithStyle: UITableViewStyleGrouped]) {
-    [table load:this withTitle:title withStyle:style items:Table::Convert(move(items))];
+    [table load:this withTitle:title withStyle:style items:TableSection::Convert(move(items))];
   }
 
 void iOSTableView::DelNavigationButton(int align) { return [table clearNavigationButton:align]; }
@@ -1130,8 +1131,8 @@ void iOSTableView::SelectRow(int section, int row) {
 void iOSTableView::BeginUpdates() { [table.tableView beginUpdates]; }
 void iOSTableView::EndUpdates() { [table.tableView endUpdates]; }
 void iOSTableView::SetSectionValues(int section, const StringVec &item) { [table setSectionValues:section items:item]; }
-void iOSTableView::ReplaceSection(int section, const string &h, int image, int flag, TableItemVec item, Callback add_button)
-{ [table replaceSection:section items:move(item) header:h image:image flag:flag addbutton:move(add_button)]; }
+void iOSTableView::ReplaceSection(int section, TableItem h, int flag, TableItemVec item)
+{ [table replaceSection:section items:move(item) header:move(h) flag:flag]; }
 
 unique_ptr<SystemAlertView> SystemAlertView::Create(AlertItemVec items) { return make_unique<iOSAlertView>(move(items)); }
 unique_ptr<SystemPanelView> SystemPanelView::Create(const Box &b, const string &title, PanelItemVec items) { return nullptr; }

@@ -22,5 +22,5 @@ struct NullAdvertisingView : public SystemAdvertisingView {
   void Show(SystemTableView *t, bool show_or_hide) {}
 };
 
-unique_ptr<SystemAdvertisingView> SystemAdvertisingView::Create(int type, int placement, const string &adid) { return make_unique<NullAdvertisingView>(); }
+unique_ptr<SystemAdvertisingView> SystemAdvertisingView::Create(int type, int placement, const string &adid, const StringVec &test_devices) { return make_unique<NullAdvertisingView>(); }
 }; // namespace LFL

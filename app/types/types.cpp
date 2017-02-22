@@ -165,26 +165,26 @@ void TableItem::AssignDep(const TableItem::Dep &d) {
   if (1)            flags      = d.flags;
 }
 
-vector<Table> Table::Convert(vector<TableItem> in) {
-  vector<Table> ret;
+vector<TableSection> TableSection::Convert(vector<TableItem> in) {
+  vector<TableSection> ret;
   ret.emplace_back();
   for (auto &i : in) {
-    if (i.type == LFL::TableItem::Separator) ret.emplace_back(i.key, i.left_icon, (i.flags & TableItem::Flag::SubText) ? Flag::SubText : 0);
+    if (i.type == LFL::TableItem::Separator) ret.emplace_back(move(i));
     else                                     ret.back().item.emplace_back(move(i));
   }
   return ret;
 }
 
-void Table::FindSectionOffset(const vector<Table> &data, int collapsed_row, int *section_out, int *row_out) {
-  auto it = lower_bound(data.begin(), data.end(), Table(collapsed_row),
-                        MemberLessThanCompare<Table, int, &Table::start_row>());
+void TableSection::FindSectionOffset(const vector<TableSection> &data, int collapsed_row, int *section_out, int *row_out) {
+  auto it = lower_bound(data.begin(), data.end(), TableSection(collapsed_row),
+                        MemberLessThanCompare<TableSection, int, &TableSection::start_row>());
   if (it != data.end() && it->start_row == collapsed_row) { *section_out = it - data.begin(); return; }
   CHECK_NE(data.begin(), it);
   *section_out = (it != data.end() ? (it - data.begin()) : data.size()) - 1;
   *row_out = collapsed_row - data[*section_out].start_row - 1;
 }
 
-void Table::ApplyItemDepends(const TableItem &in, const string &v, vector<Table> *out, function<void(const TableItem::Dep&)> f) {
+void TableSection::ApplyItemDepends(const TableItem &in, const string &v, vector<TableSection> *out, function<void(const TableItem::Dep&)> f) {
   auto it = in.depends.find(v);
   if (it == in.depends.end()) return;
   for (auto &d : it->second) {

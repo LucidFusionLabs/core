@@ -453,7 +453,7 @@ struct TableItem {
   struct Flag { enum { LeftText=1, SubText=2, FixDropdown=4, HighlightBackground=8 }; };
   typedef unordered_map<string, vector<Dep>> Depends;
   string key;
-  int type, flags=0;
+  int type, flags;
   string val, right_text, dropdown_key;
   int tag, left_icon, right_icon;
   Callback cb, right_icon_cb;
@@ -464,9 +464,9 @@ struct TableItem {
   bool loaded=0, gui_loaded=0, has_placeholder_val=0;
   virtual ~TableItem() {}
   TableItem(string K=string(), int T=0, string V=string(), string RT=string(), int TG=0, int LI=0,
-            int RI=0, Callback CB=Callback(), Callback RC=Callback(), Depends D=Depends(), bool H=false,
-            PickerItem *P=0, string DDK=string()) :
-    key(move(K)), type(T), val(move(V)), right_text(move(RT)), dropdown_key(move(DDK)), tag(TG), left_icon(LI),
+            int RI=0, Callback CB=Callback(), Callback RC=Callback(), int F=0, Depends D=Depends(),
+            bool H=false, PickerItem *P=0, string DDK=string()) :
+    key(move(K)), type(T), flags(F), val(move(V)), right_text(move(RT)), dropdown_key(move(DDK)), tag(TG), left_icon(LI),
     right_icon(RI), cb(move(CB)), right_icon_cb(move(RC)), depends(move(D)), hidden(H), picker(P) {}
   bool HasPlaceholderValue() const { return val.size() && (val[0] == 1 || val[0] == 2); }
   string GetPlaceholderValue() const { return val.substr(1); }
@@ -474,17 +474,16 @@ struct TableItem {
   void AssignDep(const Dep &d);
 };
 
-struct Table {
-  struct Flag { enum { EditButton=1, EditableIfHasTag=2, SubText=4 }; };
-  string header;
-  int image=0, flag=0, header_height=0, start_row=0;
-  Callback add_cb;
+struct TableSection {
+  struct Flag { enum { EditButton=1, EditableIfHasTag=2 }; };
+  int header_height=0, start_row=0, flag=0;
+  TableItem header;
   vector<TableItem> item;
-  Table(int sr) : start_row(sr) {}
-  Table(string h="", int i=0, int f=0, Callback c=Callback(), int sr=0) : header(move(h)), image(i), flag(f), start_row(sr), add_cb(move(c)) {}
-  static vector<Table> Convert(vector<TableItem> in);
-  static void FindSectionOffset(const vector<Table> &in, int collapsed_row, int *section_out, int *row_out);
-  static void ApplyItemDepends(const TableItem &in, const string &name, vector<Table> *out, function<void(const TableItem::Dep&)>);
+  TableSection(int sr=0) : start_row(sr) {}
+  TableSection(TableItem h, int f=0, int sr=0) : start_row(sr), flag(f), header(move(h)) {}
+  static vector<TableSection> Convert(vector<TableItem> in);
+  static void FindSectionOffset(const vector<TableSection> &in, int collapsed_row, int *section_out, int *row_out);
+  static void ApplyItemDepends(const TableItem &in, const string &name, vector<TableSection> *out, function<void(const TableItem::Dep&)>);
 };
 
 typedef vector<MenuItem>  MenuItemVec;
@@ -858,7 +857,7 @@ struct SystemTableView {
   virtual void EndUpdates() = 0;
   virtual void AddRow(int section, TableItem item) = 0;
   virtual void SetSectionValues(int section, const StringVec&) = 0;
-  virtual void ReplaceSection(int section, const string &h, int image, int flag, TableItemVec item, Callback add_button=Callback()) = 0;
+  virtual void ReplaceSection(int section, TableItem header, int flag, TableItemVec item) = 0;
 };
 
 struct SystemTextView {
@@ -884,7 +883,7 @@ struct SystemNavigationView {
 
 struct SystemAdvertisingView {
   struct Type { enum { BANNER=1 }; };
-  static unique_ptr<SystemAdvertisingView> Create(int type, int placement, const string &id);
+  static unique_ptr<SystemAdvertisingView> Create(int type, int placement, const string &id, const StringVec &test_devices);
   virtual ~SystemAdvertisingView() {}
   virtual void Show(bool show_or_hide) = 0;
   virtual void Show(SystemTableView*, bool show_or_hide) = 0;
