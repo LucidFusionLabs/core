@@ -154,16 +154,15 @@ void RingSampler::Handle::CopyFrom(const RingSampler::Handle *src) {
   for (int i=0; i<B; i++) Write(0.0);
 }
 
-void TableItem::AssignDep(const TableItem::Dep &d) {
-  if (1)            hidden     = d.hidden;
-  if (d.left_icon)  left_icon  = d.left_icon  == -1 ? 0 : d.left_icon;
-  if (d.right_icon) right_icon = d.right_icon == -1 ? 0 : d.right_icon;
-  if (d.key.size()) key        = d.key;
-  if (d.cb)         cb         = d.cb;
-  if (d.type)       type       = d.type;
-  if (1)            val        = d.val;
-  if (1)            flags      = d.flags;
+TableItem::TableItem(string K, int T, string V, string RT, int TG, int LI, int RI, Callback CB, StringCB RC,
+                     int F, bool H, PickerItem *P, string DDK, const Color &fg, const Color &bg)
+  : TableItem(move(K), T, move(V), move(RT), TG, LI, RI, move(CB), move(RC), F, H, P, DDK) {
+  SetFGColor(fg);
+  SetBGColor(bg);
 }
+
+void TableItem::SetFGColor(const Color &c) { fg_r=c.R(); fg_g=c.G(); fg_b=c.B(); fg_a=c.A(); }
+void TableItem::SetBGColor(const Color &c) { bg_r=c.R(); bg_g=c.G(); bg_b=c.B(); bg_a=c.A(); }
 
 vector<TableSection> TableSection::Convert(vector<TableItem> in) {
   vector<TableSection> ret;
@@ -184,16 +183,25 @@ void TableSection::FindSectionOffset(const vector<TableSection> &data, int colla
   *row_out = collapsed_row - data[*section_out].start_row - 1;
 }
 
-void TableSection::ApplyItemDepends(const TableItem &in, const string &v, vector<TableSection> *out, function<void(const TableItem::Dep&)> f) {
-  auto it = in.depends.find(v);
-  if (it == in.depends.end()) return;
-  for (auto &d : it->second) {
+void TableSection::ApplyChangeList(const TableSection::ChangeList &changes, vector<TableSection> *out, function<void(const TableSection::Change&)> f) {
+  for (auto &d : changes) {
     CHECK_LT(d.section, out->size());
     CHECK_LT(d.row, (*out)[d.section].item.size());
     auto &ci = (*out)[d.section].item[d.row];
-    ci.AssignDep(d);
+    ApplyChange(&ci, d);
     if (f) f(d);
   }
+}
+
+void TableSection::ApplyChange(TableItem *out, const TableSection::Change &d) {
+  if (1)            out->val        = d.val;
+  if (1)            out->hidden     = d.hidden;
+  if (d.left_icon)  out->left_icon  = d.left_icon  == -1 ? 0 : d.left_icon;
+  if (d.right_icon) out->right_icon = d.right_icon == -1 ? 0 : d.right_icon;
+  if (d.key.size()) out->key        = d.key;
+  if (d.cb)         out->cb         = d.cb;
+  if (d.type)       out->type       = d.type;
+  if (d.flags)      out->flags      = d.flags;
 }
 
 }; // namespace LFL

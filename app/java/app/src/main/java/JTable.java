@@ -74,67 +74,6 @@ public class JTable extends JWidget {
             (new Runnable() { public void run() { get(activity).data.delNavButton(halign); }});
     }
 
-    public void beginUpdates(final MainActivity activity) {
-        activity.runOnUiThread
-            (new Runnable() { public void run() { get(activity).data.beginUpdates(); }});
-    }
-
-    public void endUpdates(final MainActivity activity) {
-        activity.runOnUiThread
-            (new Runnable() { public void run() { get(activity).data.endUpdates(); }});
-    }
-
-    public void selectRow(final MainActivity activity, final int s, final int r) {
-        activity.runOnUiThread
-            (new Runnable() { public void run() { get(activity).data.selectRow(s, r); }});
-    }
-
-    public void setEditable(final MainActivity activity, final int s, final int start_row, final LIntIntCB intint_cb) {
-        activity.runOnUiThread
-            (new Runnable() { public void run() { get(activity).data.setEditable(s, start_row, intint_cb); }});
-    }
-
-    public void setTitle(final MainActivity activity, final String v) {
-        activity.runOnUiThread
-            (new Runnable() { public void run() { title = v; }});
-    }
-
-    public void addRow(final MainActivity activity, final int section, final JModelItem row) {
-        activity.runOnUiThread
-            (new Runnable() { public void run() { get(activity).data.addRow(section, row); }});
-    }
-
-    public void replaceSection(final MainActivity activity, final String h, final int image,
-                               final int flag, final int section, final ArrayList<JModelItem> v) {
-        activity.runOnUiThread
-            (new Runnable() { public void run() { get(activity).data.replaceSection(h, image, flag, section, v); }});
-    }
-
-    public void setSectionValues(final MainActivity activity, final int section, final ArrayList<String> v) {
-        activity.runOnUiThread
-            (new Runnable() { public void run() { get(activity).data.setSectionValues(section, v); }});
-    }
-
-    public void setTag(final MainActivity activity, final int s, final int r, final int v) {
-        activity.runOnUiThread
-            (new Runnable() { public void run() { get(activity).data.setTag(s, r, v); }});
-    }
-
-    public void setKey(final MainActivity activity, final int s, final int r, final String v) {
-        activity.runOnUiThread
-            (new Runnable() { public void run() { get(activity).data.setKey(s, r, v); }});
-    }
-
-    public void setValue(final MainActivity activity, final int s, final int r, final String v) {
-        activity.runOnUiThread
-            (new Runnable() { public void run() { get(activity).data.setValue(s, r, v); }});
-    }
-
-    public void setHidden(final MainActivity activity, final int s, final int r, final boolean v) {
-        activity.runOnUiThread
-            (new Runnable() { public void run() { get(activity).data.setHidden(s, r, v); }});
-    }
-
     public String getKey(final MainActivity activity, final int s, final int r) {
         FutureTask<String> future = new FutureTask<String>
             (new Callable<String>(){ public String call() throws Exception {
@@ -173,5 +112,76 @@ public class JTable extends JWidget {
                 }});
         try { activity.runOnUiThread(future); return future.get(); }
         catch(Exception e) { return new ArrayList<Pair<String, String>>(); }
+    }
+
+    public void beginUpdates(final MainActivity activity) {
+        activity.runOnUiThread
+            (new Runnable() { public void run() { get(activity).data.beginUpdates(); }});
+    }
+
+    public void endUpdates(final MainActivity activity) {
+        activity.runOnUiThread
+            (new Runnable() { public void run() { get(activity).data.endUpdates(); }});
+    }
+
+    public void addRow(final MainActivity activity, final int section, final JModelItem row) {
+        activity.runOnUiThread
+            (new Runnable() { public void run() { get(activity).data.addRow(section, row); }});
+    }
+
+    public void selectRow(final MainActivity activity, final int s, final int r) {
+        activity.runOnUiThread
+            (new Runnable() { public void run() { get(activity).data.selectRow(s, r); }});
+    }
+
+    public void replaceRow(final MainActivity activity, final int s, final int r, final JModelItem v) {
+        activity.runOnUiThread
+            (new Runnable() { public void run() { get(activity).data.replaceRow(s, r, v); }});
+    }
+
+    public void replaceSection(final MainActivity activity, final int section, final JModelItem h,
+                               final int flag, final ArrayList<JModelItem> v) {
+        activity.runOnUiThread
+            (new Runnable() { public void run() { get(activity).data.replaceSection(section, h, flag, v); }});
+    }
+
+    public void applyChangeList(final MainActivity activity, final ArrayList<JModelItemChange> changes) {
+        activity.runOnUiThread
+            (new Runnable() { public void run() { JModelItemChange.applyChangeList(changes, get(activity).data); }});
+    }
+
+    public void setSectionValues(final MainActivity activity, final int section, final ArrayList<String> v) {
+        activity.runOnUiThread
+            (new Runnable() { public void run() { get(activity).data.setSectionValues(section, v); }});
+    }
+
+    public void setTag(final MainActivity activity, final int s, final int r, final int v) {
+        activity.runOnUiThread
+            (new Runnable() { public void run() { get(activity).data.setTag(s, r, v); }});
+    }
+
+    public void setKey(final MainActivity activity, final int s, final int r, final String v) {
+        activity.runOnUiThread
+            (new Runnable() { public void run() { get(activity).data.setKey(s, r, v); }});
+    }
+
+    public void setValue(final MainActivity activity, final int s, final int r, final String v) {
+        activity.runOnUiThread
+            (new Runnable() { public void run() { get(activity).data.setValue(s, r, v); }});
+    }
+
+    public void setHidden(final MainActivity activity, final int s, final int r, final boolean v) {
+        activity.runOnUiThread
+            (new Runnable() { public void run() { get(activity).data.setHidden(s, r, v); }});
+    }
+
+    public void setTitle(final MainActivity activity, final String v) {
+        activity.runOnUiThread
+            (new Runnable() { public void run() { title = v; }});
+    }
+
+    public void setEditable(final MainActivity activity, final int s, final int start_row, final LIntIntCB intint_cb) {
+        activity.runOnUiThread
+            (new Runnable() { public void run() { get(activity).data.setEditable(s, start_row, intint_cb); }});
     }
 }

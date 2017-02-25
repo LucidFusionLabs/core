@@ -119,7 +119,6 @@ struct AndroidTableView : public SystemTableView {
     jni->env->DeleteLocalRef(tstr);
   }
 
-  void AddToolbar(SystemToolbarView *toolbar) { ERROR("not implemented"); }
   void AddNavigationButton(int halign_type, const TableItem &item) {
     static jmethodID mid = CheckNotNull
       (jni->env->GetMethodID(jni->jtable_class,
@@ -134,6 +133,10 @@ struct AndroidTableView : public SystemTableView {
       (jni->env->GetMethodID(jni->jtable_class,
                              "delNavButton", "(Lcom/lucidfusionlabs/app/MainActivity;I)V"));
     jni->env->CallVoidMethod(impl, mid, jni->activity, jint(halign_type));
+  }
+  
+  void AddToolbar(SystemToolbarView *toolbar) {
+    ERROR("not implemented");
   }
 
   void Show(bool show_or_hide) {
@@ -152,12 +155,112 @@ struct AndroidTableView : public SystemTableView {
     jni->env->DeleteLocalRef(v);
     return ret;
   }
+  
+  string GetValue(int section, int row) {
+    return "";
+  }
 
   int GetTag(int section, int row) {
     static jmethodID mid = CheckNotNull
       (jni->env->GetMethodID(jni->jtable_class,
                              "getTag", "(Lcom/lucidfusionlabs/app/MainActivity;II)I"));
     jni->env->CallIntMethod(impl, mid, jni->activity, jint(section), jint(row));
+  }
+
+  PickerItem *GetPicker(int section, int row) {
+    static jmethodID mid = CheckNotNull
+      (jni->env->GetMethodID(jni->jtable_class, "getPicked", "(Lcom/lucidfusionlabs/app/MainActivity;II)Landroid/util/Pair;"));
+    jobject a = jni->env->CallObjectMethod(impl, mid, jni->activity, section, row);
+    if (a == nullptr) return nullptr;
+
+    jobject al = CheckNotNull(jni->env->GetObjectField(a, jni->pair_second));
+    jobject pl = CheckNotNull(jni->env->GetObjectField(a, jni->pair_first));
+    intptr_t pp = CheckNotNull(jni->env->CallLongMethod(pl, jni->long_longval));
+    auto picker = static_cast<PickerItem*>(Void(pp));
+    if (picker->picked.size() != picker->data.size()) picker->picked.resize(picker->data.size());
+    for (int i = 0, l = jni->env->CallIntMethod(al, jni->arraylist_size), l2 = picker->picked.size();
+         i < l && i < l2; i++) picker->picked[i] = jni->env->CallIntMethod(al, jni->arraylist_get, i);
+    jni->env->DeleteLocalRef(pl);
+    jni->env->DeleteLocalRef(al);
+    jni->env->DeleteLocalRef(a);
+    return picker; 
+  }
+
+  StringPairVec GetSectionText(int section) {
+    static jmethodID mid = CheckNotNull
+      (jni->env->GetMethodID(jni->jtable_class, "getSectionText", "(Lcom/lucidfusionlabs/app/MainActivity;I)Ljava/util/ArrayList;"));
+    jobject arraylist = jni->env->CallObjectMethod(impl, mid, jni->activity, section);
+    int size = jni->env->CallIntMethod(arraylist, jni->arraylist_size);
+    StringPairVec ret;
+    for (int i = 0; i != size; ++i) {
+      jobject pair = jni->env->CallObjectMethod(arraylist, jni->arraylist_get, i);
+      jstring ki = (jstring)jni->env->GetObjectField(pair, jni->pair_first);
+      jstring vi = (jstring)jni->env->GetObjectField(pair, jni->pair_second);
+      ret.emplace_back(jni->GetJString(ki), jni->GetJString(vi));
+      jni->env->DeleteLocalRef(vi);
+      jni->env->DeleteLocalRef(ki);
+    }
+    return ret;
+  }
+
+  void BeginUpdates() {
+    static jmethodID mid = CheckNotNull
+      (jni->env->GetMethodID(jni->jtable_class,
+                             "beginUpdates", "(Lcom/lucidfusionlabs/app/MainActivity;)V"));
+    jni->env->CallVoidMethod(impl, mid, jni->activity);
+  }
+
+  void EndUpdates() {
+    static jmethodID mid = CheckNotNull
+      (jni->env->GetMethodID(jni->jtable_class,
+                             "endUpdates", "(Lcom/lucidfusionlabs/app/MainActivity;)V"));
+    jni->env->CallVoidMethod(impl, mid, jni->activity);
+  }
+
+  void AddRow(int section, TableItem item) {
+    static jmethodID mid = CheckNotNull
+      (jni->env->GetMethodID(jni->jtable_class,
+                             "addRow", "(Lcom/lucidfusionlabs/app/MainActivity;ILcom/lucidfusionlabs/app/JModelItem;)V"));
+    jobject v = jni->ToJModelItem(move(item));
+    jni->env->CallVoidMethod(impl, mid, jni->activity, jint(section), v);
+    jni->env->DeleteLocalRef(v);
+  }
+
+  void SelectRow(int section, int row) {
+    static jmethodID mid = CheckNotNull
+      (jni->env->GetMethodID(jni->jtable_class, "selectRow", "(Lcom/lucidfusionlabs/app/MainActivity;II)V"));
+    jni->env->CallVoidMethod(impl, mid, jni->activity, jint(section), jint(row));
+  }
+
+  void ReplaceRow(int section, int row, TableItem item) {
+  }
+
+  void ReplaceSection(int section, TableItem header, int flag, TableItemVec item) {
+    header.type = TableItem::Separator;
+    jobject h = jni->ToJModelItem(move(header));
+    jobject l = jni->ToJModelItemArrayList(move(item));
+    static jmethodID mid = CheckNotNull
+      (jni->env->GetMethodID(jni->jtable_class, "replaceSection", "(Lcom/lucidfusionlabs/app/MainActivity;ILcom/lucidfusionlabs/app/JModelItem;ILjava/util/ArrayList;)V"));
+    jni->env->CallVoidMethod(impl, mid, jni->activity, jint(section), h, jint(flag), l);
+    jni->env->DeleteLocalRef(l);
+    jni->env->DeleteLocalRef(h);
+  }
+
+  void ApplyChangeList(const TableSection::ChangeList &changes) {
+    jobject l = jni->ToJModelItemChangeList(changes);
+    static jmethodID mid = CheckNotNull
+      (jni->env->GetMethodID(jni->jtable_class, "applyChangeList", "(Lcom/lucidfusionlabs/app/MainActivity;Ljava/util/ArrayList;)V"));
+    jni->env->CallVoidMethod(impl, mid, jni->activity, l);
+    jni->env->DeleteLocalRef(l);
+  }
+
+  void SetSectionValues(int section, const StringVec &in) {
+    static jmethodID mid = CheckNotNull
+      (jni->env->GetMethodID(jni->jtable_class,
+                             "setSectionValues", "(Lcom/lucidfusionlabs/app/MainActivity;ILjava/util/ArrayList;)V"));
+    jobject v = jni->ToJStringArrayList(in);
+    jni->env->CallVoidMethod(impl, mid, jni->activity, jint(section), v);
+    jni->env->DeleteLocalRef(v);
   }
 
   void SetTag(int section, int row, int val) {
@@ -185,6 +288,9 @@ struct AndroidTableView : public SystemTableView {
     jni->env->DeleteLocalRef(vstr);
   }
 
+  void SetSelected(int section, int row, int val) {
+  }
+
   void SetHidden(int section, int row, bool val) {
     static jmethodID mid = CheckNotNull
       (jni->env->GetMethodID(jni->jtable_class, "setHidden", "(Lcom/lucidfusionlabs/app/MainActivity;IIZ)V"));
@@ -199,47 +305,8 @@ struct AndroidTableView : public SystemTableView {
     jni->env->CallVoidMethod(impl, mid, jni->activity, tstr);
     jni->env->DeleteLocalRef(tstr);
   }
-
-  void SelectRow(int section, int row) {
-    static jmethodID mid = CheckNotNull
-      (jni->env->GetMethodID(jni->jtable_class, "selectRow", "(Lcom/lucidfusionlabs/app/MainActivity;II)V"));
-    jni->env->CallVoidMethod(impl, mid, jni->activity, jint(section), jint(row));
-  }
-
-  StringPairVec GetSectionText(int section) {
-    static jmethodID mid = CheckNotNull
-      (jni->env->GetMethodID(jni->jtable_class, "getSectionText", "(Lcom/lucidfusionlabs/app/MainActivity;I)Ljava/util/ArrayList;"));
-    jobject arraylist = jni->env->CallObjectMethod(impl, mid, jni->activity, section);
-    int size = jni->env->CallIntMethod(arraylist, jni->arraylist_size);
-    StringPairVec ret;
-    for (int i = 0; i != size; ++i) {
-      jobject pair = jni->env->CallObjectMethod(arraylist, jni->arraylist_get, i);
-      jstring ki = (jstring)jni->env->GetObjectField(pair, jni->pair_first);
-      jstring vi = (jstring)jni->env->GetObjectField(pair, jni->pair_second);
-      ret.emplace_back(jni->GetJString(ki), jni->GetJString(vi));
-      jni->env->DeleteLocalRef(vi);
-      jni->env->DeleteLocalRef(ki);
-    }
-    return ret;
-  }
-
-  PickerItem *GetPicker(int section, int row) {
-    static jmethodID mid = CheckNotNull
-      (jni->env->GetMethodID(jni->jtable_class, "getPicked", "(Lcom/lucidfusionlabs/app/MainActivity;II)Landroid/util/Pair;"));
-    jobject a = jni->env->CallObjectMethod(impl, mid, jni->activity, section, row);
-    if (a == nullptr) return nullptr;
-
-    jobject al = CheckNotNull(jni->env->GetObjectField(a, jni->pair_second));
-    jobject pl = CheckNotNull(jni->env->GetObjectField(a, jni->pair_first));
-    intptr_t pp = CheckNotNull(jni->env->CallLongMethod(pl, jni->long_longval));
-    auto picker = static_cast<PickerItem*>(Void(pp));
-    if (picker->picked.size() != picker->data.size()) picker->picked.resize(picker->data.size());
-    for (int i = 0, l = jni->env->CallIntMethod(al, jni->arraylist_size), l2 = picker->picked.size();
-         i < l && i < l2; i++) picker->picked[i] = jni->env->CallIntMethod(al, jni->arraylist_get, i);
-    jni->env->DeleteLocalRef(pl);
-    jni->env->DeleteLocalRef(al);
-    jni->env->DeleteLocalRef(a);
-    return picker; 
+  
+  void SetTheme(const string &theme) {
   }
 
   void SetEditableSection(int section, int start_row, IntIntCB iicb) {
@@ -248,48 +315,6 @@ struct AndroidTableView : public SystemTableView {
     jobject cb = iicb ? jni->ToLIntIntCB(move(iicb)) : nullptr;
     jni->env->CallVoidMethod(impl, mid, jni->activity, jint(section), jint(start_row), cb);
     if (cb) jni->env->DeleteLocalRef(cb);
-  }
-
-  void BeginUpdates() {
-    static jmethodID mid = CheckNotNull
-      (jni->env->GetMethodID(jni->jtable_class,
-                             "beginUpdates", "(Lcom/lucidfusionlabs/app/MainActivity;)V"));
-    jni->env->CallVoidMethod(impl, mid, jni->activity);
-  }
-
-  void EndUpdates() {
-    static jmethodID mid = CheckNotNull
-      (jni->env->GetMethodID(jni->jtable_class,
-                             "endUpdates", "(Lcom/lucidfusionlabs/app/MainActivity;)V"));
-    jni->env->CallVoidMethod(impl, mid, jni->activity);
-  }
-
-  void AddRow(int section, TableItem item) {
-    static jmethodID mid = CheckNotNull
-      (jni->env->GetMethodID(jni->jtable_class,
-                             "addRow", "(Lcom/lucidfusionlabs/app/MainActivity;ILcom/lucidfusionlabs/app/JModelItem;)V"));
-    jobject v = jni->ToJModelItem(move(item));
-    jni->env->CallVoidMethod(impl, mid, jni->activity, jint(section), v);
-    jni->env->DeleteLocalRef(v);
-  }
-
-  void SetSectionValues(int section, const StringVec &in) {
-    static jmethodID mid = CheckNotNull
-      (jni->env->GetMethodID(jni->jtable_class,
-                             "setSectionValues", "(Lcom/lucidfusionlabs/app/MainActivity;ILjava/util/ArrayList;)V"));
-    jobject v = jni->ToJStringArrayList(in);
-    jni->env->CallVoidMethod(impl, mid, jni->activity, jint(section), v);
-    jni->env->DeleteLocalRef(v);
-  }
-
-  void ReplaceSection(int section, const string &h, int image, int flag, TableItemVec item, Callback add_button) {
-    jstring hstr = jni->ToJString(h);
-    jobject l = jni->ToJModelItemArrayList(move(item));
-    static jmethodID mid = CheckNotNull
-      (jni->env->GetMethodID(jni->jtable_class, "replaceSection", "(Lcom/lucidfusionlabs/app/MainActivity;Ljava/lang/String;IIILjava/util/ArrayList;)V"));
-    jni->env->CallVoidMethod(impl, mid, jni->activity, hstr, jint(image), jint(flag), jint(section), l);
-    jni->env->DeleteLocalRef(l);
-    jni->env->DeleteLocalRef(hstr);
   }
 };
 
@@ -408,6 +433,14 @@ int Application::LoadSystemImage(const string &n) {
   return ret;
 }
 
+unique_ptr<SystemAlertView> SystemAlertView::Create(AlertItemVec items) { return make_unique<AndroidAlertView>(move(items)); }
+unique_ptr<SystemPanelView> SystemPanelView::Create(const Box &b, const string &title, PanelItemVec items) { return nullptr; }
+unique_ptr<SystemToolbarView> SystemToolbarView::Create(MenuItemVec items) { return make_unique<AndroidToolbarView>(move(items)); }
+unique_ptr<SystemMenuView> SystemMenuView::Create(const string &title, MenuItemVec items) { return make_unique<AndroidMenuView>(title, move(items)); }
 unique_ptr<SystemMenuView> SystemMenuView::CreateEditMenu(MenuItemVec items) { return nullptr; }
+unique_ptr<SystemTableView> SystemTableView::Create(const string &title, const string &style, TableItemVec items) { return make_unique<AndroidTableView>(title, style, move(items)); }
+unique_ptr<SystemTextView> SystemTextView::Create(const string &title, File *file) { return make_unique<AndroidTextView>(title, file); }
+unique_ptr<SystemTextView> SystemTextView::Create(const string &title, const string &text) { return make_unique<AndroidTextView>(title, text); }
+unique_ptr<SystemNavigationView> SystemNavigationView::Create() { return make_unique<AndroidNavigationView>(); }
 
 }; // namespace LFL

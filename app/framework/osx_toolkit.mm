@@ -22,6 +22,7 @@
 #include "core/app/framework/apple_common.h"
 #include "core/app/framework/osx_common.h"
 
+struct OSXTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
 static std::vector<NSImage*> app_images;
 
 @interface OSXAlert : NSObject<NSTextFieldDelegate>
@@ -374,7 +375,6 @@ static std::vector<NSImage*> app_images;
     [self checkExists:section row:r];
     auto &ci = data[section].item[r];
     ci.key = v;
-    if (ci.depends.size()) [self applyItemDeps: ci withDep: v];
   }
 
   - (std::string)getKey:(int)section row:(int)r {
@@ -414,8 +414,8 @@ static std::vector<NSImage*> app_images;
     //  withRowAnimation:UITableViewRowAnimationNone];
   }
 
-  - (void)applyItemDeps:(const LFL::TableItem&)compiled_item withDep:(const std::string&)v {
-    LFL::TableSection::ApplyItemDepends(compiled_item, v, &data, [=](const LFL::TableItem::Dep &d){
+  - (void)applyChangeList:(const LFL::TableSection::ChangeList&)changes {
+    LFL::TableSection::ApplyChangeList(changes, &data, [=](const LFL::TableSection::Change &d){
     #if 0
       NSIndexPath *p = [NSIndexPath indexPathForRow:d.row inSection:d.section];
       [self.tableView reloadRowsAtIndexPaths:@[p] withRowAnimation:UITableViewRowAnimationNone];
@@ -434,7 +434,7 @@ static std::vector<NSImage*> app_images;
     LFL::TableSection::FindSectionOffset(data, collapsed_row, &section, &row);
     if (section < 0 || section >= data.size() || row < 0 || row >= data[section].item.size()) return _row_height;
     const auto &ci = data[section].item[row];
-    if (ci.gui_loaded &&
+    if ((ci.flags & OSXTableItem::GUILoaded) &&
         (ci.type == LFL::TableItem::Picker || ci.type == LFL::TableItem::FontPicker)) return ci.height;
     else return _row_height; 
   }
@@ -687,31 +687,35 @@ struct OSXTableView : public SystemTableView {
       [table.tableContainer removeFromSuperview];
   }
 
-  void AddRow(int section, TableItem item) { return [table addRow:section withItem:move(item)]; }
   string GetKey(int section, int row) { return [table getKey:section row:row]; }
+  string GetValue(int section, int row) { return ""; }
   int GetTag(int section, int row) { return 0; }
+  PickerItem *GetPicker(int section, int row) { return [table getPicker:section row:row]; }
+  StringPairVec GetSectionText(int section) { return [table dumpDataForSection:section]; }
+
+  void BeginUpdates() { [table.tableView beginUpdates]; }
+  void EndUpdates() { [table.tableView endUpdates]; }
+  void AddRow(int section, TableItem item) { return [table addRow:section withItem:move(item)]; }
+  void SelectRow(int section, int row) {} 
+  void ReplaceRow(int section, int row, TableItem item) {}
+  void ReplaceSection(int section, TableItem h, int flag, TableItemVec item)
+  { [table replaceSection:section items:move(item) header:h flag:flag]; }
+
+  void ApplyChangeList(const TableSection::ChangeList &changes) { [table applyChangeList:changes]; }
+  void SetSectionValues(int section, const StringVec &item) { [table setSectionValues:section items:item]; }
   int SetTag(int section, int row) { return [table getTag:section row:row]; }
   void SetTag(int section, int row, int val) { [table setTag:section row:row val:val]; }
   void SetKey(int section, int row, const string &val) { [table setKey:section row:row val:val]; }
   void SetValue(int section, int row, const string &val) { [table setValue:section row:row val:val]; }
+  void SetSelected(int section, int row, int selected) {}
   void SetHidden(int section, int row, bool val) { [table setHidden:section row:row val:val]; }
   void SetTitle(const string &title) { table.title = LFL::MakeNSString(title); }
-  PickerItem *GetPicker(int section, int row) { return [table getPicker:section row:row]; }
-  StringPairVec GetSectionText(int section) { return [table dumpDataForSection:section]; }
+  void SetTheme(const string &theme) {}
   void SetEditableSection(int section, int start_row, LFL::IntIntCB cb) {
     table.delete_row_cb = move(cb);
     table.editable_section = section;
     table.editable_start_row = start_row;
   }
-
-  void SelectRow(int section, int row) {
-  } 
-
-  void BeginUpdates() { [table.tableView beginUpdates]; }
-  void EndUpdates() { [table.tableView endUpdates]; }
-  void SetSectionValues(int section, const StringVec &item) { [table setSectionValues:section items:item]; }
-  void ReplaceSection(int section, TableItem h, int flag, TableItemVec item)
-  { [table replaceSection:section items:move(item) header:h flag:flag]; }
 };
 
 struct OSXTextView : public SystemTextView {

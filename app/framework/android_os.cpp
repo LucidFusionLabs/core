@@ -170,16 +170,21 @@ jobject JNI::ToJModelItemArrayList(TableItemVec items) {
   return ret;
 }
 
-jobject JNI::ToJDependencyItemHashMap(TableItem::Depends items) {
+jobject JNI::ToJModelItemChangeList(TableSection::ChangeList items) {
+  jobject ret = env->NewObject(arraylist_class, arraylist_construct);
+  for (auto &i : items) {
+    jobject v = ToJModelItemChange(move(i));
+    CHECK(env->CallBooleanMethod(ret, arraylist_add, v));
+    env->DeleteLocalRef(v);
+  }
+  return ret;
+}
+
+jobject JNI::ToJModelItemChangeSet(TableSection::ChangeSet items) {
   jobject ret = env->NewObject(hashmap_class, hashmap_construct);
-  for (auto &di : items) {
-    jstring k = ToJString(di.first);
-    jobject l = env->NewObject(arraylist_class, arraylist_construct);
-    for (auto &i : di.second) {
-      jobject v = ToJDependencyItem(move(i));
-      CHECK(env->CallBooleanMethod(l, arraylist_add, v));
-      env->DeleteLocalRef(v);
-    }
+  for (auto &i : items) {
+    jstring k = ToJString(i.first);
+    jobject l = ToJModelItemChangeList(move(i.second));
     env->CallObjectMethod(ret, hashmap_put, k, l);
     env->DeleteLocalRef(l);
     env->DeleteLocalRef(k);
@@ -214,16 +219,18 @@ jobject JNI::ToJModelItem(MenuItem item) {
 }
 
 jobject JNI::ToJModelItem(TableItem item) {
+  jint fg = (item.fg_a << 24) | (item.fg_r << 16) | (item.fg_g << 8) | item.fg_b;
+  jint bg = (item.bg_a << 24) | (item.bg_r << 16) | (item.bg_g << 8) | item.bg_b;
   jobject k = ToJString(item.key), v = ToJString(item.val), rt = ToJString(item.right_text),
-          ddk = ToJString(item.dropdown_key), picker = ToJPickerItem(item.picker),
-          dep = ToJDependencyItemHashMap(move(item.depends)), scb = nullptr;
+          ddk = ToJString(item.dropdown_key), picker = ToJPickerItem(item.picker);
   jobject cb = item.cb ? ToLCallback(move(item.cb)) : nullptr;
-  jobject rcb = item.right_icon_cb ? ToLCallback(move(item.right_icon_cb)) : nullptr;
-  jobject ret = env->NewObject(jmodelitem_class, jmodelitem_construct, k, v, rt, ddk, item.type, item.flags,
-                               item.left_icon, item.right_icon, cb, rcb, scb, item.hidden, picker, dep);
+  jobject rcb = item.right_cb ? ToLStringCB(move(item.right_cb)) : nullptr;
+  jobject ret = env->NewObject(jmodelitem_class, jmodelitem_construct, k, v, rt, ddk, jint(item.type),
+                               jint(item.tag), jint(item.flags), jint(item.left_icon), jint(item.right_icon),
+                               jint(item.selected), jint(item.height), cb, rcb, picker, jboolean(item.hidden),
+                               fg, bg);
   if (rcb) env->DeleteLocalRef(rcb);
   if (cb) env->DeleteLocalRef(cb);
-  if (dep) env->DeleteLocalRef(dep);
   if (picker) env->DeleteLocalRef(picker);
   env->DeleteLocalRef(ddk);
   env->DeleteLocalRef(rt);
@@ -232,10 +239,10 @@ jobject JNI::ToJModelItem(TableItem item) {
   return ret;
 }
 
-jobject JNI::ToJDependencyItem(TableItem::Dep item) {
+jobject JNI::ToJModelItemChange(TableSection::Change item) {
   jobject k = ToJString(item.key), v = ToJString(item.val);
   jobject cb = item.cb ? ToLCallback(move(item.cb)) : nullptr;
-  jobject ret = env->NewObject(jdepitem_class, jdepitem_construct, jint(item.section), jint(item.row),
+  jobject ret = env->NewObject(jmodelitemchange_class, jmodelitemchange_construct, jint(item.section), jint(item.row),
                                jint(item.type), k, v, jint(item.left_icon), jint(item.right_icon),
                                jint(item.flags), jboolean(item.hidden), cb);
   if (cb) env->DeleteLocalRef(cb);

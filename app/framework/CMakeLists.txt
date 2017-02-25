@@ -11,6 +11,8 @@ if(LFL_ANDROID)
   lfl_add_target(app_android_os STATIC_LIBRARY SOURCES android_os.cpp LINK_LIBRARIES -llog -lz ${C_LIBRARY})
   lfl_add_target(app_android_framework STATIC_LIBRARY SOURCES android_framework.cpp)
   lfl_add_target(app_android_toolkit STATIC_LIBRARY SOURCES android_toolkit.cpp)
+  lfl_add_target(app_android_billing STATIC_LIBRARY SOURCES android_billing.cpp)
+  lfl_add_target(app_android_admob STATIC_LIBRARY SOURCES android_admob.cpp)
 endif()
 
 if(LFL_IOS)

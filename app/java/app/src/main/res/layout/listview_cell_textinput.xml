@@ -33,5 +33,6 @@
         android:text=""
         android:id="@+id/listview_cell_textinput"
         android:layout_width="wrap_content"
-        android:layout_height="wrap_content"/>
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_vertical"/>
 </LinearLayout>

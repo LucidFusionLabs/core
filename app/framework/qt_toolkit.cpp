@@ -168,9 +168,9 @@ class QtStyledItemDelegate : public QStyledItemDelegate {
       if (row < 0) return false;
       auto &ci = table->data[section].item[row];
 
-      if (ci.right_icon_cb) {
+      if (ci.right_cb) {
         QRect check_rect = GetRealignedRect(option);
-        if (check_rect.contains(static_cast<QMouseEvent*>(event)->pos())) { ci.right_icon_cb(); return true; }
+        if (check_rect.contains(static_cast<QMouseEvent*>(event)->pos())) { ci.right_cb(""); return true; }
       }
 
       table->HandleCellClicked(index);
@@ -216,7 +216,7 @@ class QtTableModel : public QStandardItemModel {
         auto &ci = (*v)[section].item[row];
         if ((index.column() == 0 && ci.dropdown_key.size()) ||
             (index.column() == 1 && ci.right_text.size())) return QColor(0, 122, 255);
-        if (index.column() == 1 && ci.has_placeholder_val) return QColor(0xc0, 0xc0, 0xc0);
+        if (index.column() == 1 && (ci.flags & TableItem::Flag::PlaceHolderVal)) return QColor(0xc0, 0xc0, 0xc0);
       }
     }
     return QStandardItemModel::data(index, role);
@@ -280,12 +280,13 @@ struct QtTable : public QtTableInterface {
 
   QList<QStandardItem*> MakeRow(TableItem *item) {
     int type = item->type;
+    item->flags = item->HasPlaceholderValue() ? TableItem::Flag::PlaceHolderVal : 0;
     auto key = make_unique<QStandardItem>
       (item->left_icon ? *app_images[item->left_icon-1] : QIcon(), MakeQString(item->key));
     auto val = make_unique<QStandardItem>
       (item->right_icon ? *app_images[item->right_icon-1] : QIcon(), MakeQString
        (item->right_text.size() ? item->right_text :
-        ((item->has_placeholder_val = item->HasPlaceholderValue()) ? item->GetPlaceholderValue() : item->val)));
+        (item->HasPlaceholderValue() ? item->GetPlaceholderValue() : item->val)));
     key->setFlags(Qt::ItemIsEnabled);
     if (!(type == TableItem::TextInput || type == TableItem::NumberInput
           || type == TableItem::PasswordInput)) val->setFlags(Qt::ItemIsEnabled); 
@@ -318,7 +319,6 @@ struct QtTable : public QtTableInterface {
     CheckExists(section, row);
     auto &ci = data[section].item[row];
     ci.key = v;
-    if (ci.depends.size()) ApplyItemDeps(ci, v);
   }
 
   void SetValue(int section, int row, const string &v) {
@@ -328,10 +328,16 @@ struct QtTable : public QtTableInterface {
     auto val = model->item(GetCollapsedRowId(section, row), 1);
     model->blockSignals(true);
     if (ci.type == TableItem::Toggle) val->setCheckState(v == "1" ? Qt::Checked : Qt::Unchecked);
-    else if (!ci.right_text.size())
-      val->setText(MakeQString((ci.has_placeholder_val = ci.HasPlaceholderValue()) ?
-                               ci.GetPlaceholderValue() : ci.val));
+    else if (!ci.right_text.size()) {
+      ci.flags |= (ci.HasPlaceholderValue() ? TableItem::Flag::PlaceHolderVal : 0);
+      val->setText(MakeQString(ci.HasPlaceholderValue() ? ci.GetPlaceholderValue() : ci.val));
+    }
     model->blockSignals(false);
+  }
+
+  void SetSelected(int section, int row, int v) {
+    CheckExists(section, row);
+    data[section].item[row].selected = v;
   }
 
   void SetHidden(int section, int row, bool v) {
@@ -339,7 +345,7 @@ struct QtTable : public QtTableInterface {
     data[section].item[row].hidden = v;
     table->setRowHidden(GetCollapsedRowId(section, row), v);
   }
-
+  
   void HideIndices(const vector<int> &ind, bool v) { for (auto &i : ind) table->setRowHidden(i, v); }
   void HideHiddenRows(const TableSection &s, bool v) {
     for (auto rb = s.item.begin(), re = s.item.end(), r = rb; r != re; ++r)
@@ -375,17 +381,17 @@ struct QtTable : public QtTableInterface {
     if (row < 0) return;
     CheckExists(section, row);
     auto &ci = data[section].item[row];
-    if (item->text().size()) { ci.has_placeholder_val = false; return; }
+    if (item->text().size()) { ci.flags &= ~TableItem::Flag::PlaceHolderVal; return; }
     if (ci.HasPlaceholderValue()) {
-      ci.has_placeholder_val = true;
+      ci.flags |= TableItem::Flag::PlaceHolderVal;
       model->blockSignals(true);
       item->setText(MakeQString(ci.GetPlaceholderValue()));
       model->blockSignals(false);
     }
   }
 
-  void ApplyItemDeps(const TableItem &ci, const string &v) {
-    TableSection::ApplyItemDepends(ci, v, &data, [=](const LFL::TableItem::Dep &d){
+  void ApplyChangeList(const TableSection::ChangeList &ci) {
+    TableSection::ApplyChangeList(ci, &data, [=](const LFL::TableSection::Change &d){
       int section_start_row = data[d.section].start_row;
       auto row = MakeRow(&data[d.section].item[d.row]);
       model->blockSignals(true);
@@ -527,6 +533,7 @@ struct QtPanelView : public SystemPanelView {
   }
 
   void SetTitle(const string &title) { panel->title->setText(MakeQString(title)); }
+  void SetTheme(const string &theme) {}
   void Show() { panel->dialog->show(); }
 };
 
@@ -550,42 +557,17 @@ struct QtTableView : public SystemTableView {
   QtTableView(const string &title, const string &style, TableItemVec items) :
     table(new QtTable(this, title, style, TableSection::Convert(move(items)))) {}
 
-  StringPairVec GetSectionText(int ind) {
-    StringPairVec ret;
-    CHECK_LT(ind, table->data.size());
-
-    for (int start_row=table->data[ind].start_row, l=table->data[ind].item.size(), i=0; i != l; i++) {
-      auto &ci = table->data[ind].item[i];
-      string val;
-
-      if (ci.type == TableItem::Toggle)
-        val = table->model->itemFromIndex(table->model->index(start_row+i+1, 1))->checkState() == Qt::Checked ? "1" : "";
-      else if (!ci.has_placeholder_val)
-        val = GetQString(table->model->index(start_row+i+1, 1).data().toString());
-
-      if (ci.dropdown_key.size()) ret.emplace_back(ci.dropdown_key, ci.key);
-      ret.emplace_back(ci.key, val);
-    }
-    return ret;
+  void DelNavigationButton(int align) {
+    if      (align == HAlign::Left)  table->left_nav  = TableItem();
+    else if (align == HAlign::Right) table->right_nav = TableItem();
   }
 
-  void SetSectionValues(int section, const StringVec &item) {
-    if (section == table->data.size()) table->AddSection();
-    CHECK_LT(section, table->data.size());
-    CHECK_EQ(item.size(), table->data[section].item.size());
-    for (int i=0, l=table->data[section].item.size(); i != l; ++i) table->SetValue(section, i, item[i]);
-  }
-
-  void AddToolbar(SystemToolbarView *t) {}
   void AddNavigationButton(int align, const TableItem &item) {
     if      (align == HAlign::Left)  table->left_nav  = item;
     else if (align == HAlign::Right) table->right_nav = item;
   }
 
-  void DelNavigationButton(int align) {
-    if      (align == HAlign::Left)  table->left_nav  = TableItem();
-    else if (align == HAlign::Right) table->right_nav = TableItem();
-  }
+  void AddToolbar(SystemToolbarView *t) {}
 
   void Show(bool show_or_hide) {
     auto w = dynamic_cast<QtWindowInterface*>(app->focused);
@@ -599,30 +581,39 @@ struct QtTableView : public SystemTableView {
     }
   }
 
-  void AddRow(int section, TableItem item) { table->AddRow(section, move(item)); }
-  string GetKey(int section, int row) { table->CheckExists(section, row); return table->data[section].item[row].key; }
-  int GetTag(int section, int row) { table->CheckExists(section, row); return table->data[section].item[row].tag; }
-  void SetTag(int section, int row, int val) { table->CheckExists(section, row); table->data[section].item[row].tag = val; }
-  void SetKey(int section, int row, const string &val) { table->SetKey(section, row, val); }
-  void SetValue(int section, int row, const string &val) { table->SetValue(section, row, val); }
-  void SetHidden(int section, int row, bool val) { table->SetHidden(section, row, val); }
-  void SetTitle(const string &title) { table->table->setWindowTitle(MakeQString(title)); }
-  void BeginUpdates() {}
-  void EndUpdates() {}
-
+  string GetKey  (int section, int row) { table->CheckExists(section, row); return table->data[section].item[row].key; }
+  string GetValue(int section, int row) { return ""; }
+  int    GetTag  (int section, int row) { table->CheckExists(section, row); return table->data[section].item[row].tag; }
   PickerItem *GetPicker(int section, int row) { return 0; }
 
+  StringPairVec GetSectionText(int ind) {
+    StringPairVec ret;
+    CHECK_LT(ind, table->data.size());
+
+    for (int start_row=table->data[ind].start_row, l=table->data[ind].item.size(), i=0; i != l; i++) {
+      auto &ci = table->data[ind].item[i];
+      string val;
+
+      if (ci.type == TableItem::Toggle)
+        val = table->model->itemFromIndex(table->model->index(start_row+i+1, 1))->checkState() == Qt::Checked ? "1" : "";
+      else if (!(ci.flags & TableItem::Flag::PlaceHolderVal))
+        val = GetQString(table->model->index(start_row+i+1, 1).data().toString());
+
+      if (ci.dropdown_key.size()) ret.emplace_back(ci.dropdown_key, ci.key);
+      ret.emplace_back(ci.key, val);
+    }
+    return ret;
+  }
+
+  void BeginUpdates() {}
+  void EndUpdates() {}
+  void AddRow(int section, TableItem item) { table->AddRow(section, move(item)); }
   void SelectRow(int section, int row) {
     table->selected_section = section;
     table->selected_row = row; 
   }
-
-  void SetEditableSection(int section, int start_row, LFL::IntIntCB cb) {
-    table->delete_row_cb = move(cb);
-    table->editable_section = section;
-    table->editable_start_row = start_row;
-  }
-
+  
+  void ReplaceRow(int section, int row, TableItem item) {}
   void ReplaceSection(int section, TableItem h, int flag, TableItemVec item) {
     bool added = section == table->data.size();
     if (added) table->AddSection();
@@ -647,6 +638,30 @@ struct QtTableView : public SystemTableView {
     if (size_delta) for (int i=section+1, e=table->data.size(); i < e; ++i) table->data[i].start_row += size_delta;
 
     table->HideHiddenRows(table->data[section], true);
+  }
+
+  void ApplyChangeList(const TableSection::ChangeList &changes) {
+    table->ApplyChangeList(changes);
+  }
+
+  void SetSectionValues(int section, const StringVec &item) {
+    if (section == table->data.size()) table->AddSection();
+    CHECK_LT(section, table->data.size());
+    CHECK_EQ(item.size(), table->data[section].item.size());
+    for (int i=0, l=table->data[section].item.size(); i != l; ++i) table->SetValue(section, i, item[i]);
+  }
+
+  void SetTag(int section, int row, int val) { table->CheckExists(section, row); table->data[section].item[row].tag = val; }
+  void SetKey(int section, int row, const string &val) { table->SetKey(section, row, val); }
+  void SetValue(int section, int row, const string &val) { table->SetValue(section, row, val); }
+  void SetSelected(int section, int row, int val) { table->SetSelected(section, row, val); }
+  void SetHidden(int section, int row, bool val) { table->SetHidden(section, row, val); }
+  void SetTitle(const string &title) { table->table->setWindowTitle(MakeQString(title)); }
+  void SetTheme(const string &theme) {}
+  void SetEditableSection(int section, int start_row, LFL::IntIntCB cb) {
+    table->delete_row_cb = move(cb);
+    table->editable_section = section;
+    table->editable_start_row = start_row;
   }
 };
 

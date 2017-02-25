@@ -4,14 +4,14 @@ import android.util.Log;
 import java.util.ArrayList;
 import java.util.HashMap;
 
-public final class JDependencyItem {
+public final class JModelItemChange {
     public int section, row, type, left_icon, right_icon, flags;
     public String key, val;
     public boolean hidden;
     public LCallback cb;
 
-    JDependencyItem(final int s, final int r, final int t, final String k, final String v,
-                    final int li, final int ri, final int f, final boolean h, final LCallback c) {
+    JModelItemChange(final int s, final int r, final int t, final String k, final String v,
+                     final int li, final int ri, final int f, final boolean h, final LCallback c) {
         section = s;
         row = r;
         type = t;
@@ -35,11 +35,8 @@ public final class JDependencyItem {
         if (type != 0)                       item.type       = type;
     }
 
-    public static void applyList(HashMap<String, ArrayList<JDependencyItem>> depends,
-                                 JListAdapter target, String v) {
-        ArrayList<JDependencyItem> dv = depends.get(v);
-        if (dv == null) return;
-        for (JDependencyItem i : dv) {
+    public static void applyChangeList(ArrayList<JModelItemChange> changes, JListAdapter target) {
+        for (JModelItemChange i : changes) {
             int row_id = target.getCollapsedRowId(i.section, i.row);
             if (row_id >= target.data.size()) throw new java.lang.IllegalArgumentException();
             i.apply(target.data.get(row_id));

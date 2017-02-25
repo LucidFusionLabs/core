@@ -93,10 +93,12 @@
   @property (nonatomic, retain) UIView *header;
   @property (nonatomic, retain) UILabel *header_label;
   @property (nonatomic, retain) UIToolbar *toolbar;
+  @property (nonatomic, retain) UIColor *orig_bg_color, *orig_separator_color;
   @property (nonatomic, assign) LFL::SystemTableView *lfl_self;
   @property (nonatomic, assign) LFL::IntIntCB delete_row_cb;
-  @property (nonatomic)         std::string style;
-  @property (nonatomic)         int editable_section, editable_start_row, selected_section, selected_row;
+  @property (nonatomic, assign) std::string style;
+  @property (nonatomic, assign) int editable_section, editable_start_row, selected_section, selected_row;
+  @property (nonatomic, assign) bool needs_reload;
   - (id)initWithStyle: (UITableViewStyle)style;
 @end
 
@@ -117,26 +119,34 @@ struct iOSTableView : public SystemTableView {
   IOSTable *table;
   ~iOSTableView();
   iOSTableView(const string &title, const string &style, TableItemVec items);
+
   void DelNavigationButton(int align);
   void AddNavigationButton(int align, const TableItem &item);
   void AddToolbar(SystemToolbarView *t);
   void Show(bool show_or_hide);
-  void AddRow(int section, TableItem item);
+
   string GetKey(int section, int row);
+  string GetValue(int section, int row);
   int GetTag(int section, int row);
+  PickerItem *GetPicker(int section, int row);
+  StringPairVec GetSectionText(int section);
+
+  void BeginUpdates();
+  void EndUpdates();
+  void AddRow(int section, TableItem item);
+  void SelectRow(int section, int row);
+  void ReplaceRow(int section, int row, TableItem item);
+  void ReplaceSection(int section, TableItem h, int flag, TableItemVec item);
+  void ApplyChangeList(const TableSection::ChangeList &changes);
+  void SetSectionValues(int section, const StringVec &item);
   void SetTag(int section, int row, int val);
   void SetKey(int section, int row, const string &val);
   void SetValue(int section, int row, const string &val);
+  void SetSelected(int section, int row, int selected);
   void SetHidden(int section, int row, bool val);
   void SetTitle(const string &title);
-  PickerItem *GetPicker(int section, int row);
-  StringPairVec GetSectionText(int section);
+  void SetTheme(const string &title);
   void SetEditableSection(int section, int start_row, LFL::IntIntCB cb);
-  void SelectRow(int section, int row);
-  void BeginUpdates();
-  void EndUpdates();
-  void SetSectionValues(int section, const StringVec &item);
-  void ReplaceSection(int section, TableItem h, int flag, TableItemVec item);
 };
 
 UIAlertView            *GetUIAlertView(SystemAlertView*);

@@ -61,6 +61,19 @@ const int Key::Insert     = -35;
 
 const int Texture::updatesystemimage_pf = Pixel::BGRA;
 
+struct AndroidWindow : public Window {
+  void SetCaption(const string &text) {
+    static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "setCaption", "(Ljava/lang/String;)V"));
+    jstring jtext = jni->env->NewStringUTF(text.c_str());
+    jni->env->CallVoidMethod(jni->activity, mid, jtext);
+    jni->env->DeleteLocalRef(jtext);
+  }
+
+  void SetResizeIncrements(float x, float y) {}
+  void SetTransparency(float v) {}
+  bool Reshape(int w, int h) { return false; }
+};
+
 struct AndroidFrameworkModule : public Module {
   bool frame_on_keyboard_input = 0, frame_on_mouse_input = 0;
 
@@ -77,9 +90,9 @@ struct AndroidFrameworkModule : public Module {
     app->opengles_version = v;
     INFOf("AndroidFrameworkModule opengles_version: %d", v);
 
-    CHECK(!screen->id.v);
-    screen->id = MakeTyped(screen);
-    app->windows[screen->id.v] = screen;
+    CHECK(!screen->id);
+    screen->id = screen;
+    app->windows[screen->id] = screen;
 
     Socket fd[2];
     CHECK(SystemNetwork::OpenSocketPair(fd));
@@ -182,17 +195,6 @@ void Application::SetKeepScreenOn(bool v) {
   jni->env->CallVoidMethod(jni->activity, mid, v);
 }
 
-void Window::SetCaption(const string &text) {
-  static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "setCaption", "(Ljava/lang/String;)V"));
-  jstring jtext = jni->env->NewStringUTF(text.c_str());
-  jni->env->CallVoidMethod(jni->activity, mid, jtext);
-  jni->env->DeleteLocalRef(jtext);
-}
-
-void Window::SetResizeIncrements(float x, float y) {}
-void Window::SetTransparency(float v) {}
-bool Window::Reshape(int w, int h) { return false; }
-
 bool Video::CreateWindow(Window *W) { return true; }
 void Video::StartWindow(Window *W) {}
 int Video::Swap() {
@@ -253,6 +255,7 @@ void FrameScheduler::DelMainWaitSocket(Window*, Socket fd) {
   wait_forever_sockets.Del(fd);
 }
 
+Window *Window::Create() { return new AndroidWindow(); }
 unique_ptr<Module> CreateFrameworkModule() { return make_unique<AndroidFrameworkModule>(); }
 unique_ptr<AssetLoaderInterface> CreateAssetLoader() { return make_unique<AndroidAssetLoader>(); }
 
@@ -285,7 +288,7 @@ extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppCreate(JNIEnv *e, j
   CHECK(jni->channels_class     = (jclass)e->NewGlobalRef(e->FindClass("java/nio/channels/Channels")));
   CHECK(jni->readbytechan_class = (jclass)e->NewGlobalRef(e->FindClass("java/nio/channels/ReadableByteChannel")));
   CHECK(jni->jmodelitem_class   = (jclass)e->NewGlobalRef(e->FindClass("com/lucidfusionlabs/app/JModelItem")));
-  CHECK(jni->jdepitem_class     = (jclass)e->NewGlobalRef(e->FindClass("com/lucidfusionlabs/app/JDependencyItem")));
+  CHECK(jni->jmodelitemchange_class = (jclass)e->NewGlobalRef(e->FindClass("com/lucidfusionlabs/app/JModelItemChange")));
   CHECK(jni->jpickeritem_class  = (jclass)e->NewGlobalRef(e->FindClass("com/lucidfusionlabs/app/JPickerItem")));
   CHECK(jni->jalert_class       = (jclass)e->NewGlobalRef(e->FindClass("com/lucidfusionlabs/app/JAlert")));
   CHECK(jni->jtoolbar_class     = (jclass)e->NewGlobalRef(e->FindClass("com/lucidfusionlabs/app/JToolbar")));
@@ -311,8 +314,8 @@ extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppCreate(JNIEnv *e, j
   CHECK(jni->pair_construct = e->GetMethodID(jni->pair_class, "<init>", "(Ljava/lang/Object;Ljava/lang/Object;)V"));
   CHECK(jni->pair_first  = e->GetFieldID(jni->pair_class, "first",  "Ljava/lang/Object;"));
   CHECK(jni->pair_second = e->GetFieldID(jni->pair_class, "second", "Ljava/lang/Object;"));
-  CHECK(jni->jmodelitem_construct = e->GetMethodID(jni->jmodelitem_class, "<init>", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;IIIILcom/lucidfusionlabs/app/LCallback;Lcom/lucidfusionlabs/app/LCallback;Lcom/lucidfusionlabs/app/LStringCB;ZLcom/lucidfusionlabs/app/JPickerItem;Ljava/util/HashMap;)V"));
-  CHECK(jni->jdepitem_construct = e->GetMethodID(jni->jdepitem_class, "<init>", "(IIILjava/lang/String;Ljava/lang/String;IIIZLcom/lucidfusionlabs/app/LCallback;)V"));
+  CHECK(jni->jmodelitem_construct = e->GetMethodID(jni->jmodelitem_class, "<init>", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;IIIIIIILcom/lucidfusionlabs/app/LCallback;Lcom/lucidfusionlabs/app/LStringCB;Lcom/lucidfusionlabs/app/JPickerItem;ZII)V"));
+  CHECK(jni->jmodelitemchange_construct = e->GetMethodID(jni->jmodelitemchange_class, "<init>", "(IIILjava/lang/String;Ljava/lang/String;IIIZLcom/lucidfusionlabs/app/LCallback;)V"));
   CHECK(jni->jpickeritem_construct = e->GetMethodID(jni->jpickeritem_class, "<init>", "(Ljava/util/ArrayList;Lcom/lucidfusionlabs/app/LPickerItemCB;J)V"));
   CHECK(jni->int_intval = e->GetMethodID(jni->int_class, "intValue", "()I"));
   CHECK(jni->long_longval = e->GetMethodID(jni->int_class, "longValue", "()J"));

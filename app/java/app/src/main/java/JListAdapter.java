@@ -97,8 +97,8 @@ public class JListAdapter extends BaseAdapter {
         parent_widget = p;
         data = v;
         beginUpdates();
-        data.add(0, new JModelItem("", "", "", "", JModelItem.TYPE_SEPARATOR, 0, 0, 0, null, null, null, false, null, null));
-        data.add(new JModelItem("", "", "", "", JModelItem.TYPE_SEPARATOR, 0, 0, 0, null, null, null, false, null, null));
+        data.add(0, new JModelItem("", "", "", "", JModelItem.TYPE_SEPARATOR, 0, 0, 0, 0, 0, 0, null, null, null, false, 0, 0));
+        data.add(new JModelItem("", "", "", "", JModelItem.TYPE_SEPARATOR, 0, 0, 0, 0, 0, 0, null, null, null, false, 0, 0));
         for (int i = 0, l = data.size(); i != l; ++i) {
             JModelItem item = data.get(i);
             if (item.type == JModelItem.TYPE_SEPARATOR) sections.add(new Section(i));
@@ -276,7 +276,7 @@ public class JListAdapter extends BaseAdapter {
             if (item.right_cb == null) holder.rightIcon.setClickable(false);
             else {
                 holder.rightIcon.setClickable(true);
-                holder.rightIcon.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { item.right_cb.run(); }});
+                holder.rightIcon.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { item.right_cb.run(""); }});
             }
         }
 
@@ -357,7 +357,7 @@ public class JListAdapter extends BaseAdapter {
                 button.setLayoutParams(layout);
                 button.setId(i);
                 button.setText(v[i]);  
-                button.setChecked(item.checkedId == i);
+                button.setChecked(item.selected == i);
                 button.setBackgroundResource(R.drawable.listview_radio_selector);
                 holder.radio.addView(button);
             }
@@ -367,12 +367,8 @@ public class JListAdapter extends BaseAdapter {
                 public void onCheckedChanged(RadioGroup group, int checkedId) {
                     parent_widget.changed = true;
                     RadioButton button = (RadioButton)group.findViewById(checkedId);
-                    if (button != null && item.depends != null) {
-                        self.beginUpdates();
-                        item.checkedId = checkedId;
-                        JDependencyItem.applyList(item.depends, self, button.getText().toString());
-                        self.endUpdates();
-                    }
+                    if (button != null && item.right_cb != null)
+                        item.right_cb.run(button.getText().toString());
                 }});
         }
 
@@ -447,7 +443,7 @@ public class JListAdapter extends BaseAdapter {
 
     public void addSection() {
         sections.add(new Section(data.size()));
-        data.add(new JModelItem("", "", "", "", JModelItem.TYPE_SEPARATOR, 0, 0, 0, null, null, null, false, null, null));
+        data.add(new JModelItem("", "", "", "", JModelItem.TYPE_SEPARATOR, 0, 0, 0, 0, 0, 0, null, null, null, false, 0, 0));
     }
 
     public void addRow(final int section, JModelItem row) {
@@ -456,14 +452,16 @@ public class JListAdapter extends BaseAdapter {
         data.add(getSectionEndRowId(section), row);
         moveSectionsAfterBy(section, 1);
     }
+    
+    public void replaceRow(final int s, final int r, JModelItem row) {
+        data.set(getCollapsedRowId(s, r), row);
+    }
 
-    public void replaceSection(final String h, final int image, final int flag, final int section, ArrayList<JModelItem> v) {
+    public void replaceSection(final int section, final JModelItem h, final int flag, ArrayList<JModelItem> v) {
         if (section == sections.size()) addSection();
         if (section >= sections.size()) throw new java.lang.IllegalArgumentException();
         int start_row = getSectionBeginRowId(section), old_section_size = getSectionSize(section);
-        JModelItem separator = data.get(start_row);
-        separator.key = h;
-        separator.left_icon = image;
+        data.set(start_row, h);
         data.subList(start_row + 1, start_row + 1 + old_section_size).clear();
         data.addAll(start_row + 1, v);
         moveSectionsAfterBy(section, v.size() - getSectionSize(section));
@@ -486,15 +484,11 @@ public class JListAdapter extends BaseAdapter {
     public String getKey(final int s, final int r) { return data.get(getCollapsedRowId(s, r)).key; }
     public int    getTag(final int s, final int r) { return data.get(getCollapsedRowId(s, r)).tag; }
 
+    public void setKey   (final int s, final int r, final String  v) { data.get(getCollapsedRowId(s, r)).key = v; }
     public void setTag   (final int s, final int r, final int     v) { data.get(getCollapsedRowId(s, r)).tag = v; } 
     public void setValue (final int s, final int r, final String  v) { data.get(getCollapsedRowId(s, r)).val = v; }
     public void setHidden(final int s, final int r, final boolean v) { data.get(getCollapsedRowId(s, r)).hidden = v; }
-
-    public void setKey(final int s, final int r, final String  v) {
-        JModelItem item = data.get(getCollapsedRowId(s, r));
-        item.key = v; 
-        if (item.depends != null) JDependencyItem.applyList(item.depends, this, v);
-    }
+    public void setSelected(final int s, final int r, final int   v) { data.get(getCollapsedRowId(s, r)).selected = v; }
 
     public Pair<Long, ArrayList<Integer>> getPicked(final int s, final int r) {
         JPickerItem picker = data.get(getCollapsedRowId(s, r)).picker;

@@ -42,6 +42,16 @@ struct NullTableView : public SystemTableView {
   NullTableView(const string &title, const string &style, TableItemVec items) :
     data(TableSection::Convert(move(items))) {}
 
+  void DelNavigationButton(int align) {}
+  void AddNavigationButton(int align, const TableItem &item) {}
+  void AddToolbar(SystemToolbarView *t) {}
+  void Show(bool show_or_hide) {}
+
+  string GetKey(int section, int row) { return ""; }
+  string GetValue(int section, int row) { return ""; }
+  int GetTag(int section, int row) { return 0; }
+  PickerItem *GetPicker(int section, int row) { return 0; }
+
   StringPairVec GetSectionText(int section) {
     StringPairVec ret;
     CHECK_RANGE(section, 0, data.size());
@@ -49,6 +59,13 @@ struct NullTableView : public SystemTableView {
     return ret;
   }
 
+  void BeginUpdates() {}
+  void EndUpdates() {}
+  void AddRow(int section, TableItem item) {}
+  void SelectRow(int section, int row) {} 
+  void ReplaceRow(int section, int row, TableItem item) {}
+  void ReplaceSection(int section, TableItem h, int flag, TableItemVec item) {}
+  void ApplyChangeList(const TableSection::ChangeList&) {}
   void SetSectionValues(int section, const StringVec &item) {
     if (section == data.size()) data.emplace_back();
     CHECK_LT(section, data.size());
@@ -56,24 +73,14 @@ struct NullTableView : public SystemTableView {
     for (int i=0, l=data[section].item.size(); i != l; ++i) data[section].item[i].val = item[i];
   }
 
-  void DelNavigationButton(int align) {}
-  void AddNavigationButton(int align, const TableItem &item) {}
-  void AddToolbar(SystemToolbarView *t) {}
-  void Show(bool show_or_hide) {}
-  void AddRow(int section, TableItem item) {}
-  string GetKey(int section, int row) { return ""; }
-  int GetTag(int section, int row) { return 0; }
   void SetTag(int section, int row, int val) {}
   void SetKey(int section, int row, const string &val) {}
   void SetValue(int section, int row, const string &val) {}
+  void SetSelected(int section, int row, int selected) {}
   void SetHidden(int section, int row, bool val) {}
   void SetTitle(const string &title) {}
-  PickerItem *GetPicker(int section, int row) { return 0; }
+  void SetTheme(const string &theme) {}
   void SetEditableSection(int section, int start_row, LFL::IntIntCB cb) {}
-  void SelectRow(int section, int row) {} 
-  void BeginUpdates() {}
-  void EndUpdates() {}
-  void ReplaceSection(int section, TableItem h, int flag, TableItemVec item) {}
 };
 
 struct NullTextView : public SystemTextView {

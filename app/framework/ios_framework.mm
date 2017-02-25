@@ -732,7 +732,7 @@ void Application::CloseWindow(Window *W) {}
 void Application::GrabMouseFocus() {}
 void Application::ReleaseMouseFocus() {}
 
-string Application::GetClipboardText() { return [[UIPasteboard generalPasteboard].string UTF8String]; }
+string Application::GetClipboardText() { return GetNSString([UIPasteboard generalPasteboard].string); }
 void Application::SetClipboardText(const string &s) {
   if (auto ns = MakeNSString(s)) [UIPasteboard generalPasteboard].string = ns;
 }

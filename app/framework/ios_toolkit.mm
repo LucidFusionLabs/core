@@ -24,6 +24,7 @@
 #include "core/app/framework/ios_common.h"
 
 static std::vector<UIImage*> app_images;
+struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
 
 @implementation IOSButton
   - (void)buttonClicked:(IOSButton*)sender {
@@ -38,7 +39,7 @@ static std::vector<UIImage*> app_images;
 @end
 
 @interface IOSSegmentedControl : UISegmentedControl
-  @property (copy) void (^changed)(const std::string&);
+  @property (nonatomic, assign) LFL::StringCB changed_cb;
 @end
 @implementation IOSSegmentedControl
 @end
@@ -338,7 +339,7 @@ static std::vector<UIImage*> app_images;
   {
     std::vector<LFL::TableSection> data;
     int double_section_row_height;
-    bool has_appeared, change_selected_row_background;
+    bool dark_theme, change_selected_row_background;
   }
 
   - (id)initWithStyle: (UITableViewStyle)style {
@@ -347,13 +348,28 @@ static std::vector<UIImage*> app_images;
     _tableView.autoresizingMask = UIViewAutoresizingFlexibleHeight | UIViewAutoresizingFlexibleWidth;
     _tableView.delegate = self;
     _tableView.dataSource = self;
+    _orig_bg_color = _tableView.backgroundColor;
+    _orig_separator_color = _tableView.separatorColor;
     [self.view addSubview: _tableView];
     return self;
+  }
+
+  - (void)setTheme:(const std::string&)n {
+    if ((dark_theme = (n == "Dark"))) {
+      _tableView.backgroundColor = [UIColor colorWithWhite:0.249 alpha:1.000];
+      _tableView.separatorColor = [UIColor colorWithWhite:0.664 alpha:1.000];
+    } else {
+      _tableView.backgroundColor = _orig_bg_color;
+      _tableView.separatorColor = _orig_separator_color;
+    }
+    if (self.isViewLoaded && _tableView.window) [_tableView reloadData];
+    else _needs_reload = true;
   }
 
   - (void)load:(LFL::SystemTableView*)lself withTitle:(const std::string&)title withStyle:(const std::string&)sty items:(std::vector<LFL::TableSection>)item {
     _lfl_self = lself;
     _style = sty;
+    _needs_reload = true;
     _editable_section = _editable_start_row = double_section_row_height = -1;
     data = move(item);
     self.title = LFL::MakeNSString(title);
@@ -393,7 +409,6 @@ static std::vector<UIImage*> app_images;
     [self checkExists:section row:r];
     auto &ci = data[section].item[r];
     ci.key = v;
-    if (ci.depends.size()) [self applyItemDeps: ci withDep: v];
   }
 
   - (std::string)getKey:(int)section row:(int)r {
@@ -422,6 +437,19 @@ static std::vector<UIImage*> app_images;
     ci.val = v;
   }
 
+  - (void)setSelected:(int)section row:(int)r val:(int)v {
+    [self checkExists:section row:r];
+    auto &ci = data[section].item[r];
+    ci.selected = v;
+  }
+
+  - (void)replaceRow:(int)section row:(int)r val:(LFL::TableItem)v {
+    [self checkExists:section row:r];
+    data[section].item[r] = move(v);
+    NSIndexPath *p = [NSIndexPath indexPathForRow:r inSection:section];
+    [self.tableView reloadRowsAtIndexPaths:@[p] withRowAnimation:UITableViewRowAnimationNone];
+  }
+
   - (void)setSectionValues:(int)section items:(const LFL::StringVec&)item {
     if (section == data.size()) data.emplace_back();
     CHECK_LT(section, data.size());
@@ -429,6 +457,13 @@ static std::vector<UIImage*> app_images;
     for (int i=0, l=data[section].item.size(); i != l; ++i) [self setValue:section row:i val:item[i]];
     [self.tableView reloadSections:[NSIndexSet indexSetWithIndex: section]
       withRowAnimation:UITableViewRowAnimationNone];
+  }
+
+  - (void)applyChangeList:(const LFL::TableSection::ChangeList&)changes {
+    LFL::TableSection::ApplyChangeList(changes, &data, [=](const LFL::TableSection::Change &d){
+      NSIndexPath *p = [NSIndexPath indexPathForRow:d.row inSection:d.section];
+      [self.tableView reloadRowsAtIndexPaths:@[p] withRowAnimation:UITableViewRowAnimationNone];
+    });
   }
 
   - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { return data.size(); }
@@ -445,7 +480,7 @@ static std::vector<UIImage*> app_images;
     if (path.section >= data.size() || path.row >= data[path.section].item.size()) return tableView.rowHeight;
     const auto &ci = data[path.section].item[path.row];
     if (ci.hidden) return 0;
-    else if (ci.gui_loaded &&
+    else if ((ci.flags & iOSTableItem::GUILoaded) &&
              (ci.type == LFL::TableItem::Picker || ci.type == LFL::TableItem::FontPicker)) return ci.height;
     else if (double_section_row_height == path.section) return tableView.rowHeight * 2;
     else if (ci.flags & LFL::TableItem::Flag::SubText) return UITableViewAutomaticDimension;
@@ -481,18 +516,17 @@ static std::vector<UIImage*> app_images;
       CHECK_LT(section, data.size());
       CHECK_LT(row, data[section].item.size());
       auto &ci = data[section].item[row];
-      ci.gui_loaded = true;
+      ci.flags |= iOSTableItem::GUILoaded;
       bool subtext      = ci.flags & LFL::TableItem::Flag::SubText;
-      bool highlight_bg = ci.flags & LFL::TableItem::Flag::HighlightBackground;
       bool is_selected_row = section == _selected_section && row == _selected_row;
       UIColor *blue  = [UIColor colorWithRed: 0.0/255 green:122.0/255 blue:255.0/255 alpha:1];
-      UIColor *green = [UIColor colorWithRed:76.0/255 green:217.0/255 blue:100.0/255 alpha:1];
 
       cell = [[UITableViewCell alloc] initWithStyle: (subtext ? UITableViewCellStyleSubtitle : UITableViewCellStyleDefault)
         reuseIdentifier:cellIdentifier];
       cell.selectionStyle = UITableViewCellSelectionStyleNone;
-      if      (highlight_bg)                                      [cell setBackgroundColor:green];
+      if      (ci.bg_a)                                           [cell setBackgroundColor:[UIColor colorWithRed:ci.bg_r/255.0 green:ci.bg_g/255.0 blue:ci.bg_b/255.0 alpha:ci.bg_a/255.0]];
       else if (change_selected_row_background && is_selected_row) [cell setBackgroundColor:[UIColor lightGrayColor]];
+      else if (dark_theme)                                        [cell setBackgroundColor: _tableView.backgroundColor];
 
       if (ci.type != LFL::TableItem::Button) {
         if (int icon = ci.left_icon) {
@@ -511,7 +545,6 @@ static std::vector<UIImage*> app_images;
           [button addTarget:button action:@selector(buttonClicked:) forControlEvents:UIControlEventTouchUpInside];
           button.cb = [=](){ auto &item = data[section].item[row]; if (item.cb) item.cb(); };
         }
-        [button setTag: ci.ref];
         [cell.contentView addSubview: button];
       }
 
@@ -549,14 +582,19 @@ static std::vector<UIImage*> app_images;
       } else if (ci.type == LFL::TableItem::Selector) {
         NSArray *itemArray = LFL::MakeNSStringArray(LFL::Split(ci.val, ','));
         IOSSegmentedControl *segmented_control = [[IOSSegmentedControl alloc] initWithItems:itemArray];
-        segmented_control.frame = cell.frame;
-        segmented_control.autoresizingMask = UIViewAutoresizingFlexibleWidth;
-        segmented_control.selectedSegmentIndex = 0; 
-        if (ci.depends.size()) 
-          segmented_control.changed = [self makeChangedCB: ci];
+        segmented_control.selectedSegmentIndex = ci.selected;
+        if (ci.right_cb) segmented_control.changed_cb = ci.right_cb;
         [segmented_control addTarget:self action:@selector(segmentedControlClicked:)
           forControlEvents: UIControlEventValueChanged];
-        [cell.contentView addSubview:segmented_control];
+        if (ci.flags & LFL::TableItem::Flag::HideKey) {
+          segmented_control.frame = cell.frame;
+          segmented_control.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+          [cell.contentView addSubview:segmented_control];
+        } else {
+          cell.textLabel.text = LFL::MakeNSString(ci.key);
+          [cell.textLabel sizeToFit];
+          cell.accessoryView = segmented_control;
+        }
         [segmented_control release]; 
 
       } else if (ci.type == LFL::TableItem::Picker || ci.type == LFL::TableItem::FontPicker) {
@@ -601,7 +639,7 @@ static std::vector<UIImage*> app_images;
           [cell.contentView addSubview:button];
           [button release];
         } else {
-          if (highlight_bg) [cell.textLabel setFont:[UIFont boldSystemFontOfSize:[UIFont labelFontSize]]];
+          if (ci.bg_a) [cell.textLabel setFont:[UIFont boldSystemFontOfSize:[UIFont labelFontSize]]];
           cell.textLabel.text = LFL::MakeNSString(ci.key);
           cell.textLabel.textAlignment = NSTextAlignmentCenter;
           [cell.textLabel sizeToFit];
@@ -647,7 +685,7 @@ static std::vector<UIImage*> app_images;
         IOSButton *button = [IOSButton buttonWithType:UIButtonTypeCustom];
         button.frame = CGRectMake(0, 0, 40, 40);
         [button setImage:image forState:UIControlStateNormal];
-        button.cb = ci.right_icon_cb;
+        button.cb = LFL::bind(ci.right_cb, "");
         [button addTarget:button action:@selector(buttonClicked:) forControlEvents:UIControlEventTouchUpInside];
         if (cell.accessoryView) [cell.accessoryView addSubview: button];
         else cell.accessoryView = button;
@@ -731,7 +769,7 @@ static std::vector<UIImage*> app_images;
         [button addTarget:self action:@selector(toggleEditMode:) forControlEvents:UIControlEventTouchUpInside];
       } else {
         button.showsTouchWhenHighlighted = TRUE;
-        button.cb = [=](){ auto &item = data[section].header; if (item.right_icon_cb) item.right_icon_cb(); };
+        button.cb = [=](){ auto &item = data[section].header; if (item.right_cb) item.right_cb(""); };
         [button setTitle:LFL::MakeNSString(data[section].header.right_text) forState:UIControlStateNormal];
         [button addTarget:button action:@selector(buttonClicked:) forControlEvents:UIControlEventTouchUpInside];
       }
@@ -793,7 +831,7 @@ static std::vector<UIImage*> app_images;
 
   - (void)viewWillDisappear:(BOOL)animated { [super viewWillDisappear: animated]; }
   - (void)viewWillAppear:(BOOL)animated {
-    if (!has_appeared && (has_appeared = true)) [_tableView reloadData];
+    if (_needs_reload && !(_needs_reload = false)) [_tableView reloadData];
     [super viewWillAppear:animated];
   }
 
@@ -804,7 +842,7 @@ static std::vector<UIImage*> app_images;
 
   - (void)segmentedControlClicked:(IOSSegmentedControl *)segmented_control {
     _lfl_self->changed = true;
-    if (segmented_control.changed) segmented_control.changed
+    if (segmented_control.changed_cb) segmented_control.changed_cb
       (LFL::GetNSString([segmented_control titleForSegmentAtIndex: segmented_control.selectedSegmentIndex]));
   }
 
@@ -833,54 +871,49 @@ static std::vector<UIImage*> app_images;
     IOSPicker *picker_control = [[cell.contentView subviews] lastObject];
     return [picker_control getItem];
   }
+  
+  - (std::string)getVal:(int)section row:(int)r {
+    NSIndexPath *path = [NSIndexPath indexPathForRow: r inSection: section];
+    UITableViewCell *cell = [self.tableView cellForRowAtIndexPath: path];
+    auto &ci = data[path.section].item[path.row];
+
+    std::string val;
+    if (!(ci.flags & iOSTableItem::GUILoaded)) {
+      if (ci.val.size() && ci.val[0] != 1) val = ci.val[0] == 2 ? ci.val.substr(1) : ci.val;
+    } else if ((ci.type == LFL::TableItem::TextInput) || (ci.type == LFL::TableItem::NumberInput) ||
+               (ci.type == LFL::TableItem::PasswordInput)) {
+      IOSTextField *textfield = LFL::objc_dynamic_cast<IOSTextField>(cell.accessoryView);
+      val = LFL::GetNSString(textfield.text);
+      if (val.empty() && !textfield.modified) {
+        if (ci.val.size() && ci.val[0] != 1) val = ci.val[0] == 2 ? ci.val.substr(1) : ci.val;
+      }
+    } else if (ci.type == LFL::TableItem::Label) {
+      UILabel *label = LFL::objc_dynamic_cast<UILabel>(cell.accessoryView);
+      val = LFL::GetNSString(label.text);
+    } else if (ci.type == LFL::TableItem::Selector) {
+      UISegmentedControl *segmented_control;
+      if (ci.flags & LFL::TableItem::Flag::HideKey) segmented_control = [[cell.contentView subviews] lastObject];
+      else segmented_control = LFL::objc_dynamic_cast<UISegmentedControl>(cell.accessoryView);
+      val = LFL::GetNSString([segmented_control titleForSegmentAtIndex: segmented_control.selectedSegmentIndex]);
+    } else if (ci.type == LFL::TableItem::Toggle) {
+      UISwitch *onoff = LFL::objc_dynamic_cast<UISwitch>(cell.accessoryView);
+      val = onoff.on ? "1" : "";
+    } else if (ci.type == LFL::TableItem::Picker || ci.type == LFL::TableItem::FontPicker) {
+      IOSPicker *picker_control = [[cell.contentView subviews] lastObject];
+      val = [picker_control getItem]->PickedString();
+    }
+    return val;
+  }
 
   - (LFL::StringPairVec)dumpDataForSection: (int)ind {
     LFL::StringPairVec ret;
     CHECK_LT(ind, data.size());
     for (int i=0, l=data[ind].item.size(); i != l; i++) {
-      NSIndexPath *path = [NSIndexPath indexPathForRow: i inSection: ind];
-      UITableViewCell *cell = [self.tableView cellForRowAtIndexPath: path];
-      auto &ci = data[path.section].item[path.row];
-
-      std::string val;
-      if (!ci.gui_loaded) {
-        if (ci.val.size() && ci.val[0] != 1) val = ci.val[0] == 2 ? ci.val.substr(1) : ci.val;
-      } else if ((ci.type == LFL::TableItem::TextInput) || (ci.type == LFL::TableItem::NumberInput) ||
-                 (ci.type == LFL::TableItem::PasswordInput)) {
-        IOSTextField *textfield = LFL::objc_dynamic_cast<IOSTextField>(cell.accessoryView);
-        val = LFL::GetNSString(textfield.text);
-        if (val.empty() && !textfield.modified) {
-          if (ci.val.size() && ci.val[0] != 1) val = ci.val[0] == 2 ? ci.val.substr(1) : ci.val;
-        }
-      } else if (ci.type == LFL::TableItem::Label) {
-        UILabel *label = LFL::objc_dynamic_cast<UILabel>(cell.accessoryView);
-        val = LFL::GetNSString(label.text);
-      } else if (ci.type == LFL::TableItem::Selector) {
-        UISegmentedControl *segmented_control = [[cell.contentView subviews] lastObject];
-        val = LFL::GetNSString([segmented_control titleForSegmentAtIndex: segmented_control.selectedSegmentIndex]);
-      } else if (ci.type == LFL::TableItem::Toggle) {
-        UISwitch *onoff = (UISwitch*)cell.accessoryView;
-        val = onoff.on ? "1" : "";
-      } else if (ci.type == LFL::TableItem::Picker || ci.type == LFL::TableItem::FontPicker) {
-        IOSPicker *picker_control = [[cell.contentView subviews] lastObject];
-        val = [picker_control getItem]->PickedString();
-      }
-
+      auto &ci = data[ind].item[i];
       if (ci.dropdown_key.size()) ret.emplace_back(ci.dropdown_key, ci.key);
-      ret.emplace_back(ci.key, val);
+      ret.emplace_back(ci.key, [self getVal:ind row:i]);
     }
     return ret;
-  }
-
-  - (void(^)(const std::string&)) makeChangedCB: (const LFL::TableItem&)ci {
-    return Block_copy(^(const std::string &v){ [self applyItemDeps: ci withDep: v]; });
-  }
-
-  - (void)applyItemDeps:(const LFL::TableItem&)ci withDep:(const std::string&)v {
-    LFL::TableSection::ApplyItemDepends(ci, v, &data, [=](const LFL::TableItem::Dep &d){
-      NSIndexPath *p = [NSIndexPath indexPathForRow:d.row inSection:d.section];
-      [self.tableView reloadRowsAtIndexPaths:@[p] withRowAnimation:UITableViewRowAnimationNone];
-    });
   }
 
   - (void)reloadRowAtIndexPath:(NSIndexPath*)path withRowAnimation:(UITableViewRowAnimation)animation {
@@ -1109,12 +1142,15 @@ void iOSTableView::Show(bool show_or_hide) {
 
 void iOSTableView::AddRow(int section, TableItem item) { return [table addRow:section withItem:move(item)]; }
 string iOSTableView::GetKey(int section, int row) { return [table getKey:section row:row]; }
+string iOSTableView::GetValue(int section, int row) { return [table getVal:section row:row]; }
 int iOSTableView::GetTag(int section, int row) { return [table getTag:section row:row]; }
 void iOSTableView::SetTag(int section, int row, int val) { [table setTag:section row:row val:val]; }
 void iOSTableView::SetKey(int section, int row, const string &val) { [table setKey:section row:row val:val]; }
 void iOSTableView::SetValue(int section, int row, const string &val) { [table setValue:section row:row val:val]; }
+void iOSTableView::SetSelected(int section, int row, int val) { [table setSelected:section row:row val:val]; }
 void iOSTableView::SetHidden(int section, int row, bool val) { [table setHidden:section row:row val:val]; }
 void iOSTableView::SetTitle(const string &title) { table.title = LFL::MakeNSString(title); }
+void iOSTableView::SetTheme(const string &theme) { [table setTheme:theme]; }
 PickerItem *iOSTableView::GetPicker(int section, int row) { return [table getPicker:section row:row]; }
 StringPairVec iOSTableView::GetSectionText(int section) { return [table dumpDataForSection:section]; }
 void iOSTableView::SetEditableSection(int section, int start_row, LFL::IntIntCB cb) {
@@ -1131,6 +1167,8 @@ void iOSTableView::SelectRow(int section, int row) {
 void iOSTableView::BeginUpdates() { [table.tableView beginUpdates]; }
 void iOSTableView::EndUpdates() { [table.tableView endUpdates]; }
 void iOSTableView::SetSectionValues(int section, const StringVec &item) { [table setSectionValues:section items:item]; }
+void iOSTableView::ApplyChangeList(const TableSection::ChangeList &changes) { [table applyChangeList:changes]; }
+void iOSTableView::ReplaceRow(int section, int row, TableItem h) { [table replaceRow:section row:row val:move(h)]; }
 void iOSTableView::ReplaceSection(int section, TableItem h, int flag, TableItemVec item)
 { [table replaceSection:section items:move(item) header:move(h) flag:flag]; }
 

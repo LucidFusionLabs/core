@@ -60,15 +60,15 @@ public class JAlert extends JWidget {
             alert.setPositiveButton(model.get(3).key, new DialogInterface.OnClickListener() {
                                     public void onClick(DialogInterface dialog, int which) {
                 JModelItem confirm = model.get(3);
-                if (confirm.string_cb != null)
-                    confirm.string_cb.run((input == null) ? confirm.val : (confirm.val + " " + input.getText().toString()));
+                if (confirm.right_cb != null)
+                    confirm.right_cb.run((input == null) ? confirm.val : (confirm.val + " " + input.getText().toString()));
             }});
 
             alert.setNegativeButton(model.get(2).key, new DialogInterface.OnClickListener() {
                                     public void onClick(DialogInterface dialog, int which) {
                 JModelItem cancel = model.get(2);
-                if (cancel.string_cb != null)
-                    cancel.string_cb.run((input == null) ? cancel.val : (cancel.val + " " + input.getText().toString()));
+                if (cancel.right_cb != null)
+                    cancel.right_cb.run((input == null) ? cancel.val : (cancel.val + " " + input.getText().toString()));
             }});
 
             view = new Pair<AlertDialog, EditText>(alert.create(), input);
@@ -94,7 +94,7 @@ public class JAlert extends JWidget {
             JModelItem title = model.get(1), confirm = model.get(3);
             title.key = tstr;
             title.val = msg;
-            confirm.string_cb = confirm_cb;
+            confirm.right_cb = confirm_cb;
             clear();
 
             Pair<AlertDialog, EditText> alert = get(activity);

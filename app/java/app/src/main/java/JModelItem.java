@@ -27,30 +27,30 @@ public final class JModelItem {
     public static final int TABLE_FLAG_FIXDROPDOWN = 1;
 
     public String key, val, right_text, dropdown_key;
-    public int type, flags, left_icon, right_icon, tag=0, checkedId=0;
-    public LCallback cb, right_cb;
-    public LStringCB string_cb;
-    public boolean hidden;
+    public int type, tag, flags, left_icon, right_icon, selected, height;
+    public LCallback cb;
+    public LStringCB right_cb;
     public JPickerItem picker;
-    public HashMap<String, ArrayList<JDependencyItem>> depends;
+    public boolean hidden;
 
     JModelItem(final String k, final String v, final String rt, final String ddk,
-               final int t, final int f, final int li, final int ri,
-               final LCallback lcb, final LCallback rcb, final LStringCB scb, final boolean h,
-               final JPickerItem p, final HashMap<String, ArrayList<JDependencyItem>> d) {
+               final int t, final int ta, final int f, final int li, final int ri, final int s, final int hi,
+               final LCallback lcb, final LStringCB rcb, final JPickerItem p,
+               final boolean h, final int fg, final int bg) {
         key = k;
         val = v;
         right_text = rt;
         dropdown_key = ddk;
         type = t;
+        tag = ta;
         flags = f;
         left_icon = li;
         right_icon = ri;
+        selected = s;
+        height = hi;
         cb = lcb;
         right_cb = rcb;
-        string_cb = scb;
-        hidden = h;
         picker = p;
-        depends = d;
+        hidden = h;
     }
 }

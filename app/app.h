@@ -447,35 +447,36 @@ struct PickerItem {
 };
 
 struct TableItem {
-  struct Dep { int section, row; string val; bool hidden; int left_icon, right_icon, type; string key; Callback cb; int flags; };
   enum { None=0, Label=1, Separator=2, Command=3, Button=4, Toggle=5, Selector=6, Picker=7, TextInput=8,
     NumberInput=9, PasswordInput=10, FontPicker=11 }; 
-  struct Flag { enum { LeftText=1, SubText=2, FixDropdown=4, HighlightBackground=8 }; };
-  typedef unordered_map<string, vector<Dep>> Depends;
-  string key;
-  int type, flags;
-  string val, right_text, dropdown_key;
-  int tag, left_icon, right_icon;
-  Callback cb, right_icon_cb;
-  Depends depends;
-  bool hidden;
+  struct Flag { enum { LeftText=1, SubText=2, FixDropdown=4, HideKey=8, PlaceHolderVal=16, User1=32 }; };
+  string key, val, right_text, dropdown_key;
+  int type, tag, flags, left_icon, right_icon, selected=0, height=0;
+  Callback cb;
+  StringCB right_cb;
   PickerItem *picker;
-  int ref=-1, height=0;
-  bool loaded=0, gui_loaded=0, has_placeholder_val=0;
+  bool hidden;
+  unsigned char fg_r=0, fg_g=0, fg_b=0, fg_a=0;
+  unsigned char bg_r=0, bg_g=0, bg_b=0, bg_a=0;
   virtual ~TableItem() {}
-  TableItem(string K=string(), int T=0, string V=string(), string RT=string(), int TG=0, int LI=0,
-            int RI=0, Callback CB=Callback(), Callback RC=Callback(), int F=0, Depends D=Depends(),
-            bool H=false, PickerItem *P=0, string DDK=string()) :
-    key(move(K)), type(T), flags(F), val(move(V)), right_text(move(RT)), dropdown_key(move(DDK)), tag(TG), left_icon(LI),
-    right_icon(RI), cb(move(CB)), right_icon_cb(move(RC)), depends(move(D)), hidden(H), picker(P) {}
+  TableItem(string K=string(), int T=0, string V=string(), string RT=string(), int TG=0, int LI=0, int RI=0,
+            Callback CB=Callback(), StringCB RC=StringCB(), int F=0, bool H=false, PickerItem *P=0, string DDK=string()) :
+    key(move(K)), val(move(V)), right_text(move(RT)), dropdown_key(move(DDK)), type(T), tag(TG), flags(F),
+    left_icon(LI), right_icon(RI), cb(move(CB)), right_cb(move(RC)), picker(P), hidden(H) {}
+  TableItem(string K, int T, string V, string RT, int TG, int LI, int RI, Callback CB, StringCB RC, int F,
+            bool H, PickerItem *P, string DDK, const Color &fg, const Color &bg);
   bool HasPlaceholderValue() const { return val.size() && (val[0] == 1 || val[0] == 2); }
   string GetPlaceholderValue() const { return val.substr(1); }
   void CheckAssign(const string &k, Callback c) { CHECK_EQ(k, key); cb=move(c); }
-  void AssignDep(const Dep &d);
+  void SetFGColor(const Color&);
+  void SetBGColor(const Color&);
 };
 
 struct TableSection {
-  struct Flag { enum { EditButton=1, EditableIfHasTag=2 }; };
+  struct Flag { enum { EditButton=1, EditableIfHasTag=2, User1=4 }; };
+  struct Change { int section, row; string val; bool hidden; int left_icon, right_icon, type; string key; Callback cb; int flags; };
+  typedef vector<Change> ChangeList;
+  typedef unordered_map<string, ChangeList> ChangeSet;
   int header_height=0, start_row=0, flag=0;
   TableItem header;
   vector<TableItem> item;
@@ -483,7 +484,8 @@ struct TableSection {
   TableSection(TableItem h, int f=0, int sr=0) : start_row(sr), flag(f), header(move(h)) {}
   static vector<TableSection> Convert(vector<TableItem> in);
   static void FindSectionOffset(const vector<TableSection> &in, int collapsed_row, int *section_out, int *row_out);
-  static void ApplyItemDepends(const TableItem &in, const string &name, vector<TableSection> *out, function<void(const TableItem::Dep&)>);
+  static void ApplyChangeList(const ChangeList &in, vector<TableSection> *out, function<void(const Change&)>);
+  static void ApplyChange(TableItem *out, const Change &d);
 };
 
 typedef vector<MenuItem>  MenuItemVec;
@@ -841,23 +843,37 @@ struct SystemTableView {
   virtual void Show(bool show_or_hide) = 0;
 
   virtual string GetKey(int section, int row) = 0;
+  virtual string GetValue(int section, int row) = 0;
   virtual int GetTag(int section, int row) = 0;
-  virtual void SetTag(int section, int row, int val) = 0;
-  virtual void SetKey(int seciton, int row, const string &key) = 0;
-  virtual void SetValue(int section, int row, const string &val) = 0;
-  virtual void SetHidden(int section, int row, bool val) = 0;
-  virtual void SetTitle(const string &title) = 0;
   virtual PickerItem *GetPicker(int section, int row) = 0;
-  virtual void SelectRow(int section, int row) = 0;
-  virtual void SetEditableSection(int section, int start_row, IntIntCB cb=IntIntCB()) = 0;
   virtual StringPairVec GetSectionText(int section) = 0;
-  bool GetSectionText(int section, vector<string*> out, bool check=1) { return GetPairValues(GetSectionText(section), move(out), check); }
 
   virtual void BeginUpdates() = 0;
   virtual void EndUpdates() = 0;
   virtual void AddRow(int section, TableItem item) = 0;
-  virtual void SetSectionValues(int section, const StringVec&) = 0;
+  virtual void SelectRow(int section, int row) = 0;
+  virtual void ReplaceRow(int section, int row, TableItem item) = 0;
   virtual void ReplaceSection(int section, TableItem header, int flag, TableItemVec item) = 0;
+  virtual void ApplyChangeList(const TableSection::ChangeList&) = 0;
+  virtual void SetSectionValues(int section, const StringVec&) = 0;
+  virtual void SetTag(int section, int row, int val) = 0;
+  virtual void SetKey(int secton, int row, const string &key) = 0;
+  virtual void SetValue(int section, int row, const string &val) = 0;
+  virtual void SetSelected(int section, int row, int selected) = 0;
+  virtual void SetHidden(int section, int row, bool val) = 0;
+  virtual void SetTitle(const string &title) = 0;
+  virtual void SetTheme(const string &theme) = 0;
+  virtual void SetEditableSection(int section, int start_row, IntIntCB cb=IntIntCB()) = 0;
+
+  bool GetSectionText(int section, vector<string*> out, bool check=1) { return GetPairValues(GetSectionText(section), move(out), check); }
+  void ApplyChangeSet(const string &v, const TableSection::ChangeSet &changes) { auto it = changes.find(v); if (it != changes.end()) ApplyChangeList(it->second); }
+};
+
+struct SystemTableViewController {
+  unique_ptr<SystemTableView> view;
+  SystemTableViewController() {}
+  SystemTableViewController(unique_ptr<SystemTableView> v) : view(move(v)) {}
+  virtual ~SystemTableViewController() {}
 };
 
 struct SystemTextView {
