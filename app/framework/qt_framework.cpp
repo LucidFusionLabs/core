@@ -153,7 +153,7 @@ class QtWindow : public QWindow, public QtWindowInterface {
     QWindow::resizeEvent(ev);
     if (!init) return; 
     app->MakeCurrentWindow(this);
-    app->focused->Reshaped(Box(ev->size().width(), ev->size().height()));
+    app->focused->Reshaped(LFL::Box(ev->size().width(), ev->size().height()));
     RequestRender();
   }
 

@@ -97,6 +97,7 @@ bool Application::LoadKeychain(const string &keyname, string *val_out) {
   return   val_out->size();
 }
 
+string Application::GetPackageName() { return GetNSString([[NSBundle mainBundle] bundleIdentifier]); }
 string Application::GetSystemDeviceName() { return GetNSString([[UIDevice currentDevice] name]); }
 string Application::GetSystemDeviceId() {
   string ret(16, 0);

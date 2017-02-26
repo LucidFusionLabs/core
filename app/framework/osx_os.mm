@@ -34,6 +34,37 @@ string Application::GetSystemDeviceName() {
   return ret;
 }
 
+string Application::GetSystemDeviceId() {
+  mach_port_t master_port;
+  kern_return_t kernResult = IOMasterPort(MACH_PORT_NULL, &master_port);
+  if (kernResult != KERN_SUCCESS) return ERRORv("", "IOMasterPort");
+
+  CFMutableDictionaryRef matching_dict = IOBSDNameMatching(master_port, 0, "en0");
+  if (!matching_dict) return ERRORv("", "IOBSDNameMatching");
+
+  io_iterator_t iterator;
+  kernResult = IOServiceGetMatchingServices(master_port, matching_dict, &iterator);
+  if (kernResult != KERN_SUCCESS) return ERRORv("", "IOServiceGetMatchingServices");
+
+  CFDataRef guid_cf_data = nil;
+  io_object_t service, parent_service;
+  while((service = IOIteratorNext(iterator)) != 0) {
+    kernResult = IORegistryEntryGetParentEntry(service, kIOServicePlane, &parent_service);
+    if (kernResult == KERN_SUCCESS) {
+      if (guid_cf_data) CFRelease(guid_cf_data);
+      guid_cf_data = (CFDataRef) IORegistryEntryCreateCFProperty(parent_service, CFSTR("IOMACAddress"), NULL, 0);
+      IOObjectRelease(parent_service);
+    }
+    IOObjectRelease(service);
+    if (guid_cf_data) break;
+  }
+  IOObjectRelease(iterator);
+
+  string ret;
+  if (guid_cf_data) ret.assign(MakeSigned(CFDataGetBytePtr(guid_cf_data)), CFDataGetLength(guid_cf_data));
+  return ret;
+}
+
 Connection *Application::ConnectTCP(const string &hostport, int default_port, Connection::CB *connected_cb, bool background_services) {
 #if 0
   INFO("Application::ConnectTCP ", hostport, " (default_port = ", default_port, ") background_services = ", background_services);

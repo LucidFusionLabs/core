@@ -731,6 +731,7 @@ struct Application : public ::LFApp {
   string GetClipboardText();
   void SetClipboardText(const string &s);
   void OpenSystemBrowser(const string &url);
+  string GetPackageName();
   string GetSystemDeviceId();
   string GetSystemDeviceName();
   void ShowSystemContextMenu(const MenuItemVec &items);
