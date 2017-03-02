@@ -29,7 +29,7 @@
 @interface IOSAdMob : NSObject<GADBannerViewDelegate>
   @property (nonatomic, retain) GADBannerView *banner;
   @property (nonatomic, retain) NSMutableArray *testDevices;
-  @property (nonatomic)         BOOL started, displayed;
+  @property (nonatomic)         BOOL started, loaded, shown;
 @end
 
 @implementation IOSAdMob
@@ -51,33 +51,36 @@
   }
 
   - (void)show: (BOOL)show_or_hide withTable:(UIViewController*)table {
-    if (show_or_hide) {
-      _displayed = NO;
+    [_banner removeFromSuperview];
+    if ((_shown = show_or_hide)) {
       _banner.rootViewController = table;
       [self updateBannerFrame];
       if (!_started && (_started = YES)) {
         GADRequest *request = [GADRequest request];
         request.testDevices = _testDevices;
         [_banner loadRequest:request];
-      }
+      } else if (!_loaded && (_loaded = YES)) [self adjustParentFrame: -_banner.frame.size.height];
       [_banner.rootViewController.view addSubview:_banner];
+    } else {
+      if (_loaded && !(_loaded = NO)) [self adjustParentFrame: _banner.frame.size.height];
     }
   }
 
   - (void)adViewDidReceiveAd:(GADBannerView *)view {
     [self updateBannerFrame];
-    if (!_displayed && (_displayed = YES)) {
-      if (auto table = LFL::objc_dynamic_cast<IOSTable>(_banner.rootViewController)) {
-         int bh = _banner.frame.size.height;
-         CGRect frame = table.tableView.frame;
-         frame.size.height -= bh;
-         table.tableView.frame = frame;
-         if (table.toolbar) {
-            frame = table.toolbar.frame;
-            frame.origin.y -= bh;
-            table.toolbar.frame = frame;
-         }
-      }
+    if (_shown && !_loaded && (_loaded = YES)) [self adjustParentFrame: -_banner.frame.size.height];
+  }
+
+  - (void)adjustParentFrame: (int)bh {
+    if (auto table = LFL::objc_dynamic_cast<IOSTable>(_banner.rootViewController)) {
+       CGRect frame = table.tableView.frame;
+       frame.size.height += bh;
+       table.tableView.frame = frame;
+       if (table.toolbar) {
+          frame = table.toolbar.frame;
+          frame.origin.y += bh;
+          table.toolbar.frame = frame;
+       }
     }
   }
 @end

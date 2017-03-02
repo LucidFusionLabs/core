@@ -193,26 +193,37 @@ static const char* const* ios_argv = 0;
     [self.controller shutdownGestureRecognizers];
   }
 
-  - (void)applicationWillResignActive:(UIApplication*)application {}
-  - (void)applicationDidBecomeActive:(UIApplication*)application {
-    INFO("applicationDidBecomeActive");
-    if (!has_become_active && (has_become_active = true)) return;
-    [self showKeyboard: false];
+  - (void)applicationWillResignActive:(UIApplication*)application {
+    INFO("applicationWillResignActive");
+    if (LFL::app->focused->unfocused_cb) LFL::app->focused->unfocused_cb();
   }
 
-  - (void)applicationWillEnterForeground:(UIApplication *)application{}
+  - (void)applicationDidBecomeActive:(UIApplication*)application {
+    INFO("applicationDidBecomeActive");
+    if (!has_become_active && (has_become_active = true)) {
+    }
+  }
+
+  - (void)applicationWillEnterForeground:(UIApplication *)application{
+    INFO("applicationWillEnterForeground");
+    if (bg_task != UIBackgroundTaskInvalid) {
+      [application endBackgroundTask:bg_task];
+      bg_task = UIBackgroundTaskInvalid;
+    }
+    if (LFL::app->focused->focused_cb) LFL::app->focused->focused_cb();
+  }
+
   - (void)applicationDidEnterBackground:(UIApplication *)application {
-#if 0
+    INFO("applicationDidEnterBackground");
     bg_task = [application beginBackgroundTaskWithName:@"MyTask" expirationHandler:^{
       [application endBackgroundTask:bg_task];
       bg_task = UIBackgroundTaskInvalid;
     }];
-    // now cancel it
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+                     [NSThread sleepForTimeInterval: 180.0f];
                      [application endBackgroundTask:bg_task];
                      bg_task = UIBackgroundTaskInvalid;
                    });
-#endif
   }
 
   - (void)application:(UIApplication *)application performFetchWithCompletionHandler:(nonnull void (^)(UIBackgroundFetchResult))completionHandler {
@@ -238,13 +249,13 @@ static const char* const* ios_argv = 0;
   }
 
   - (void)hideKeyboard {
+    if ([self.text_field isFirstResponder])
+      [self.text_field performSelector:@selector(resignFirstResponder) withObject:nil afterDelay:0];
     [self.controller performSelector:@selector(becomeFirstResponder) withObject:nil afterDelay:0];
   }
 
   - (void)showKeyboard: (bool)enable_app_frame {
     _enable_frame_on_textfield_shown = enable_app_frame; 
-    if ([self.text_field isFirstResponder])
-      [self.text_field performSelector:@selector(resignFirstResponder) withObject:nil afterDelay:0];
     [self.text_field performSelector:@selector(becomeFirstResponder) withObject:nil afterDelay:0.1f];
   }
 
@@ -414,6 +425,10 @@ static const char* const* ios_argv = 0;
     bool show_or_hide = CGRectContainsRect(window.frame, endFrame); // CGRectIntersectsRect(window.frame, endFrame);
     if (show_or_hide) [self kbWillShowOrHide:YES withRect:[self.view convertRect:endFrame fromView:nil] andDuration:duration andCurve:curve];
     else              [self kbWillShowOrHide:NO  withRect:CGRectMake(0,0,0,0)                                 andDuration:duration andCurve:curve];
+
+    if (uiapp.enable_frame_on_textfield_shown /*&& show_or_hide*/) {
+      uiapp.frame_disabled = uiapp.enable_frame_on_textfield_shown = false;
+    }
   }
 
   - (void)kbWillShowOrHide:(BOOL)show_or_hide withRect:(CGRect)rect andDuration:(NSTimeInterval)interval andCurve:(UIViewAnimationCurve)curve {
@@ -421,17 +436,15 @@ static const char* const* ios_argv = 0;
     if (_input_accessory_toolbar) _input_accessory_toolbar.hidden = show_or_hide;
     _showing_keyboard = show_or_hide;
     keyboard_frame = rect;
+    INFO("kbWillShowOrHide: ", bool(show_or_hide), " ", LFL::GetCGRect(keyboard_frame).DebugString(), " scale=", uiapp.scale);
     bool presented_controller = uiapp.top_controller != uiapp.root_controller;
     if (presented_controller) [uiapp.top_controller.view setNeedsLayout];
-    if (uiapp.enable_frame_on_textfield_shown && show_or_hide)
-      uiapp.frame_disabled = uiapp.enable_frame_on_textfield_shown = false;
     [uiapp.glk_view setNeedsLayout];
 #if 0
     [UIView animateWithDuration:interval animations:^{
       if (presented_controller) [uiapp.top_controller.view layoutIfNeeded];
       [uiapp.glk_view layoutIfNeeded];
     }];
-    INFO("kbWillShowOrHide: ", bool(show_or_hide), " ", LFL::GetCGRect(keyboard_frame).DebugString(), " scale=", uiapp.scale);
 #endif
   }
 
@@ -746,7 +759,8 @@ void Application::ToggleTouchKeyboard() {
   else OpenTouchKeyboard();
 }
 
-void Application::SetAppFrameEnabled(bool v) { [LFUIApplication sharedAppDelegate].frame_disabled = !v; }
+bool Application::GetAppFrameEnabled() { return ![LFUIApplication sharedAppDelegate].frame_disabled; }
+void Application::SetAppFrameEnabled(bool v) { [LFUIApplication sharedAppDelegate].frame_disabled = !v; INFO("frame enabled = ", v); }
 void Application::SetAutoRotateOrientation(bool v) {}
 int Application::SetMultisample(bool v) { return [[LFUIApplication sharedAppDelegate] updateGLKMultisample:v]; }
 int Application::SetExtraScale(bool v) { return [[LFUIApplication sharedAppDelegate] updateScale:v]; }

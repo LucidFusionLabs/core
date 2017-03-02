@@ -538,7 +538,13 @@ void FrameBuffer::Resize(int W, int H, int flag) {
   }
   Attach(tex.ID, depth.ID);
   int status = gd->CheckFrameBufferStatus();
-  if (status != GraphicsDevice::FramebufferComplete) ERROR("FrameBuffer status ", status);
+  if (status != GraphicsDevice::FramebufferComplete) {
+#if 0
+    ERROR("FrameBuffer Resize(", W, ", ", H, ") status ", status);
+#else
+    ERROR("FrameBuffer Resize(", W, ", ", H, ") status ", status, " from:\n", app->PrintCallStack());
+#endif
+  }
   if (flag & Flag::ReleaseFB) Release();
 }
 

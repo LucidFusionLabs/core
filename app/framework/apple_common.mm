@@ -165,6 +165,7 @@ void NSURLSessionStreamConnection::ReadableCB(bool init, bool error, bool eof) {
   [stream readDataOfMinLength:1 maxLength:65536 timeout:0 completionHandler:^(NSData *data, BOOL atEOF, NSError *error){
     if (!stream) return;
     if (!error) buf.append(static_cast<const char *>(data.bytes), data.length);
+    else INFO(endpoint_name, ": ", GetNSString([error localizedDescription]));
     app->RunInMainThread(bind(&NSURLSessionStreamConnection::ReadableCB, this, false, error != nil, atEOF));
   }];
 }
@@ -249,6 +250,13 @@ void Application::SaveSettings(const StringPairVec &v) {
   NSUserDefaults* defaults = [NSUserDefaults standardUserDefaults];
   for (auto &i : v) [defaults setObject:MakeNSString(i.second) forKey:MakeNSString(i.first)];
   [defaults synchronize];
+}
+
+string Application::PrintCallStack() {
+  string ret;
+  NSArray *callstack = [NSThread callStackSymbols];
+  for (NSString *symbol in callstack) StrAppend(&ret, GetNSString(symbol), "\n");
+  return ret;
 }
 
 }; // namespace LFL

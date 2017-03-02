@@ -405,6 +405,12 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
     CHECK_LT(r, data[section].item.size());
   }
 
+  - (void)setHeader:(int)section header:(LFL::TableItem)h {
+    if (section == data.size()) data.emplace_back();
+    CHECK_LT(section, data.size());
+    data[section].header = move(h);
+  }
+
   - (void)setKey:(int)section row:(int)r val:(const std::string&)v {
     [self checkExists:section row:r];
     auto &ci = data[section].item[r];
@@ -1125,13 +1131,20 @@ iOSTableView::iOSTableView(const string &title, const string &style, TableItemVe
 void iOSTableView::DelNavigationButton(int align) { return [table clearNavigationButton:align]; }
 void iOSTableView::AddNavigationButton(int align, const TableItem &item) { return [table loadNavigationButton:item withAlign:align]; }
 
-void iOSTableView::AddToolbar(SystemToolbarView *t) {
+void iOSTableView::SetToolbar(SystemToolbarView *t) {
   int toolbar_height = 44;
   CGRect frame = table.tableView.frame;
-  table.toolbar = [dynamic_cast<iOSToolbarView*>(t)->toolbar createUIToolbar:
-    CGRectMake(frame.origin.x, frame.origin.y+frame.size.height-toolbar_height, frame.size.width, toolbar_height) first: YES];
-  [table.view addSubview: table.toolbar];
-  frame.size.height -= toolbar_height;
+  if (table.toolbar) {
+    [table.toolbar removeFromSuperview];
+    table.toolbar = nil;
+    frame.size.height += toolbar_height;
+  }
+  if (t) {
+    table.toolbar = [dynamic_cast<iOSToolbarView*>(t)->toolbar createUIToolbar:
+      CGRectMake(frame.origin.x, frame.origin.y+frame.size.height-toolbar_height, frame.size.width, toolbar_height) first: YES];
+    [table.view addSubview: table.toolbar];
+    frame.size.height -= toolbar_height;
+  }
   table.tableView.frame = frame;
 }
 
@@ -1144,8 +1157,9 @@ void iOSTableView::AddRow(int section, TableItem item) { return [table addRow:se
 string iOSTableView::GetKey(int section, int row) { return [table getKey:section row:row]; }
 string iOSTableView::GetValue(int section, int row) { return [table getVal:section row:row]; }
 int iOSTableView::GetTag(int section, int row) { return [table getTag:section row:row]; }
-void iOSTableView::SetTag(int section, int row, int val) { [table setTag:section row:row val:val]; }
+void iOSTableView::SetHeader(int section, TableItem h) { return [table setHeader:section header:move(h)]; }
 void iOSTableView::SetKey(int section, int row, const string &val) { [table setKey:section row:row val:val]; }
+void iOSTableView::SetTag(int section, int row, int val) { [table setTag:section row:row val:val]; }
 void iOSTableView::SetValue(int section, int row, const string &val) { [table setValue:section row:row val:val]; }
 void iOSTableView::SetSelected(int section, int row, int val) { [table setSelected:section row:row val:val]; }
 void iOSTableView::SetHidden(int section, int row, bool val) { [table setHidden:section row:row val:val]; }

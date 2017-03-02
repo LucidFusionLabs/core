@@ -585,7 +585,7 @@ struct Window : public ::LFAppWindow {
   GraphicsDevice *gd=0;
   point mouse, mouse_v, mouse2, mouse2_v, mouse_wheel;
   string caption;
-  Callback reshaped_cb;
+  Callback reshaped_cb, focused_cb, unfocused_cb;
   FrameCB frame_cb;
   Timer frame_time;
   RollingAvg<unsigned> fps;
@@ -703,17 +703,20 @@ struct Application : public ::LFApp {
   bool Running() const { return run; }
   bool MainThread() const { return Thread::GetId() == main_thread_id; }
   bool MainProcess() const { return !main_process; }
-  double FPS() const { return focused->fps.FPS(); }
-  double CamFPS() const { return camera->fps.FPS(); }
   Window *GetWindow(void *id) const { return FindOrNull(windows, id); }
   int LoadModule(Module *m) { return m ? PushBack(modules, m)->Init() : 0; }
-  void Log(int level, const char *file, int line, const char *message);
-  void MakeCurrentWindow(Window*);
-  void CloseWindow(Window*);
-  void CreateNewWindow();
-  void StartNewWindow(Window*);
-  SocketServicesThread *CreateNetworkThread(bool detach_existing_module, bool start);
 
+  string   GetLocalizedString   (const char *key);
+  String16 GetLocalizedString16 (const char *key);
+  string   GetLocalizedInteger  (int number);
+  String16 GetLocalizedInteger16(int number);
+  string   GetPackageName();
+  string   GetVersion();
+  string   GetSystemDeviceName();
+  string   GetSystemDeviceId();
+  string   PrintCallStack();
+
+  void Log(int level, const char *file, int line, const char *message);
   int Create(const char *source_filename);
   int Init();
   int Start();
@@ -724,16 +727,16 @@ struct Application : public ::LFApp {
   int MainLoop();
   void DrawSplash(const Color &c);
   void ResetGL();
-
+  void MakeCurrentWindow(Window*);
+  void CloseWindow(Window*);
+  void CreateNewWindow();
+  void StartNewWindow(Window*);
   void LoseFocus();
   void GrabMouseFocus();
   void ReleaseMouseFocus();
   string GetClipboardText();
   void SetClipboardText(const string &s);
   void OpenSystemBrowser(const string &url);
-  string GetPackageName();
-  string GetSystemDeviceId();
-  string GetSystemDeviceName();
   void ShowSystemContextMenu(const MenuItemVec &items);
   void ShowSystemFontChooser(const FontDesc &cur_font, const StringVecCB&);
   void ShowSystemFileChooser(bool files, bool dirs, bool multi, const StringVecCB&);
@@ -741,19 +744,18 @@ struct Application : public ::LFApp {
   int LoadSystemImage(const string &fn);
   void UpdateSystemImage(int n, Texture&);
   bool OpenSystemAppPreferences();
-
   void OpenTouchKeyboard(bool enable_app_frame=false);
   void CloseTouchKeyboard();
   void CloseTouchKeyboardAfterReturn(bool);
   void SetTouchKeyboardTiled(bool);
   void ToggleTouchKeyboard();
+  bool GetAppFrameEnabled();
   void SetAppFrameEnabled(bool);
   void SetAutoRotateOrientation(bool);
   void SetVerticalSwipeRecognizer(int touches);
   void SetHorizontalSwipeRecognizer(int touches);
   void SetPanRecognizer(bool enabled);
   void SetPinchRecognizer(bool enabled);
-
   int SetMultisample(bool on);
   int SetExtraScale(bool on); /// e.g. Retina display
   void SetDownScale(bool on);
@@ -763,19 +765,15 @@ struct Application : public ::LFApp {
   bool LoadKeychain(const string &key, string *val);
   void SaveKeychain(const string &key, const string &val);
 
-  string   GetVersion();
-  string   GetLocalizedString   (const char *key);
-  String16 GetLocalizedString16 (const char *key);
-  string   GetLocalizedInteger  (int number);
-  String16 GetLocalizedInteger16(int number);
+  SocketServicesThread *CreateNetworkThread(bool detach_existing_module, bool start);
+  Connection *ConnectTCP(const string &hostport, int default_port, Connection::CB *connected_cb,
+                         bool background_services = false);
 
   int GetVolume();
   int GetMaxVolume();
   void SetVolume(int v);
   void PlaySoundEffect(SoundAsset*, const v3 &pos=v3(), const v3 &vel=v3());
   void PlayBackgroundMusic(SoundAsset*);
-  Connection *ConnectTCP(const string &hostport, int default_port, Connection::CB *connected_cb,
-                         bool background_services = false);
 
   void RunCallbackInMainThread(Callback *cb) {
     message_queue.Write(cb);
@@ -840,7 +838,7 @@ struct SystemTableView {
 
   virtual void DelNavigationButton(int id) = 0;
   virtual void AddNavigationButton(int id, const TableItem &item) = 0;
-  virtual void AddToolbar(SystemToolbarView*) = 0;
+  virtual void SetToolbar(SystemToolbarView*) = 0;
   virtual void Show(bool show_or_hide) = 0;
 
   virtual string GetKey(int section, int row) = 0;
@@ -857,8 +855,9 @@ struct SystemTableView {
   virtual void ReplaceSection(int section, TableItem header, int flag, TableItemVec item) = 0;
   virtual void ApplyChangeList(const TableSection::ChangeList&) = 0;
   virtual void SetSectionValues(int section, const StringVec&) = 0;
-  virtual void SetTag(int section, int row, int val) = 0;
+  virtual void SetHeader(int section, TableItem header) = 0;
   virtual void SetKey(int secton, int row, const string &key) = 0;
+  virtual void SetTag(int section, int row, int val) = 0;
   virtual void SetValue(int section, int row, const string &val) = 0;
   virtual void SetSelected(int section, int row, int selected) = 0;
   virtual void SetHidden(int section, int row, bool val) = 0;

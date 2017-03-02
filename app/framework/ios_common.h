@@ -122,7 +122,7 @@ struct iOSTableView : public SystemTableView {
 
   void DelNavigationButton(int align);
   void AddNavigationButton(int align, const TableItem &item);
-  void AddToolbar(SystemToolbarView *t);
+  void SetToolbar(SystemToolbarView *t);
   void Show(bool show_or_hide);
 
   string GetKey(int section, int row);
@@ -139,8 +139,9 @@ struct iOSTableView : public SystemTableView {
   void ReplaceSection(int section, TableItem h, int flag, TableItemVec item);
   void ApplyChangeList(const TableSection::ChangeList &changes);
   void SetSectionValues(int section, const StringVec &item);
-  void SetTag(int section, int row, int val);
+  void SetHeader(int section, TableItem h);
   void SetKey(int section, int row, const string &val);
+  void SetTag(int section, int row, int val);
   void SetValue(int section, int row, const string &val);
   void SetSelected(int section, int row, int selected);
   void SetHidden(int section, int row, bool val);

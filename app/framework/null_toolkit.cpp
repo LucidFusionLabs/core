@@ -44,7 +44,7 @@ struct NullTableView : public SystemTableView {
 
   void DelNavigationButton(int align) {}
   void AddNavigationButton(int align, const TableItem &item) {}
-  void AddToolbar(SystemToolbarView *t) {}
+  void SetToolbar(SystemToolbarView *t) {}
   void Show(bool show_or_hide) {}
 
   string GetKey(int section, int row) { return ""; }
@@ -73,8 +73,9 @@ struct NullTableView : public SystemTableView {
     for (int i=0, l=data[section].item.size(); i != l; ++i) data[section].item[i].val = item[i];
   }
 
-  void SetTag(int section, int row, int val) {}
+  void SetHeader(int section, TableItem) {}
   void SetKey(int section, int row, const string &val) {}
+  void SetTag(int section, int row, int val) {}
   void SetValue(int section, int row, const string &val) {}
   void SetSelected(int section, int row, int selected) {}
   void SetHidden(int section, int row, bool val) {}

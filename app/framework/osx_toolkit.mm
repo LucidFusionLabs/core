@@ -676,7 +676,7 @@ struct OSXTableView : public SystemTableView {
 
   void DelNavigationButton(int align) {}
   void AddNavigationButton(int align, const TableItem &item) {}
-  void AddToolbar(SystemToolbarView *t) {}
+  void SetToolbar(SystemToolbarView *t) {}
 
   void Show(bool show_or_hide) {
     NSView *contentView = dynamic_cast<OSXWindow*>(app->focused)->view.window.contentView;
@@ -688,8 +688,8 @@ struct OSXTableView : public SystemTableView {
   }
 
   string GetKey(int section, int row) { return [table getKey:section row:row]; }
+  int GetTag(int section, int row) { return [table getTag:section row:row]; }
   string GetValue(int section, int row) { return ""; }
-  int GetTag(int section, int row) { return 0; }
   PickerItem *GetPicker(int section, int row) { return [table getPicker:section row:row]; }
   StringPairVec GetSectionText(int section) { return [table dumpDataForSection:section]; }
 
@@ -703,9 +703,9 @@ struct OSXTableView : public SystemTableView {
 
   void ApplyChangeList(const TableSection::ChangeList &changes) { [table applyChangeList:changes]; }
   void SetSectionValues(int section, const StringVec &item) { [table setSectionValues:section items:item]; }
-  int SetTag(int section, int row) { return [table getTag:section row:row]; }
-  void SetTag(int section, int row, int val) { [table setTag:section row:row val:val]; }
+  void SetHeader(int section, TableItem header) {}
   void SetKey(int section, int row, const string &val) { [table setKey:section row:row val:val]; }
+  void SetTag(int section, int row, int val) { [table setTag:section row:row val:val]; }
   void SetValue(int section, int row, const string &val) { [table setValue:section row:row val:val]; }
   void SetSelected(int section, int row, int selected) {}
   void SetHidden(int section, int row, bool val) { [table setHidden:section row:row val:val]; }
