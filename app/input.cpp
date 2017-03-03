@@ -553,4 +553,8 @@ int MouseController::SendMouseEvent(InputEvent::Id event, const point &p, const 
   return fired;
 }
 
+int MouseController::SendWheelEvent(InputEvent::Id event, const v2 &p, const v2 &d, bool begin) {
+  return SendMouseEvent(event, point(p.x, p.y), point(d.x*100, d.y*100), 1, 0);
+}
+
 }; // namespace LFL

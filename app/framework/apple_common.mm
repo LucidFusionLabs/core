@@ -85,7 +85,45 @@
 #endif
 @end
 
+@interface ObjcTimer : NSObject
+@end
+
+@implementation ObjcTimer
+  {
+    NSTimer *timer;
+    NSTimeInterval timer_start;
+    LFL::Callback cb;
+  }
+
+  - (id)initWithCB:(LFL::Callback)v { self = [super init]; cb = move(v); return self; }
+  - (void)dealloc { if (timer) [self clearTrigger]; [super dealloc]; }
+  - (void)clearTrigger { [timer invalidate]; timer = nil; }
+  - (void)triggerFired:(id)sender { [self clearTrigger]; if (cb) cb(); }
+
+  - (void)triggerIn:(int)ms force:(bool)force {
+    NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
+    if (timer) {
+      int remaining = [[timer userInfo] intValue] - (now - timer_start)*1000.0;
+      if (remaining <= ms && !force) return;
+      [self clearTrigger]; 
+    }
+    timer = [NSTimer timerWithTimeInterval: ms/1000.0
+      target:self selector:@selector(triggerFired:) userInfo:[NSNumber numberWithInt:ms] repeats:NO];
+    [[NSRunLoop currentRunLoop] addTimer:timer forMode:NSDefaultRunLoopMode];
+    [timer retain];
+    timer_start = now;
+  }
+@end
+
 namespace LFL {
+struct AppleTimer : public SystemTimer{
+  ObjcTimer *timer;
+  ~AppleTimer() { [timer release]; }
+  AppleTimer(Callback c) : timer([[ObjcTimer alloc] initWithCB: move(c)]) {}
+  void Run(Time interval, bool force=false) { [timer triggerIn:interval.count() force:force]; }
+  void Clear() { [timer clearTrigger]; }
+};
+
 static AppleURLSessions *apple_url_sessions = 0;
 NSURLSession* NSURLSessionStreamConnection::session = 0;
 
@@ -258,5 +296,7 @@ string Application::PrintCallStack() {
   for (NSString *symbol in callstack) StrAppend(&ret, GetNSString(symbol), "\n");
   return ret;
 }
+
+unique_ptr<SystemTimer> SystemTimer::Create(Callback cb) { return make_unique<AppleTimer>(move(cb)); }
 
 }; // namespace LFL

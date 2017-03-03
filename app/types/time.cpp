@@ -124,7 +124,7 @@ string logfiledaytime(Time t) { char buf[128] = {0}; logfiledaytime(Time2time_t(
 int logfiledaytime(char *buf, int size) { return logfiledaytime(time(0), buf, size); }
 int logfiledaytime(time_t t, char *buf, int size) { tm tm; localtm(t, &tm); return logfiledaytime(&tm, buf, size); }
 int logfiledaytime(const tm *tm, char *buf, int size) {
-  return snprintf(buf, size, "%04d-%02d-%02d_%02d:%02d", 1900+tm->tm_year, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min);
+  return snprintf(buf, size, "%04d-%02d-%02d_%02d_%02d", 1900+tm->tm_year, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min);
 }
 
 string logfiletime(Time t) { char buf[128] = {0}; logfiletime(Time2time_t(t), buf, sizeof(buf)); return buf; }

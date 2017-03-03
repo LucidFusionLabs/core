@@ -104,7 +104,7 @@ int Video::Swap() { return 0; }
 
 bool FrameScheduler::DoMainWait() { return false; }
 void FrameScheduler::Setup() { rate_limit = synchronize_waits = wait_forever_thread = 0; }
-void FrameScheduler::Wakeup(Window*) {}
+void FrameScheduler::Wakeup(Window*, int) {}
 void FrameScheduler::UpdateWindowTargetFPS(Window*) {}
 void FrameScheduler::AddMainWaitMouse(Window*) {}
 void FrameScheduler::DelMainWaitMouse(Window*) {}

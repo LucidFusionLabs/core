@@ -641,7 +641,7 @@ TextArea::TextArea(Window *W, const FontRef &F, int S, int LC) :
   drag_cb = [=](int, point p, point d, int down){
     if (selection.explicitly_initiated) return false;
     if (selection.Update(p, down)) selection.beg_click_time = Now();
-    else if (!down && abs(selection.beg_click.y - selection.end_click.y) < 3
+    else if (!down && abs(selection.beg_click.y - selection.end_click.y) < 12
              && (Now() - selection.beg_click_time).count() > 200) {
       app->ShowSystemContextMenu
         (MenuItemVec{ 
@@ -695,9 +695,9 @@ void TextArea::SetDimension(int w, int h) {
 
 void TextArea::Resized(const Box &b, bool font_size_changed) {
   SetDimension(b.w, b.h);
-  if (selection.gui_ind >= 0) UpdateBox(Box(0,-b.h,b.w,b.h*2), -1, selection.gui_ind);
-  if (context_gui_ind   >= 0) UpdateBox(Box(0,-b.h,b.w,b.h*2), -1, context_gui_ind);
-  if (wheel_gui_ind     >= 0) UpdateBox(Box(0,-b.h,b.w,b.h*2), -1, wheel_gui_ind);
+  Box gui_box(0,-b.h,b.w,b.h*2);
+  if (selection.gui_ind >= 0) UpdateBox(gui_box, -1, selection.gui_ind);
+  for (auto &i : resize_gui_ind) UpdateBox(gui_box, -1, i);
   UpdateLines(last_v_scrolled, 0, 0, 0);
   UpdateCursor();
   Redraw(false, font_size_changed);
@@ -850,9 +850,9 @@ bool TextArea::GetGlyphFromCoordsOffset(const point &p, Selection::Point *out, i
 }
 
 void TextArea::InitSelection() {
-  wheel_gui_ind = mouse.AddWheelBox
+  resize_gui_ind.push_back(mouse.AddWheelBox
     (Box(), MouseController::CoordCB
-     ([=](int button, point p, point d, int down) { if (d.y > 0) ScrollUp(); else ScrollDown(); }));
+     ([=](int button, point p, point d, int down) { if (d.y > 0) ScrollUp(); else ScrollDown(); })));
   selection.gui_ind = mouse.AddDragBox
     (Box(), MouseController::CoordCB(bind(&TextArea::DragCB, this, _1, _2, _3, _4)));
 }

@@ -289,9 +289,7 @@ void Application::SetClipboardText(const string &s) { QApplication::clipboard()-
 
 bool FrameScheduler::DoMainWait() { return false; }
 void FrameScheduler::Setup() { rate_limit = synchronize_waits = wait_forever_thread = monolithic_frame = run_main_loop = 0; }
-void FrameScheduler::Wakeup(Window *w) { if (wait_forever && w) dynamic_cast<QtWindow*>(w)->RequestRender(); }
-bool FrameScheduler::WakeupIn(Window *w, Time interval, bool force) { return false; }
-void FrameScheduler::ClearWakeupIn(Window*) {}
+void FrameScheduler::Wakeup(Window *w, int) { if (wait_forever && w) dynamic_cast<QtWindow*>(w)->RequestRender(); }
 void FrameScheduler::UpdateWindowTargetFPS(Window *w) { /*QTTriggerFrame(w->id.value);*/ }
 void FrameScheduler::AddMainWaitMouse(Window *w) { if (w) dynamic_cast<QtWindow*>(w)->frame_on_mouse_input = true; }
 void FrameScheduler::DelMainWaitMouse(Window *w) { if (w) dynamic_cast<QtWindow*>(w)->frame_on_mouse_input = false; }

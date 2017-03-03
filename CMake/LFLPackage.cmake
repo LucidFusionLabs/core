@@ -97,7 +97,7 @@ elseif(LFL_IOS)
     # DTPlatformVersion, DTSDKBuild, DTSDKName, DTXcode, DTXcodeBuild keys.
     add_custom_command(TARGET ${target} POST_BUILD WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
       COMMAND rm -rf ${pkgname}.dSYM i${pkgname}.app 
-      COMMAND mkdir  i${pkgname}.app
+      COMMAND mkdir i${pkgname}.app
       COMMAND cp ${info_plist} i${pkgname}.app/Info.plist
       COMMAND cp -r ${CMAKE_CURRENT_SOURCE_DIR}/assets i${pkgname}.app
       COMMAND cp ${LFL_APP_ASSET_FILES} i${pkgname}.app/assets
@@ -142,7 +142,8 @@ elseif(LFL_IOS)
 
     else()
       add_custom_target(${target}_run WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} DEPENDS ${target}
-        COMMAND ios-deploy --bundle i${pkgname}.app)
+        COMMAND ios-deploy --bundle i${pkgname}.app
+        COMMAND zip deployed-`date +\"%Y-%m-%d_%H_%M_%S\"`-${target}.zip -r i${pkgname}.app)
       add_custom_target(${target}_debug WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} DEPENDS ${target}
         COMMAND ios-deploy --debug --bundle i${pkgname}.app)
     endif()

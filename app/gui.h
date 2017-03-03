@@ -312,9 +312,10 @@ struct TextBox : public GUI, public TextboxController {
   LinesFrameBuffer cmd_fb;
   string cmd_prefix="> ";
   RingVector<string> cmd_last;
+  vector<int> resize_gui_ind;
   Color cmd_color=Color::white, selection_color=Color(Color::grey70, 0.5);
   bool deactivate_on_enter=0, token_processing=0, insert_mode=1, run_blank_cmd=0;
-  int start_line=0, end_line=0, start_line_adjust=0, skip_last_lines=0, default_attr=0, cmd_last_ind=-1, context_gui_ind=-1, wheel_gui_ind=-1;
+  int start_line=0, end_line=0, start_line_adjust=0, skip_last_lines=0, default_attr=0, cmd_last_ind=-1;
   function<void(const Selection::Point&)> selection_cb;
   function<void(const shared_ptr<Control>&)> new_link_cb;
   function<void(Control*)> hover_control_cb;
@@ -434,8 +435,8 @@ struct TextArea : public TextBox {
   void DragCB(int button, point p, point d, int down);
   void CopyText(const Selection::Point &beg, const Selection::Point &end);
   string CopyText(int beg_line_ind, int beg_char_ind, int end_line_end, int end_char_ind, bool add_nl);
-  void InitContextMenu(const MouseController::CB &cb) { context_gui_ind = mouse.AddRightClickBox(box, cb); }
-  void InitWheelMenu(const MouseController::CoordCB &cb) { wheel_gui_ind = mouse.AddWheelBox(box, cb); }
+  void InitContextMenu(const MouseController::CB &cb)    { resize_gui_ind.push_back(mouse.AddRightClickBox(box, cb)); }
+  void InitWheelMenu(const MouseController::CoordCB &cb) { resize_gui_ind.push_back(mouse.AddWheelBox(box, cb)); }
 };
 
 struct TextView : public TextArea {

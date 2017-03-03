@@ -227,14 +227,11 @@ bool FrameScheduler::DoMainWait() {
   return ret;
 }
 
-void FrameScheduler::Wakeup(Window *w) {
+void FrameScheduler::UpdateWindowTargetFPS(Window *w) {}
+void FrameScheduler::Wakeup(Window *w, int) {
   char c = 'W';
   write(wait_forever_wakeup_socket, &c, 1);
 }
-
-bool FrameScheduler::WakeupIn(Window*, Time interval, bool force) { return 0; }
-void FrameScheduler::ClearWakeupIn(Window*) {}
-void FrameScheduler::UpdateWindowTargetFPS(Window *w) {}
 
 void FrameScheduler::AddMainWaitMouse(Window*)    { dynamic_cast<AndroidFrameworkModule*>(app->framework.get())->frame_on_mouse_input    = true;  }
 void FrameScheduler::DelMainWaitMouse(Window*)    { dynamic_cast<AndroidFrameworkModule*>(app->framework.get())->frame_on_mouse_input    = false; }

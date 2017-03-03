@@ -520,6 +520,7 @@ struct RateLimiter {
 };
 
 struct FrameScheduler {
+  struct WakeupFlag { enum { InMainThread=1 }; };
   RateLimiter maxfps;
   mutex frame_mutex, wait_mutex;
   SocketWakeupThread wakeup_thread;
@@ -535,9 +536,7 @@ struct FrameScheduler {
   void Start();
   bool MainWait();
   bool DoMainWait();
-  void Wakeup(Window*);
-  bool WakeupIn(Window*, Time interval, bool force=0);
-  void ClearWakeupIn(Window*);
+  void Wakeup(Window*, int flag=0);
   void UpdateTargetFPS(Window*, int fps);
   void UpdateWindowTargetFPS(Window*);
   void SetAnimating(Window*, bool);
@@ -799,6 +798,13 @@ struct Application : public ::LFApp {
   static void Daemonize(FILE *fout, FILE *ferr);
   static void WriteLogLine(const char *tbuf, const char *message, const char *file, int line);
   static void WriteDebugLine(const char *message, const char *file, int line);
+};
+
+struct SystemTimer {
+  static unique_ptr<SystemTimer> Create(Callback cb);
+  virtual ~SystemTimer() {}
+  virtual void Clear() = 0;
+  virtual void Run(Time interval, bool force=false) = 0;
 };
 
 struct SystemAlertView {

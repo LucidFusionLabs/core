@@ -25,8 +25,9 @@ SystemAdvertisingView::SystemAdvertisingView() {}
 void SystemAdvertisingView::Show() {}
 void SystemAdvertisingView::Hide() {}
 
-string Application::GetSetting(const string &key) { return string(); }
 string Application::GetVersion() { return string(); }
+string Application::PrintCallStack() { return ""; }
+string Application::GetSetting(const string &key) { return string(); }
 void Application::SaveSettings(const StringPairVec&) {}
 void Application::OpenSystemBrowser(const string &url_text) {}
 

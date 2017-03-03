@@ -230,7 +230,7 @@ void FrameScheduler::Setup() {
 
 bool FrameScheduler::DoMainWait() { return SDL_WaitEvent(NULL); }
 void FrameScheduler::UpdateWindowTargetFPS(Window *w) {}
-void FrameScheduler::Wakeup(Window *w) {
+void FrameScheduler::Wakeup(Window *w, int) {
   if (wait_forever && w && wait_forever_thread) {
     static int my_event_type = SDL_RegisterEvents(1);
     CHECK_GE(my_event_type, 0);

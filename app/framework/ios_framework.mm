@@ -200,8 +200,8 @@ static const char* const* ios_argv = 0;
 
   - (void)applicationDidBecomeActive:(UIApplication*)application {
     INFO("applicationDidBecomeActive");
-    if (!has_become_active && (has_become_active = true)) {
-    }
+    if (!has_become_active && (has_become_active = true)) {}
+    [self.glk_view setNeedsDisplay];
   }
 
   - (void)applicationWillEnterForeground:(UIApplication *)application{
@@ -604,7 +604,7 @@ static const char* const* ios_argv = 0;
       pinch_scale = 1.0;
     }
     CGFloat p_scale = 1.0 - (pinch_scale - pinch.scale);
-    LFL::v2 p(uiapp.scale * pinch_point.x, uiapp.scale * pinch_point.y), d(p_scale, p_scale);
+    LFL::v2 p(pinch_point.x, s->y + s->height - pinch_point.y), d(p_scale, p_scale);
     int fired = LFL::app->input->MouseZoom(p, d, begin);
     if (fired && uiapp.frame_on_mouse_input) [uiapp.glk_view setNeedsDisplay];
     pinch_scale = p_scale;
@@ -796,12 +796,9 @@ int Video::Swap() {
 
 bool FrameScheduler::DoMainWait() { return false; }
 void FrameScheduler::Setup() { rate_limit = synchronize_waits = wait_forever_thread = monolithic_frame = run_main_loop = 0; }
-void FrameScheduler::Wakeup(Window *w) {
+void FrameScheduler::Wakeup(Window *w, int) {
   dispatch_async(dispatch_get_main_queue(), ^{ [dynamic_cast<iOSWindow*>(w)->glkview setNeedsDisplay]; });
 }
-
-bool FrameScheduler::WakeupIn(Window*, Time interval, bool force) { return false; }
-void FrameScheduler::ClearWakeupIn(Window*) {}
 
 void FrameScheduler::UpdateWindowTargetFPS(Window *w) {
   [[LFUIApplication sharedAppDelegate] updateTargetFPS: w->target_fps];

@@ -171,9 +171,9 @@ int Video::Swap() {
   return 0;
 }
 
-void FrameScheduler::DoMainWait() { glfwWaitEvents(); }
 void FrameScheduler::Setup() {}
-void FrameScheduler::Wakeup(Window*) { if (wait_forever && screen && wait_forever_thread) glfwPostEmptyEvent(); }
+void FrameScheduler::DoMainWait() { glfwWaitEvents(); }
+void FrameScheduler::Wakeup(Window*, int) { if (wait_forever && screen && wait_forever_thread) glfwPostEmptyEvent(); }
 void FrameScheduler::UpdateWindowTargetFPS(Window*) {}
 void FrameScheduler::AddMainWaitMouse(Window*) {}
 void FrameScheduler::DelMainWaitMouse(Window*) {}

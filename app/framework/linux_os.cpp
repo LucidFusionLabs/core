@@ -18,7 +18,7 @@
 
 namespace LFL {
 string Application::GetVersion() { return "1.0"; }
-void Application::OpenSystemBrowser(const string &url_text) {}
+string Application::PrintCallStack() { return ""; }
 String16 Application::GetLocalizedString16(const char *key) { return String16(); }
 string Application::GetLocalizedString(const char *key) { return string(); }
 String16 Application::GetLocalizedInteger16(int number) { return String16(); }

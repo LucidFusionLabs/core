@@ -29,8 +29,7 @@
     NSOpenGLContext *context;
     NSOpenGLPixelFormat *pixel_format;
 
-    NSTimer *runloop_timer, *trigger_timer;
-    NSTimeInterval trigger_timer_start;
+    NSTimer *runloop_timer;
     CVDisplayLinkRef displayLink;
 
     NSPoint prev_mouse_pos;
@@ -40,7 +39,6 @@
   };
 
   - (void)dealloc {
-    if (trigger_timer) [self clearTriggerTimer];
     if (runloop_timer) ERRORf("%s", "runloop_timer remaining");
     CVDisplayLinkRelease(displayLink);
     [pixel_format release];
@@ -144,24 +142,6 @@
   }
 
   - (void)runloopTimerFired:(id)sender { [self setNeedsDisplay:YES]; }
-  - (void)triggerTimerFired:(id)sender { [self clearTriggerTimer]; needs_frame=1; [self setNeedsDisplay:YES]; }
-  - (void)clearTriggerTimer { needs_frame=0; [trigger_timer invalidate]; trigger_timer = nil; }
-  - (bool)triggerFrameIn:(int)ms force:(bool)force {
-    if (needs_frame && !(needs_frame=0)) { [self clearTriggerTimer]; return false; }
-    NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
-    if (trigger_timer) {
-      int remaining = [[trigger_timer userInfo] intValue] - (now - trigger_timer_start)*1000.0;
-      if (remaining <= ms && !force) return true;
-      [self clearTriggerTimer]; 
-    }
-    trigger_timer = [NSTimer timerWithTimeInterval: ms/1000.0
-      target:self selector:@selector(triggerTimerFired:) userInfo:[NSNumber numberWithInt:ms] repeats:NO];
-    [[NSRunLoop currentRunLoop] addTimer:trigger_timer forMode:NSDefaultRunLoopMode];
-    [trigger_timer retain];
-    trigger_timer_start = now;
-    return true;
-  }
-
   - (void)drawRect:(NSRect)dirtyRect { if (use_timer) [self getFrameForTime:0]; }
   - (void)getFrameForTime:(const CVTimeStamp*)outputTime {
     static bool first_callback = 1;
@@ -582,16 +562,13 @@ int Video::Swap() {
 void FrameScheduler::Setup() { rate_limit = synchronize_waits = wait_forever_thread = monolithic_frame = run_main_loop = 0; }
 bool FrameScheduler::DoMainWait() { return false; }
 
-void FrameScheduler::Wakeup(Window *w) {
-  if (wait_forever && w)
-    [dynamic_cast<OSXWindow*>(w)->view performSelectorOnMainThread:@selector(setNeedsDisplay:) withObject:@YES waitUntilDone:NO];
+void FrameScheduler::Wakeup(Window *w, int flag) {
+  if (wait_forever && w) {
+    if (flag & WakeupFlag::InMainThread) [dynamic_cast<OSXWindow*>(w)->view setNeedsDisplay:YES];
+    else [dynamic_cast<OSXWindow*>(w)->view performSelectorOnMainThread:@selector(setNeedsDisplay:) withObject:@YES waitUntilDone:NO];
+  }
 }
 
-bool FrameScheduler::WakeupIn(Window *w, Time interval, bool force) { 
-  return [dynamic_cast<OSXWindow*>(w)->view triggerFrameIn:interval.count() force:force];
-}
-
-void FrameScheduler::ClearWakeupIn(Window *w) { [dynamic_cast<OSXWindow*>(w)->view clearTriggerTimer]; }
 void FrameScheduler::UpdateWindowTargetFPS(Window *w) { 
   [dynamic_cast<OSXWindow*>(w)->view stopThread];
   [dynamic_cast<OSXWindow*>(w)->view startThread:false];

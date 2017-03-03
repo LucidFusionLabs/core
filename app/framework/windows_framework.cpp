@@ -338,7 +338,7 @@ int Video::Swap() {
 bool FrameScheduler::DoMainWait() { return false;  }
 void FrameScheduler::UpdateWindowTargetFPS(Window*) {}
 void FrameScheduler::Setup() { synchronize_waits = wait_forever_thread = run_main_loop = 0; }
-void FrameScheduler::Wakeup(Window *W) { 
+void FrameScheduler::Wakeup(Window *W, int) { 
   auto w = dynamic_cast<WinWindow*>(W);
   InvalidateRect(w->hwnd, NULL, 0);
   // PostMessage(w->hwnd, WM_USER, 0, 0);

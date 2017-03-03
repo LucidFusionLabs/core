@@ -193,7 +193,7 @@ struct MouseController {
   virtual int AddHoverBox     (const Box &w, MouseControllerCallback cb) { return hit.Insert(HitBox(Event::Hover,      w, move(cb))); }
   virtual int AddDragBox      (const Box &w, MouseControllerCallback cb) { return hit.Insert(HitBox(Event::Drag,       w, move(cb))); }
   virtual int SendMouseEvent(InputEvent::Id, const point &p, const point &d, int down, int flag);
-  virtual int SendWheelEvent(InputEvent::Id, const v2    &p, const v2    &d, bool begin) { return 0; }
+  virtual int SendWheelEvent(InputEvent::Id, const v2    &p, const v2    &d, bool begin);
 };
 
 struct DragTracker {
