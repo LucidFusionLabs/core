@@ -590,6 +590,7 @@ struct OSXAlertView : public SystemAlertView {
   ~OSXAlertView() { [alert release]; }
   OSXAlertView(AlertItemVec items) : alert([[OSXAlert alloc] init: move(items)]) {}
 
+  void Hide() {}
   void Show(const string &arg) {
     if (alert.add_text) [alert.input setStringValue: MakeNSString(arg)];
     [alert.alert beginSheetModalForWindow:[dynamic_cast<OSXWindow*>(app->focused)->view window] modalDelegate:alert

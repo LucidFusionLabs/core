@@ -501,6 +501,7 @@ int Application::Create(const char *source_filename) {
     if (FLAGS_logfile == "\x01") FLAGS_logfile = StrCat(savedir, name, ".txt");
     logfile = fopen(FLAGS_logfile.c_str(), "a");
     if (logfile) SystemNetwork::SetSocketCloseOnExec(fileno(logfile), 1);
+    INFO("logfile = ", FLAGS_logfile, " (opened=", logfile != nullptr, ")");
   }
 
   INFO("startdir = ", startdir);

@@ -74,7 +74,7 @@
 
 #ifdef LFL_GDDEBUG
 #define GDDebug(...) { \
-  if (screen) screen->gd->CheckForError(__FILE__, __LINE__); \
+  if (app->focused) app->focused->gd->CheckForError(__FILE__, __LINE__); \
   if (FLAGS_gd_debug) DebugPrintf("%s", StrCat(__VA_ARGS__).c_str()); }
 #else 
 #define GDDebug(...)
@@ -216,6 +216,7 @@ struct OpenGLES1 : public GraphicsDevice, public QOpenGLFunctions {
     return ver && *ver == '2';
   }
 
+  void MarkDirty() {}
   void  EnableTexture() {  glEnable(GL_TEXTURE_2D);  glEnableClientState(GL_TEXTURE_COORD_ARRAY); GDDebug("Texture=1"); }
   void DisableTexture() { glDisable(GL_TEXTURE_2D); glDisableClientState(GL_TEXTURE_COORD_ARRAY); GDDebug("Texture=0"); }
   void  EnableLighting() {  glEnable(GL_LIGHTING);  glEnable(GL_COLOR_MATERIAL); GDDebug("Lighting=1"); }
@@ -372,6 +373,7 @@ struct OpenGLES2 : public GraphicsDevice, public QOpenGLFunctions {
   }
 
   bool ShaderSupport() const { return true; }
+  void MarkDirty() { dirty_matrix = dirty_color = 1; }
   void EnableLighting()     { lighting_on=1; GDDebug("Lighting=1"); }
   void DisableLighting()    { lighting_on=0; GDDebug("Lighting=0"); }
   void EnableTexture()      { if (Changed(&texture_on,    true))  { ClearDeferred(); UpdateTexture();    } GDDebug("Texture=1"); }

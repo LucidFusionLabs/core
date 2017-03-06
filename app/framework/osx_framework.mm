@@ -475,7 +475,9 @@ bool OSXWindow::Reshape(int w, int h) {
 }
 
 void Application::MakeCurrentWindow(Window *W) { 
-  if ((focused = W)) [[dynamic_cast<OSXWindow*>(W)->view openGLContext] makeCurrentContext];
+  if (!(focused = W)) return;
+  [[dynamic_cast<OSXWindow*>(W)->view openGLContext] makeCurrentContext];
+  if (W->gd) W->gd->MarkDirty();
 }
 
 void Application::CloseWindow(Window *W) {

@@ -102,13 +102,12 @@ static const char* const* ios_argv = 0;
   }
 
   - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
-    _resign_textfield_on_return = YES;
     _main_wait_fh = [[NSMutableDictionary alloc] init];
     _scale = [[UIScreen mainScreen] scale];
     CGRect wbounds = [[UIScreen mainScreen] bounds];
 
     MyAppCreate(LFL::ios_argc, LFL::ios_argv);
-    self.window = [[[LFUIWindow alloc] initWithFrame:wbounds] autorelease];
+    _window = [[LFUIWindow alloc] initWithFrame:wbounds];
 
     if (_show_title) {
       _title_bar = [[UINavigationBar alloc] initWithFrame:CGRectMake(0, 0, CGRectGetWidth(wbounds), 44)];
@@ -116,7 +115,7 @@ static const char* const* ios_argv = 0;
       UINavigationItem *item = [[UINavigationItem alloc] init];
       item.title = LFL::MakeNSString(LFL::app->focused ? LFL::app->focused->caption : LFL::app->name);
       [_title_bar setItems:@[item]];
-      [self.window addSubview: _title_bar];
+      [_window addSubview: _title_bar];
 
       int title_height = _title_bar.bounds.size.height;
       wbounds.origin.y    += title_height;
@@ -126,59 +125,52 @@ static const char* const* ios_argv = 0;
     EAGLContext *context = [[EAGLContext alloc] initWithAPI:kEAGLRenderingAPIOpenGLES2];
     [EAGLContext setCurrentContext:context];
 
-    self.glk_controller = [[[LFGLKViewController alloc] initWithNibName:nil bundle:nil] autorelease];
-    self.glk_controller.delegate = self.glk_controller;
-    self.glk_controller.resumeOnDidBecomeActive = NO;
-    // self.glk_controller.wantsFullScreenLayout = YES;
+    _glk_controller = [[LFGLKViewController alloc] initWithNibName:nil bundle:nil];
+    _glk_controller.delegate = _glk_controller;
+    _glk_controller.resumeOnDidBecomeActive = NO;
+    // _glk_controller.wantsFullScreenLayout = YES;
 
-    self.glk_view = [[[LFGLKView alloc] initWithFrame:wbounds] autorelease];
-    self.glk_view.context = context;
-    self.glk_view.delegate = self.glk_controller;
-    self.glk_view.enableSetNeedsDisplay = TRUE;
-    self.glk_view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight |
+    _glk_view = [[LFGLKView alloc] initWithFrame:wbounds];
+    _glk_view.context = context;
+    _glk_view.delegate = _glk_controller;
+    _glk_view.enableSetNeedsDisplay = TRUE;
+    _glk_view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight |
       UIViewAutoresizingFlexibleBottomMargin | UIViewAutoresizingFlexibleLeftMargin |
       UIViewAutoresizingFlexibleRightMargin | UIViewAutoresizingFlexibleTopMargin;
+    _glk_view.resign_textfield_on_return = YES;
     [context release];
-    self.glk_controller.view = self.glk_view;
+    _glk_controller.view = _glk_view;
 
-    self.controller = [[[LFViewController alloc] initWithNibName:nil bundle:nil] autorelease];
-    self.top_controller = self.controller;
-    self.root_controller = self.controller;
-    self.window.rootViewController = self.controller;
-    [self.controller addChildViewController: self.glk_controller];
-    // self.glk_controller.view.frame = [self.controller frameForContentController];
-    [self.controller.view addSubview:self.glk_controller.view];
-    [self.glk_controller didMoveToParentViewController: self.controller];
-    [self.controller initNotifications];
+    _controller = [[[LFViewController alloc] initWithNibName:nil bundle:nil] autorelease];
+    _top_controller = _controller;
+    _root_controller = _controller;
+    _window.rootViewController = _controller;
+    [_controller addChildViewController: _glk_controller];
+    // _glk_controller.view.frame = [_controller frameForContentController];
+    [_controller.view addSubview:_glk_controller.view];
+    [_glk_controller didMoveToParentViewController: _controller];
+    [_controller initNotifications];
 
     // left touch view
     CGRect lrect = CGRectMake(0, 0, wbounds.size.width, wbounds.size.height/2);
-    self.lview = [[[MyTouchView alloc] initWithFrame:lrect] autorelease];
-    // self.lview.backgroundColor = [UIColor greenColor];
-    // self.lview.alpha = 0.3f;
-    [self.glk_view addSubview:self.lview];
+    _lview = [[MyTouchView alloc] initWithFrame:lrect];
+    // _lview.backgroundColor = [UIColor greenColor];
+    // _lview.alpha = 0.3f;
+    [_glk_view addSubview:_lview];
     
     // right touch view
     CGRect rrect = CGRectMake(0, wbounds.size.height/2, wbounds.size.width, wbounds.size.height/2);
-    self.rview = [[[MyTouchView alloc] initWithFrame:rrect] autorelease];
-    // self.rview.backgroundColor = [UIColor blueColor];
-    // self.rview.alpha = 0.3f;
-    [self.glk_view addSubview:self.rview];
-
-    // text view for keyboard display
-    self.text_field = [[[MyTextField alloc] initWithFrame: CGRectZero] autorelease];
-    self.text_field.delegate = self;
-    self.text_field.text = [NSString stringWithFormat:@"default"];
-    self.text_field.autocorrectionType = UITextAutocorrectionTypeNo;
-    self.text_field.autocapitalizationType = UITextAutocapitalizationTypeNone;
-    [self.window addSubview:self.text_field];
+    _rview = [[[MyTouchView alloc] initWithFrame:rrect] autorelease];
+    // _rview.backgroundColor = [UIColor blueColor];
+    // _rview.alpha = 0.3f;
+    [_glk_view addSubview:_rview];
 
     [[NSFileManager defaultManager] changeCurrentDirectoryPath: [[NSBundle mainBundle] resourcePath]];
     NSLog(@"iOSMain argc=%d", LFL::app->argc);
     MyAppMain();
-    INFOf("didFinishLaunchingWithOptions, views: %p, %p, %p, csf=%f", self.glk_view, self.lview, self.rview, self.scale);
+    INFOf("didFinishLaunchingWithOptions, views: %p, %p, %p, csf=%f", _glk_view, _lview, _rview, _scale);
 
-    [self.window makeKeyAndVisible];
+    [_window makeKeyAndVisible];
     // INFO("after window makeKeyAndVisible");
     return YES;
   }
@@ -189,8 +181,8 @@ static const char* const* ios_argv = 0;
   }
 
   - (void)applicationWillTerminate:(UIApplication *)application {
-    [self.controller shutdownNotifications];
-    [self.controller shutdownGestureRecognizers];
+    [_controller shutdownNotifications];
+    [_controller shutdownGestureRecognizers];
   }
 
   - (void)applicationWillResignActive:(UIApplication*)application {
@@ -201,7 +193,7 @@ static const char* const* ios_argv = 0;
   - (void)applicationDidBecomeActive:(UIApplication*)application {
     INFO("applicationDidBecomeActive");
     if (!has_become_active && (has_become_active = true)) {}
-    [self.glk_view setNeedsDisplay];
+    [_glk_view setNeedsDisplay];
   }
 
   - (void)applicationWillEnterForeground:(UIApplication *)application{
@@ -230,56 +222,33 @@ static const char* const* ios_argv = 0;
     completionHandler(UIBackgroundFetchResultNoData);
   }
 
-  - (CGRect)getFrame { return self.glk_view.frame; }
+  - (CGRect)getFrame { return _glk_view.frame; }
   - (CGFloat)getScale { return (want_extra_scale ? _scale : 1); }
-  - (bool)isKeyboardFirstResponder { return [self.text_field isFirstResponder]; }
+  - (bool)isKeyboardFirstResponder { return [_glk_view isFirstResponder]; }
 
   - (void)updateTargetFPS: (int)fps {
     target_fps = fps;
     INFOf("updateTargetFPS: %d", target_fps);
-    [self.glk_controller setPaused:(!target_fps)];
+    [_glk_controller setPaused:(!target_fps)];
   }
 
   - (int)updateScale: (bool)v { want_extra_scale=v; [self updateGLKViewScale]; return v ? _scale : 1; }
   - (void)downScale: (bool)v { _downscale=v; [self updateGLKViewScale]; }
-  - (void)updateGLKViewScale { self.glk_view.contentScaleFactor = _downscale ? 1 : [self getScale]; }
+  - (void)updateGLKViewScale { _glk_view.contentScaleFactor = _downscale ? 1 : [self getScale]; }
   - (int)updateGLKMultisample: (bool)v { 
-    self.glk_view.drawableMultisample = v ? GLKViewDrawableMultisample4X : GLKViewDrawableMultisampleNone;
+    _glk_view.drawableMultisample = v ? GLKViewDrawableMultisample4X : GLKViewDrawableMultisampleNone;
     return v ? 4 : 0;
   }
 
   - (void)hideKeyboard {
-    if ([self.text_field isFirstResponder])
-      [self.text_field performSelector:@selector(resignFirstResponder) withObject:nil afterDelay:0];
-    [self.controller performSelector:@selector(becomeFirstResponder) withObject:nil afterDelay:0];
+    if ([_glk_view isFirstResponder])
+      [_glk_view performSelector:@selector(resignFirstResponder) withObject:nil afterDelay:0];
+    [_controller performSelector:@selector(becomeFirstResponder) withObject:nil afterDelay:0];
   }
 
   - (void)showKeyboard: (bool)enable_app_frame {
     _enable_frame_on_textfield_shown = enable_app_frame; 
-    [self.text_field performSelector:@selector(becomeFirstResponder) withObject:nil afterDelay:0.1f];
-  }
-
-  - (BOOL)textField: (UITextField *)textField shouldChangeCharactersInRange:(NSRange)range replacementString:(NSString *)string {
-    int l = [string length];
-    // if (!l) [self handleKey: LFL::Key::Backspace];
-    for (int i = 0, l = [string length]; i < l; i++) {
-      unichar k = [string characterAtIndex: i];
-      [self handleKey: k];
-    }
-    return YES;
-  }
-
-  - (BOOL)textFieldShouldReturn: (UITextField *)tf {
-    [self handleKey: LFL::Key::Return];
-    if (_resign_textfield_on_return) [tf resignFirstResponder];
-    return YES;
-  }
-
-  - (void)handleKey: (int)k {
-    int fired = 0;
-    fired += LFL::app->input->KeyPress(k, 0, 1);
-    fired += LFL::app->input->KeyPress(k, 0, 0);
-    if (fired && _frame_on_keyboard_input) [self.glk_view setNeedsDisplay];
+    [_glk_view performSelector:@selector(becomeFirstResponder) withObject:nil afterDelay:0];
   }
 
   - (void)addMainWaitSocket:(int)fd callback:(std::function<bool()>)cb {
@@ -293,10 +262,56 @@ static const char* const* ios_argv = 0;
   }
 
   - (void)objcWindowSelect {}
-  - (void)objcWindowFrame { [self.glk_view setNeedsDisplay]; }
+  - (void)objcWindowFrame { [_glk_view setNeedsDisplay]; }
+
+  - (UIViewController*)findTopViewController {
+    return [LFUIApplication findTopViewControllerWithRootViewController: _top_controller];
+  }
+
+  + (UIViewController*)findTopViewControllerWithRootViewController:(UIViewController*)rootViewController {
+    if ([rootViewController isKindOfClass:[UITabBarController class]]) {
+      UITabBarController* tabBarController = (UITabBarController*)rootViewController;
+      return [LFUIApplication findTopViewControllerWithRootViewController:tabBarController.selectedViewController];
+    } else if ([rootViewController isKindOfClass:[UINavigationController class]]) {
+      UINavigationController* navigationController = (UINavigationController*)rootViewController;
+      return [LFUIApplication findTopViewControllerWithRootViewController:navigationController.visibleViewController];
+    } else if (rootViewController.presentedViewController) {
+      UIViewController* presentedViewController = rootViewController.presentedViewController;
+      return [LFUIApplication findTopViewControllerWithRootViewController:presentedViewController];
+    } else if (rootViewController.childViewControllers.count > 0) {
+      return [LFUIApplication  findTopViewControllerWithRootViewController:rootViewController.childViewControllers.lastObject];
+    } else {
+      return rootViewController;
+    }
+  }
 @end
 
 @implementation LFGLKView
+  - (BOOL)hasText { return YES; }
+  - (BOOL)canBecomeFirstResponder { return YES; }
+  - (UITextAutocorrectionType)autocorrectionType { return UITextAutocorrectionTypeNo; }
+  - (void)deleteBackward { [self handleKey: LFL::Key::Backspace]; }
+  - (void)insertText:(NSString*)string {
+    for (int i = 0, l = [string length]; i < l; i++) {
+      unichar k = [string characterAtIndex: i];
+      [self handleKey: k];
+      if (k == '\n' && _resign_textfield_on_return) [self resignFirstResponder];
+    }
+  }
+
+  - (void)handleKey: (int)k {
+    int fired = 0;
+    fired += LFL::app->input->KeyPress(k, 0, 1);
+    fired += LFL::app->input->KeyPress(k, 0, 0);
+    if (fired && _frame_on_keyboard_input) [self setNeedsDisplay];
+  }
+
+  - (BOOL)canPerformAction:(SEL)action withSender:(id)sender {
+    return action == @selector(copy:) || action == @selector(paste:) || action == @selector(toggleKeyboard:);
+  }
+
+  - (void)copy:(id)sender { if (_copy_cb) _copy_cb(); }
+  - (void)toggleKeyboard:(id)sender { LFL::app->ToggleTouchKeyboard(); }
 @end
 
 @implementation LFGLKViewController
@@ -602,6 +617,11 @@ static const char* const* ios_argv = 0;
       point1.y = s->y + s->height - point1.y;
       pinch_point = CGPointMake((point0.x + point1.x) / 2.0, (point0.y + point1.y) / 2.0);
       pinch_scale = 1.0;
+      _pinch_occurring = true;
+    } else if (pinch.state == UIGestureRecognizerStateEnded ||
+               pinch.state == UIGestureRecognizerStateCancelled ||
+               pinch.state == UIGestureRecognizerStateFailed) {
+      _pinch_occurring = false;
     }
     CGFloat p_scale = 1.0 - (pinch_scale - pinch.scale);
     LFL::v2 p(pinch_point.x, s->y + s->height - pinch_point.y), d(p_scale, p_scale);
@@ -614,7 +634,7 @@ static const char* const* ios_argv = 0;
     return action == @selector(copy:) || action == @selector(paste:) || action == @selector(toggleKeyboard:);
   }
 
-  - (void)copy:(id)sender { if (uiapp.text_field.copy_cb) uiapp.text_field.copy_cb(); }
+  - (void)copy:(id)sender { if (uiapp.glk_view.copy_cb) uiapp.glk_view.copy_cb(); }
   - (void)toggleKeyboard:(id)sender { LFL::app->ToggleTouchKeyboard(); }
 @end
 
@@ -630,6 +650,7 @@ static const char* const* ios_argv = 0;
   }
 
   - (void)touchesBegan:(NSSet *)touches withEvent:(UIEvent *)event {
+    if (uiapp.controller.pinch_occurring) return;
     UITouch *touch = [touches anyObject];
     UIView *v = [touch view];
     CGPoint position = [touch locationInView:v];
@@ -689,20 +710,6 @@ static const char* const* ios_argv = 0;
 #endif
 @end
 
-@implementation MyTextField
-  - (void)deleteBackward {
-    [super deleteBackward];
-    [[LFUIApplication sharedAppDelegate] handleKey: LFL::Key::Backspace];
-  }
-
-  - (BOOL)canPerformAction:(SEL)action withSender:(id)sender {
-    return action == @selector(copy:) || action == @selector(paste:) || action == @selector(toggleKeyboard:);
-  }
-
-  - (void)copy:(id)sender { if (_copy_cb) _copy_cb(); }
-  - (void)toggleKeyboard:(id)sender { LFL::app->ToggleTouchKeyboard(); }
-@end
-
 namespace LFL {
 struct iOSFrameworkModule : public Module {
   int Init() {
@@ -752,7 +759,7 @@ void Application::SetClipboardText(const string &s) {
 
 void Application::OpenTouchKeyboard(bool enable_app_frame) { [[LFUIApplication sharedAppDelegate] showKeyboard: enable_app_frame]; }
 void Application::CloseTouchKeyboard() { [[LFUIApplication sharedAppDelegate] hideKeyboard]; }
-void Application::CloseTouchKeyboardAfterReturn(bool v) { [LFUIApplication sharedAppDelegate].resign_textfield_on_return = v; }
+void Application::CloseTouchKeyboardAfterReturn(bool v) { [LFUIApplication sharedAppDelegate].glk_view.resign_textfield_on_return = v; }
 void Application::SetTouchKeyboardTiled(bool v) { [[LFUIApplication sharedAppDelegate].controller setOverlapKeyboard: !v]; }
 void Application::ToggleTouchKeyboard() {
   if ([[LFUIApplication sharedAppDelegate] isKeyboardFirstResponder]) CloseTouchKeyboard();
@@ -813,11 +820,11 @@ void FrameScheduler::DelMainWaitMouse(Window*) {
 }
 
 void FrameScheduler::AddMainWaitKeyboard(Window*) {
-  [LFUIApplication sharedAppDelegate].frame_on_keyboard_input = YES;
+  [LFUIApplication sharedAppDelegate].glk_view.frame_on_keyboard_input = YES;
 }
 
 void FrameScheduler::DelMainWaitKeyboard(Window*) {
- [LFUIApplication sharedAppDelegate].frame_on_keyboard_input = NO;
+ [LFUIApplication sharedAppDelegate].glk_view.frame_on_keyboard_input = NO;
 }
 
 void FrameScheduler::AddMainWaitSocket(Window *w, Socket fd, int flag, function<bool()> cb) {

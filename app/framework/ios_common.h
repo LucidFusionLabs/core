@@ -19,13 +19,9 @@
 @interface MyTouchView : UIView {}
 @end
 
-@interface MyTextField : UITextField {}
-  @property (nonatomic, assign) LFL::Callback copy_cb;
-@end
-
 @interface LFViewController : UIViewController<UIActionSheetDelegate> {}
   @property (nonatomic, retain) UIToolbar *input_accessory_toolbar;
-  @property BOOL showing_keyboard;
+  @property BOOL showing_keyboard, pinch_occurring;
   - (CGRect)getKeyboardFrame;
   - (CGRect)getKeyboardToolbarFrame;
   - (void)initNotifications;
@@ -36,24 +32,25 @@
 @interface LFUIWindow : UIWindow {}
 @end
 
-@interface LFGLKView : GLKView {}
+@interface LFGLKView : GLKView<UIKeyInput> {}
+  @property (nonatomic, strong) UIView *inputAccessoryView;
+  @property (nonatomic, assign) LFL::Callback copy_cb;
+  @property BOOL resign_textfield_on_return, frame_on_keyboard_input;
 @end
 
 @interface LFGLKViewController : GLKViewController<GLKViewControllerDelegate, GLKViewDelegate> {}
 @end
 
-@interface LFUIApplication : NSObject<UIApplicationDelegate, UITextFieldDelegate, ObjcWindow> {}
+@interface LFUIApplication : NSObject<UIApplicationDelegate, ObjcWindow> {}
   @property (nonatomic, retain) LFUIWindow *window;
   @property (nonatomic, retain) LFViewController *controller;
   @property (nonatomic, retain) LFGLKViewController *glk_controller;
-  @property (nonatomic, retain) GLKView *glk_view;
+  @property (nonatomic, retain) LFGLKView *glk_view;
   @property (nonatomic, retain) UIView *lview, *rview;
-  @property (nonatomic, retain) MyTextField *text_field;
   @property (nonatomic, retain) UINavigationBar *title_bar;
   @property (nonatomic, retain) NSMutableDictionary *main_wait_fh;
   @property (nonatomic, assign) UIViewController *root_controller, *top_controller;
-  @property BOOL frame_disabled, enable_frame_on_textfield_shown, resign_textfield_on_return, frame_on_keyboard_input,
-                 frame_on_mouse_input, downscale, show_title;
+  @property BOOL frame_disabled, enable_frame_on_textfield_shown, frame_on_mouse_input, downscale, show_title;
   @property int screen_y, screen_width, screen_height;
   @property CGFloat scale;
   + (LFUIApplication *) sharedAppDelegate;
@@ -64,6 +61,8 @@
   - (bool)isKeyboardFirstResponder;
   - (void)hideKeyboard;
   - (void)showKeyboard:(bool)enable_app_frame;
+  - (UIViewController*)findTopViewController;
+  + (UIViewController*)findTopViewControllerWithRootViewController:(UIViewController*)rootViewController;
 @end
 
 @interface IOSToolbar : NSObject
@@ -81,10 +80,12 @@
   - (IBAction)buttonClicked:(IOSBarButtonItem*)sender;
 @end
 
-@interface IOSAlert : NSObject<UIAlertViewDelegate>
-  @property (nonatomic, retain) UIAlertView *alert;
-  @property (nonatomic)         bool         add_text, done;
-  @property (nonatomic)         std::string  style;
+@interface IOSAlert : NSObject
+  @property (nonatomic, retain) UIAlertController *alert;
+  @property (nonatomic, retain) UIView *flash;
+  @property (nonatomic, retain) UILabel *flash_text;
+  @property (nonatomic)         std::string style;
+  @property (nonatomic)         bool add_text, done;
   @property (nonatomic, assign) LFL::StringCB cancel_cb, confirm_cb;
 @end
 

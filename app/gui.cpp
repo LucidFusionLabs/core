@@ -649,12 +649,14 @@ TextArea::TextArea(Window *W, const FontRef &F, int S, int LC) :
          MenuItem{"", "Keyboard" } });
       return true;
     }
+#if 0
     if (d.y) {
       float sl = float(d.y) / style.font->Height();
       v_scrolled = Clamp(v_scrolled + sl * PercentOfLines(1), 0.0f, 1.0f);
       UpdateScrolled();
       if (!W->target_fps) app->scheduler.Wakeup(root);
     }
+#endif
     return true;
   };
 #endif

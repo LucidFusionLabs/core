@@ -810,6 +810,7 @@ struct SystemTimer {
 struct SystemAlertView {
   static unique_ptr<SystemAlertView> Create(AlertItemVec items);
   virtual ~SystemAlertView() {}
+  virtual void Hide() = 0;
   virtual void Show(const string &arg) = 0;
   virtual void ShowCB(const string &title, const string &msg, const string &arg, StringCB confirm_cb) = 0;
   virtual string RunModal(const string &arg) = 0;

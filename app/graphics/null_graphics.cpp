@@ -72,8 +72,9 @@ int Pixel::OpenGLID(int p) { return 0; }
 struct NullGraphicsDevice : public GraphicsDevice {
   NullGraphicsDevice(Window *w) : GraphicsDevice(w) {}
   void Init(const Box&) {}
-  bool ShaderSupport() const { return 0; }
   bool GetEnabled(int) { return 0; }
+  bool ShaderSupport() const { return 0; }
+  void MarkDirty() {}
   void EnableTexture() {}
   void DisableTexture() {}
   void EnableLighting() {}

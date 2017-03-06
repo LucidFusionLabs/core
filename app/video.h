@@ -369,6 +369,7 @@ struct GraphicsDevice {
   virtual ~GraphicsDevice() {}
   virtual void Init(const Box&) = 0;
   virtual bool ShaderSupport() const = 0;
+  virtual void MarkDirty() = 0;
   virtual bool GetEnabled(int) = 0;
   virtual void EnableTexture() = 0;
   virtual void DisableTexture() = 0;

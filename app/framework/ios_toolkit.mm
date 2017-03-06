@@ -60,26 +60,89 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
     _style       = kv[0].second;
     _cancel_cb   = kv[2].cb;
     _confirm_cb  = kv[3].cb;
-    _alert       = [[UIAlertView alloc]
-      initWithTitle:     [NSString stringWithUTF8String: kv[1].first .c_str()]
-      message:           [NSString stringWithUTF8String: kv[1].second.c_str()]
-      delegate:          self
-      cancelButtonTitle: [NSString stringWithUTF8String: kv[2].first.c_str()]
-      otherButtonTitles: [NSString stringWithUTF8String: kv[3].first.c_str()], nil];
-    if      ((_add_text = _style == "textinput")) _alert.alertViewStyle = UIAlertViewStylePlainTextInput;
-    else if ((_add_text = _style == "pwinput"))   _alert.alertViewStyle = UIAlertViewStyleSecureTextInput;
-#if 0
-    UISwitch *onoff = [[UISwitch alloc] init];
-    [_alert setValue:onoff forKey:@"accessoryView"];
-    [onoff release];
-#endif
+
+    if (kv[2].first.empty() && kv[3].first.empty()) {
+      CGRect bounds = [[UIScreen mainScreen] bounds];
+      CGFloat cornerRadius = 7, flashWidth = 150, flashHeight = 30;
+
+      _flash = [[UIView alloc] initWithFrame:
+        CGRectMake((bounds.size.width - flashWidth) / 2, (bounds.size.height - flashHeight) / 2, flashWidth, flashHeight)];
+      _flash.autoresizingMask = UIViewAutoresizingFlexibleRightMargin | UIViewAutoresizingFlexibleLeftMargin |
+        UIViewAutoresizingFlexibleTopMargin | UIViewAutoresizingFlexibleBottomMargin;
+      _flash.layer.cornerRadius = cornerRadius;
+      _flash.layer.borderColor = [[UIColor colorWithRed:198.0/255.0 green:198.0/255.0 blue:198.0/255.0 alpha:1.0f] CGColor];
+      _flash.layer.borderWidth = 1;
+      _flash.layer.shadowRadius = cornerRadius + 5;
+      _flash.layer.shadowOpacity = 0.1f;
+      _flash.layer.shadowOffset = CGSizeMake(0 - (cornerRadius+5)/2, 0 - (cornerRadius+5)/2);
+      _flash.layer.shadowColor = [UIColor blackColor].CGColor;
+      _flash.layer.shadowPath = [UIBezierPath bezierPathWithRoundedRect:_flash.bounds cornerRadius:_flash.layer.cornerRadius].CGPath;
+
+      CAGradientLayer *gradient = [CAGradientLayer layer];
+      gradient.cornerRadius = cornerRadius;
+      gradient.frame = _flash.bounds;
+      gradient.colors = [NSArray arrayWithObjects:
+        (id)[[UIColor colorWithRed:218.0/255.0 green:218.0/255.0 blue:218.0/255.0 alpha:1.0f] CGColor],
+        (id)[[UIColor colorWithRed:233.0/255.0 green:233.0/255.0 blue:233.0/255.0 alpha:1.0f] CGColor],
+        (id)[[UIColor colorWithRed:218.0/255.0 green:218.0/255.0 blue:218.0/255.0 alpha:1.0f] CGColor],
+        nil];
+      [_flash.layer insertSublayer:gradient atIndex:0];
+
+      _flash_text = [[UILabel alloc] initWithFrame: CGRectMake(10, 0, flashWidth-20, 30)];
+      _flash_text.font = [UIFont boldSystemFontOfSize:18.0];
+      _flash_text.autoresizingMask = _flash.autoresizingMask;
+      _flash_text.textAlignment = NSTextAlignmentCenter;
+      [_flash addSubview: _flash_text];
+
+    } else {
+      self.alert   = [UIAlertController
+        alertControllerWithTitle: LFL::MakeNSString(kv[1].first)
+        message:                  LFL::MakeNSString(kv[1].second)
+        preferredStyle:           UIAlertControllerStyleAlert];
+      
+      if ((_add_text = _style == "textinput")) {
+        [_alert addTextFieldWithConfigurationHandler:^(UITextField *textField) {
+        }];
+      } else if ((_add_text = _style == "pwinput")) {
+        [_alert addTextFieldWithConfigurationHandler:^(UITextField *textField) {
+          textField.secureTextEntry = YES;
+        }];
+      }
+      
+      if (!kv[2].first.empty()) {
+        UIAlertAction *a = [UIAlertAction
+          actionWithTitle: LFL::MakeNSString(kv[2].first)
+          style:           UIAlertActionStyleCancel
+          handler:         ^(UIAlertAction *action) {
+            _done = true;
+            if (_cancel_cb) _cancel_cb("");
+          }];
+        [_alert addAction:a];
+      }
+      
+      if (!kv[3].first.empty()) {
+        UIAlertAction *a = [UIAlertAction
+          actionWithTitle: LFL::MakeNSString(kv[3].first)
+          style:           UIAlertActionStyleDefault
+          handler:         ^(UIAlertAction *action) {
+            _done = true;
+            if (_confirm_cb) _confirm_cb(_add_text ? LFL::GetNSString(_alert.textFields[0].text) : "");
+          }];
+        [_alert addAction:a];
+      }
+    }
+
     return self;
   }
 
-  - (void)alertView:(UIAlertView *)alertView clickedButtonAtIndex:(NSInteger)buttonIndex {
-    if (buttonIndex) { if (_confirm_cb) _confirm_cb(_add_text ? [[alertView textFieldAtIndex:0].text UTF8String] : ""); }
-    else             { if (_cancel_cb)  _cancel_cb(""); }
-    _done = true;
+  - (void)show: (bool)show_or_hide {
+    LFUIApplication *uiapp = [LFUIApplication sharedAppDelegate];
+    _done = !show_or_hide;
+    if (_flash) [_flash removeFromSuperview];
+    if (show_or_hide) {
+      if (!_flash) [uiapp.top_controller presentViewController:_alert animated:YES completion:nil];
+      else [uiapp.top_controller.view addSubview: _flash];
+    } else if (!_flash) [_alert dismissViewControllerAnimated:YES completion:nil];
   }
 @end
 
@@ -200,8 +263,8 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
   - (void)show: (bool)show_or_hide {
     auto uiapp = [LFUIApplication sharedAppDelegate];
     uiapp.controller.input_accessory_toolbar = show_or_hide ? _toolbar : nil;
-    uiapp.text_field.inputAccessoryView = show_or_hide ? _toolbar2 : nil;
-    if ([uiapp.text_field isFirstResponder]) [uiapp.text_field reloadInputViews];
+    uiapp.glk_view.inputAccessoryView = show_or_hide ? _toolbar2 : nil;
+    if ([uiapp.glk_view isFirstResponder]) [uiapp.glk_view reloadInputViews];
     [_toolbar removeFromSuperview];
     if (show_or_hide) {
       uiapp.controller.input_accessory_toolbar.hidden = uiapp.controller.showing_keyboard;
@@ -958,28 +1021,31 @@ struct iOSAlertView : public SystemAlertView {
   ~iOSAlertView() { [alert release]; }
   iOSAlertView(AlertItemVec items) : alert([[IOSAlert alloc] init: move(items)]) {}
 
+  void Hide() { [alert show: false]; }
   void Show(const string &arg) {
-    if (alert.add_text) [alert.alert textFieldAtIndex:0].text = MakeNSString(arg);
-    [alert.alert show];
+    if (alert.add_text) alert.alert.textFields[0].text = MakeNSString(arg);
+    [alert show: true];
   }
 
   void ShowCB(const string &title, const string &msg, const string &arg, StringCB confirm_cb) {
     alert.confirm_cb = move(confirm_cb);
-    alert.alert.title = MakeNSString(title);
-    alert.alert.message = MakeNSString(msg);
-    if (alert.add_text) [alert.alert textFieldAtIndex:0].text = MakeNSString(arg);
-    [alert.alert show];
+    if (alert.flash) alert.flash_text.text = LFL::MakeNSString(title);
+    else {
+      alert.alert.title = MakeNSString(title);
+      alert.alert.message = MakeNSString(msg);
+    }
+    Show(arg);
   }
 
   string RunModal(const string &arg) {
-    if (alert.add_text) [alert.alert textFieldAtIndex:0].text = MakeNSString(arg);
+    if (alert.add_text) alert.alert.textFields[0].text = MakeNSString(arg);
     alert.done = false;
-    [alert.alert show];
+    [alert show: true];
     NSRunLoop *rl = [NSRunLoop currentRunLoop];
     // do { [rl runMode:NSRunLoopCommonModes beforeDate:[NSDate distantFuture]]; }
     do { [rl runMode:NSRunLoopCommonModes beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.3]]; }
     while(!alert.done);
-    return alert.add_text ? GetNSString([alert.alert textFieldAtIndex:0].text) : "";
+    return alert.add_text ? GetNSString(alert.alert.textFields[0].text) : "";
   }
 };
 
@@ -1085,7 +1151,7 @@ void Application::ShowSystemContextMenu(const MenuItemVec &items) {
   UIMenuController* mc = [UIMenuController sharedMenuController];
   vector<UIMenuItem*> menuitems;
   for (auto &i : items) {
-    if      (i.name == "Copy") { uiapp.text_field.copy_cb = i.cb; continue; }
+    if      (i.name == "Copy") { uiapp.glk_view.copy_cb = i.cb; continue; }
     else if (i.name == "Keyboard") {
       string title = [[LFUIApplication sharedAppDelegate] isKeyboardFirstResponder] ? "Hide Keyboard" : "Show Keyboard";
       UIMenuItem *mi = [[UIMenuItem alloc] initWithTitle: MakeNSString(title) action:@selector(toggleKeyboard:)];
