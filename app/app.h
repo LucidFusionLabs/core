@@ -449,7 +449,8 @@ struct PickerItem {
 struct TableItem {
   enum { None=0, Label=1, Separator=2, Command=3, Button=4, Toggle=5, Selector=6, Picker=7, TextInput=8,
     NumberInput=9, PasswordInput=10, FontPicker=11 }; 
-  struct Flag { enum { LeftText=1, SubText=2, FixDropdown=4, HideKey=8, PlaceHolderVal=16, User1=32 }; };
+  struct Flag { enum { LeftText=1, SubText=2, FixDropdown=4, HideKey=8, PlaceHolderVal=16, ColoredSubText=32,
+    User1=64 }; };
   string key, val, right_text, dropdown_key;
   int type, tag, flags, left_icon, right_icon, selected=0, height=0;
   Callback cb;
@@ -679,6 +680,7 @@ struct Application : public ::LFApp {
   unordered_map<string, StringPiece> asset_cache;
   const Color *splash_color = &Color::black;
   bool log_pid=0, frame_disabled=0;
+  StringCB open_url_cb;
   Callback exit_cb;
 
   vector<Module*> modules;
@@ -743,7 +745,7 @@ struct Application : public ::LFApp {
   int LoadSystemImage(const string &fn);
   void UpdateSystemImage(int n, Texture&);
   bool OpenSystemAppPreferences();
-  void OpenTouchKeyboard(bool enable_app_frame=false);
+  void OpenTouchKeyboard();
   void CloseTouchKeyboard();
   void CloseTouchKeyboardAfterReturn(bool);
   void SetTouchKeyboardTiled(bool);
@@ -760,6 +762,7 @@ struct Application : public ::LFApp {
   void SetDownScale(bool on);
   void SetTitleBar(bool on);
   void SetKeepScreenOn(bool on);
+  void SetExtendedBackgroundTask(Callback);
 
   bool LoadKeychain(const string &key, string *val);
   void SaveKeychain(const string &key, const string &val);
@@ -891,9 +894,9 @@ struct SystemTextView {
 };
 
 struct SystemNavigationView {
-  static unique_ptr<SystemNavigationView> Create();
+  static unique_ptr<SystemNavigationView> Create(const string &style);
   bool shown=0;
-  SystemTableView *root=0, *last_root=0;
+  SystemTableView *root=0;
   virtual ~SystemNavigationView() {}
   virtual SystemTableView *Back() = 0;
   virtual void Show(bool show_or_hide) = 0;

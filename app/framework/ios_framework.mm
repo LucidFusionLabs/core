@@ -82,6 +82,7 @@ static const char* const* ios_argv = 0;
   {
     bool want_extra_scale, has_become_active;
     int target_fps;
+    LFL::Callback bg_task_cb;
     UIBackgroundTaskIdentifier bg_task;
   }
 
@@ -176,7 +177,9 @@ static const char* const* ios_argv = 0;
   }
 
   - (BOOL)application:(UIApplication *)application openURL:(NSURL *)url sourceApplication:(NSString *)sourceApplication annotation:(id)annotation {
-    INFO("openURL ", LFL::GetNSString([url absoluteString]));
+    LFL::string urltext = LFL::GetNSString([url absoluteString]);
+    INFO("openURL ", urltext);
+    if (LFL::app->open_url_cb) LFL::app->open_url_cb(urltext);
     return YES;
   }
 
@@ -186,18 +189,15 @@ static const char* const* ios_argv = 0;
   }
 
   - (void)applicationWillResignActive:(UIApplication*)application {
-    INFO("applicationWillResignActive");
     if (LFL::app->focused->unfocused_cb) LFL::app->focused->unfocused_cb();
   }
 
   - (void)applicationDidBecomeActive:(UIApplication*)application {
-    INFO("applicationDidBecomeActive");
     if (!has_become_active && (has_become_active = true)) {}
     [_glk_view setNeedsDisplay];
   }
 
   - (void)applicationWillEnterForeground:(UIApplication *)application{
-    INFO("applicationWillEnterForeground");
     if (bg_task != UIBackgroundTaskInvalid) {
       [application endBackgroundTask:bg_task];
       bg_task = UIBackgroundTaskInvalid;
@@ -206,16 +206,17 @@ static const char* const* ios_argv = 0;
   }
 
   - (void)applicationDidEnterBackground:(UIApplication *)application {
-    INFO("applicationDidEnterBackground");
-    bg_task = [application beginBackgroundTaskWithName:@"MyTask" expirationHandler:^{
-      [application endBackgroundTask:bg_task];
-      bg_task = UIBackgroundTaskInvalid;
-    }];
-    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-                     [NSThread sleepForTimeInterval: 180.0f];
-                     [application endBackgroundTask:bg_task];
-                     bg_task = UIBackgroundTaskInvalid;
-                   });
+    if (bg_task_cb) {
+      bg_task = [application beginBackgroundTaskWithName:@"MyTask" expirationHandler:^{
+        [application endBackgroundTask:bg_task];
+        bg_task = UIBackgroundTaskInvalid;
+      }];
+      dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+                       if (bg_task_cb) bg_task_cb();
+                       [application endBackgroundTask:bg_task];
+                       bg_task = UIBackgroundTaskInvalid;
+                     });
+    }
   }
 
   - (void)application:(UIApplication *)application performFetchWithCompletionHandler:(nonnull void (^)(UIBackgroundFetchResult))completionHandler {
@@ -246,8 +247,7 @@ static const char* const* ios_argv = 0;
     [_controller performSelector:@selector(becomeFirstResponder) withObject:nil afterDelay:0];
   }
 
-  - (void)showKeyboard: (bool)enable_app_frame {
-    _enable_frame_on_textfield_shown = enable_app_frame; 
+  - (void)showKeyboard {
     [_glk_view performSelector:@selector(becomeFirstResponder) withObject:nil afterDelay:0];
   }
 
@@ -263,6 +263,7 @@ static const char* const* ios_argv = 0;
 
   - (void)objcWindowSelect {}
   - (void)objcWindowFrame { [_glk_view setNeedsDisplay]; }
+  - (void)setExtendedBackgroundTaskCB:(LFL::Callback)cb { bg_task_cb = move(cb); }
 
   - (UIViewController*)findTopViewController {
     return [LFUIApplication findTopViewControllerWithRootViewController: _top_controller];
@@ -342,11 +343,11 @@ static const char* const* ios_argv = 0;
 
   - (void)glkView:(GLKView *)v drawInRect:(CGRect)rect {
     LFL::Window *screen = LFL::app->focused;
-    if (uiapp.frame_disabled || !uiapp.screen_width || !uiapp.screen_height || !screen) return;
+    if ((uiapp.top_controller != uiapp.root_controller && !uiapp.overlay_top_controller) ||
+        uiapp.frame_disabled || !uiapp.screen_width || !uiapp.screen_height || !screen) return;
     if (screen->y != uiapp.screen_y || screen->width != uiapp.screen_width || screen->height != uiapp.screen_height)
       LFL::app->focused->Reshaped(LFL::Box(0, uiapp.screen_y, uiapp.screen_width, uiapp.screen_height));
-
-    LFAppFrame(true);
+    LFL::app->EventDrivenFrame(true);
   }
 @end
 
@@ -440,10 +441,6 @@ static const char* const* ios_argv = 0;
     bool show_or_hide = CGRectContainsRect(window.frame, endFrame); // CGRectIntersectsRect(window.frame, endFrame);
     if (show_or_hide) [self kbWillShowOrHide:YES withRect:[self.view convertRect:endFrame fromView:nil] andDuration:duration andCurve:curve];
     else              [self kbWillShowOrHide:NO  withRect:CGRectMake(0,0,0,0)                                 andDuration:duration andCurve:curve];
-
-    if (uiapp.enable_frame_on_textfield_shown /*&& show_or_hide*/) {
-      uiapp.frame_disabled = uiapp.enable_frame_on_textfield_shown = false;
-    }
   }
 
   - (void)kbWillShowOrHide:(BOOL)show_or_hide withRect:(CGRect)rect andDuration:(NSTimeInterval)interval andCurve:(UIViewAnimationCurve)curve {
@@ -650,7 +647,7 @@ static const char* const* ios_argv = 0;
   }
 
   - (void)touchesBegan:(NSSet *)touches withEvent:(UIEvent *)event {
-    if (uiapp.controller.pinch_occurring) return;
+    // if (uiapp.controller.pinch_occurring) return;
     UITouch *touch = [touches anyObject];
     UIView *v = [touch view];
     CGPoint position = [touch locationInView:v];
@@ -757,7 +754,7 @@ void Application::SetClipboardText(const string &s) {
   if (auto ns = MakeNSString(s)) [UIPasteboard generalPasteboard].string = ns;
 }
 
-void Application::OpenTouchKeyboard(bool enable_app_frame) { [[LFUIApplication sharedAppDelegate] showKeyboard: enable_app_frame]; }
+void Application::OpenTouchKeyboard() { [[LFUIApplication sharedAppDelegate] showKeyboard]; }
 void Application::CloseTouchKeyboard() { [[LFUIApplication sharedAppDelegate] hideKeyboard]; }
 void Application::CloseTouchKeyboardAfterReturn(bool v) { [LFUIApplication sharedAppDelegate].glk_view.resign_textfield_on_return = v; }
 void Application::SetTouchKeyboardTiled(bool v) { [[LFUIApplication sharedAppDelegate].controller setOverlapKeyboard: !v]; }
@@ -774,6 +771,7 @@ int Application::SetExtraScale(bool v) { return [[LFUIApplication sharedAppDeleg
 void Application::SetDownScale(bool v) { [[LFUIApplication sharedAppDelegate] downScale:v]; }
 void Application::SetTitleBar(bool v) { [LFUIApplication sharedAppDelegate].show_title = v; }
 void Application::SetKeepScreenOn(bool v) { [UIApplication sharedApplication].idleTimerDisabled = v; }
+void Application::SetExtendedBackgroundTask(Callback cb) { [[LFUIApplication sharedAppDelegate] setExtendedBackgroundTaskCB: move(cb)]; }
 void Application::SetVerticalSwipeRecognizer(int touches) { [[LFUIApplication sharedAppDelegate].controller initVerticalSwipeGestureRecognizers: touches]; }
 void Application::SetHorizontalSwipeRecognizer(int touches) { [[LFUIApplication sharedAppDelegate].controller initHorizontalSwipeGestureRecognizers: touches]; }
 void Application::SetPanRecognizer(bool enabled) { [[LFUIApplication sharedAppDelegate].controller initPanGestureRecognizers]; }

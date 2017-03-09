@@ -586,7 +586,7 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
       CHECK_LT(row, data[section].item.size());
       auto &ci = data[section].item[row];
       ci.flags |= iOSTableItem::GUILoaded;
-      bool subtext      = ci.flags & LFL::TableItem::Flag::SubText;
+      bool subtext = ci.flags & LFL::TableItem::Flag::SubText;
       bool is_selected_row = section == _selected_section && row == _selected_row;
       UIColor *blue  = [UIColor colorWithRed: 0.0/255 green:122.0/255 blue:255.0/255 alpha:1];
 
@@ -740,6 +740,13 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
 
       } else {
         cell.textLabel.text = LFL::MakeNSString(ci.key);
+        if (subtext) {
+          cell.detailTextLabel.text = LFL::MakeNSString(ci.val);
+          cell.detailTextLabel.lineBreakMode = NSLineBreakByWordWrapping;
+          cell.detailTextLabel.numberOfLines = 0;
+          if (ci.fg_a && (ci.flags & LFL::TableItem::Flag::ColoredSubText))
+            cell.detailTextLabel.textColor = [UIColor colorWithRed:ci.fg_r/255.0 green:ci.fg_g/255.0 blue:ci.fg_b/255.0 alpha:ci.fg_a/255.0];
+        }
       }
 
       if (ci.dropdown_key.size() && cell.textLabel.text.length &&
@@ -1075,9 +1082,11 @@ struct iOSTextView : public SystemTextView {
 
 struct iOSNavigationView : public SystemNavigationView {
   IOSNavigation *nav;
+  bool overlay;
   ~iOSNavigationView() { [nav release]; }
-  iOSNavigationView() : nav([[IOSNavigation alloc] initWithNavigationBarClass:nil toolbarClass:nil]) {
+  iOSNavigationView(const string &style) : nav([[IOSNavigation alloc] initWithNavigationBarClass:nil toolbarClass:nil]) {
     [nav setToolbarHidden:YES animated:NO];
+    overlay = style == "overlay";
   }
 
   void Show(bool show_or_hide) {
@@ -1085,6 +1094,7 @@ struct iOSNavigationView : public SystemNavigationView {
     if ((shown = show_or_hide)) {
       if (root->show_cb) root->show_cb();
       INFO("LFViewController.presentViewController IOSNavigation frame=", LFL::GetCGRect(uiapp.controller.view.frame).DebugString());
+      uiapp.overlay_top_controller = overlay;
       uiapp.top_controller = nav;
       if (uiapp.controller.presentedViewController != nav)
         [uiapp.controller presentViewController:nav animated:YES completion:nil];
@@ -1104,17 +1114,12 @@ struct iOSNavigationView : public SystemNavigationView {
   }
 
   void PushTableView(SystemTableView *t) {
-    if (!root && last_root == t) { root = t; return; }
     if (t->show_cb) t->show_cb();
-    [nav pushViewController: dynamic_cast<iOSTableView*>(t)->table animated: YES];
-    if (root) return;
-    root = t;
-    int children = [nav.viewControllers count];
-    if (children == 1) return;
-    CHECK_EQ(2, children);
-    NSMutableArray *vc = [nav.viewControllers mutableCopy];
-    [vc removeObjectAtIndex:0];
-    nav.viewControllers = vc;
+    if (root) {
+      [nav pushViewController: dynamic_cast<iOSTableView*>(t)->table animated: YES];
+    } else if ((root = t)) {
+      [nav setViewControllers:@[ dynamic_cast<iOSTableView*>(t)->table ] animated: YES];
+    }
   }
 
   void PushTextView(SystemTextView *t) {
@@ -1123,15 +1128,12 @@ struct iOSNavigationView : public SystemNavigationView {
   }
 
   void PopToRoot() {
-    if (root) [nav popToRootViewControllerAnimated: YES];
+    [nav popToRootViewControllerAnimated: YES];
   }
 
   void PopAll() {
-    if (!root) return;
-    last_root = root;
+    [nav setViewControllers:@[] animated: NO];
     root = 0;
-    [nav popToRootViewControllerAnimated: NO];
-    if (last_root && last_root->hide_cb) last_root->hide_cb();
   }
 
   void PopView(int n) {
@@ -1260,6 +1262,6 @@ unique_ptr<SystemMenuView> SystemMenuView::CreateEditMenu(vector<MenuItem> items
 unique_ptr<SystemTableView> SystemTableView::Create(const string &title, const string &style, TableItemVec items) { return make_unique<iOSTableView>(title, style, move(items)); }
 unique_ptr<SystemTextView> SystemTextView::Create(const string &title, File *file) { return make_unique<iOSTextView>(title, file); }
 unique_ptr<SystemTextView> SystemTextView::Create(const string &title, const string &text) { return make_unique<iOSTextView>(title, text); }
-unique_ptr<SystemNavigationView> SystemNavigationView::Create() { return make_unique<iOSNavigationView>(); }
+unique_ptr<SystemNavigationView> SystemNavigationView::Create(const string &style) { return make_unique<iOSNavigationView>(style); }
 
 }; // namespace LFL

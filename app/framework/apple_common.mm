@@ -96,8 +96,8 @@
   }
 
   - (id)initWithCB:(LFL::Callback)v { self = [super init]; cb = move(v); return self; }
-  - (void)dealloc { if (timer) [self clearTrigger]; [super dealloc]; }
-  - (void)clearTrigger { [timer invalidate]; timer = nil; }
+  - (void)dealloc { [self clearTrigger]; [super dealloc]; }
+  - (void)clearTrigger { if (timer) [timer invalidate]; timer = nil; }
   - (void)triggerFired:(id)sender { [self clearTrigger]; if (cb) cb(); }
 
   - (void)triggerIn:(int)ms force:(bool)force {

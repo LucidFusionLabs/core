@@ -745,6 +745,8 @@ struct SSHClientConnection : public SSHClient::Handler {
 
         case SSH::MSG_SERVICE_ACCEPT::ID: {
           SSHTrace(c->Name(), ": MSG_SERVICE_ACCEPT");
+          login = params.user;
+          if ((login_prompts = login.empty())) cb(c, "login: ");
           if (load_identity_cb) { if (!load_identity_cb(&identity)) break; }
           if (int ret = SendAuthenticationRequest(c)) return ret;
         } break;
@@ -1063,12 +1065,21 @@ struct SSHClientConnection : public SSHClient::Handler {
   }
 
   int WriteChannelData(Connection *c, const StringPiece &b) {
-    if (!password_prompts) {
-      if (!session_channel || !WriteToChannel(c, session_channel, b)) return -1;
-    } else {
+    if (login_prompts) {
+      cb(c, b);
+      bool cr = b.len && b.back() == '\r';
+      login.append(b.data(), b.size() - cr);
+      if (cr) {
+        cb(c, "\n");
+        login_prompts = 0;
+        if (!SendAuthenticationRequest(c)) return ERRORv(-1, c->Name(), ": write");
+      }
+    } else if (password_prompts) {
       bool cr = b.len && b.back() == '\r';
       pw.append(b.data(), b.size() - cr);
       if (cr && !WritePassword(c)) return ERRORv(-1, c->Name(), ": write");
+    } else {
+      if (!session_channel || !WriteToChannel(c, session_channel, b)) return -1;
     }
     return b.size();
   }
@@ -1084,7 +1095,7 @@ struct SSHClientConnection : public SSHClient::Handler {
     wrote_pw = true;
     bool success = false;
     if (userauth_fail) {
-      success = WriteCipher(c, SSH::MSG_USERAUTH_REQUEST(params.user, "ssh-connection", "password", "", pw, ""));
+      success = WriteCipher(c, SSH::MSG_USERAUTH_REQUEST(login, "ssh-connection", "password", "", pw, ""));
     } else {
       vector<StringPiece> prompt(password_prompts);
       prompt.back() = StringPiece(pw.data(), pw.size());
@@ -1113,9 +1124,9 @@ struct SSHClientConnection : public SSHClient::Handler {
     if (!identity) { /**/ }
     else if (identity->ed25519.privkey.size()) {
       string pubkey = SSH::Ed25519Key(identity->ed25519.pubkey).ToString();
-      string challenge = SSH::DeriveChallengeText(session_id, params.user, "ssh-connection", "publickey", "ssh-ed25519", pubkey);
+      string challenge = SSH::DeriveChallengeText(session_id, login, "ssh-connection", "publickey", "ssh-ed25519", pubkey);
       string sig = SSH::Ed25519Signature(Ed25519Sign(challenge, identity->ed25519.privkey)).ToString();
-      if (!WriteCipher(c, SSH::MSG_USERAUTH_REQUEST(params.user, "ssh-connection", "publickey", "ssh-ed25519", pubkey, sig)))
+      if (!WriteCipher(c, SSH::MSG_USERAUTH_REQUEST(login, "ssh-connection", "publickey", "ssh-ed25519", pubkey, sig)))
         return ERRORv(-1, c->Name(), ": write");
       return 0;
 
@@ -1127,13 +1138,13 @@ struct SSHClientConnection : public SSHClient::Handler {
       else {
         string pubkey = SSH::ECDSAKey(algo_name, curve_name,
                                       ECPointGetData(group, GetECPairPubKey(identity->ec), ctx)).ToString();
-        string challenge = SSH::DeriveChallenge(hash_id, session_id, params.user, "ssh-connection", "publickey", algo_name, pubkey);
+        string challenge = SSH::DeriveChallenge(hash_id, session_id, login, "ssh-connection", "publickey", algo_name, pubkey);
         ECDSASig ecdsa_sig = ECDSASign(challenge, identity->ec);
         if (!ecdsa_sig) ERROR("ECDSASign failed: ", Crypto::GetLastErrorText());
         else {
           string sig = SSH::ECDSASignature(algo_name, GetECDSASigR(ecdsa_sig), GetECDSASigS(ecdsa_sig)).ToString();
           ECDSASigFree(ecdsa_sig);
-          if (!WriteCipher(c, SSH::MSG_USERAUTH_REQUEST(params.user, "ssh-connection", "publickey", algo_name, pubkey, sig)))
+          if (!WriteCipher(c, SSH::MSG_USERAUTH_REQUEST(login, "ssh-connection", "publickey", algo_name, pubkey, sig)))
             return ERRORv(-1, c->Name(), ": write");
           return 0;
         }
@@ -1141,10 +1152,10 @@ struct SSHClientConnection : public SSHClient::Handler {
 
     } else if (identity->rsa) {
       string sig, pubkey = SSH::RSAKey(GetRSAKeyE(identity->rsa), GetRSAKeyN(identity->rsa)).ToString();
-      string challenge = SSH::DeriveChallenge(Crypto::DigestAlgos::SHA1(), session_id, params.user, "ssh-connection", "publickey", "ssh-rsa", pubkey);
+      string challenge = SSH::DeriveChallenge(Crypto::DigestAlgos::SHA1(), session_id, login, "ssh-connection", "publickey", "ssh-rsa", pubkey);
       if (RSASign(challenge, &sig, identity->rsa) != 1) ERROR("RSASign failed: ", Crypto::GetLastErrorText());
       else {
-        if (!WriteCipher(c, SSH::MSG_USERAUTH_REQUEST(params.user, "ssh-connection", "publickey", "ssh-rsa", pubkey,
+        if (!WriteCipher(c, SSH::MSG_USERAUTH_REQUEST(login, "ssh-connection", "publickey", "ssh-rsa", pubkey,
                                                       SSH::RSASignature(sig).ToString())))
           return ERRORv(-1, c->Name(), ": write");
         return 0;
@@ -1153,19 +1164,19 @@ struct SSHClientConnection : public SSHClient::Handler {
     } else if (identity->dsa) {
       string pubkey = SSH::DSSKey(GetDSAKeyP(identity->dsa), GetDSAKeyQ(identity->dsa),
                                   GetDSAKeyG(identity->dsa), GetDSAKeyK(identity->dsa)).ToString();
-      string challenge = SSH::DeriveChallenge(Crypto::DigestAlgos::SHA1(), session_id, params.user, "ssh-connection", "publickey", "ssh-dss", pubkey);
+      string challenge = SSH::DeriveChallenge(Crypto::DigestAlgos::SHA1(), session_id, login, "ssh-connection", "publickey", "ssh-dss", pubkey);
       DSASig dsa_sig = DSASign(challenge, identity->dsa);
       if (!dsa_sig) ERROR("DSASign failed: ", Crypto::GetLastErrorText());
       else {
         string sig = SSH::DSSSignature(GetDSASigR(dsa_sig), GetDSASigS(dsa_sig)).ToString();
         DSASigFree(dsa_sig);
-        if (!WriteCipher(c, SSH::MSG_USERAUTH_REQUEST(params.user, "ssh-connection", "publickey", "ssh-dss", pubkey, sig)))
+        if (!WriteCipher(c, SSH::MSG_USERAUTH_REQUEST(login, "ssh-connection", "publickey", "ssh-dss", pubkey, sig)))
           return ERRORv(-1, c->Name(), ": write");
         return 0;
       }
     }
 
-    if (!WriteCipher(c, SSH::MSG_USERAUTH_REQUEST(params.user, "ssh-connection", "keyboard-interactive", "", "", "")))
+    if (!WriteCipher(c, SSH::MSG_USERAUTH_REQUEST(login, "ssh-connection", "keyboard-interactive", "", "", "")))
       return ERRORv(-1, c->Name(), ": write");
     return 0;
   }
@@ -1230,9 +1241,14 @@ int  SSHClient::SetTerminalWindowSize(Connection *c, int w, int h)              
 void SSHClient::SetCredentialCB      (Connection *c, FingerprintCB F, LoadIdentityCB LI, LoadPasswordCB LP) { dynamic_cast<SSHClientConnection*>(c->handler.get())->SetCredentialCB(move(F), move(LI), move(LP)); }
 void SSHClient::SetRemoteForwardCB   (Connection *c, RemoteForwardCB F)                                     { dynamic_cast<SSHClientConnection*>(c->handler.get())->remote_forward_cb = move(F); }
 
-int SSHClient::SendAuthenticationRequest(Connection *c, shared_ptr<SSHClient::Identity> identity) {
+int SSHClient::SendAuthenticationRequest(Connection *c, shared_ptr<SSHClient::Identity> identity, const string *login) {
   auto ssh = dynamic_cast<SSHClientConnection*>(c->handler.get());
   if (identity) ssh->identity = identity;
+  if (login) {
+    ssh->login_prompts = 0;
+    ssh->login = *login;
+    ssh->cb(c, StrCat(*login, "\r\n"));
+  }
   return ssh->SendAuthenticationRequest(c);
 }
 

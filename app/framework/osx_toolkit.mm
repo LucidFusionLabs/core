@@ -847,6 +847,6 @@ unique_ptr<SystemMenuView> SystemMenuView::CreateEditMenu(MenuItemVec items) {
 unique_ptr<SystemTableView> SystemTableView::Create(const string &title, const string &style, TableItemVec items) { return make_unique<OSXTableView>(title, style, move(items)); }
 unique_ptr<SystemTextView> SystemTextView::Create(const string &title, File *file) { return make_unique<OSXTextView>(title, file); }
 unique_ptr<SystemTextView> SystemTextView::Create(const string &title, const string &text) { return make_unique<OSXTextView>(title, text); }
-unique_ptr<SystemNavigationView> SystemNavigationView::Create() { return make_unique<OSXNavigationView>(); }
+unique_ptr<SystemNavigationView> SystemNavigationView::Create(const string &style) { return make_unique<OSXNavigationView>(); }
 
 }; // namespace LFL

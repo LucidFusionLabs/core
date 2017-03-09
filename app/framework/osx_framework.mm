@@ -522,7 +522,7 @@ string Application::GetClipboardText() {
 
 void Application::SetAppFrameEnabled(bool) {}
 void Application::ToggleTouchKeyboard() {}
-void Application::OpenTouchKeyboard(bool) {}
+void Application::OpenTouchKeyboard() {}
 void Application::CloseTouchKeyboard() {}
 void Application::CloseTouchKeyboardAfterReturn(bool v) {}
 void Application::SetTouchKeyboardTiled(bool v) {}

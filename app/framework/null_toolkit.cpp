@@ -18,6 +18,7 @@
 
 namespace LFL {
 struct NullAlertView : public SystemAlertView {
+  void Hide() {}
   void Show(const string &arg) {}
   void ShowCB(const string &title, const string &msg, const string &arg, StringCB confirm_cb) {}
   string RunModal(const string &arg) { return string(); }
@@ -111,6 +112,6 @@ unique_ptr<SystemMenuView> SystemMenuView::CreateEditMenu(vector<MenuItem> items
 unique_ptr<SystemTableView> SystemTableView::Create(const string &title, const string &style, TableItemVec items) { return make_unique<NullTableView>(title, style, move(items)); }
 unique_ptr<SystemTextView> SystemTextView::Create(const string &title, File *file) { return make_unique<NullTextView>(); }
 unique_ptr<SystemTextView> SystemTextView::Create(const string &title, const string &text) { return make_unique<NullTextView>(); }
-unique_ptr<SystemNavigationView> SystemNavigationView::Create() { return make_unique<NullNavigationView>(); }
+unique_ptr<SystemNavigationView> SystemNavigationView::Create(const string &style) { return make_unique<NullNavigationView>(); }
 
 }; // namespace LFL

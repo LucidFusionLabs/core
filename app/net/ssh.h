@@ -206,9 +206,9 @@ struct SSHClient {
     RemoteForwardCB remote_forward_cb;
     Callback success_cb;
     shared_ptr<Identity> identity;
-    string V_C, V_S, KEXINIT_C, KEXINIT_S, H_text, session_id, integrity_c2s, integrity_s2c, decrypt_buf, pw;
+    string V_C, V_S, KEXINIT_C, KEXINIT_S, H_text, session_id, integrity_c2s, integrity_s2c, decrypt_buf, login, pw;
     int state=0, packet_len=0, packet_MAC_len=0, MAC_len_c=0, MAC_len_s=0, encrypt_block_size=0, decrypt_block_size=0, server_version=0;
-    unsigned sequence_number_c2s=0, sequence_number_s2c=0, password_prompts=0, userauth_fail=0;
+    unsigned sequence_number_c2s=0, sequence_number_s2c=0, login_prompts=0, password_prompts=0, userauth_fail=0;
     bool guessed_c=0, guessed_s=0, guessed_right_c=0, guessed_right_s=0, accepted_hostkey=0, loaded_pw=0, wrote_pw=0;
     unsigned char padding=0, packet_id=0;
     Handler(Params p, ResponseCB CB, Callback s) : params(move(p)), cb(move(CB)), success_cb(move(s)), V_C("SSH-2.0-LFL_1.0") {}
@@ -221,7 +221,7 @@ struct SSHClient {
   static void SetRemoteForwardCB(Connection *c, RemoteForwardCB F);
   static bool ParsePortForward(const string &text, vector<Params::Forward> *out);
   static bool AcceptHostKeyAndBeginAuthRequest(Connection *c);
-  static int SendAuthenticationRequest(Connection *c, shared_ptr<Identity>);
+  static int SendAuthenticationRequest(Connection *c, shared_ptr<Identity>, const string *login=0);
   static int SetTerminalWindowSize(Connection *c, int w, int h);
   static int WriteChannelData(Connection *c, const StringPiece &b);
   static bool WritePassword(Connection *c, const StringPiece &b);

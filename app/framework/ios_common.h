@@ -50,7 +50,7 @@
   @property (nonatomic, retain) UINavigationBar *title_bar;
   @property (nonatomic, retain) NSMutableDictionary *main_wait_fh;
   @property (nonatomic, assign) UIViewController *root_controller, *top_controller;
-  @property BOOL frame_disabled, enable_frame_on_textfield_shown, frame_on_mouse_input, downscale, show_title;
+  @property BOOL overlay_top_controller, frame_disabled, frame_on_mouse_input, downscale, show_title;
   @property int screen_y, screen_width, screen_height;
   @property CGFloat scale;
   + (LFUIApplication *) sharedAppDelegate;
@@ -60,7 +60,7 @@
   - (CGRect)getFrame;
   - (bool)isKeyboardFirstResponder;
   - (void)hideKeyboard;
-  - (void)showKeyboard:(bool)enable_app_frame;
+  - (void)showKeyboard;
   - (UIViewController*)findTopViewController;
   + (UIViewController*)findTopViewControllerWithRootViewController:(UIViewController*)rootViewController;
 @end
