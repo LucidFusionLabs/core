@@ -45,7 +45,7 @@ extern "C" LFAppWindow* GetLFAppWindow()           { return LFL::app->focused; }
 extern "C" const char*  GetLFAppSaveDir()          { return LFL::app->savedir.c_str(); }
 extern "C" int          LFAppMain()                { return LFL::app->Main(); }
 extern "C" int          LFAppMainLoop()            { return LFL::app->MainLoop(); }
-extern "C" int          LFAppFrame(bool handle_ev) { return LFL::app->EventDrivenFrame(handle_ev); }
+extern "C" int          LFAppFrame(bool handle_ev) { return LFL::app->EventDrivenFrame(handle_ev, true); }
 extern "C" void         LFAppTimerDrivenFrame()    { LFL::app->TimerDrivenFrame(true); }
 extern "C" void         LFAppWakeup()              { return LFL::app->scheduler.Wakeup(LFL::app->focused); }
 extern "C" void         LFAppResetGL()             { return LFL::app->ResetGL(); }
@@ -619,11 +619,12 @@ int Application::HandleEvents(unsigned clicks) {
   return events;
 }
 
-int Application::EventDrivenFrame(bool handle_events) {
+int Application::EventDrivenFrame(bool handle_events, bool draw_frame) {
   if (!MainThread()) ERROR("Frame() called from thread ", Thread::GetId());
   unsigned clicks = focused->frame_time.GetTime(true).count();
   if (handle_events) HandleEvents(clicks);
 
+  if (!draw_frame) return clicks;
   int ret = focused->Frame(clicks, 0);
   if (FLAGS_frame_debug) INFO("frame_debug Application::Frame Window ", focused->id, " = ", ret);
 

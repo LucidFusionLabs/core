@@ -17,6 +17,7 @@
  */
 
 namespace LFL {
+void Application::OpenSystemBrowser(const string &url_text) {}
 string Application::GetVersion() { return "1.0"; }
 string Application::PrintCallStack() { return ""; }
 String16 Application::GetLocalizedString16(const char *key) { return String16(); }
@@ -26,6 +27,7 @@ string Application::GetLocalizedInteger(int number) { return string(); }
 void Application::LoadDefaultSettings(const StringPairVec &v) {}
 string Application::GetSetting(const string &key) { return string(); }
 void Application::SaveSettings(const StringPairVec &v) {}
+void Application::SetKeepScreenOn(bool v) {}
 
 Connection *Application::ConnectTCP(const string &hostport, int default_port, Connection::CB *connected_cb, bool background_services) {
   INFO("Application::ConnectTCP ", hostport, " (default_port = ", default_port, ") background_services = false"); 

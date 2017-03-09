@@ -769,6 +769,8 @@ struct OSXNavigationView : public SystemNavigationView {
     for (int i = 0; i != n; ++i)
       [nav popViewControllerAnimated: (i == n - 1)];
   }
+
+  void SetTheme(const string &theme) {}
 };
 
 void Application::ShowSystemFontChooser(const FontDesc &cur_font, const StringVecCB &choose_cb) {
@@ -844,9 +846,9 @@ unique_ptr<SystemMenuView> SystemMenuView::CreateEditMenu(MenuItemVec items) {
   return make_unique<OSXMenuView>("", MenuItemVec());
 }
 
-unique_ptr<SystemTableView> SystemTableView::Create(const string &title, const string &style, TableItemVec items) { return make_unique<OSXTableView>(title, style, move(items)); }
+unique_ptr<SystemTableView> SystemTableView::Create(const string &title, const string &style, const string &theme, TableItemVec items) { return make_unique<OSXTableView>(title, style, move(items)); }
 unique_ptr<SystemTextView> SystemTextView::Create(const string &title, File *file) { return make_unique<OSXTextView>(title, file); }
 unique_ptr<SystemTextView> SystemTextView::Create(const string &title, const string &text) { return make_unique<OSXTextView>(title, text); }
-unique_ptr<SystemNavigationView> SystemNavigationView::Create(const string &style) { return make_unique<OSXNavigationView>(); }
+unique_ptr<SystemNavigationView> SystemNavigationView::Create(const string &style, const string &theme) { return make_unique<OSXNavigationView>(); }
 
 }; // namespace LFL

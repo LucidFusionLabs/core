@@ -343,11 +343,11 @@ static const char* const* ios_argv = 0;
 
   - (void)glkView:(GLKView *)v drawInRect:(CGRect)rect {
     LFL::Window *screen = LFL::app->focused;
-    if ((uiapp.top_controller != uiapp.root_controller && !uiapp.overlay_top_controller) ||
-        uiapp.frame_disabled || !uiapp.screen_width || !uiapp.screen_height || !screen) return;
-    if (screen->y != uiapp.screen_y || screen->width != uiapp.screen_width || screen->height != uiapp.screen_height)
+    bool draw_frame = (uiapp.top_controller == uiapp.root_controller || uiapp.overlay_top_controller) &&
+      !uiapp.frame_disabled && uiapp.screen_width && uiapp.screen_height && screen;
+    if (draw_frame && (screen->y != uiapp.screen_y || screen->width != uiapp.screen_width || screen->height != uiapp.screen_height))
       LFL::app->focused->Reshaped(LFL::Box(0, uiapp.screen_y, uiapp.screen_width, uiapp.screen_height));
-    LFL::app->EventDrivenFrame(true);
+    LFL::app->EventDrivenFrame(true, draw_frame);
   }
 @end
 

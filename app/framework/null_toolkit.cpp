@@ -96,6 +96,7 @@ struct NullNavigationView : public SystemNavigationView {
   void PopToRoot() {}
   void PopAll() {}
   void PopView(int n) {}
+  void SetTheme(const string &theme) {}
 };
 
 void Application::ShowSystemFontChooser(const FontDesc &cur_font, const StringVecCB&) {}
@@ -109,9 +110,9 @@ unique_ptr<SystemPanelView> SystemPanelView::Create(const Box &b, const string &
 unique_ptr<SystemToolbarView> SystemToolbarView::Create(MenuItemVec items) { return make_unique<NullToolbarView>(); }
 unique_ptr<SystemMenuView> SystemMenuView::Create(const string &title, MenuItemVec items) { return make_unique<NullMenuView>(); }
 unique_ptr<SystemMenuView> SystemMenuView::CreateEditMenu(vector<MenuItem> items) { return nullptr; }
-unique_ptr<SystemTableView> SystemTableView::Create(const string &title, const string &style, TableItemVec items) { return make_unique<NullTableView>(title, style, move(items)); }
+unique_ptr<SystemTableView> SystemTableView::Create(const string &title, const string &style, const string &theme, TableItemVec items) { return make_unique<NullTableView>(title, style, move(items)); }
 unique_ptr<SystemTextView> SystemTextView::Create(const string &title, File *file) { return make_unique<NullTextView>(); }
 unique_ptr<SystemTextView> SystemTextView::Create(const string &title, const string &text) { return make_unique<NullTextView>(); }
-unique_ptr<SystemNavigationView> SystemNavigationView::Create(const string &style) { return make_unique<NullNavigationView>(); }
+unique_ptr<SystemNavigationView> SystemNavigationView::Create(const string &style, const string &theme) { return make_unique<NullNavigationView>(); }
 
 }; // namespace LFL

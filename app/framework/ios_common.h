@@ -119,7 +119,7 @@ struct iOSWindow : public Window {
 struct iOSTableView : public SystemTableView {
   IOSTable *table;
   ~iOSTableView();
-  iOSTableView(const string &title, const string &style, TableItemVec items);
+  iOSTableView(const string &title, const string &style, const string &theme, TableItemVec items);
 
   void DelNavigationButton(int align);
   void AddNavigationButton(int align, const TableItem &item);

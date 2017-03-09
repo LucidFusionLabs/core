@@ -722,7 +722,7 @@ struct Application : public ::LFApp {
   int Init();
   int Start();
   int HandleEvents(unsigned clicks);
-  int EventDrivenFrame(bool handle_events);
+  int EventDrivenFrame(bool handle_events, bool draw_frame);
   int TimerDrivenFrame(bool got_wakeup);
   int Main();
   int MainLoop();
@@ -841,7 +841,8 @@ struct SystemMenuView {
 };
 
 struct SystemTableView {
-  static unique_ptr<SystemTableView> Create(const string &title, const string &style, TableItemVec items);
+  static unique_ptr<SystemTableView> Create(const string &title, const string &style, const string &theme,
+                                            TableItemVec items);
   bool changed=0;
   Callback hide_cb, show_cb = [=](){ changed=0; }; 
   virtual ~SystemTableView() {}
@@ -894,7 +895,7 @@ struct SystemTextView {
 };
 
 struct SystemNavigationView {
-  static unique_ptr<SystemNavigationView> Create(const string &style);
+  static unique_ptr<SystemNavigationView> Create(const string &style, const string &theme);
   bool shown=0;
   SystemTableView *root=0;
   virtual ~SystemNavigationView() {}
@@ -905,6 +906,7 @@ struct SystemNavigationView {
   virtual void PopView(int num=1) = 0;
   virtual void PopToRoot() = 0;
   virtual void PopAll() = 0;
+  virtual void SetTheme(const string &theme) = 0;
 };
 
 struct SystemAdvertisingView {

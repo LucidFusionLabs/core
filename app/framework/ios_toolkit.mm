@@ -396,6 +396,11 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
 
   - (BOOL)shouldAutorotate { return self.topViewController.shouldAutorotate; }
   - (NSUInteger)supportedInterfaceOrientations { return self.topViewController.supportedInterfaceOrientations; }
+
+  - (void)setTheme:(const std::string&)n {
+    if (n == "Dark") self.navigationBar.barStyle = UIBarStyleBlack;
+    else             self.navigationBar.barStyle = UIBarStyleDefault;
+  }
 @end
 
 @implementation IOSTable
@@ -595,7 +600,12 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
       cell.selectionStyle = UITableViewCellSelectionStyleNone;
       if      (ci.bg_a)                                           [cell setBackgroundColor:[UIColor colorWithRed:ci.bg_r/255.0 green:ci.bg_g/255.0 blue:ci.bg_b/255.0 alpha:ci.bg_a/255.0]];
       else if (change_selected_row_background && is_selected_row) [cell setBackgroundColor:[UIColor lightGrayColor]];
-      else if (dark_theme)                                        [cell setBackgroundColor: _tableView.backgroundColor];
+      else if (dark_theme)                                        [cell setBackgroundColor:[UIColor colorWithWhite:0.349 alpha:1.000]];
+
+      if (dark_theme) {
+        cell.textLabel.textColor = [UIColor whiteColor];
+        if (subtext) cell.detailTextLabel.textColor = [UIColor whiteColor];
+      }
 
       if (ci.type != LFL::TableItem::Button) {
         if (int icon = ci.left_icon) {
@@ -642,7 +652,8 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
 
         if (ci.HasPlaceholderValue()) [textfield setPlaceholder: LFL::MakeNSString(ci.GetPlaceholderValue())];
         else if (ci.val.size())       [textfield setText:        LFL::MakeNSString(ci.val)];
-
+        
+        if (dark_theme) textfield.textColor = [UIColor whiteColor];
         textfield.textAlignment = NSTextAlignmentRight;
         cell.accessoryView = textfield;
         if (is_selected_row) [textfield becomeFirstResponder];
@@ -734,6 +745,7 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
           label.text = LFL::MakeNSString(ci.val);
           label.adjustsFontSizeToFitWidth = TRUE;
           label.textAlignment = NSTextAlignmentRight;
+          if (dark_theme) label.textColor = [UIColor whiteColor];
           cell.accessoryView = label;
           [label release];
         }
@@ -833,6 +845,7 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
       label.autoresizingMask = UIViewAutoresizingFlexibleRightMargin | UIViewAutoresizingFlexibleLeftMargin;
       label.lineBreakMode = NSLineBreakByWordWrapping;
       label.numberOfLines = 0;
+      if (dark_theme) label.textColor = [UIColor lightGrayColor];
       [headerView addSubview:label];
       [label release];
     }
@@ -1084,8 +1097,9 @@ struct iOSNavigationView : public SystemNavigationView {
   IOSNavigation *nav;
   bool overlay;
   ~iOSNavigationView() { [nav release]; }
-  iOSNavigationView(const string &style) : nav([[IOSNavigation alloc] initWithNavigationBarClass:nil toolbarClass:nil]) {
+  iOSNavigationView(const string &style, const string &theme) : nav([[IOSNavigation alloc] initWithNavigationBarClass:nil toolbarClass:nil]) {
     [nav setToolbarHidden:YES animated:NO];
+    [nav setTheme: theme];
     overlay = style == "overlay";
   }
 
@@ -1140,6 +1154,8 @@ struct iOSNavigationView : public SystemNavigationView {
     for (int i = 0; i != n; ++i)
       [nav popViewControllerAnimated: (i == n - 1)];
   }
+
+  void SetTheme(const string &theme) { [nav setTheme: theme]; }
 };
 
 void Application::ShowSystemFontChooser(const FontDesc &cur_font, const StringVecCB &cb) {
@@ -1191,9 +1207,10 @@ void Application::UpdateSystemImage(int n, Texture &t) {
 }
 
 iOSTableView::~iOSTableView() { [table release]; }
-iOSTableView::iOSTableView(const string &title, const string &style, TableItemVec items) :
+iOSTableView::iOSTableView(const string &title, const string &style, const string &theme, TableItemVec items) :
   table([[IOSTable alloc] initWithStyle: UITableViewStyleGrouped]) {
     [table load:this withTitle:title withStyle:style items:TableSection::Convert(move(items))];
+    [table setTheme: theme];
   }
 
 void iOSTableView::DelNavigationButton(int align) { return [table clearNavigationButton:align]; }
@@ -1259,9 +1276,9 @@ unique_ptr<SystemPanelView> SystemPanelView::Create(const Box &b, const string &
 unique_ptr<SystemToolbarView> SystemToolbarView::Create(MenuItemVec items) { return make_unique<iOSToolbarView>(move(items)); }
 unique_ptr<SystemMenuView> SystemMenuView::Create(const string &title, MenuItemVec items) { return make_unique<iOSMenuView>(title, move(items)); }
 unique_ptr<SystemMenuView> SystemMenuView::CreateEditMenu(vector<MenuItem> items) { return nullptr; }
-unique_ptr<SystemTableView> SystemTableView::Create(const string &title, const string &style, TableItemVec items) { return make_unique<iOSTableView>(title, style, move(items)); }
+unique_ptr<SystemTableView> SystemTableView::Create(const string &title, const string &style, const string &theme, TableItemVec items) { return make_unique<iOSTableView>(title, style, theme, move(items)); }
 unique_ptr<SystemTextView> SystemTextView::Create(const string &title, File *file) { return make_unique<iOSTextView>(title, file); }
 unique_ptr<SystemTextView> SystemTextView::Create(const string &title, const string &text) { return make_unique<iOSTextView>(title, text); }
-unique_ptr<SystemNavigationView> SystemNavigationView::Create(const string &style) { return make_unique<iOSNavigationView>(style); }
+unique_ptr<SystemNavigationView> SystemNavigationView::Create(const string &style, const string &theme) { return make_unique<iOSNavigationView>(style, theme); }
 
 }; // namespace LFL
