@@ -36,6 +36,7 @@ struct NullPanelView : public SystemPanelView {
 struct NullToolbarView : public SystemToolbarView {
   void Show(bool show_or_hide) {}
   void ToggleButton(const string &n) {}
+  void SetTheme(const string &theme) {}
 };
 
 struct NullTableView : public SystemTableView {
@@ -107,7 +108,7 @@ void Application::UpdateSystemImage(int n, Texture&) {}
 
 unique_ptr<SystemAlertView> SystemAlertView::Create(AlertItemVec items) { return make_unique<NullAlertView>(); }
 unique_ptr<SystemPanelView> SystemPanelView::Create(const Box &b, const string &title, PanelItemVec items) { return nullptr; }
-unique_ptr<SystemToolbarView> SystemToolbarView::Create(MenuItemVec items) { return make_unique<NullToolbarView>(); }
+unique_ptr<SystemToolbarView> SystemToolbarView::Create(const string &theme, MenuItemVec items) { return make_unique<NullToolbarView>(); }
 unique_ptr<SystemMenuView> SystemMenuView::Create(const string &title, MenuItemVec items) { return make_unique<NullMenuView>(); }
 unique_ptr<SystemMenuView> SystemMenuView::CreateEditMenu(vector<MenuItem> items) { return nullptr; }
 unique_ptr<SystemTableView> SystemTableView::Create(const string &title, const string &style, const string &theme, TableItemVec items) { return make_unique<NullTableView>(title, style, move(items)); }

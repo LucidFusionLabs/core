@@ -186,6 +186,10 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
     _toolbar2 = [self createUIToolbar: [self getToolbarFrame] first:false];
     return self;
   }
+
+  - (void)setTheme:(const std::string&)n {
+    if (n == "Dark") {}
+  }
   
   - (NSMutableArray*)createUIToolbarItems:(BOOL)first {
     NSMutableArray *items = [[NSMutableArray alloc] init];
@@ -754,8 +758,13 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
         cell.textLabel.text = LFL::MakeNSString(ci.key);
         if (subtext) {
           cell.detailTextLabel.text = LFL::MakeNSString(ci.val);
-          cell.detailTextLabel.lineBreakMode = NSLineBreakByWordWrapping;
-          cell.detailTextLabel.numberOfLines = 0;
+          if (ci.type == LFL::TableItem::Command) {
+            cell.detailTextLabel.adjustsFontSizeToFitWidth = TRUE;
+            cell.detailTextLabel.textColor = [UIColor lightGrayColor];
+          } else {
+            cell.detailTextLabel.lineBreakMode = NSLineBreakByWordWrapping;
+            cell.detailTextLabel.numberOfLines = 0;
+          }
           if (ci.fg_a && (ci.flags & LFL::TableItem::Flag::ColoredSubText))
             cell.detailTextLabel.textColor = [UIColor colorWithRed:ci.fg_r/255.0 green:ci.fg_g/255.0 blue:ci.fg_b/255.0 alpha:ci.fg_a/255.0];
         }
@@ -1079,9 +1088,10 @@ struct iOSMenuView : public SystemMenuView {
 struct iOSToolbarView : public SystemToolbarView {
   IOSToolbar *toolbar;
   ~iOSToolbarView() { [toolbar release]; }
-  iOSToolbarView(MenuItemVec items) : toolbar([[IOSToolbar alloc] init: move(items)]) {}
+  iOSToolbarView(const string &theme, MenuItemVec items) : toolbar([[IOSToolbar alloc] init: move(items)]) { [toolbar setTheme: theme]; }
   void Show(bool show_or_hide) { [toolbar show:show_or_hide]; }
   void ToggleButton(const string &n) { [toolbar toggleButtonNamed: n]; }
+  void SetTheme(const string &theme) { [toolbar setTheme: theme]; }
 };
 
 struct iOSTextView : public SystemTextView {
@@ -1273,7 +1283,7 @@ void iOSTableView::ReplaceSection(int section, TableItem h, int flag, TableItemV
 
 unique_ptr<SystemAlertView> SystemAlertView::Create(AlertItemVec items) { return make_unique<iOSAlertView>(move(items)); }
 unique_ptr<SystemPanelView> SystemPanelView::Create(const Box &b, const string &title, PanelItemVec items) { return nullptr; }
-unique_ptr<SystemToolbarView> SystemToolbarView::Create(MenuItemVec items) { return make_unique<iOSToolbarView>(move(items)); }
+unique_ptr<SystemToolbarView> SystemToolbarView::Create(const string &theme, MenuItemVec items) { return make_unique<iOSToolbarView>(theme, move(items)); }
 unique_ptr<SystemMenuView> SystemMenuView::Create(const string &title, MenuItemVec items) { return make_unique<iOSMenuView>(title, move(items)); }
 unique_ptr<SystemMenuView> SystemMenuView::CreateEditMenu(vector<MenuItem> items) { return nullptr; }
 unique_ptr<SystemTableView> SystemTableView::Create(const string &title, const string &style, const string &theme, TableItemVec items) { return make_unique<iOSTableView>(title, style, theme, move(items)); }

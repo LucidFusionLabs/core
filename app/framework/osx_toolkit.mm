@@ -667,6 +667,7 @@ struct OSXToolbarView : public SystemToolbarView {
   OSXToolbarView(MenuItemVec items) {}
   void Show(bool show_or_hide) {}
   void ToggleButton(const string &n) {}
+  void SetTheme(const string &theme) {}
 };
 
 struct OSXTableView : public SystemTableView {
@@ -829,7 +830,7 @@ int Application::LoadSystemImage(const string &n) {
 
 unique_ptr<SystemAlertView> SystemAlertView::Create(AlertItemVec items) { return make_unique<OSXAlertView>(move(items)); }
 unique_ptr<SystemPanelView> SystemPanelView::Create(const Box &b, const string &title, PanelItemVec items) { return make_unique<OSXPanelView>(b, title, move(items)); }
-unique_ptr<SystemToolbarView> SystemToolbarView::Create(MenuItemVec items) { return make_unique<OSXToolbarView>(move(items)); }
+unique_ptr<SystemToolbarView> SystemToolbarView::Create(const string &theme, MenuItemVec items) { return make_unique<OSXToolbarView>(move(items)); }
 
 unique_ptr<SystemMenuView> SystemMenuView::Create(const string &title, MenuItemVec items) { return make_unique<OSXMenuView>(title, move(items)); }
 unique_ptr<SystemMenuView> SystemMenuView::CreateEditMenu(MenuItemVec items) {

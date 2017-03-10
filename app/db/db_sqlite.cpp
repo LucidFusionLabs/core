@@ -29,6 +29,10 @@ void SQLite::Row::GetColumnVal(int col, int *out) {
   *out = sqlite3_column_int(FromVoid<sqlite3_stmt*>(*parent), col);
 }
 
+void SQLite::Row::GetColumnVal(int col, int64_t *out) {
+  *out = sqlite3_column_int64(FromVoid<sqlite3_stmt*>(*parent), col);
+}
+
 void SQLite::Row::GetColumnVal(int col, StringPiece *out) {
   auto stmt = FromVoid<sqlite3_stmt*>(*parent);
   *out = StringPiece(MakeSigned(sqlite3_column_text(stmt, col)), sqlite3_column_bytes(stmt, col));
@@ -109,6 +113,12 @@ void SQLite::Bind(Statement stmt, int ind, int v) {
     ERROR("sqlite3_bind_int: error=", sqlite3_errstr(ret));
 }
 
+void SQLite::Bind(Statement stmt, int ind, int64_t v) {
+  int ret = 0;
+  if (SQLITE_OK != (ret = sqlite3_bind_int64(FromVoid<sqlite3_stmt*>(stmt), ind, v)))
+    ERROR("sqlite3_bind_int: error=", sqlite3_errstr(ret));
+}
+
 void SQLite::Bind(Statement stmt, int ind, const StringPiece &v) {
   int ret = 0;
   if (SQLITE_OK != (ret = sqlite3_bind_text(FromVoid<sqlite3_stmt*>(stmt), ind, v.buf, v.len, 0)))
@@ -138,28 +148,41 @@ void SQLiteIdValueStore::Open(SQLite::Database *d, const string &tn) {
   table_name = tn;
   CHECK(SQLite::Exec(*db, StrCat("CREATE TABLE IF NOT EXISTS ", tn ,"\n"
                                  "(id INTEGER PRIMARY KEY AUTOINCREMENT,\n"
-                                 "data BLOB NOT NULL);\n")));
-  CHECK(SQLite::Exec(*db, StrCat("SELECT id, data FROM ", tn, ";"),
-                     [=](SQLite::Row *r) {
-                       data[r->GetColumnValue<int>(0)] = r->GetColumnValue<BlobPiece>(1).str();
-                       return 0;
-                     }));
+                                 " data BLOB NOT NULL,\n"
+                                 " date INTEGER DEFAULT 0,\n"
+                                 " flags INTEGER DEFAULT 0\n"
+                                 ");\n")));
+  CHECK(SQLite::Exec(*db, StrCat("SELECT id, data, date FROM ", tn, ";"), [=](SQLite::Row *r) {
+    data[r->GetColumnValue<int>(0)] = { r->GetColumnValue<BlobPiece>(1).str(), Time(r->GetColumnValue<int64_t>(2)) };
+    return 0;
+  }));
 }
 
 int SQLiteIdValueStore::Insert(const BlobPiece &val) {
-  SQLite::Statement stmt = SQLite::Prepare(*db, StrCat("INSERT INTO ", table_name, " (data) VALUES (?);"));
-  SQLite::ExecPrepared(stmt, val);
+  int64_t now = Now().count();
+  SQLite::Statement stmt = SQLite::Prepare(*db, StrCat("INSERT INTO ", table_name, " (data, date) VALUES (?, ?);"));
+  SQLite::ExecPrepared(stmt, val, now);
   SQLite::Finalize(stmt);
   int ret = sqlite3_last_insert_rowid(FromVoid<sqlite3*>(*db));
-  data[ret] = val.str();
+  data[ret] = { val.str(), Time(now) };
   return ret;
 }
 
 bool SQLiteIdValueStore::Update(int id, const BlobPiece &val) {
-  SQLite::Statement stmt = SQLite::Prepare(*db, StrCat("UPDATE ", table_name, " SET data = ? WHERE id = ?;"));
-  SQLite::ExecPrepared(stmt, val, id);
+  int64_t now = Now().count();
+  SQLite::Statement stmt = SQLite::Prepare(*db, StrCat("UPDATE ", table_name, " SET data = ?, date = ? WHERE id = ?;"));
+  SQLite::ExecPrepared(stmt, val, now, id);
   SQLite::Finalize(stmt);
-  data[id] = val.str();
+  data[id] = { val.str(), Time(now) };
+  return true;
+}
+
+bool SQLiteIdValueStore::UpdateDate(int id, Time t) {
+  int64_t date = t.count();
+  SQLite::Statement stmt = SQLite::Prepare(*db, StrCat("UPDATE ", table_name, " SET date = ? WHERE id = ?;"));
+  SQLite::ExecPrepared(stmt, date, id);
+  SQLite::Finalize(stmt);
+  data[id].date = Time(date);
   return true;
 }
 

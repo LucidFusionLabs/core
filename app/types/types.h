@@ -39,6 +39,10 @@ template <typename X, typename Y, Y (X::*Z)> struct MemberLessThanCompare {
   bool operator()(const X &a, const X &b) { return a.*Z < b.*Z; }
 };
 
+template <typename X, typename Y, Y (X::*Z)> struct MemberGreaterThanCompare {
+  bool operator()(const X &a, const X &b) { return a.*Z > b.*Z; }
+};
+
 struct VoidPtr : public void_ptr {
   VoidPtr(void *V=0) { v=V; }
   operator bool() const { return v; }

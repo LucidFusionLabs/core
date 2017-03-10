@@ -827,10 +827,11 @@ struct SystemPanelView {
 };
 
 struct SystemToolbarView {
-  static unique_ptr<SystemToolbarView> Create(MenuItemVec items);
+  static unique_ptr<SystemToolbarView> Create(const string &theme, MenuItemVec items);
   virtual ~SystemToolbarView() {}
   virtual void Show(bool show_or_hide) = 0;
   virtual void ToggleButton(const string &n) = 0;
+  virtual void SetTheme(const string &theme) = 0;
 };
 
 struct SystemMenuView {

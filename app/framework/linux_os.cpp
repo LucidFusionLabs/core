@@ -27,7 +27,6 @@ string Application::GetLocalizedInteger(int number) { return string(); }
 void Application::LoadDefaultSettings(const StringPairVec &v) {}
 string Application::GetSetting(const string &key) { return string(); }
 void Application::SaveSettings(const StringPairVec &v) {}
-void Application::SetKeepScreenOn(bool v) {}
 
 Connection *Application::ConnectTCP(const string &hostport, int default_port, Connection::CB *connected_cb, bool background_services) {
   INFO("Application::ConnectTCP ", hostport, " (default_port = ", default_port, ") background_services = false"); 
