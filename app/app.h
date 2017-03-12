@@ -796,6 +796,7 @@ struct Application : public ::LFApp {
   static void *GetSymbol(const string &n);
   static string GetSetting(const string &key);
   static void SaveSettings(const StringPairVec&);
+  static void SaveSetting(const string &k, const string &v) { SaveSettings({ StringPair(k,v) }); }
   static void LoadDefaultSettings(const StringPairVec&);
   static void Daemonize(const char *dir, const char *progname);
   static void Daemonize(FILE *fout, FILE *ferr);

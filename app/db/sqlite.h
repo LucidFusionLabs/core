@@ -73,11 +73,11 @@ struct SQLiteIdValueStore {
   void Open(SQLite::Database *db, const string &tn);
   bool Erase(int row_id);
   int Insert(const BlobPiece &val);
-  bool Update(int row_id, const BlobPiece &val);
+  bool Update(int row_id, const BlobPiece &val, bool update_date=false);
   bool UpdateDate(int row_id, Time val);
 #ifdef LFL_FLATBUFFERS
   int Insert(const FlatBufferPiece &blob) { return Insert(MakeBlobPiece(blob)); }
-  bool Update(int row_id, const FlatBufferPiece &blob) { return Update(row_id, MakeBlobPiece(blob)); }
+  bool Update(int row_id, const FlatBufferPiece &blob, bool update_date=false) { return Update(row_id, MakeBlobPiece(blob), update_date); }
 #endif
 };
 

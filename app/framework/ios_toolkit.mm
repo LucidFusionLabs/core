@@ -46,10 +46,19 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
 
 @interface IOSTextField : UITextField
   @property (nonatomic) bool modified;
+  @property (nonatomic, assign) LFL::StringCB changed_cb;
   - (void)textFieldDidChange:(IOSTextField*)sender;
 @end
 @implementation IOSTextField
-  - (void)textFieldDidChange:(IOSTextField*)sender { _modified = true; }
+  - (void)textFieldDidChange:(IOSTextField*)sender {
+    if (_changed_cb) _changed_cb(LFL::GetNSString(self.text));
+  }
+@end
+
+@interface IOSSwitch : UISwitch
+  @property (nonatomic, assign) LFL::StringCB changed_cb;
+@end
+@implementation IOSSwitch
 @end
 
 @implementation IOSAlert
@@ -182,16 +191,17 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
     data = move(kv);
     toggled.resize(data.size());
     for (auto b = data.begin(), e = data.end(), i = b; i != e; ++i) toolbar_titles[i->shortcut] = i - b;
-    _toolbar  = [self createUIToolbar: [self getToolbarFrame] first:true];
-    _toolbar2 = [self createUIToolbar: [self getToolbarFrame] first:false];
+    _toolbar  = [self createUIToolbar: [self getToolbarFrame] resignAfterClick:false];
+    _toolbar2 = [self createUIToolbar: [self getToolbarFrame] resignAfterClick:true];
     return self;
   }
 
   - (void)setTheme:(const std::string&)n {
-    if (n == "Dark") {}
+    if (n == "Dark") { [_toolbar setBarStyle: UIBarStyleBlackTranslucent]; [_toolbar2 setBarStyle: UIBarStyleBlackTranslucent]; }
+    else             { [_toolbar setBarStyle: UIBarStyleDefault];          [_toolbar2 setBarStyle: UIBarStyleDefault]; }
   }
   
-  - (NSMutableArray*)createUIToolbarItems:(BOOL)first {
+  - (NSMutableArray*)createUIToolbarItems: (BOOL)resignAfterClick {
     NSMutableArray *items = [[NSMutableArray alloc] init];
     UIBarButtonItem *spacer = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil];
     for (int i=0, l=data.size(); i<l; i++) {
@@ -201,10 +211,10 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
       if (int icon = data[i].image) {
           CHECK_LE(icon, app_images.size());
           item = [[UIBarButtonItem alloc] initWithImage: app_images[icon - 1]
-            style:UIBarButtonItemStylePlain target:self action:(first ? @selector(onClick:) : @selector(onClick2:))];
+            style:UIBarButtonItemStylePlain target:self action:(resignAfterClick ? @selector(onClickResign:) : @selector(onClick:))];
       } else {
         item = [[UIBarButtonItem alloc] initWithTitle:(([K length] && LFL::isascii([K characterAtIndex:0])) ? [NSString stringWithFormat:@"%@", K] : [NSString stringWithFormat:@"%@\U0000FE0E", K])
-          style:UIBarButtonItemStylePlain target:self action:(first ? @selector(onClick:) : @selector(onClick2:))];
+          style:UIBarButtonItemStylePlain target:self action:(resignAfterClick ? @selector(onClickResign:) : @selector(onClick:))];
       }
       [item setTag:i];
       [items addObject:item];
@@ -215,10 +225,9 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
     return items;
   }
 
-  - (UIToolbar*)createUIToolbar:(CGRect)rect first:(BOOL)first {
-    NSMutableArray *items = [self createUIToolbarItems: first];
+  - (UIToolbar*)createUIToolbar:(CGRect)rect resignAfterClick:(BOOL)resignAfterClick {
+    NSMutableArray *items = [self createUIToolbarItems: resignAfterClick];
     UIToolbar *tb = [[UIToolbar alloc] initWithFrame: rect];
-    // [tb setBarStyle:UIBarStyleBlackTranslucent];
     tb.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleTopMargin;
     [tb setItems:items];
     [items release];
@@ -259,7 +268,7 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
     if (b.name == "toggle") [self toggleButton: item.tag];
   }
 
-  - (void)onClick2:(id)sender {
+  - (void)onClickResign:(id)sender {
     [self onClick: sender];
     [[LFUIApplication sharedAppDelegate].controller resignFirstResponder];
   }
@@ -639,6 +648,7 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
 
         IOSTextField *textfield = [[IOSTextField alloc] initWithFrame:
           [self getCellFrame:cell.textLabel.frame.size.width]];
+        textfield.changed_cb = ci.right_cb;
         textfield.autoresizingMask = UIViewAutoresizingFlexibleHeight;
         // textfield.adjustsFontSizeToFitWidth = YES;
         textfield.autoresizesSubviews = YES;
@@ -730,7 +740,8 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
         }
 
       } else if (ci.type == LFL::TableItem::Toggle) {
-        UISwitch *onoff = [[UISwitch alloc] init];
+        IOSSwitch *onoff = [[IOSSwitch alloc] init];
+        onoff.changed_cb = ci.right_cb;
         onoff.on = ci.val == "1";
         [onoff addTarget: self action: @selector(switchFlipped:) forControlEvents: UIControlEventValueChanged];
         cell.textLabel.text = LFL::MakeNSString(ci.key);
@@ -944,7 +955,8 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
       (LFL::GetNSString([segmented_control titleForSegmentAtIndex: segmented_control.selectedSegmentIndex]));
   }
 
-  - (IBAction) switchFlipped: (UISwitch*) onoff {
+  - (IBAction) switchFlipped: (IOSSwitch*) onoff {
+    if (onoff.changed_cb) onoff.changed_cb(onoff.on ? "1" : "");
     _lfl_self->changed = true;
   }
 
@@ -1235,8 +1247,8 @@ void iOSTableView::SetToolbar(SystemToolbarView *t) {
     frame.size.height += toolbar_height;
   }
   if (t) {
-    table.toolbar = [dynamic_cast<iOSToolbarView*>(t)->toolbar createUIToolbar:
-      CGRectMake(frame.origin.x, frame.origin.y+frame.size.height-toolbar_height, frame.size.width, toolbar_height) first: YES];
+    table.toolbar = dynamic_cast<iOSToolbarView*>(t)->toolbar.toolbar;
+    table.toolbar.frame = CGRectMake(frame.origin.x, frame.origin.y+frame.size.height-toolbar_height, frame.size.width, toolbar_height);
     [table.view addSubview: table.toolbar];
     frame.size.height -= toolbar_height;
   }

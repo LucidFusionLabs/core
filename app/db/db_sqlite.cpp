@@ -168,12 +168,19 @@ int SQLiteIdValueStore::Insert(const BlobPiece &val) {
   return ret;
 }
 
-bool SQLiteIdValueStore::Update(int id, const BlobPiece &val) {
-  int64_t now = Now().count();
-  SQLite::Statement stmt = SQLite::Prepare(*db, StrCat("UPDATE ", table_name, " SET data = ?, date = ? WHERE id = ?;"));
-  SQLite::ExecPrepared(stmt, val, now, id);
-  SQLite::Finalize(stmt);
-  data[id] = { val.str(), Time(now) };
+bool SQLiteIdValueStore::Update(int id, const BlobPiece &val, bool update_date) {
+  if (update_date) {
+    int64_t now = Now().count();
+    SQLite::Statement stmt = SQLite::Prepare(*db, StrCat("UPDATE ", table_name, " SET data = ?, date = ? WHERE id = ?;"));
+    SQLite::ExecPrepared(stmt, val, now, id);
+    SQLite::Finalize(stmt);
+    data[id] = { val.str(), Time(now) };
+  } else {
+    SQLite::Statement stmt = SQLite::Prepare(*db, StrCat("UPDATE ", table_name, " SET data = ? WHERE id = ?;"));
+    SQLite::ExecPrepared(stmt, val, id);
+    SQLite::Finalize(stmt);
+    data[id].blob = val.str();
+  }
   return true;
 }
 

@@ -445,6 +445,7 @@ static const char* const* ios_argv = 0;
 
   - (void)kbWillShowOrHide:(BOOL)show_or_hide withRect:(CGRect)rect andDuration:(NSTimeInterval)interval andCurve:(UIViewAnimationCurve)curve {
     if (/*interface_rotation || */ CGRectEqualToRect(rect, keyboard_frame)) return;
+    if (show_or_hide && !rect.size.height) return;
     if (_input_accessory_toolbar) _input_accessory_toolbar.hidden = show_or_hide;
     _showing_keyboard = show_or_hide;
     keyboard_frame = rect;
