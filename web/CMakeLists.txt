@@ -10,6 +10,10 @@ if(LFL_LIBCSS)
   set(CMAKE_AUTOMOC)
 endif()
 
+if(LFL_MOBILE)
+  return()
+endif()
+
 lfl_project(crawler)
 PROTOBUF_GENERATE_CPP(PROTO_SRC PROTO_HDR crawler.proto)
 add_executable(crawler crawler.cpp ${PROTO_SRC})

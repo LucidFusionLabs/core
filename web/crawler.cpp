@@ -75,7 +75,7 @@ using namespace LFL;
 
 extern "C" void MyAppCreate(int argc, const char* const* argv) {
   app = new Application(argc, argv);
-  app->focused = new Window();
+  app->focused = Window::Create();
   app->focused->frame_cb = Frame;
   app->focused->caption = "crawler";
   FLAGS_enable_network = 1;

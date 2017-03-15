@@ -64,6 +64,8 @@ struct QtAlertView : public SystemAlertView {
   }
 
   string RunModal(const string &arg) { return ""; }
+  void Hide() {}
+
   void Show(const string &arg) {
     app->ReleaseMouseFocus();
     if (add_text) {
@@ -123,6 +125,7 @@ struct QtToolbarView : public SystemToolbarView {
     }
   }
 
+  void SetTheme(const string&) {}
   void ToggleButton(const string &n) {}
   void Show(bool show_or_hide) {  
     if (!init && (init=1)) 
@@ -360,7 +363,7 @@ struct QtTableView : public QtTableInterface, public SystemTableView {
     else if (align == HAlign::Right) right_nav = item;
   }
 
-  void AddToolbar(SystemToolbarView *t) {}
+  void SetToolbar(SystemToolbarView *t) {}
 
   void Show(bool show_or_hide) {
     auto w = dynamic_cast<QtWindowInterface*>(app->focused);
@@ -465,6 +468,9 @@ struct QtTableView : public QtTableInterface, public SystemTableView {
     CHECK_LT(section, data.size());
     CHECK_EQ(item.size(), data[section].item.size());
     for (int i=0, l=data[section].item.size(); i != l; ++i) SetValue(section, i, item[i]);
+  }
+
+  void SetHeader(int section, TableItem header) {
   }
 
   void SetKey(int section, int row, const string &v) {
@@ -685,6 +691,8 @@ struct QtNavigationView : public SystemNavigationView {
       content_layout->removeWidget(w);
     }
   }
+
+  void SetTheme(const string&) {}
 };
 
 void Application::ShowSystemFontChooser(const FontDesc &cur_font, const StringVecCB &font_change_cb) {
@@ -730,12 +738,12 @@ void Application::UpdateSystemImage(int n, Texture &t) {
 
 unique_ptr<SystemAlertView> SystemAlertView::Create(AlertItemVec items) { return make_unique<QtAlertView>(move(items)); }
 unique_ptr<SystemPanelView> SystemPanelView::Create(const Box &b, const string &title, PanelItemVec items) { return nullptr; }
-unique_ptr<SystemToolbarView> SystemToolbarView::Create(MenuItemVec items) { return make_unique<QtToolbarView>(move(items)); }
+unique_ptr<SystemToolbarView> SystemToolbarView::Create(const string &theme, MenuItemVec items) { return make_unique<QtToolbarView>(move(items)); }
 unique_ptr<SystemMenuView> SystemMenuView::Create(const string &title, MenuItemVec items) { return make_unique<QtMenuView>(title, move(items)); }
 unique_ptr<SystemMenuView> SystemMenuView::CreateEditMenu(MenuItemVec items) { return make_unique<QtMenuView>("Edit", move(items)); }
-unique_ptr<SystemTableView> SystemTableView::Create(const string &title, const string &style, TableItemVec items) { return make_unique<QtTableView>(title, style, move(items)); }
+unique_ptr<SystemTableView> SystemTableView::Create(const string &title, const string &style, const string &theme, TableItemVec items) { return make_unique<QtTableView>(title, style, move(items)); }
 unique_ptr<SystemTextView> SystemTextView::Create(const string &title, File *file) { return make_unique<QtTextView>(title, file); }
 unique_ptr<SystemTextView> SystemTextView::Create(const string &title, const string &text) { return make_unique<QtTextView>(title, text); }
-unique_ptr<SystemNavigationView> SystemNavigationView::Create() { return make_unique<QtNavigationView>(); }
+unique_ptr<SystemNavigationView> SystemNavigationView::Create(const string &style, const string &theme) { return make_unique<QtNavigationView>(); }
 
 }; // namespace LFL

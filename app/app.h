@@ -549,6 +549,15 @@ struct FrameScheduler {
   void DelMainWaitSocket(Window*, Socket fd);
 };
 
+struct FrameWakeupTimer {
+  Window *root;
+  bool needs_frame=false;
+  unique_ptr<SystemTimer> timer;
+  FrameWakeupTimer(Window *w);
+  void ClearWakeupIn();
+  bool WakeupIn(Time interval);
+};
+
 struct BrowserInterface {
   virtual void Draw(const Box&) = 0;
   virtual void Open(const string &url) = 0;

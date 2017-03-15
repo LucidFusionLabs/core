@@ -143,7 +143,7 @@ class QtWindow : public QWindow, public QtWindowInterface {
       if (!app->run) { qapp->exit(); return true; }
     }
     if (!app->focused || app->focused != static_cast<LFL::Window*>(this)) app->MakeCurrentWindow(this);
-    app->EventDrivenFrame(true);
+    app->EventDrivenFrame(true, true);
     if (!app->run) { qapp->exit(); return true; }
     if (app->focused->target_fps) RequestRender();
     return QWindow::event(event);
@@ -268,7 +268,7 @@ void Application::LoseFocus() {}
 void Application::GrabMouseFocus()    { auto w = dynamic_cast<QtWindow*>(app->focused); w->grabbed=1; w->window->windowHandle()->setCursor(Qt::BlankCursor); w->grab_mode.On();  w->cursor_grabbed=true;  }
 void Application::ReleaseMouseFocus() { auto w = dynamic_cast<QtWindow*>(app->focused); w->grabbed=0; w->window->windowHandle()->unsetCursor();              w->grab_mode.Off(); w->cursor_grabbed=false; }
 void Application::ToggleTouchKeyboard() {}
-void Application::OpenTouchKeyboard(bool) {}
+void Application::OpenTouchKeyboard() {}
 void Application::CloseTouchKeyboard() {}
 void Application::CloseTouchKeyboardAfterReturn(bool v) {}
 void Application::SetTouchKeyboardTiled(bool v) {}

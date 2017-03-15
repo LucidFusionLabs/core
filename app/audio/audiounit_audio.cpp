@@ -72,13 +72,13 @@ struct AudioUnitAudioModule : public Module {
     // if ((err = AudioUnitSetProperty(inst_audiounit, kAudioUnitProperty_ShouldAllocateBuffer, kAudioUnitScope_Output, au_input_element,   &shouldAllocateBuffer, sizeof(shouldAllocateBuffer)))) return ERRORv(-1, "AudioUnitSetProperty: ", err);
 
     char errBuf[sizeof(int)+1]; errBuf[sizeof(errBuf)-1] = 0;
-    if (err = AudioSessionInitialize(NULL, NULL, NULL, NULL)) { memcpy(errBuf, &err, sizeof(int)); INFO("AudioSessionInitialize - ", errBuf); }
+    if ((err = AudioSessionInitialize(NULL, NULL, NULL, NULL))) { memcpy(errBuf, &err, sizeof(int)); INFO("AudioSessionInitialize - ", errBuf); }
 
     UInt32 sessionCategory = kAudioSessionCategory_PlayAndRecord;    
-    if (err = AudioSessionSetProperty (kAudioSessionProperty_AudioCategory, sizeof (sessionCategory), &sessionCategory)) {  memcpy(errBuf, &err, sizeof(int)); INFO("AudioSessionSetProperty - kAudioSessionProperty_AudioCategory - ", errBuf); }
+    if ((err = AudioSessionSetProperty (kAudioSessionProperty_AudioCategory, sizeof (sessionCategory), &sessionCategory))) {  memcpy(errBuf, &err, sizeof(int)); INFO("AudioSessionSetProperty - kAudioSessionProperty_AudioCategory - ", errBuf); }
 
     UInt32 newRoute = kAudioSessionOverrideAudioRoute_Speaker;
-    if (err = AudioSessionSetProperty(kAudioSessionProperty_OverrideAudioRoute, sizeof(newRoute), &newRoute)) { memcpy(errBuf, &err, sizeof(int)); INFO("AudioSessionSetProperty - kAudioSessionProperty_OverrideAudioRoute - Set speaker on ", errBuf); }
+    if ((err = AudioSessionSetProperty(kAudioSessionProperty_OverrideAudioRoute, sizeof(newRoute), &newRoute))) { memcpy(errBuf, &err, sizeof(int)); INFO("AudioSessionSetProperty - kAudioSessionProperty_OverrideAudioRoute - Set speaker on ", errBuf); }
 
     if ((err = AudioUnitInitialize(inst_audiounit))) return ERRORv(-1, "AudioUnitInitialize: ", err);
     return 0;
@@ -108,11 +108,10 @@ struct AudioUnitAudioModule : public Module {
     ioData = &list;
     AudioUnitRender(inst_audiounit, ioActionFlags, inTimeStamp, au_input_element, inNumberFrames, ioData);
 
-    double step = Seconds(1)*1000/FLAGS_sample_rate;
-    Time stamp = AudioResampler::monotonouslyIncreasingTimestamp(audio->IL->ReadTimestamp(-1), Now()*1000, &step, inNumberFrames);
+    microseconds step(1000000/FLAGS_sample_rate), stamp = AudioResamplerInterface::MonotonouslyIncreasingTimestamp(audio->IL->ReadTimestamp(-1), ToMicroseconds(Now()), &step, inNumberFrames);
     RingSampler::WriteAheadHandle IL(audio->IL.get()), IR(audio->IR.get());
     for (int i=0; i<inNumberFrames; i++) {
-      Time timestamp = stamp + i*step;
+      microseconds timestamp = stamp + i*step;
       IL.Write(in[i*FLAGS_chans_in+0]/32768.0, RingSampler::Stamp, timestamp);
 
       if (FLAGS_chans_in == 1) continue;
@@ -122,7 +121,7 @@ struct AudioUnitAudioModule : public Module {
       ScopedMutex ML(audio->inlock);
       IL.Commit();
       IR.Commit();
-      app->samples_read += inNumberFrames;
+      app->audio->samples_read += inNumberFrames;
     }
     return 0;
   }
@@ -140,11 +139,11 @@ struct AudioUnitAudioModule : public Module {
   }
 
   static OSStatus IOInCB (void *inRefCon, AudioUnitRenderActionFlags *ioActionFlags, const AudioTimeStamp *inTimeStamp, UInt32 inBusNumber, UInt32 inNumberFrames, AudioBufferList *ioData) {
-    return ((AudioUnitAudioModule*)app->audio.impl)->IOIn(inRefCon, ioActionFlags, inTimeStamp, inBusNumber, inNumberFrames, ioData);
+    return ((AudioUnitAudioModule*)app->audio.get())->IOIn(inRefCon, ioActionFlags, inTimeStamp, inBusNumber, inNumberFrames, ioData);
   }
 
   static OSStatus IOOutCB(void *inRefCon, AudioUnitRenderActionFlags *ioActionFlags, const AudioTimeStamp *inTimeStamp, UInt32 inBusNumber, UInt32 inNumberFrames, AudioBufferList *ioData) {
-    return ((AudioUnitAudioModule*)app->audio.impl)->IOOut(inRefCon, ioActionFlags, inTimeStamp, inBusNumber, inNumberFrames, ioData);
+    return ((AudioUnitAudioModule*)app->audio.get())->IOOut(inRefCon, ioActionFlags, inTimeStamp, inBusNumber, inNumberFrames, ioData);
   }
 };
 
@@ -152,6 +151,6 @@ int Application::GetMaxVolume() { return 0; }
 int Application::GetVolume() { return 0; }
 void Application::SetVolume(int v) {}
 
-Module *CreateAudioModule(Audio *a) { return new AudioUnitAudioModule(a); }
+unique_ptr<Module> CreateAudioModule(Audio *a) { return make_unique<AudioUnitAudioModule>(a); }
 
 }; // namespace LFL

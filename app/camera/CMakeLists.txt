@@ -2,7 +2,7 @@
 
 lfl_add_target(app_null_camera STATIC_LIBRARY SOURCES null_camera.cpp)
 
-if(LFL_IOS)
+if(0)
   lfl_add_target(app_avcapture_camera STATIC_LIBRARY SOURCES avcapture_camera.mm
                  COMPILE_OPTIONS -fobjc-abi-version=2 -fobjc-legacy-dispatch)
 endif()
@@ -15,7 +15,7 @@ if(0)
   target_link_libraries(app_qtkit_camera PUBLIC "-framework QTKit" "-framework CoreVideo")
 endif()
 
-if(LFL_OPENCV)
+if(0)
   lfl_add_target(app_opencv_camera STATIC_LIBRARY SOURCES opencv_camera.cpp
                  INCLUDE_DIRECTORIES ${OPENCV_INCLUDE} LINK_LIBRARIES ${OPENCV_LIB})
 endif()

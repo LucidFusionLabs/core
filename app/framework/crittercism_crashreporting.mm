@@ -1,3 +1,7 @@
+#ifdef LFL_IOS
+#import <UIKit/UIKit.h>
+#endif
+
 #import "Crittercism.h"
 #include "apple_common.h"
 

@@ -68,10 +68,14 @@ if(LFL_PNG AND NOT LFL_EMSCRIPTEN)
   elseif(LFL_LINUX)
     set(PNG_LIB -lpng PARENT_SCOPE)
   else()
+    set(PNG_CMAKE_ARGS)
+    if(LFL_XCODE)
+      set(PNG_CMAKE_ARGS ${PNG_CMAKE_ARGS} -DPNG_SHARED=FALSE)
+    endif()
     ExternalProject_Add(libpng SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libpng
                         PREFIX ${CMAKE_CURRENT_BINARY_DIR}/libpng
                         CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_CURRENT_BINARY_DIR}/libpng
-                        -DCMAKE_TOOLCHAIN_FILE:string=${CMAKE_TOOLCHAIN_FILE})
+                        -DCMAKE_TOOLCHAIN_FILE:string=${CMAKE_TOOLCHAIN_FILE} ${PNG_CMAKE_ARGS})
     add_library(libpng16 IMPORTED STATIC GLOBAL)
     add_dependencies(libpng16 libpng)
     set_property(TARGET libpng16 PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/libpng/lib/libpng16.a)
@@ -89,9 +93,13 @@ if(LFL_JPEG)
     target_include_directories(libjpeg PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/3rdparty/libjpeg)
     set(JPEG_LIB libjpeg PARENT_SCOPE)
   else()
+    set(JPEG_CONFIGURE_ENV ${CONFIGURE_ENV})
+    if(LFL_OSX)
+      set(JPEG_CONFIGURE_ENV ${JPEG_CONFIGURE_ENV} NASM=/opt/local/bin/nasm)
+    endif()
     ExternalProject_Add(libjpeg-turbo LOG_CONFIGURE ON LOG_BUILD ON
                         PREFIX ${CMAKE_CURRENT_BINARY_DIR}/libjpeg-turbo
-                        CONFIGURE_COMMAND ${CMAKE_COMMAND} -E env ${CONFIGURE_ENV}
+                        CONFIGURE_COMMAND ${CMAKE_COMMAND} -E env ${JPEG_CONFIGURE_ENV}
                         <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> ${CONFIGURE_OPTIONS}
                         DOWNLOAD_COMMAND rm -rf libjpeg-turbo
                         COMMAND cp -R ${CMAKE_CURRENT_SOURCE_DIR}/libjpeg-turbo libjpeg-turbo
@@ -353,7 +361,8 @@ if(LFL_SQLCIPHER)
                       PREFIX ${CMAKE_CURRENT_BINARY_DIR}/sqlcipher
                       SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/sqlcipher
                       CONFIGURE_COMMAND ${CMAKE_COMMAND} -E env ${CONFIG_ENV}
-                      <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> ${CONFIG_OPTS})
+                      <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> ${CONFIG_OPTS}
+                      BUILD_COMMAND make libsqlcipher.la)
   add_library(libsqlcipher IMPORTED SHARED GLOBAL)
   add_dependencies(libsqlcipher sqlcipher)
   set_property(TARGET libsqlcipher PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/sqlcipher/lib/libsqlcipher.a)
@@ -424,10 +433,18 @@ if(LFL_FFMPEG)
           --extra-cflags=-I${CMAKE_CURRENT_BINARY_DIR}/x264/include --disable-sse --disable-outdev=sdl)
     endif()
 
+    set(FFMPEG_CONFIGURE_ENV ${CONFIGURE_ENV})
+    if(LFL_OSX)
+      set(CONFIGURE_OPTIONS ${CONFIGURE_OPTIONS} --disable-decoder=vp9)
+      set(FFMPEG_CONFIGURE_ENV ${FFMPEG_CONFIGURE_ENV} PATH=/opt/local/bin:$ENV{PATH})
+    endif()
+
     ExternalProject_Add(ffmpeg LOG_CONFIGURE ON LOG_BUILD ON
                         PREFIX ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg
                         SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg
-                        CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> ${CONFIGURE_OPTIONS})
+                        CONFIGURE_COMMAND ${CMAKE_COMMAND} -E env ${FFMPEG_CONFIGURE_ENV}
+                        <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> ${CONFIGURE_OPTIONS}
+                        BUILD_COMMAND ${CMAKE_COMMAND} -E env ${FFMPEG_CONFIGURE_ENV} make)
     add_dependencies(ffmpeg ${LAME_LIB} ${X264_LIB})
     add_library(libavdevice IMPORTED STATIC GLOBAL)
     add_library(libavfilter IMPORTED STATIC GLOBAL)
@@ -574,9 +591,9 @@ endif()
 # OpenCV
 if(LFL_OPENCV)
   ExternalProject_Add(OpenCV SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV
-                             PREFIX ${CMAKE_CURRENT_BINARY_DIR}/OpenCV
-                             CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_CURRENT_BINARY_DIR}/OpenCV
-                             -DBUILD_TESTS=OFF -DBUILD_PERF_TESTS=OFF -DWITH_IPP=OFF)
+                      PREFIX ${CMAKE_CURRENT_BINARY_DIR}/OpenCV
+                      CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_CURRENT_BINARY_DIR}/OpenCV
+                      -DBUILD_TESTS=OFF -DBUILD_PERF_TESTS=OFF -DWITH_IPP=OFF -DBUILD_opencv_videoio=OFF)
 
   add_library(libopencv_core IMPORTED SHARED GLOBAL)
   add_library(libopencv_imgproc IMPORTED SHARED GLOBAL)
@@ -598,6 +615,7 @@ endif()
 
 # libarchive
 if(LFL_LIBARCHIVE)
+  set(ENABLE_ICONV FALSE)
   add_subdirectory(libarchive)
   set(ARCHIVE_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/libarchive PARENT_SCOPE)
   if(WIN32)

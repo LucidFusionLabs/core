@@ -203,6 +203,7 @@ struct SystemMenuView;
 struct SystemNavigationView;
 struct SystemResolver;
 struct SystemTableView;
+struct SystemTimer;
 struct SystemToolbarView;
 struct TextBox;
 struct Texture;

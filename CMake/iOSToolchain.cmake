@@ -19,12 +19,21 @@ set(CMAKE_SYSTEM_FRAMEWORK_PATH ${LFL_IOS_SDK}/System/Library/Frameworks)
 set(CMAKE_SIZEOF_VOID_P 4)
 
 if(CMAKE_GENERATOR MATCHES Xcode)
+  set(LFL_XCODE TRUE)
   set(CMAKE_MACOSX_BUNDLE YES)
   set(IOS_VERSION_MIN)
   set(IOS_VERSION_MIN_FULL) 
+  set(CMAKE_THREAD_LIBS_INIT "-lpthread")
+  set(CMAKE_HAVE_THREADS_LIBRARY 1)
+  set(CMAKE_USE_WIN32_THREADS_INIT 0)
+  set(CMAKE_USE_PTHREADS_INIT 1)
+  set(ENV{CPP} "/usr/bin/clang -E -arch arm")
 else()
   set(IOS_VERSION_MIN      "-miphoneos-version-min=8.0")
   set(IOS_VERSION_MIN_FULL "-miphoneos-version-min=8.0 -D__IPHONE_OS_VERSION_MIN_REQUIRED=80000")
+  set(ZLIB_INCLUDE_DIR ${LFL_IOS_SDK}/usr/include)
+  set(ZLIB_LIBRARY ${LFL_IOS_SDK}/usr/lib/libz.tbd)
+  set(M_LIBRARY ${LFL_IOS_SDK}/usr/lib/libm.tbd)
 endif()
 
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -isysroot ${LFL_IOS_SDK} -F${LFL_IOS_SDK}/System/Library/Frameworks ${IOS_VERSION_MIN}")
@@ -43,8 +52,4 @@ set(ENV{LDFLAGS}  "-arch arm64 -arch armv7 -isysroot ${LFL_IOS_SDK} ${IOS_VERSIO
 
 set(CONFIGURE_OPTIONS "--host=arm-apple-darwin")
 set(CONFIGURE_ENV CC=$ENV{CC} CXX=$ENV{CXX} CPP=$ENV{CPP} CXXCPP=$ENV{CXXCPP} AR=$ENV{AR} RANLIB=$ENV{RANLIB}
-    CFLAGS=$ENV{CFLAGS} CXXFLAGS=$ENV{CXXFLAGS} LDFLAGS=$ENV{LDFLAGS})
-
-set(M_LIBRARY ${LFL_IOS_SDK}/usr/lib/libm.tbd)
-set(ZLIB_INCLUDE_DIR ${LFL_IOS_SDK}/usr/include)
-set(ZLIB_LIBRARY ${LFL_IOS_SDK}/usr/lib/libz.tbd)
+    CFLAGS=$ENV{CFLAGS} CXXFLAGS=$ENV{CXXFLAGS} CPPFLAGS=$ENV{CPPFLAGS} LDFLAGS=$ENV{LDFLAGS})

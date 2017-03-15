@@ -277,6 +277,16 @@ void RateLimiter::Limit() {
   if (sleep != Time(0)) { MSleep(sleep.count()); sleep_bias.Add((timer.GetTime(true) - sleep).count()); }
 }
 
+FrameWakeupTimer::FrameWakeupTimer(Window *w) : root(w), timer(SystemTimer::Create([=](){
+  needs_frame=1; app->scheduler.Wakeup(root, FrameScheduler::WakeupFlag::InMainThread);
+})) {}
+
+void FrameWakeupTimer::ClearWakeupIn() { needs_frame=false; timer->Clear(); }
+bool FrameWakeupTimer::WakeupIn(Time interval) {
+  if (needs_frame && !(needs_frame=0)) { timer->Clear();       return false; }
+  else                                 { timer->Run(interval); return true;  }
+}
+
 /* Application */
 
 Application::Application(int ac, const char* const* av) : argc(ac), argv(av) {

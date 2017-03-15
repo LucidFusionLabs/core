@@ -99,6 +99,7 @@ See [new_app_template/README.txt](new_app_template/README.txt) to quick start yo
 
 * https://cmake.org/files/v3.3/cmake-3.3.0-Darwin-universal.dmg
 * Minimum of XCode 6 required, nasm & yasm (from macports or brew)
+* Make sure /usr/bin is before /opt/local/bin in PATH
 
         cd lfl
         mkdir osx && cd osx

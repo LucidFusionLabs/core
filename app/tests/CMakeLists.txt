@@ -1,5 +1,9 @@
 # $Id: CMakeLists.txt 1334 2014-11-28 09:14:21Z justin $
 
+if(LFL_MOBILE)
+  return()
+endif()
+
 lfl_project(app_test)
 lfl_add_target(tests EXECUTABLE
                INCLUDE_DIRECTORIES ${GTEST_INCLUDE} ${LIBCSS_INCLUDE}

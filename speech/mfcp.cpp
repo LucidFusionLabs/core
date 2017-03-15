@@ -31,7 +31,7 @@ extern "C" void MyAppCreate(int argc, const char* const* argv) {
   FLAGS_open_console = 1;
 #endif
   app = new Application(argc, argv);
-  app->focused = new Window();
+  app->focused = Window::Create();
 }
 
 extern "C" int MyAppMain() {

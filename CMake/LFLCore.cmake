@@ -252,6 +252,11 @@ if(LFL_PROTOBUF)
   set(PROTOBUF_PROTOC_EXECUTABLE ${LFL_OS_CORE_BINARY_DIR}/imports/protobuf/protoc)
 endif()
 
+if(LFL_FLATBUFFERS AND LFL_XCODE)
+  set(FLATBUFFERS_BUILD_FLATC FALSE)
+  set(FLATBUFFERS_BUILD_FLATHASH FALSE)
+endif()
+
 # imports
 add_subdirectory(${LFL_SOURCE_DIR}/core/imports)
 

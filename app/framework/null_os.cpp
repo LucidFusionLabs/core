@@ -21,10 +21,6 @@ namespace LFL {
 string GetNSDocumentDirectory() { return string("/tmp"); }
 #endif
 
-SystemAdvertisingView::SystemAdvertisingView() {}
-void SystemAdvertisingView::Show() {}
-void SystemAdvertisingView::Hide() {}
-
 string Application::GetVersion() { return string(); }
 string Application::PrintCallStack() { return ""; }
 string Application::GetSetting(const string &key) { return string(); }

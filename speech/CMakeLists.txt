@@ -4,6 +4,10 @@ lfl_project(speech)
 
 lfl_add_target(recognition STATIC_LIBRARY SOURCES speech.cpp recognition.cpp voice.cpp)
 
+if(LFL_MOBILE)
+  return()
+endif()
+
 lfl_add_target(speech-trainer EXECUTABLE SOURCES trainer.cpp
                LINK_LIBRARIES ${LFL_APP_LIB} app_null_framework app_null_graphics
                app_null_audio app_null_camera app_opencv_matrix app_ffmpeg_fft app_simple_loader

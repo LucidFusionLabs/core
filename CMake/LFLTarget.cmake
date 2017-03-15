@@ -68,6 +68,7 @@ macro(lfl_project _name)
   set(LFL_PROJECT ${_name})
   set(LFL_PROJECT_DIR ${CMAKE_CURRENT_SOURCE_DIR})
   set(LFL_PROJECT_BINDIR ${CMAKE_CURRENT_BINARY_DIR})
+  set(MACOSX_BUNDLE_GUI_IDENTIFIER ${ARGN})
 endmacro(lfl_project)
 
 function(lfl_add_target _name)
@@ -102,6 +103,10 @@ function(lfl_add_target _name)
   set_property(TARGET ${_name} PROPERTY NO_SYSTEM_FROM_IMPORTED ON)
   if(_LINK_LIBRARIES)
     target_link_libraries(${_name} PUBLIC ${_LINK_LIBRARIES})
+  endif()
+
+  if(_EXECUTABLE AND LFL_IOS AND LFL_XCODE)
+    set_target_properties(${_name} PROPERTIES XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY ${LFL_IOS_CERT})
   endif()
 
   if(_EXECUTABLE AND LFL_ADD_BITCODE_TARGETS)
