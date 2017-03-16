@@ -75,9 +75,6 @@
 [submodule "imports/diff-match-patch-cpp-stl"]
 	path = imports/diff-match-patch-cpp-stl
 	url = https://github.com/leutloff/diff-match-patch-cpp-stl
-[submodule "imports/glew"]
-	path = imports/glew
-	url = https://github.com/LuaDist/glew
 [submodule "imports/freetype"]
 	path = imports/freetype
 	url = https://github.com/LucidFusionLabs/freetype
@@ -117,3 +114,6 @@
 [submodule "imports/libarchive"]
 	path = imports/libarchive
 	url = https://github.com/LucidFusionLabs/libarchive
+[submodule "imports/glew"]
+	path = imports/glew
+	url = https://github.com/LucidFusionLabs/glew

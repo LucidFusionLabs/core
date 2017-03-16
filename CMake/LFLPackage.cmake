@@ -163,18 +163,18 @@ elseif(LFL_OSX)
     set(bin ${pkgname}.app/Contents/MacOS/${target})
 
     add_custom_command(TARGET ${target} POST_BUILD WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-      COMMAND cp ${target} ${pkgname}.app/Contents/MacOS
+      COMMAND cp $<TARGET_FILE:${target}> ${bin}
       COMMAND install_name_tool -change /usr/local/lib/libportaudio.2.dylib @loader_path/../Libraries/libportaudio.2.dylib ${bin}
       COMMAND install_name_tool -change /usr/local/lib/libmp3lame.0.dylib @loader_path/../Libraries/libmp3lame.0.dylib ${bin}
       COMMAND install_name_tool -change lib/libopencv_core.3.1.dylib @loader_path/../Libraries/libopencv_core.3.1.dylib ${bin}
       COMMAND install_name_tool -change lib/libopencv_imgproc.3.1.dylib @loader_path/../Libraries/libopencv_imgproc.3.1.dylib ${bin}
-      COMMAND codesign -f -s \"${LFL_OSX_CERT}\" ${pkgname}.app/Contents/MacOS/${target})
+      COMMAND codesign -f -s \"${LFL_OSX_CERT}\" ${bin})
 
     add_custom_target(${target}_run WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} DEPENDS ${target}
-      COMMAND ${pkgname}.app/Contents/MacOS/${target})
+      COMMAND ${bin})
 
     add_custom_target(${target}_debug WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} DEPENDS ${target}
-      COMMAND lldb -f ${pkgname}.app/Contents/MacOS/${target} -o run)
+      COMMAND lldb -f ${bin} -o run)
   endfunction()
 
   function(lfl_post_build_start target binname pkgname)
@@ -205,7 +205,7 @@ elseif(LFL_OSX)
       COMMAND if [ -d ${CMAKE_CURRENT_SOURCE_DIR}/assets ]; then cp -r ${CMAKE_CURRENT_SOURCE_DIR}/assets ${res}\; else mkdir ${res}/assets\; fi
       COMMAND for d in ${CMAKE_CURRENT_SOURCE_DIR}/drawable-\*\; do if [ -d $$d ]; then cp -R $$d ${res}\; fi\; done
       COMMAND if [ ${copy_lfl_app_asset_files} ]; then cp ${LFL_APP_ASSET_FILES} ${res}/assets\; fi
-      COMMAND cp ${target} ${pkgname}.app/Contents/MacOS
+      COMMAND cp $<TARGET_FILE:${target}> ${bin}
       COMMAND if [ ${copy_lfl_app_lib_files} ]; then cp ${LFL_APP_LIB_FILES} ${lib}\; fi
       COMMAND if [ ${copy_lfl_app_asset_dirs} ]; then for d in ${LFL_APP_ASSET_DIRS}\; do cp -R $$d ${res}/assets\; done\; fi
       COMMAND install_name_tool -change /usr/local/lib/libportaudio.2.dylib @loader_path/../Libraries/libportaudio.2.dylib ${bin}
@@ -215,7 +215,7 @@ elseif(LFL_OSX)
       COMMAND install_name_tool -change lib/libopencv_imgproc.3.1.dylib @loader_path/../Libraries/libopencv_imgproc.3.1.dylib ${bin})
 
     add_custom_target(${target}_pkg WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-      COMMAND codesign -f -s \"${LFL_OSX_CERT}\" ${pkgname}.app/Contents/MacOS/${binname}
+      COMMAND codesign -f -s \"${LFL_OSX_CERT}\" ${bin}
       COMMAND if [ -d /Volumes/${pkgname} ]; then umount /Volumes/${pkgname}\; fi
       COMMAND rm -rf ${pkgname}.dmg ${pkgname}.sparseimage
       COMMAND hdiutil create -size 60m -type SPARSE -fs HFS+ -volname ${pkgname} -attach ${pkgname}.sparseimage
@@ -227,10 +227,10 @@ elseif(LFL_OSX)
       COMMAND codesign -f -s \"${LFL_OSX_CERT}\" ${pkgname}.dmg)
 
     add_custom_target(${target}_run WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} DEPENDS ${target}
-      COMMAND ${pkgname}.app/Contents/MacOS/${target})
+      COMMAND ${bin})
 
     add_custom_target(${target}_debug WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} DEPENDS ${target}
-      COMMAND lldb -f ${pkgname}.app/Contents/MacOS/${target} -o run)
+      COMMAND lldb -f ${bin} -o run)
 
     if(LFL_ADD_BITCODE_TARGETS AND TARGET ${target}_designer)
       lfl_post_build_copy_bin(${target}_designer ${target}_designer ${pkgname})

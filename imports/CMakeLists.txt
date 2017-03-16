@@ -103,7 +103,7 @@ if(LFL_JPEG)
                         <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> ${CONFIGURE_OPTIONS}
                         DOWNLOAD_COMMAND rm -rf libjpeg-turbo
                         COMMAND cp -R ${CMAKE_CURRENT_SOURCE_DIR}/libjpeg-turbo libjpeg-turbo
-                        COMMAND ${CMAKE_COMMAND} -E chdir libjpeg-turbo autoreconf -fi)
+                        COMMAND ${CMAKE_COMMAND} -E chdir libjpeg-turbo env -i autoreconf -fi)
     add_library(libjpeg IMPORTED STATIC GLOBAL)
     add_dependencies(libjpeg libjpeg-turbo)
     set_property(TARGET libjpeg PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/libjpeg-turbo/lib/libturbojpeg.a)
@@ -191,11 +191,15 @@ endif()
 
 # glog
 if(LFL_GLOG)
+  set(GLOG_CMAKE_ARGS)
+  if(LFL_XCODE)
+    set(GLOG_CMAKE_ARGS ${GLOG_CMAKE_ARGS} -DHAVE_UINT16_T=TRUE)
+  endif()
   ExternalProject_Add(googlelog LOG_CONFIGURE ON LOG_BUILD ON
                       SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/glog
                       PREFIX ${CMAKE_CURRENT_BINARY_DIR}/glog
                       CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_CURRENT_BINARY_DIR}/glog
-                      -DCMAKE_TOOLCHAIN_FILE:string=${CMAKE_TOOLCHAIN_FILE})
+                      -DCMAKE_TOOLCHAIN_FILE:string=${CMAKE_TOOLCHAIN_FILE} ${GLOG_CMAKE_ARGS})
   add_library(libglog IMPORTED STATIC GLOBAL)
   add_dependencies(libglog googlelog)
   get_static_library_name(_lib glog)
@@ -396,10 +400,16 @@ endif()
 
 # x264
 if(LFL_X264 AND NOT LFL_WINDOWS)
+  set(X264_CONFIGURE_ENV ${CONFIGURE_ENV})
+  if(LFL_XCODE)
+    set(X264_CONFIGURE_ENV ${X264_CONFIGURE_ENV} PATH=$ENV{PATH}:/opt/local/bin)
+  endif()
   ExternalProject_Add(x264 LOG_CONFIGURE ON LOG_BUILD ON
                       PREFIX ${CMAKE_CURRENT_BINARY_DIR}/x264
                       SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/x264
-                      CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> --extra-cflags=-w --enable-shared)
+                      CONFIGURE_COMMAND ${CMAKE_COMMAND} -E env ${X264_CONFIGURE_ENV}
+                      <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> --extra-cflags=-w --enable-shared
+                      BUILD_COMMAND ${CMAKE_COMMAND} -E env ${X264_CONFIGURE_ENV} make)
   add_library(libx264 IMPORTED SHARED GLOBAL)
   add_dependencies(libx264 x264)
   get_shared_library_name(SHARED_LIBRARY_NAME libx264 138)
@@ -616,6 +626,9 @@ endif()
 # libarchive
 if(LFL_LIBARCHIVE)
   set(ENABLE_ICONV FALSE)
+  set(ENABLE_CAT FALSE)
+  set(ENABLE_TAR FALSE)
+  set(ENABLE_CPIO FALSE)
   add_subdirectory(libarchive)
   set(ARCHIVE_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/libarchive PARENT_SCOPE)
   if(WIN32)
