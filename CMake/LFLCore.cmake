@@ -184,6 +184,10 @@ list(APPEND CMAKE_MODULE_PATH ${LFL_SOURCE_DIR}/core/CMake)
 include(LFLTarget)
 include(LFLPackage)
 
+if(LFL_IOS_SIM)
+  add_custom_target(sim_start COMMAND nohup /Applications/Xcode.app/Contents/Developer/Applications/iOS\ Simulator.app/Contents/MacOS/iOS\ Simulator &)
+endif()
+
 if(LFL_WINDOWS)
   link_directories("")
   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /SAFESEH:NO")

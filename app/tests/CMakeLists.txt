@@ -14,7 +14,8 @@ lfl_add_target(tests EXECUTABLE
                app_null_audio app_null_camera ${LFL_APP_MATRIX} app_null_fft app_simple_loader
                app_simple_resampler ${LFL_APP_CONVERT} app_stdregex_regex app_null_sregex
                app_libpng_png app_null_jpeg app_null_gif app_null_ogg app_libcss_css app_null_ttf
-               app_null_ssl app_null_js app_null_tu app_null_toolkit ${LFL_APP_OS})
+               app_null_ssl app_null_js app_null_tu app_null_toolkit ${LFL_APP_OS}
+               LIB_FILES ${LFL_APP_LIB_FILES} ${OPENCV_LIB_FILES})
 
 add_custom_command(TARGET tests POST_BUILD WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
                    COMMAND ${CMAKE_COMMAND} -E make_directory lib

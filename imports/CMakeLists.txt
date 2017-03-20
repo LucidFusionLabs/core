@@ -103,7 +103,7 @@ if(LFL_JPEG)
                         <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> ${CONFIGURE_OPTIONS}
                         DOWNLOAD_COMMAND rm -rf libjpeg-turbo
                         COMMAND cp -R ${CMAKE_CURRENT_SOURCE_DIR}/libjpeg-turbo libjpeg-turbo
-                        COMMAND ${CMAKE_COMMAND} -E chdir libjpeg-turbo env -i autoreconf -fi)
+                        COMMAND ${CMAKE_COMMAND} -E chdir libjpeg-turbo autoreconf -fi)
     add_library(libjpeg IMPORTED STATIC GLOBAL)
     add_dependencies(libjpeg libjpeg-turbo)
     set_property(TARGET libjpeg PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/libjpeg-turbo/lib/libturbojpeg.a)
