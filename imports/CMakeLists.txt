@@ -68,14 +68,11 @@ if(LFL_PNG AND NOT LFL_EMSCRIPTEN)
   elseif(LFL_LINUX)
     set(PNG_LIB -lpng PARENT_SCOPE)
   else()
-    set(PNG_CMAKE_ARGS)
-    if(LFL_XCODE)
-      set(PNG_CMAKE_ARGS ${PNG_CMAKE_ARGS} -DPNG_SHARED=FALSE)
-    endif()
     ExternalProject_Add(libpng SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libpng
                         PREFIX ${CMAKE_CURRENT_BINARY_DIR}/libpng
                         CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_CURRENT_BINARY_DIR}/libpng
-                        -DCMAKE_TOOLCHAIN_FILE:string=${CMAKE_TOOLCHAIN_FILE} ${PNG_CMAKE_ARGS})
+                        -DCMAKE_TOOLCHAIN_FILE:string=${CMAKE_TOOLCHAIN_FILE}
+                        -DPNG_SHARED=FALSE -DPNG_TESTS=FALSE)
     add_library(libpng16 IMPORTED STATIC GLOBAL)
     add_dependencies(libpng16 libpng)
     set_property(TARGET libpng16 PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/libpng/lib/libpng16.a)

@@ -85,9 +85,10 @@ function(lfl_add_target _name)
   set(${_name}_ASSET_FILES ${_ASSET_FILES} PARENT_SCOPE)
 
   if(LFL_IOS OR LFL_OSX)
-    set(BUNDLE_PREFIX)
     if(LFL_OSX)
       set(BUNDLE_PREFIX Resources/) 
+    elseif(LFL_IOS AND LFL_XCODE)
+      set(BUNDLE_PREFIX ${_name}.app/)
     endif()
     file(GLOB ASSET_FILES ${_ASSET_FILES})
     set_source_files_properties(${ASSET_FILES} PROPERTIES HEADER_FILE_ONLY ON
