@@ -88,16 +88,26 @@ elseif(LFL_IOS)
   endfunction()
 
   function(lfl_post_build_start target)
+    string(REPLACE ";" " " IOS_CERT "${LFL_IOS_CERT}")
     set_target_properties(${target} PROPERTIES MACOSX_BUNDLE TRUE)
+    set_target_properties(${target} PROPERTIES XCODE_ATTRIBUTE_SDKROOT iphoneos)
     set_target_properties(${target} PROPERTIES XCODE_ATTRIBUTE_ENABLE_BITCODE FALSE)
-    set_target_properties(${target} PROPERTIES XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY ${LFL_IOS_CERT})
-    set_target_properties(${target} PROPERTIES XCODE_ATTRIBUTE_PROVISIONING_PROFILE ${LFL_IOS_PROVISION})
+    set_target_properties(${target} PROPERTIES XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY "${IOS_CERT}")
+    set_target_properties(${target} PROPERTIES XCODE_ATTRIBUTE_DEVELOPMENT_TEAM "${LFL_IOS_TEAM}")
+    set_target_properties(${target} PROPERTIES XCODE_ATTRIBUTE_PROVISIONING_PROFILE_SPECIFIER "${LFL_IOS_PROVISION_NAME}")
+    set_target_properties(${target} PROPERTIES XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET "${IOS_VERSION_MIN}")
+
     if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/iphone-Info.plist)
+      # For the Info.plist files, Xcode inserts BuildMachineOSBuild, DTCompiler, DTPlatformBuild,
+      # DTPlatformVersion, DTSDKBuild, DTSDKName, DTXcode, DTXcodeBuild keys.
       set_target_properties(${target} PROPERTIES MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/iphone-Info.plist)
     endif()
 
-    # For the Info.plist files, Xcode inserts BuildMachineOSBuild, DTCompiler, DTPlatformBuild,
-    # DTPlatformVersion, DTSDKBuild, DTSDKName, DTXcode, DTXcodeBuild keys.
+    set(should_sign)
+    if(NOT LFL_IOS_SIM AND NOT LFL_XCODE)
+      set(should_sign 1)
+    endif()
+
     add_custom_command(TARGET ${target} POST_BUILD WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
       COMMAND rm -rf ${target}.dSYM
       COMMAND cp ${CMAKE_CURRENT_SOURCE_DIR}/${target}-iphone/BundleRoot/* $<TARGET_FILE_DIR:${target}>
@@ -105,7 +115,7 @@ elseif(LFL_IOS)
       COMMAND for d in ${CMAKE_CURRENT_SOURCE_DIR}/${target}-iphone/\*.bundle\; do if [ -d $$d ]; then cp -R $$d $<TARGET_FILE_DIR:${target}>\; fi\; done
       COMMAND for f in ${CMAKE_CURRENT_SOURCE_DIR}/${target}-iphone/Resources/\*\; do o=`basename $$f | sed s/xib$$/nib/`\; ${LFL_APPLE_DEVELOPER}/usr/bin/ibtool --warnings --errors --notices --compile $<TARGET_FILE_DIR:${target}>/$$o $$f\; done
       COMMAND dsymutil $<TARGET_FILE:${target}> -o ${target}.dSYM
-      COMMAND if ! [ ${LFL_IOS_SIM} ]\; then codesign -f -s \"${LFL_IOS_CERT}\"
+      COMMAND if [ ${should_sign} ]\; then codesign -f -s \"${LFL_IOS_CERT}\"
       --entitlements ${CMAKE_CURRENT_SOURCE_DIR}/iphone-Entitlements.plist $<TARGET_FILE_DIR:${target}>\; fi)
 
     add_custom_target(${target}_pkg WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} DEPENDS ${target}
