@@ -38,9 +38,8 @@ if(LFL_IOS)
   add_library(app_ios_admob STATIC ios_admob.mm)
   target_include_directories(app_ios_admob PUBLIC ${LFL_APP_INCLUDE}) 
   target_compile_definitions(app_ios_admob PUBLIC ${LFL_APP_DEF})
-  target_compile_options(app_ios_admob PUBLIC -fobjc-abi-version=2 -fobjc-legacy-dispatch
-                         "-F${LFL_IOS_FIREBASE}/AdMob")
-  target_link_libraries(app_ios_admob "-F${LFL_IOS_FIREBASE}/AdMob" "-framework GoogleMobileAds"
+  target_compile_options(app_ios_admob PUBLIC -fobjc-abi-version=2 -fobjc-legacy-dispatch "${ADMOB_OPTIONS}")
+  target_link_libraries(app_ios_admob "${ADMOB_LIBS}" "-framework GoogleMobileAds"
                         "-framework AdSupport" "-framework CoreTelephony" "-framework CoreMotion"
                         "-framework CFNetwork" "-framework AudioToolbox" "-framework MediaPlayer"
                         "-framework MessageUI" "-framework MobileCoreServices"

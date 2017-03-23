@@ -3,7 +3,6 @@ set(LFL_IOS_ROOT "${LFL_APPLE_DEVELOPER}/Platforms/iPhoneSimulator.platform/Deve
 set(LFL_IOS_SDK "${LFL_IOS_ROOT}/SDKs/iPhoneSimulator.sdk")
 set(LFL_IOS_ARCH "x86_64")
 set(LFL_IOS_ARCH_FLAGS "-arch x86_64")
-set(LFL_IOS_FIREBASE "$ENV{HOME}/Firebase")
 set(LFL_IOS TRUE)
 set(LFL_IOS_SIM TRUE)
 set(LFL_USE_LIBCPP ON)
