@@ -87,7 +87,7 @@ namespace SSH {
   struct DSSSignature : public LFL::Serializable {
     StringPiece format_id;
     BigNum r, s;
-    DSSSignature(BigNum R, BigNum S) : Serializable(0), r(R), s(S), format_id("ssh-dss") {}
+    DSSSignature(BigNum R, BigNum S) : Serializable(0), format_id("ssh-dss"), r(R), s(S) {}
 
     int HeaderSize() const { return 4*2 + 7 + 20*2; }
     int Size() const { return HeaderSize(); }

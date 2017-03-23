@@ -448,7 +448,7 @@ struct HTTPServerConnection : public Connection::Handler {
     const char *url=0, *args=0, *headers=0, *postdata=0; 
     Dispatcher() {}
     Dispatcher(int T, const char *U, const char *A, const char *H, int L) :
-      type(T), url(U), args(A), headers(H), reqlen(L) {}
+      type(T), reqlen(L), url(U), args(A), headers(H) {}
 
     void clear() { type=reqlen=postlen=0; url=args=headers=postdata=0; }
     bool empty() { return !type; }

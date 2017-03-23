@@ -414,7 +414,7 @@ namespace SSH {
     unsigned char want_reply=0;
     MSG_CHANNEL_REQUEST() : Serializable(ID) {}
     MSG_CHANNEL_REQUEST(int RC, const StringPiece &RT, const StringPiece &V, bool WR) : Serializable(ID), recipient_channel(RC), request_type(RT), term(V), want_reply(WR) {}
-    MSG_CHANNEL_REQUEST(int RC, const StringPiece &RT, int ES, bool WR) : Serializable(ID), recipient_channel(RC), request_type(RT), width(ES), want_reply(WR) {}
+    MSG_CHANNEL_REQUEST(int RC, const StringPiece &RT, int ES, bool WR) : Serializable(ID), recipient_channel(RC), width(ES), request_type(RT), want_reply(WR) {}
     MSG_CHANNEL_REQUEST(int RC, const StringPiece &RT, const point &D, const point &PD, const StringPiece &T, const StringPiece &TM, bool WR) : Serializable(ID),
       recipient_channel(RC), width(D.x), height(D.y), pixel_width(PD.x), pixel_height(PD.y), request_type(RT), term(T), term_mode(TM), want_reply(WR) {}
 

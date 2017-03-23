@@ -318,7 +318,7 @@ struct FreeTypeFontEngine : public FontEngine {
     string name, content;
     FT_FaceRec_ *face=0;
     virtual ~Resource();
-    Resource(FT_FaceRec_ *FR=0, const string &N="", string *C=0) : face(FR), name(N) { if (C) swap(*C, content); }
+    Resource(FT_FaceRec_ *FR=0, const string &N="", string *C=0) : name(N), face(FR) { if (C) swap(*C, content); }
   };
   unordered_map<FontDesc, Font*, FontDesc::Hasher, FontDesc::Equal> font_map;
   unordered_map<string, shared_ptr<Resource>> resource;

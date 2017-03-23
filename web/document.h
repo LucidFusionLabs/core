@@ -40,7 +40,7 @@ struct DocumentParser {
     StyleSheet *style_target;
     StyleParser(DocumentParser *p, const string &url, const DOM::DOMString &cs) : Parser(p, url), charset(String::ToUTF8(cs)),
     style_target(new StyleSheet(parent->doc->node, "", charset.empty() ? "UTF-8" : charset.c_str(), 0, 0)) {
-      p->doc->style_sheet.push_back(move(unique_ptr<StyleSheet>(style_target)));
+      p->doc->style_sheet.push_back(unique_ptr<StyleSheet>(style_target));
     }
 
     virtual void Complete(void *self) { 

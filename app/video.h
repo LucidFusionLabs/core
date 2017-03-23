@@ -264,7 +264,7 @@ struct DepthTexture {
   int width, height, df;
   bool owner=true;
   DepthTexture(GraphicsDevice *D=0, int w=0, int h=0, int DF=Depth::_16, unsigned id=0) :
-    ID(id), gd(D), width(w), height(h), df(DF) {}
+    gd(D), ID(id), width(w), height(h), df(DF) {}
   ~DepthTexture() { if (owner) ClearGL(); }
 
   struct Flag { enum { CreateGL=1 }; };

@@ -581,7 +581,7 @@ struct Sniffer {
   CB cb;
   int ip, mask;
   void *handle;
-  Sniffer(void *H, int I, int M, CB C) : cb(C), handle(H), ip(I), mask(M) {}
+  Sniffer(void *H, int I, int M, CB C) : cb(C), ip(I), mask(M), handle(H) {}
   ~Sniffer() { thread.Wait(); }
   void Threadproc();
   static unique_ptr<Sniffer> Open(const string &dev, const string &filter, int snaplen, CB cb);

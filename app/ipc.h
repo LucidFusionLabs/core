@@ -439,7 +439,7 @@ struct ProcessAPIServer : public ProcessAPI {
     point tile;
     MultiProcessPaintResourceBuilder paint_list;
     PaintQuery(Parent *P, int L, const point &X, int F, MultiProcessPaintResourceBuilder &list) :
-      PaintIPC(P,0), layer(L), tile(X), flag(F) { swap(paint_list, list); }
+      PaintIPC(P,0), layer(L), flag(F), tile(X) { swap(paint_list, list); }
     int AllocateBufferResponse(const IPC::AllocateBufferResponse*, MultiProcessBuffer&);
   };
   IPC_CLIENT_CALL(SwapTree, Void, int id, const LayersInterface *layers) {

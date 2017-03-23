@@ -1163,7 +1163,7 @@ int SocketServicesThread::ConnectionHandler::Read(Connection *c) {
   return 0;
 }
 
-SocketServicesThread::SocketServicesThread(SocketServices *N, bool Init) : net(N), init(Init),
+SocketServicesThread::SocketServicesThread(SocketServices *N, bool Init) : init(Init), net(N),
   rd(new SocketConnection(app->net->unix_client.get(), new SocketServicesThread::ConnectionHandler())),
   wr(new SocketConnection(app->net->unix_client.get(), new SocketServicesThread::ConnectionHandler())),
   thread(make_unique<Thread>(bind(&SocketServicesThread::HandleMessagesLoop, this))) {

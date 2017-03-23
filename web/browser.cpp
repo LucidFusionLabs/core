@@ -346,7 +346,7 @@ void DOM::Renderer::Finish() {
 }
 
 Browser::Document::~Document() {}
-Browser::Document::Document(const Box &V) : parser(make_unique<DocumentParser>(this)), alloc(1024*1024) {}
+Browser::Document::Document(const Box &V) : alloc(1024*1024), parser(make_unique<DocumentParser>(this)) {}
 
 void Browser::Document::Clear() {
   js_context.reset();

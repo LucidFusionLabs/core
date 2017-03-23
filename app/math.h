@@ -448,7 +448,7 @@ template <class T=double> struct matrix {
 
   matrix() : M(0), N(0), flag(0), bytes(0), alloc(Allocator::Default()), m(0) {}
   matrix(int Mrows, int Ncols, T InitialVal=T(), int Flag=0, Allocator *Alloc=0) : m(0) { Open(Mrows, Ncols, InitialVal, Flag, Alloc); }
-  matrix(const matrix<T> &copy) : m(0), alloc(0) { Open(copy.M, copy.N, T(), copy.flag); AssignL(&copy); }
+  matrix(const matrix<T> &copy) : alloc(0), m(0) { Open(copy.M, copy.N, T(), copy.flag); AssignL(&copy); }
   matrix(const char *bitmap, int Mrows, int Ncols, int Flag=0, int Chans=1, int ChanInd=0, Allocator *Alloc=0) : m(0) { Open(Mrows, Ncols, bitmap, Flag, Alloc); }
   matrix& operator=(const matrix &copy) { Open(copy.M, copy.N, T(), copy.flag); AssignL(&copy); return *this; }
   virtual ~matrix() { alloc->Free(m); }

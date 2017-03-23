@@ -47,8 +47,8 @@ struct SyntaxMatcher {
     Regex beg, end, skip;
     int type=0;
     CompiledRule() {}
-    CompiledRule(int T, const String16 &b, const String16 &e) : type(T), beg_pat(b), end_pat(e) {}
-    CompiledRule(int T, const string &b, const string &e, const string &s) : type(T), beg(b), end(e), skip(s) {}
+    CompiledRule(int T, const String16 &b, const String16 &e) : beg_pat(b), end_pat(e), type(T) {}
+    CompiledRule(int T, const string &b, const string &e, const string &s) : beg(b), end(e), skip(s), type(T) {}
   };
 
   struct CompiledGroup {
