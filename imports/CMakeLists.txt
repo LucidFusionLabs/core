@@ -363,7 +363,7 @@ if(LFL_SQLCIPHER)
                       SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/sqlcipher
                       CONFIGURE_COMMAND ${CMAKE_COMMAND} -E env ${CONFIG_ENV}
                       <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> ${CONFIG_OPTS}
-                      BUILD_COMMAND env -i ${CMAKE_COMMAND} -E env PATH=$ENV{PATH} ${CONFIG_ENV}
+                      BUILD_COMMAND env -i ${CMAKE_COMMAND} -E env HOME=$ENV{HOME} PATH=$ENV{PATH} ${CONFIG_ENV}
                       make libsqlcipher.la)
   add_library(libsqlcipher IMPORTED SHARED GLOBAL)
   add_dependencies(libsqlcipher sqlcipher)
