@@ -215,6 +215,10 @@ else()
   endif()
 endif()
 
+if(LFL_XCODE)
+  set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${LFL_BINARY_DIR}/out/library)
+endif()
+
 # utility macros
 macro(list_find_match _list _regex _out)
   set(${_out} -1)
