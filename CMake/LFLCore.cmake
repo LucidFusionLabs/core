@@ -217,6 +217,7 @@ endif()
 
 if(LFL_XCODE)
   set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${LFL_BINARY_DIR}/out/library)
+  set(CMAKE_XCODE_ATTRIBUTE_SKIP_INSTALL YES)
 endif()
 
 # utility macros
