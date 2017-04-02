@@ -460,6 +460,13 @@ void Texture::UpdateGL(const unsigned char *B, const ::LFL::Box &box, int pf, in
                    pf ? Pixel::OpenGLID(pf) : GLPixelType(), GLBufferType(), B);
 }
 
+void Texture::ResetGL(int flag) {
+  bool reload = flag & ResetGLFlag::Reload, forget = (flag & ResetGLFlag::Delete) == 0;
+  if (forget) ID = 0;
+  if (reload && width && height) RenewGL();
+  else ClearGL();
+}
+
 #ifdef LFL_APPLE
 #import <CoreGraphics/CGBitmapContext.h> 
 CGContextRef Texture::CGBitMap() { return CGBitMap(0, 0, width, height); }
@@ -524,6 +531,13 @@ void DepthTexture::ClearGL() {
   }
 }
 
+void DepthTexture::ResetGL(int flag) {
+  bool reload = flag & ResetGLFlag::Reload, forget = (flag & ResetGLFlag::Delete) == 0;
+  if (forget) ID = 0;
+  ClearGL();
+  if (reload && width && height) Create(width, height);
+}
+
 /* FrameBuffer */
 
 void FrameBuffer::Resize(int W, int H, int flag) {
@@ -579,6 +593,15 @@ void FrameBuffer::ClearGL() {
     else if (FLAGS_gd_debug) ERROR("DelFrameBuffer no device ", ID);
     ID = 0;
   }
+}
+
+void FrameBuffer::ResetGL(int flag) {
+  bool reload = flag & ResetGLFlag::Reload, forget = (flag & ResetGLFlag::Delete) == 0;
+  if (forget) ID = 0;
+  ClearGL();
+  tex.ResetGL(flag);
+  depth.ResetGL(flag);
+  if (reload && width && height) Create(width, height);
 }
 
 /* Shader */

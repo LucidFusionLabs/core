@@ -28,6 +28,7 @@ DECLARE_bool(swap_axis);
 DECLARE_bool(gd_debug);
 
 struct DrawMode { enum { _2D=0, _3D=1, NullOp=2 }; int m; };
+struct ResetGLFlag { enum { Forget=0, Delete=1, Reload=2 }; };
 struct TexGen { enum { LINEAR=1, REFLECTION=2 }; };
 
 struct Depth {
@@ -206,6 +207,7 @@ struct Texture : public Drawable {
 
   /// ClearGL() is thread-safe.
   void ClearGL();
+  void ResetGL(int flag);
   void RenewGL() { ClearGL(); Create(width, height); }
   unsigned ReleaseGL() { unsigned ret = ID; ID = 0; return ret; }
 
@@ -254,7 +256,8 @@ struct Texture : public Drawable {
 
 struct TextureArray {
   vector<Texture> a;
-  void ClearGL() { for (auto &i : a) i.ClearGL(); }
+  void ClearGL()         { for (auto &i : a) i.ClearGL(); }
+  void ResetGL(int flag) { for (auto &i : a) i.ResetGL(flag); }
   void DrawSequence(Asset *out, Entity *e, int *ind);
 };
 
@@ -271,6 +274,7 @@ struct DepthTexture {
   void Create(int W, int H, int DF=0) { Resize(W, H, DF, Flag::CreateGL); }
   void Resize(int W, int H, int DF=0, int flag=0);
   void ClearGL();
+  void ResetGL(int flag);
 };
 
 struct FrameBuffer {
@@ -283,7 +287,6 @@ struct FrameBuffer {
 
   FrameBuffer(GraphicsDevice *d, int w=0, int h=0, unsigned id=0) : gd(d), ID(id), width(w), height(h) {}
   ~FrameBuffer() { if (owner) ClearGL(); }
-  void ResetGL() { ID=width=height=0; tex.owner=depth.owner=0; tex=Texture(); depth=DepthTexture(); }
 
   struct Flag { enum { CreateGL=1, CreateTexture=2, CreateDepthTexture=4, ReleaseFB=8, RepeatGL=16 }; };
   void Create(int W, int H, int flag=0) { Resize(W, H, Flag::CreateGL | flag); }
@@ -296,6 +299,7 @@ struct FrameBuffer {
   void Attach(int ct=0, int dt=0, bool update_viewport=1);
   void Release(bool update_viewport=1);
   void ClearGL();
+  void ResetGL(int flag);
 };
 
 struct ShaderDefines {

@@ -707,8 +707,9 @@ void TextArea::Resized(const Box &b, bool font_size_changed) {
 
 void TextArea::CheckResized(const Box &b) {
   LinesFrameBuffer *fb = GetFrameBuffer();
-  if (int c = fb->SizeChanged(b.w, b.h, style.font, bg_color)) { Resized(b, c > 1); fb->SizeChangedDone(); }
-  else if (box.w != b.w || box.h != b.h) { SetDimension(b.w, b.h); UpdateCursor(); }
+  if (int c = fb->SizeChanged(b.w, b.h, style.font, bg_color))                 { Resized(b, c > 1); fb->SizeChangedDone(); }
+  else if (needs_redraw && !(needs_redraw = 0)) { fb->BeginSizeChange(bg_color); Resized(b, c > 1); fb->SizeChangedDone(); }
+  else if (box.w != b.w || box.h != b.h)                                       { SetDimension(b.w, b.h); UpdateCursor(); }
 }
 
 void TextArea::Redraw(bool attach, bool relayout) {
@@ -1668,7 +1669,8 @@ void Terminal::Resized(const Box &b, bool font_size_changed) {
   int height_dy = term_height - old_term_height;
   if (!line_fb.only_grow) {
     if      (height_dy > 0) TextArea::Write(string(height_dy, '\n'), 0);
-    else if (height_dy < 0 && term_cursor.y < old_term_height) line.PopBack(-height_dy);
+    else if (height_dy < 0 && term_cursor.y < old_term_height)
+      line.PopBack(min(-height_dy, old_term_height - term_cursor.y));
   } else {
     if      (height_dy > 0) { for (int i=0; i<height_dy; i++) line.PushFront(); }
     else if (height_dy < 0) line.PopFront(-height_dy);

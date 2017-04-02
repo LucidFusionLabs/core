@@ -419,8 +419,7 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
 @implementation IOSTable
   {
     std::vector<LFL::TableSection> data;
-    int double_section_row_height;
-    bool dark_theme, change_selected_row_background;
+    bool dark_theme;
   }
 
   - (id)initWithStyle: (UITableViewStyle)style {
@@ -451,14 +450,10 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
     _lfl_self = lself;
     _style = sty;
     _needs_reload = true;
-    _editable_section = _editable_start_row = double_section_row_height = -1;
+    _editable_section = _editable_start_row = -1;
     data = move(item);
     self.title = LFL::MakeNSString(title);
     if (_style != "indent") self.tableView.separatorInset = UIEdgeInsetsZero;
-    if (_style == "big") {
-      double_section_row_height = 0;
-      change_selected_row_background = true;
-    }
     [self.tableView setSeparatorStyle:UITableViewCellSeparatorStyleSingleLine];
     [self.tableView setSeparatorColor:[UIColor grayColor]];
   }
@@ -515,7 +510,14 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
 
   - (void)setHidden:(int)section row:(int)r val:(bool)v {
     [self checkExists:section row:r];
-    data[section].item[r].hidden = v;
+    auto &hi = data[section];
+    hi.item[r].hidden = v;
+    if (hi.flag & LFL::TableSection::Flag::DeleteRowsWhenAllHidden) {
+      for (auto &i : hi.item) if (!i.hidden) return;
+      hi.item.clear();
+      [self.tableView reloadSections:[NSIndexSet indexSetWithIndex: section]
+        withRowAnimation:UITableViewRowAnimationNone];
+    }
   }
 
   - (void)setValue:(int)section row:(int)r val:(const std::string&)v {
@@ -565,11 +567,12 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
 
   - (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)path {
     if (path.section >= data.size() || path.row >= data[path.section].item.size()) return tableView.rowHeight;
-    const auto &ci = data[path.section].item[path.row];
+    auto &hi = data[path.section];
+    const auto &ci = hi.item[path.row];
     if (ci.hidden) return 0;
     else if ((ci.flags & iOSTableItem::GUILoaded) &&
              (ci.type == LFL::TableItem::Picker || ci.type == LFL::TableItem::FontPicker)) return ci.height;
-    else if (double_section_row_height == path.section) return tableView.rowHeight * 2;
+    else if (hi.flag & LFL::TableSection::Flag::DoubleRowHeight) return tableView.rowHeight * 2;
     else if (ci.flags & LFL::TableItem::Flag::SubText) return UITableViewAutomaticDimension;
     else return tableView.rowHeight;
   }
@@ -602,7 +605,8 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
       int row = path.row, section = path.section;
       CHECK_LT(section, data.size());
       CHECK_LT(row, data[section].item.size());
-      auto &ci = data[section].item[row];
+      auto &hi = data[section];
+      auto &ci = hi.item[row];
       ci.flags |= iOSTableItem::GUILoaded;
       bool subtext = ci.flags & LFL::TableItem::Flag::SubText;
       bool is_selected_row = section == _selected_section && row == _selected_row;
@@ -611,9 +615,9 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
       cell = [[UITableViewCell alloc] initWithStyle: (subtext ? UITableViewCellStyleSubtitle : UITableViewCellStyleDefault)
         reuseIdentifier:cellIdentifier];
       cell.selectionStyle = UITableViewCellSelectionStyleNone;
-      if      (ci.bg_a)                                           [cell setBackgroundColor:[UIColor colorWithRed:ci.bg_r/255.0 green:ci.bg_g/255.0 blue:ci.bg_b/255.0 alpha:ci.bg_a/255.0]];
-      else if (change_selected_row_background && is_selected_row) [cell setBackgroundColor:[UIColor lightGrayColor]];
-      else if (dark_theme)                                        [cell setBackgroundColor:[UIColor colorWithWhite:0.349 alpha:1.000]];
+      if      (ci.bg_a)                                                                      [cell setBackgroundColor:[UIColor colorWithRed:ci.bg_r/255.0 green:ci.bg_g/255.0 blue:ci.bg_b/255.0 alpha:ci.bg_a/255.0]];
+      else if (is_selected_row && (hi.flag & LFL::TableSection::Flag::HighlightSelectedRow)) [cell setBackgroundColor:[UIColor lightGrayColor]];
+      else if (dark_theme)                                                                   [cell setBackgroundColor:[UIColor colorWithWhite:0.349 alpha:1.000]];
 
       if (dark_theme) {
         cell.textLabel.textColor = [UIColor whiteColor];
@@ -798,13 +802,25 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
         if (cell.accessoryView) [cell.accessoryView addSubview: button];
         else cell.accessoryView = button;
       } else if (ci.right_text.size()) {
+        UIView *addView = 0;
         UILabel *label = [[UILabel alloc] init];
-        label.textColor = self.view.tintColor;
+        if (ci.fg_a && (ci.flags & LFL::TableItem::Flag::ColoredRightText))
+          label.textColor = [UIColor colorWithRed:ci.fg_r/255.0 green:ci.fg_g/255.0 blue:ci.fg_b/255.0 alpha:ci.fg_a/255.0];
+        else label.textColor = self.view.tintColor;
         label.text = LFL::MakeNSString(ci.right_text);
         [label sizeToFit];
-        if (cell.accessoryView) [cell.accessoryView addSubview: label];
-        else cell.accessoryView = label;
-        [label release];
+        if (ci.right_cb) {
+          IOSButton *button = [IOSButton buttonWithType:UIButtonTypeCustom];
+          button.frame = label.frame;
+          button.cb = LFL::bind(ci.right_cb, "");
+          [button addTarget:button action:@selector(buttonClicked:) forControlEvents:UIControlEventTouchUpInside];
+          [button addSubview: label];
+          [label release];
+          addView = button;
+        } else addView = label;
+        if (cell.accessoryView) [cell.accessoryView addSubview: addView];
+        else cell.accessoryView = addView;
+        [addView release];
       }
     }
     return cell;
@@ -813,54 +829,66 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
   - (void)tableView:(UITableView *)tableView commitEditingStyle:(UITableViewCellEditingStyle)editingStyle forRowAtIndexPath:(NSIndexPath *)path {
     [self checkExists:path.section row:path.row];
     if (editingStyle == UITableViewCellEditingStyleDelete) {
-      if (_delete_row_cb) _delete_row_cb(path.row, data[path.section].item[path.row].tag);
-      data[path.section].item.erase(data[path.section].item.begin() + path.row);
+      auto &hi = data[path.section];
+      if (_delete_row_cb) _delete_row_cb(path.row, hi.item[path.row].tag);
+      hi.item.erase(hi.item.begin() + path.row);
       [tableView beginUpdates];
       [tableView deleteRowsAtIndexPaths:@[path] withRowAnimation:UITableViewRowAnimationNone];
+      if (!hi.item.size()) {
+        [self.tableView setEditing:NO animated:NO];
+        [self.tableView reloadSections:[NSIndexSet indexSetWithIndex: path.section]
+          withRowAnimation:UITableViewRowAnimationNone];
+      }
       [tableView endUpdates];
     }
   }
 
   - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
     CHECK_LT(section, data.size());
-    return LFL::MakeNSString(data[section].header.key);
+    auto &hi = data[section];
+    if (!hi.item.size() && !hi.header.left_icon) return nil;
+    return LFL::MakeNSString(hi.header.key);
   }
 
   - (CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section {
     CHECK_LT(section, data.size());
-    if (int h = data[section].header_height) return h;
-    if (int image = data[section].header.left_icon) {
+    auto &hi = data[section];
+    if (!hi.item.size() && !hi.header.left_icon) return 0.001;
+    if (int h = hi.header_height) return h;
+    if (int image = hi.header.left_icon) {
       UIImageView *image_view = [[UIImageView alloc] initWithImage: app_images[image - 1]];
-      data[section].header_height = 44 + image_view.frame.size.height;
+      hi.header_height = 44 + image_view.frame.size.height;
       [image_view release];
-      return data[section].header_height;
+      return hi.header_height;
     }
     return UITableViewAutomaticDimension;
   }
 
   - (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section {
     CHECK_LT(section, data.size());
+    auto &hi = data[section];
+    if (!hi.item.size() && !hi.header.left_icon) return nil;
     UIView *headerView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, tableView.frame.size.width, 44)];
     headerView.autoresizingMask = UIViewAutoresizingFlexibleWidth;
-    if (data[section].header.hidden) return headerView;
+    if (hi.header.hidden) return headerView;
 
-    if (int image = data[section].header.left_icon) {
+    if (int image = hi.header.left_icon) {
       UIImageView *image_view = [[UIImageView alloc] initWithImage: app_images[image - 1]];
-      data[section].header_height = 44 + image_view.frame.size.height;
+      hi.header_height = 44 + image_view.frame.size.height;
       image_view.contentMode = UIViewContentModeCenter;
       image_view.center = CGPointMake(headerView.frame.size.width/2, image_view.frame.size.height/2);
       image_view.autoresizingMask = UIViewAutoresizingFlexibleRightMargin | UIViewAutoresizingFlexibleLeftMargin;
-      headerView.frame = CGRectMake(0, 0, tableView.frame.size.width, data[section].header_height);
+      headerView.frame = CGRectMake(0, 0, tableView.frame.size.width, hi.header_height);
       [headerView addSubview: image_view];
       [image_view release];
     }
 
-    int key_size = data[section].header.key.size();
+    int key_size = hi.header.key.size();
     if (key_size) {
       UILabel *label = [[UILabel alloc] initWithFrame:
         CGRectMake(50, headerView.frame.size.height-1-21-11, headerView.frame.size.width-100,
-                   (data[section].header.flags & LFL::TableItem::Flag::SubText) ? 44 : 21)];
-      label.text = LFL::MakeNSString(data[section].header.key);
+                   (hi.header.flags & LFL::TableItem::Flag::SubText) ? 44 : 21)];
+      label.text = LFL::MakeNSString(hi.header.key);
       label.textAlignment = NSTextAlignmentCenter;
       label.autoresizingMask = UIViewAutoresizingFlexibleRightMargin | UIViewAutoresizingFlexibleLeftMargin;
       label.lineBreakMode = NSLineBreakByWordWrapping;
@@ -870,16 +898,16 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
       [label release];
     }
 
-    bool edit_button = data[section].flag & LFL::TableSection::Flag::EditButton;
-    if (edit_button || data[section].header.right_text.size()) {
+    bool edit_button = hi.flag & LFL::TableSection::Flag::EditButton;
+    if (edit_button || hi.header.right_text.size()) {
       IOSButton *button = [IOSButton buttonWithType:UIButtonTypeSystem];
       if (edit_button) {
         [button setTitle:@"Edit" forState:UIControlStateNormal];
         [button addTarget:self action:@selector(toggleEditMode:) forControlEvents:UIControlEventTouchUpInside];
       } else {
         button.showsTouchWhenHighlighted = TRUE;
-        button.cb = [=](){ auto &item = data[section].header; if (item.right_cb) item.right_cb(""); };
-        [button setTitle:LFL::MakeNSString(data[section].header.right_text) forState:UIControlStateNormal];
+        button.cb = [=](){ auto &item = hi.header; if (item.right_cb) item.right_cb(""); };
+        [button setTitle:LFL::MakeNSString(hi.header.right_text) forState:UIControlStateNormal];
         [button addTarget:button action:@selector(buttonClicked:) forControlEvents:UIControlEventTouchUpInside];
       }
       [button sizeToFit];

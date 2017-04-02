@@ -190,11 +190,12 @@ static const char* const* ios_argv = 0;
 
   - (void)applicationWillResignActive:(UIApplication*)application {
     if (LFL::app->focused->unfocused_cb) LFL::app->focused->unfocused_cb();
+    LFL::app->ResetGL(LFL::ResetGLFlag::Delete);
   }
 
   - (void)applicationDidBecomeActive:(UIApplication*)application {
     if (!has_become_active && (has_become_active = true)) {}
-    [_glk_view setNeedsDisplay];
+    if (LFL::app->focused->focused_cb) LFL::app->focused->focused_cb();
   }
 
   - (void)applicationWillEnterForeground:(UIApplication *)application{
@@ -202,7 +203,8 @@ static const char* const* ios_argv = 0;
       [application endBackgroundTask:bg_task];
       bg_task = UIBackgroundTaskInvalid;
     }
-    if (LFL::app->focused->focused_cb) LFL::app->focused->focused_cb();
+    LFL::app->focused->gd->default_framebuffer = 0;
+    _glk_controller.needs_gl_reset = true;
   }
 
   - (void)applicationDidEnterBackground:(UIApplication *)application {
@@ -343,6 +345,12 @@ static const char* const* ios_argv = 0;
 
   - (void)glkView:(GLKView *)v drawInRect:(CGRect)rect {
     LFL::Window *screen = LFL::app->focused;
+    if (!screen->gd->default_framebuffer)
+      screen->gd->GetIntegerv(LFL::GraphicsDevice::FramebufferBinding, &screen->gd->default_framebuffer);
+    if (_needs_gl_reset && !(_needs_gl_reset = false)) {
+      LFL::app->ResetGL(LFL::ResetGLFlag::Delete | LFL::ResetGLFlag::Reload);
+      LFL::FrameBuffer(screen->gd).Release();
+    }
     bool draw_frame = (uiapp.top_controller == uiapp.root_controller || uiapp.overlay_top_controller) &&
       !uiapp.frame_disabled && uiapp.screen_width && uiapp.screen_height && screen;
     if (draw_frame && (screen->y != uiapp.screen_y || screen->width != uiapp.screen_width || screen->height != uiapp.screen_height))

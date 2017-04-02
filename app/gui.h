@@ -56,7 +56,7 @@ struct GUI {
   virtual void Layout(const Box &b) { box=b; Layout(); }
   virtual void Layout() {}
   virtual void Draw();
-  virtual void ResetGL() {}
+  virtual void ResetGL(int flag) {}
   virtual void HandleTextMessage(const string &s) {}
 };
 
@@ -314,7 +314,7 @@ struct TextBox : public GUI, public TextboxController {
   RingVector<string> cmd_last;
   vector<int> resize_gui_ind;
   Color cmd_color=Color::white, selection_color=Color(Color::grey70, 0.5);
-  bool deactivate_on_enter=0, token_processing=0, insert_mode=1, run_blank_cmd=0;
+  bool needs_redraw=0, deactivate_on_enter=0, token_processing=0, insert_mode=1, run_blank_cmd=0;
   int start_line=0, end_line=0, start_line_adjust=0, skip_last_lines=0, default_attr=0, cmd_last_ind=-1;
   function<void(const Selection::Point&)> selection_cb;
   function<void(const shared_ptr<Control>&)> new_link_cb;
@@ -351,7 +351,7 @@ struct TextBox : public GUI, public TextboxController {
 
   virtual const LinesFrameBuffer *GetFrameBuffer() const { return &cmd_fb; }
   virtual       LinesFrameBuffer *GetFrameBuffer()       { return &cmd_fb; }
-  virtual void ResetGL() { cmd_fb.ResetGL(); }
+  virtual void ResetGL(int flag) { cmd_fb.ResetGL(flag); needs_redraw=true; }
   virtual void UpdateCursorX(int x) { cursor.i.x = x; UpdateCursor(); }
   virtual void UpdateCursor() { cursor.p = cmd_line.data->glyphs.Position(cursor.i.x) + point(0, style.font->Height()); }
   virtual void UpdateCommandFB() { UpdateLineFB(&cmd_line, &cmd_fb); }
@@ -412,7 +412,7 @@ struct TextArea : public TextBox {
   virtual int WrappedLines() const { return line.wrapped_lines; }
   virtual const LinesFrameBuffer *GetFrameBuffer() const { return &line_fb; }
   virtual       LinesFrameBuffer *GetFrameBuffer()       { return &line_fb; }
-  virtual void ResetGL() { line_fb.ResetGL(); TextBox::ResetGL(); }
+  virtual void ResetGL(int flag) { line_fb.ResetGL(flag); TextBox::ResetGL(flag); }
   void ChangeColors(Colors *C);
 
   struct DrawFlag { enum { DrawCursor=1, CheckResized=2, Default=DrawCursor|CheckResized }; };

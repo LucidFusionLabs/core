@@ -137,12 +137,17 @@ GlyphCache::~GlyphCache() {}
 GlyphCache::GlyphCache(unsigned T, int W, int H) :
   dim(W, H ? H : W), tex(nullptr, dim.w, dim.h, Texture::preferred_pf, T), flow(make_unique<Flow>(&dim)) {}
 
-void GlyphCache::Clear() {
+void GlyphCache::Clear(bool reopen) {
   flow = make_unique<Flow>(&dim);
   for (auto g : glyph) g->ready = false;
   glyph.clear();
-  if      (tex.buf) tex.RenewBuffer();
-  else if (tex.ID)  tex.RenewGL();
+  if (reopen) {
+    if (tex.buf) tex.RenewBuffer();
+    else         tex.RenewGL();
+  } else {
+    if (tex.buf) tex.RenewBuffer();
+    else         tex.ClearGL();
+  }
 }
 
 bool GlyphCache::Add(point *out, float *texcoord, int w, int h, int max_height) {
@@ -465,22 +470,24 @@ int Fonts::ScaledFontSize(int pointsize) {
   return pointsize + FLAGS_add_font_size;
 }
 
-void Fonts::ResetGL() {
+void Fonts::ResetGL(int flag) {
+  bool reload = flag & ResetGLFlag::Reload, forget = (flag & ResetGLFlag::Delete) == 0;
   unordered_set<GlyphMap*> maps;
   unordered_set<GlyphCache*> caches;
   for (auto &i : desc_map) {
     auto f = i.second.get();
     if (f->engine == atlas_engine.get() && f == dynamic_cast<AtlasFontEngine::Resource*>(f->resource.get())->primary) {
-      f->glyph->cache->tex.owner = false;
+      if (forget) f->glyph->cache->tex.owner = false;
       f->glyph->cache->tex = Texture();
+      if (!reload) continue;
       Asset::LoadTexture(StrCat(f->desc->Filename(), ".0000.png"), &f->glyph->cache->tex);
       if (!f->glyph->cache->tex.ID) ERROR("Reset font failed");
     } else maps.insert(f->glyph.get());
   }
   for (auto m : maps) if (auto c = m->cache.get()) caches.insert(c);
   for (auto c : caches) {
-    c->tex.owner = false;
-    c->Clear();
+    if (forget) c->tex.owner = false;
+    c->Clear(reload);
   }
 }
 

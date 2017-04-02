@@ -39,6 +39,7 @@
 @end
 
 @interface LFGLKViewController : GLKViewController<GLKViewControllerDelegate, GLKViewDelegate> {}
+  @property BOOL needs_gl_reset;
 @end
 
 @interface LFUIApplication : NSObject<UIApplicationDelegate, ObjcWindow> {}

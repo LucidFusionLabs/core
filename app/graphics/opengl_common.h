@@ -49,7 +49,10 @@ void GenTextures(int t, int n, unsigned *out) {
 void CheckForError(const char *file, int line) {
   GLint gl_error=0, gl_validate_status=0;
   if ((gl_error = glGetError())) {
-    ERROR(file, ":", line, " gl error: ", gl_error);
+    int framebuffer_id = 0;
+    GetIntegerv(FramebufferBinding, &framebuffer_id);
+
+    ERROR(file, ":", line, " gl error: ", gl_error, ", framebuffer = ", framebuffer_id);
     BreakHook();
     if (app->opengles_version == 2) {
       glValidateProgram(shader->ID);

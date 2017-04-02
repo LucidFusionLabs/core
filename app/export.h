@@ -258,7 +258,7 @@ struct LFApp {
 struct LFAppWindow {
   void *id;
   int x, y, width, height, target_fps;
-  bool started, minimized, cursor_grabbed, frame_init, animating;
+  bool started, minimized, cursor_grabbed, animating;
   short resize_increment_x, resize_increment_y;
   float multitouch_keyboard_x;
 };

@@ -29,18 +29,22 @@ template <class Line> struct RingFrameBuffer {
   RingFrameBuffer(GraphicsDevice *d) : fb(d) {}
   virtual ~RingFrameBuffer() {}
 
-  void ResetGL() { w=h=0; fb.ResetGL(); }
+  void ResetGL(int flag) { fb.ResetGL(flag); }
   virtual void SizeChangedDone() { fb.gd->PopScissorStack(); fb.Release(); scroll=v2(); p=point(); }
   virtual int SizeChanged(int W, int H, Font *font, const Color *bgc) {
-    if (W == w && H == h && font->size == font_size) return 0;
+    if (fb.ID && W == w && H == h && font->size == font_size) return 0;
     int orig_font_size = font_size;
     SetDimensions(W, H, font);
+    BeginSizeChange(bgc);
+    return 1 + (orig_font_size && font_size != orig_font_size);
+  }
+
+  void BeginSizeChange(const Color *bgc) {
     fb.Resize(w, h, FrameBuffer::Flag::CreateGL | FrameBuffer::Flag::CreateTexture);
     ScopedClearColor scc(fb.gd, bgc);
     fb.gd->PushScissorStack();
     fb.gd->Clear();
     fb.gd->DrawMode(DrawMode::_2D, false);
-    return 1 + (orig_font_size && font_size != orig_font_size);
   }
 
   virtual void Draw(point pos, point adjust, bool scissor=true) {

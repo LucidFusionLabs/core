@@ -48,7 +48,7 @@ extern "C" int          LFAppMainLoop()            { return LFL::app->MainLoop()
 extern "C" int          LFAppFrame(bool handle_ev) { return LFL::app->EventDrivenFrame(handle_ev, true); }
 extern "C" void         LFAppTimerDrivenFrame()    { LFL::app->TimerDrivenFrame(true); }
 extern "C" void         LFAppWakeup()              { return LFL::app->scheduler.Wakeup(LFL::app->focused); }
-extern "C" void         LFAppResetGL()             { return LFL::app->ResetGL(); }
+extern "C" void         LFAppResetGL()             { return LFL::app->ResetGL(LFL::ResetGLFlag::Reload); }
 extern "C" void         LFAppAtExit()              { delete LFL::app; }
 extern "C" void         LFAppShutdown()            { LFL::app->run=0; LFAppWakeup(); }
 extern "C" void         BreakHook()                {}
@@ -693,11 +693,12 @@ void Application::DrawSplash(const Color &c) {
   focused->gd->ClearColor(focused->gd->clear_color);
 }
 
-void Application::ResetGL() {
-  INFO("Application::ResetGL");
-  fonts->ResetGL();
-  for (auto &a : asset.vec) a.ResetGL();
-  for (auto &w : windows) w.second->ResetGL();
+void Application::ResetGL(int flag) {
+  bool reload = flag & ResetGLFlag::Reload, forget = (flag & ResetGLFlag::Delete) == 0;
+  INFO("Application::ResetGL forget=", forget, " reload=", reload);
+  fonts->ResetGL(flag);
+  for (auto &a : asset.vec) a.ResetGL(flag);
+  for (auto &w : windows) w.second->ResetGL(flag);
 }
 
 Application::~Application() {
@@ -731,7 +732,7 @@ Application::~Application() {
 Window::Window() : caption(app->name), fps(128), tex_mode(2, 1, 0), grab_mode(2, 0, 1),
   fill_mode(3, GraphicsDevice::Fill, GraphicsDevice::Line, GraphicsDevice::Point) {
   id = 0;
-  started = minimized = cursor_grabbed = frame_init = animating = 0;
+  started = minimized = cursor_grabbed = animating = 0;
   resize_increment_x = resize_increment_y = 0;
   target_fps = FLAGS_target_fps;
   multitouch_keyboard_x = .93; 
@@ -814,12 +815,14 @@ void Window::Reshaped(const LFL::Box &b) {
   if (reshaped_cb) reshaped_cb();
 }
 
-void Window::ResetGL() {
-  INFO("Window::ResetGL");
-  for (auto b : gd->buffers) *b = -1;
-  gd->Init(Box());
-  for (auto &g : gui    ) g->ResetGL();
-  for (auto &g : dialogs) g->ResetGL();
+void Window::ResetGL(int flag) {
+  bool reload = flag & ResetGLFlag::Reload, forget = (flag & ResetGLFlag::Delete) == 0;
+  INFO("Window::ResetGL forget=", forget, " reload=", reload);
+  if (forget) for (auto b : gd->buffers) *b = -1;
+  if (forget && reload) gd->Init(Box());
+  for (auto &g : gui    ) g->ResetGL(flag);
+  for (auto &g : dialogs) g->ResetGL(flag);
+  FrameBuffer(gd).Release();
 }
 
 void Window::SwapAxis() {
@@ -832,12 +835,6 @@ int Window::Frame(unsigned clicks, int flag) {
   if (app->focused != this) app->MakeCurrentWindow(this);
 
   if (FLAGS_enable_video) {
-    if (!frame_init && (frame_init = true))  {
-#ifdef LFL_IOS
-      gd->GetIntegerv(GraphicsDevice::FramebufferBinding, &gd->default_framebuffer);
-      INFO("default_framebuffer = ", gd->default_framebuffer);
-#endif
-    }
     gd->DrawMode(gd->default_draw_mode);
     gd->Clear();
     gd->LoadIdentity();

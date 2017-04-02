@@ -450,7 +450,7 @@ struct TableItem {
   enum { None=0, Label=1, Separator=2, Command=3, Button=4, Toggle=5, Selector=6, Picker=7, TextInput=8,
     NumberInput=9, PasswordInput=10, FontPicker=11 }; 
   struct Flag { enum { LeftText=1, SubText=2, FixDropdown=4, HideKey=8, PlaceHolderVal=16, ColoredSubText=32,
-    User1=64 }; };
+    ColoredRightText=64, User1=128 }; };
   string key, val, right_text, dropdown_key;
   int type, tag, flags, left_icon, right_icon, selected=0, height=0;
   Callback cb;
@@ -474,7 +474,8 @@ struct TableItem {
 };
 
 struct TableSection {
-  struct Flag { enum { EditButton=1, EditableIfHasTag=2, User1=4 }; };
+  struct Flag { enum { EditButton=1, EditableIfHasTag=2, DoubleRowHeight=4, HighlightSelectedRow=8,
+    DeleteRowsWhenAllHidden=16, User1=32 }; };
   struct Change { int section, row; string val; bool hidden; int left_icon, right_icon, type; string key; Callback cb; int flags; };
   typedef vector<Change> ChangeList;
   typedef unordered_map<string, ChangeList> ChangeSet;
@@ -630,7 +631,7 @@ struct Window : public ::LFAppWindow {
   void Reshaped(const LFL::Box&);
   void Minimized()   { minimized=1; }
   void UnMinimized() { minimized=0; }
-  void ResetGL();
+  void ResetGL(int flag);
   void SwapAxis();
   void ClearChildren();
   int  Frame(unsigned clicks, int flag);
@@ -736,7 +737,7 @@ struct Application : public ::LFApp {
   int Main();
   int MainLoop();
   void DrawSplash(const Color &c);
-  void ResetGL();
+  void ResetGL(int flag);
   void MakeCurrentWindow(Window*);
   void CloseWindow(Window*);
   void CreateNewWindow();

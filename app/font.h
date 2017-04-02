@@ -179,7 +179,7 @@ struct GlyphCache {
     return t.width < max_width && t.height < max_height;
   }
 
-  void Clear();
+  void Clear(bool reopen=true);
   bool Add(point *out, float *out_texcoord, int w, int h, int max_height=0);
   void Load(const Font*, const Glyph*, const unsigned char *buf, int linesize, int pf, const FilterCB &f=FilterCB());
 #if defined(LFL_APPLE)
@@ -508,7 +508,7 @@ struct Fonts {
   template <class... Args> Font *Get(Args&&... args) { return GetByDesc(FontDesc(forward<Args>(args)...)); }
   Font *Change(Font*, int new_size, const Color &new_fg, const Color &new_bg, int new_flag=0);
   int ScaledFontSize(int pointsize);
-  void ResetGL();
+  void ResetGL(int flag);
   void LoadDefaultFonts();
   void LoadConsoleFont(const string &name, const vector<int> &sizes = vector<int>(1, 32));
   shared_ptr<GlyphCache> GetGlyphCache() {

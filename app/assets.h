@@ -105,7 +105,7 @@ struct Asset {
 
   void Load(void *handle=0, VideoAssetLoader *l=0);
   void Unload();
-  void ResetGL();
+  void ResetGL(int flag);
 
   static void Load(vector<Asset> *assets) { for (int i=0; i<assets->size(); ++i) (*assets)[i].Load(); }
   static void LoadTexture(         const string &asset_fn, Texture *out, VideoAssetLoader *l=0, int flag=VideoAssetLoader::Flag::Default) { LoadTexture(0, asset_fn, out, l, flag); }

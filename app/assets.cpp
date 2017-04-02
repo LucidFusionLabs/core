@@ -86,10 +86,14 @@ void Asset::Unload() {
   if (hull)     { delete hull;     hull     = 0; }
 }
 
-void Asset::ResetGL() {
+void Asset::ResetGL(int flag) {
+  bool reload = flag & ResetGLFlag::Reload, forget = (flag & ResetGLFlag::Delete) == 0;
   if (!texture.empty()) {
-    tex.ID = 0;
-    LoadTexture(nullptr, texture, &tex, nullptr);
+    if (tex.ID) {
+      if (forget) tex.ID = 0;
+      else        tex.ClearGL();
+    }
+    if (reload) LoadTexture(nullptr, texture, &tex, nullptr);
   } 
 }
 
