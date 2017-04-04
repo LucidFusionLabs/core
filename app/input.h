@@ -178,12 +178,12 @@ struct MouseController {
     HitBox(int ET=0, const Box &b=Box(), MouseControllerCallback cb=MouseControllerCallback()) : box(b), evtype(ET), CB(move(cb)) {}
   };
 
-  GUI *parent_gui;
+  View *parent_view;
   IterableFreeListVector<HitBox, &HitBox::deleted> hit;
   unordered_set<int> drag;
   vector<int> hover;
 
-  MouseController(GUI *P=0) : parent_gui(P) {}
+  MouseController(View *V=0) : parent_view(V) {}
   virtual ~MouseController() { Clear(); }
   virtual void Clear() { hit.Clear(); }
   virtual int AddClickBox     (const Box &w, MouseControllerCallback cb) { return hit.Insert(HitBox(Event::Click,      w, move(cb))); }
@@ -248,7 +248,7 @@ struct Input : public Module {
   int MouseZoom(const v2 &p, const v2 &d, bool begin);
   int MouseClick(int button, bool down, const point &p);
   int MouseEventDispatch(InputEvent::Id event, const point &p, const point &d, int down);
-  int MouseEventDispatchGUI(InputEvent::Id event, const point &p, const point &d, int down, GUI *g, int *active_guis);
+  int MouseEventDispatchGUI(InputEvent::Id event, const point &p, const point &d, int down, View *v, int *active_guis);
 
   static point TransformMouseCoordinate(point p);
 };

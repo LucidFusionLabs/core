@@ -26,10 +26,10 @@
 #include <openssl/x509_vfy.h>
 
 namespace LFL {
-struct AppleProduct : public SystemProduct {
+struct AppleProduct : public ProductInterface {
   SKProduct *product;
   ~AppleProduct() { [product release]; }
-  AppleProduct(const string &i, SKProduct *p) : SystemProduct(i), product(p) { [product retain]; }
+  AppleProduct(const string &i, SKProduct *p) : ProductInterface(i), product(p) { [product retain]; }
   string Name() { return GetNSString(product.localizedTitle); }
   string Description() { return GetNSString(product.localizedDescription); }
   string Price() {
@@ -51,10 +51,10 @@ struct AppleProduct : public SystemProduct {
 @implementation IOSProductRequest
   {
     LFL::Callback done_cb;
-    LFL::SystemPurchases::ProductCB product_cb;
+    LFL::PurchasesInterface::ProductCB product_cb;
   }
 
-  - (id)initWithProducts:(NSSet*)products doneCB:(LFL::Callback)dcb productCB:(LFL::SystemPurchases::ProductCB)pcb {
+  - (id)initWithProducts:(NSSet*)products doneCB:(LFL::Callback)dcb productCB:(LFL::PurchasesInterface::ProductCB)pcb {
     self = [super init];
     done_cb = LFL::move(dcb);
     product_cb = LFL::move(pcb);
@@ -158,7 +158,7 @@ struct AppleProduct : public SystemProduct {
 @end
 
 namespace LFL {
-struct ApplePurchases : public SystemPurchases {
+struct ApplePurchases : public PurchasesInterface {
   struct ReceiptAttribute { enum { BundleIdentifier = 2, AppVersion = 3, OpaqueValue = 4, Hash = 5,
     InAppPurchaseReceipt = 17, OriginalAppVersion = 19, ExpirationDate = 21 }; };
   struct InAppPurchaseReceiptAttribute { enum { ProductIdentifier = 1702 }; };
@@ -175,7 +175,7 @@ struct ApplePurchases : public SystemPurchases {
     [[IOSProductRequest alloc] initWithProducts:MakeNSStringSet(products) doneCB:move(done_cb) productCB:move(product_cb)];
   }
 
-  bool MakePurchase(SystemProduct *product, IntCB result_cb) {
+  bool MakePurchase(ProductInterface *product, IntCB result_cb) {
     return [purchaser makePurchase:dynamic_cast<AppleProduct*>(product) withCB:result_cb];
   }
 
@@ -288,5 +288,5 @@ struct ApplePurchases : public SystemPurchases {
   }
 };
 
-unique_ptr<SystemPurchases> SystemPurchases::Create() { return make_unique<ApplePurchases>(); }
+unique_ptr<PurchasesInterface> SystemToolkit::CreatePurchases() { return make_unique<ApplePurchases>(); }
 }; // namespace LFL

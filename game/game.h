@@ -518,11 +518,11 @@ struct GameClient {
   Game::Controller control;
   History last;
   Replay replay, gameover;
-  GUI *playerlist;
+  View *playerlist;
   TextArea *chat;
 
   ~GameClient() { Reset(); }
-  GameClient(Game *w, GUI *PlayerList, TextArea *Chat) :
+  GameClient(Game *w, View *PlayerList, TextArea *Chat) :
     world(w), retry(UDPClient::Write), playerlist(PlayerList), chat(Chat) {}
 
   virtual void NewEntityCB(Entity *) {}
@@ -869,11 +869,11 @@ struct GameSettings {
   const char *Get(int n) const { CHECK(n < vec.size()); return vec[n].value->Cur(); }
 };
 
-struct GameMenuGUI : public GUI, public Connection::Handler {
+struct GameMenuGUI : public View, public Connection::Handler {
   struct Server { string addr, name, players; };
   typedef Particles<1024, 1, true> MenuParticles;
 
-  GUI topbar;
+  View topbar;
   GameSettings *settings=0;
   IPV4::Addr ip, broadcast_ip;
   UDPServer pinger;
@@ -893,12 +893,12 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
   Widget::Button gplus_signin_button, gplus_signout_button, gplus_quick, gplus_invite, gplus_accept;
 #endif
   Browser browser;
-  unique_ptr<SystemAdvertisingView> ads;
+  unique_ptr<AdvertisingViewInterface> ads;
   MenuParticles particles;
   Entity *cam=0;
 
   GameMenuGUI(Window *W, const string &master_url, int port, Texture *Title=0) :
-    GUI(W), topbar(W), pinger(-1), master_get_url(master_url), title(Title),
+    View(W), topbar(W), pinger(-1), master_get_url(master_url), title(Title),
     font       (FontDesc(FLAGS_font,                 "", 12, Color::grey80)),
     bright_font(FontDesc(FLAGS_font,                 "", 12, Color::white)),
     glow_font  (FontDesc(StrCat(FLAGS_font, "Glow"), "", 12)),
@@ -1050,7 +1050,7 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
   }
 
   void LayoutTopbar() {
-    Flow topbarflow(&topbar.box, font, topbar.ResetGUI());
+    Flow topbarflow(&topbar.box, font, topbar.ResetView());
     tab1.box = tab2.box = tab3.box = tab4.box = Box(topbar.box.w/4, topbar.box.h);
     tab1.Layout(&topbarflow, (selected == 1) ? glow_font : font);
     tab2.Layout(&topbarflow, (selected == 2) ? glow_font : font);
@@ -1061,7 +1061,7 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
   void LayoutMenu() {
     Box b;
     int fh = font->Height(), scrolled = 0;
-    Flow menuflow(&box, bright_font, ResetGUI());
+    Flow menuflow(&box, bright_font, ResetView());
     mouse.AddClickBox(Box(0, -box.h, box.w-tab1_options.dot_size, box.h),
                       MouseController::CB(bind(&GameMenuGUI::MenuLineClicked, this)));
 
@@ -1236,7 +1236,7 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
     LayoutMenu();
     {
       Scissor s(gc.gd, box);
-      GUI::Draw();
+      View::Draw();
     }
     topbar.Draw();
     tab3_volume.Update();
@@ -1264,7 +1264,7 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
   }
 };
 
-struct GamePlayerListGUI : public GUI {
+struct GamePlayerListGUI : public View {
   typedef vector<string> Player;
   typedef vector<Player> PlayerList;
 
@@ -1273,7 +1273,7 @@ struct GamePlayerListGUI : public GUI {
   string titlename, titletext, team1, team2;
   PlayerList playerlist;
   int winning_team=0;
-  GamePlayerListGUI(Window *W, const char *TitleName, const char *Team1, const char *Team2) : GUI(W),
+  GamePlayerListGUI(Window *W, const char *TitleName, const char *Team1, const char *Team2) : View(W),
     font(FontDesc(FLAGS_font, "", 12, Color::black)), titlename(TitleName), team1(Team1), team2(Team2) {}
 
   void HandleTextMessage(const string &in) {
@@ -1302,7 +1302,7 @@ struct GamePlayerListGUI : public GUI {
   }
 
   void Draw(Shader *MyShader) {
-    GUI::Draw();
+    View::Draw();
     if (!toggled) Deactivate();
     GraphicsContext gc(root->gd);
     gc.gd->EnableBlend();

@@ -443,7 +443,7 @@ if(LFL_FFMPEG)
 
     set(FFMPEG_CONFIGURE_ENV ${CONFIGURE_ENV})
     if(LFL_OSX)
-      set(CONFIGURE_OPTIONS ${CONFIGURE_OPTIONS} --disable-decoder=vp9)
+      set(CONFIGURE_OPTIONS ${CONFIGURE_OPTIONS} --disable-decoder=vp9 --disable-iconv)
       set(FFMPEG_CONFIGURE_ENV ${FFMPEG_CONFIGURE_ENV} PATH=/opt/local/bin:$ENV{PATH})
     endif()
 

@@ -86,7 +86,7 @@
 @end
 
 namespace LFL {
-struct iOSAdvertisingView : public SystemAdvertisingView {
+struct iOSAdvertisingView : public AdvertisingViewInterface {
   IOSAdMob *admob;
   virtual ~iOSAdvertisingView() { [admob release]; }
   iOSAdvertisingView(int type, int placement, const string &adid, const StringVec &test_devices) :
@@ -96,7 +96,7 @@ struct iOSAdvertisingView : public SystemAdvertisingView {
   }
 
   void Show(bool show_or_hide) {}
-  void Show(SystemTableView *t, bool show_or_hide) {
+  void Show(TableViewInterface *t, bool show_or_hide) {
     [admob show: show_or_hide withTable: dynamic_cast<iOSTableView*>(t)->table];
   }
 
@@ -106,7 +106,7 @@ struct iOSAdvertisingView : public SystemAdvertisingView {
   }
 };
 
-unique_ptr<SystemAdvertisingView> SystemAdvertisingView::Create(int type, int placement, const string &adid, const StringVec &test_devices) {
+unique_ptr<AdvertisingViewInterface> SystemToolkit::CreateAdvertisingView(int type, int placement, const string &adid, const StringVec &test_devices) {
   return make_unique<iOSAdvertisingView>(type, placement, adid, test_devices);
 }
 

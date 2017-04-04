@@ -19,14 +19,14 @@
 #include "core/app/app.h"
 
 namespace LFL {
-struct NullPurchases : public SystemPurchases {
+struct NullPurchases : public PurchasesInterface {
   bool CanPurchase() { return false; };
   void LoadPurchases() {}
   bool HavePurchase(const string&) { return false; }
   void RestorePurchases(Callback done_cb) {}
   void PreparePurchase(const StringVec&, Callback done_cb, ProductCB product_cb) { done_cb(); }
-  bool MakePurchase(SystemProduct*, IntCB result_cb) { return false; };
+  bool MakePurchase(ProductInterface*, IntCB result_cb) { return false; };
 };
 
-unique_ptr<SystemPurchases> SystemPurchases::Create() { return make_unique<NullPurchases>(); }
+unique_ptr<PurchasesInterface> SystemToolkit::CreatePurchases() { return make_unique<NullPurchases>(); }
 }; // namespace LFL

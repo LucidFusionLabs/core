@@ -17,36 +17,36 @@
  */
 
 namespace LFL {
-struct NullAlertView : public SystemAlertView {
+struct NullAlertView : public AlertViewInterface {
   void Hide() {}
   void Show(const string &arg) {}
   void ShowCB(const string &title, const string &msg, const string &arg, StringCB confirm_cb) {}
   string RunModal(const string &arg) { return string(); }
 };
 
-struct NullMenuView : public SystemMenuView {
+struct NullMenuView : public MenuViewInterface {
   void Show() {}
 };
 
-struct NullPanelView : public SystemPanelView {
+struct NullPanelView : public PanelViewInterface {
   void Show() {}
   void SetTitle(const string &title) {}
 };
 
-struct NullToolbarView : public SystemToolbarView {
+struct NullToolbarView : public ToolbarViewInterface {
   void Show(bool show_or_hide) {}
   void ToggleButton(const string &n) {}
   void SetTheme(const string &theme) {}
 };
 
-struct NullTableView : public SystemTableView {
+struct NullTableView : public TableViewInterface {
   vector<TableSection> data;
   NullTableView(const string &title, const string &style, TableItemVec items) :
     data(TableSection::Convert(move(items))) {}
 
   void DelNavigationButton(int align) {}
   void AddNavigationButton(int align, const TableItem &item) {}
-  void SetToolbar(SystemToolbarView *t) {}
+  void SetToolbar(ToolbarViewInterface *t) {}
   void Show(bool show_or_hide) {}
 
   string GetKey(int section, int row) { return ""; }
@@ -86,14 +86,14 @@ struct NullTableView : public SystemTableView {
   void SetEditableSection(int section, int start_row, LFL::IntIntCB cb) {}
 };
 
-struct NullTextView : public SystemTextView {
+struct NullTextView : public TextViewInterface {
 };
 
-struct NullNavigationView : public SystemNavigationView {
+struct NullNavigationView : public NavigationViewInterface {
   void Show(bool show_or_hide) {}
-  SystemTableView *Back() { return nullptr; }
-  void PushTableView(SystemTableView *t) {}
-  void PushTextView(SystemTextView *t) {}
+  TableViewInterface *Back() { return nullptr; }
+  void PushTableView(TableViewInterface *t) {}
+  void PushTextView(TextViewInterface *t) {}
   void PopToRoot() {}
   void PopAll() {}
   void PopView(int n) {}
@@ -106,14 +106,14 @@ void Application::ShowSystemContextMenu(const vector<MenuItem>&items) {}
 int Application::LoadSystemImage(const string &n) { static int ret=0; return ++ret; }
 void Application::UpdateSystemImage(int n, Texture&) {}
 
-unique_ptr<SystemAlertView> SystemAlertView::Create(AlertItemVec items) { return make_unique<NullAlertView>(); }
-unique_ptr<SystemPanelView> SystemPanelView::Create(const Box &b, const string &title, PanelItemVec items) { return nullptr; }
-unique_ptr<SystemToolbarView> SystemToolbarView::Create(const string &theme, MenuItemVec items) { return make_unique<NullToolbarView>(); }
-unique_ptr<SystemMenuView> SystemMenuView::Create(const string &title, MenuItemVec items) { return make_unique<NullMenuView>(); }
-unique_ptr<SystemMenuView> SystemMenuView::CreateEditMenu(vector<MenuItem> items) { return nullptr; }
-unique_ptr<SystemTableView> SystemTableView::Create(const string &title, const string &style, const string &theme, TableItemVec items) { return make_unique<NullTableView>(title, style, move(items)); }
-unique_ptr<SystemTextView> SystemTextView::Create(const string &title, File *file) { return make_unique<NullTextView>(); }
-unique_ptr<SystemTextView> SystemTextView::Create(const string &title, const string &text) { return make_unique<NullTextView>(); }
-unique_ptr<SystemNavigationView> SystemNavigationView::Create(const string &style, const string &theme) { return make_unique<NullNavigationView>(); }
+unique_ptr<AlertViewInterface> SystemToolkit::CreateAlert(AlertItemVec items) { return make_unique<NullAlertView>(); }
+unique_ptr<PanelViewInterface> SystemToolkit::CreatePanel(const Box &b, const string &title, PanelItemVec items) { return nullptr; }
+unique_ptr<ToolbarViewInterface> SystemToolkit::CreateToolbar(const string &theme, MenuItemVec items) { return make_unique<NullToolbarView>(); }
+unique_ptr<MenuViewInterface> SystemToolkit::CreateMenu(const string &title, MenuItemVec items) { return make_unique<NullMenuView>(); }
+unique_ptr<MenuViewInterface> SystemToolkit::CreateEditMenu(vector<MenuItem> items) { return nullptr; }
+unique_ptr<TableViewInterface> SystemToolkit::CreateTableView(const string &title, const string &style, const string &theme, TableItemVec items) { return make_unique<NullTableView>(title, style, move(items)); }
+unique_ptr<TextViewInterface> SystemToolkit::CreateTextView(const string &title, File *file) { return make_unique<NullTextView>(); }
+unique_ptr<TextViewInterface> SystemToolkit::CreateTextView(const string &title, const string &text) { return make_unique<NullTextView>(); }
+unique_ptr<NavigationViewInterface> SystemToolkit::CreateNavigationView(const string &style, const string &theme) { return make_unique<NullNavigationView>(); }
 
 }; // namespace LFL

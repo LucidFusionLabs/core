@@ -446,7 +446,7 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
     else _needs_reload = true;
   }
 
-  - (void)load:(LFL::SystemTableView*)lself withTitle:(const std::string&)title withStyle:(const std::string&)sty items:(std::vector<LFL::TableSection>)item {
+  - (void)load:(LFL::TableViewInterface*)lself withTitle:(const std::string&)title withStyle:(const std::string&)sty items:(std::vector<LFL::TableSection>)item {
     _lfl_self = lself;
     _style = sty;
     _needs_reload = true;
@@ -517,6 +517,8 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
       hi.item.clear();
       [self.tableView reloadSections:[NSIndexSet indexSetWithIndex: section]
         withRowAnimation:UITableViewRowAnimationNone];
+      if (hi.flag & LFL::TableSection::Flag::ClearLeftNavWhenEmpty)
+        self.navigationItem.leftBarButtonItem = nil;
     }
   }
 
@@ -1085,7 +1087,7 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
 @end
 
 namespace LFL {
-struct iOSAlertView : public SystemAlertView {
+struct iOSAlertView : public AlertViewInterface {
   IOSAlert *alert;
   ~iOSAlertView() { [alert release]; }
   iOSAlertView(AlertItemVec items) : alert([[IOSAlert alloc] init: move(items)]) {}
@@ -1118,14 +1120,14 @@ struct iOSAlertView : public SystemAlertView {
   }
 };
 
-struct iOSMenuView : public SystemMenuView {
+struct iOSMenuView : public MenuViewInterface {
   IOSMenu *menu;
   ~iOSMenuView() { [menu release]; }
   iOSMenuView(const string &t, MenuItemVec i) : menu([[IOSMenu alloc] init:t items:move(i)]) {}
   void Show() { [menu.actions showInView: [UIApplication sharedApplication].keyWindow]; }
 };
 
-struct iOSToolbarView : public SystemToolbarView {
+struct iOSToolbarView : public ToolbarViewInterface {
   IOSToolbar *toolbar;
   ~iOSToolbarView() { [toolbar release]; }
   iOSToolbarView(const string &theme, MenuItemVec items) : toolbar([[IOSToolbar alloc] init: move(items)]) { [toolbar setTheme: theme]; }
@@ -1134,7 +1136,7 @@ struct iOSToolbarView : public SystemToolbarView {
   void SetTheme(const string &theme) { [toolbar setTheme: theme]; }
 };
 
-struct iOSTextView : public SystemTextView {
+struct iOSTextView : public TextViewInterface {
   IOSTextView *view;
   ~iOSTextView() { [view release]; }
   iOSTextView(const string &title, File *f) : iOSTextView(title, f ? f->Contents() : "") {}
@@ -1143,7 +1145,7 @@ struct iOSTextView : public SystemTextView {
          initWithBytes:text.data() length:text.size() encoding:NSASCIIStringEncoding] autorelease]]) {}
 };
 
-struct iOSNavigationView : public SystemNavigationView {
+struct iOSNavigationView : public NavigationViewInterface {
   IOSNavigation *nav;
   bool overlay;
   ~iOSNavigationView() { [nav release]; }
@@ -1169,7 +1171,7 @@ struct iOSNavigationView : public SystemNavigationView {
     }
   }
 
-  SystemTableView *Back() {
+  TableViewInterface *Back() {
     for (UIViewController *c in [nav.viewControllers reverseObjectEnumerator]) {
       if ([c isKindOfClass:[IOSTable class]])
         if (auto lself = static_cast<IOSTable*>(c).lfl_self) return lself;
@@ -1177,7 +1179,7 @@ struct iOSNavigationView : public SystemNavigationView {
     return nullptr;
   }
 
-  void PushTableView(SystemTableView *t) {
+  void PushTableView(TableViewInterface *t) {
     if (t->show_cb) t->show_cb();
     if (root) {
       [nav pushViewController: dynamic_cast<iOSTableView*>(t)->table animated: YES];
@@ -1186,7 +1188,7 @@ struct iOSNavigationView : public SystemNavigationView {
     }
   }
 
-  void PushTextView(SystemTextView *t) {
+  void PushTextView(TextViewInterface *t) {
     if (t->show_cb) t->show_cb();
     [nav pushViewController: dynamic_cast<iOSTextView*>(t)->view animated: YES];
   }
@@ -1266,7 +1268,7 @@ iOSTableView::iOSTableView(const string &title, const string &style, const strin
 void iOSTableView::DelNavigationButton(int align) { return [table clearNavigationButton:align]; }
 void iOSTableView::AddNavigationButton(int align, const TableItem &item) { return [table loadNavigationButton:item withAlign:align]; }
 
-void iOSTableView::SetToolbar(SystemToolbarView *t) {
+void iOSTableView::SetToolbar(ToolbarViewInterface *t) {
   int toolbar_height = 44;
   CGRect frame = table.tableView.frame;
   if (table.toolbar) {
@@ -1321,14 +1323,14 @@ void iOSTableView::ReplaceRow(int section, int row, TableItem h) { [table replac
 void iOSTableView::ReplaceSection(int section, TableItem h, int flag, TableItemVec item)
 { [table replaceSection:section items:move(item) header:move(h) flag:flag]; }
 
-unique_ptr<SystemAlertView> SystemAlertView::Create(AlertItemVec items) { return make_unique<iOSAlertView>(move(items)); }
-unique_ptr<SystemPanelView> SystemPanelView::Create(const Box &b, const string &title, PanelItemVec items) { return nullptr; }
-unique_ptr<SystemToolbarView> SystemToolbarView::Create(const string &theme, MenuItemVec items) { return make_unique<iOSToolbarView>(theme, move(items)); }
-unique_ptr<SystemMenuView> SystemMenuView::Create(const string &title, MenuItemVec items) { return make_unique<iOSMenuView>(title, move(items)); }
-unique_ptr<SystemMenuView> SystemMenuView::CreateEditMenu(vector<MenuItem> items) { return nullptr; }
-unique_ptr<SystemTableView> SystemTableView::Create(const string &title, const string &style, const string &theme, TableItemVec items) { return make_unique<iOSTableView>(title, style, theme, move(items)); }
-unique_ptr<SystemTextView> SystemTextView::Create(const string &title, File *file) { return make_unique<iOSTextView>(title, file); }
-unique_ptr<SystemTextView> SystemTextView::Create(const string &title, const string &text) { return make_unique<iOSTextView>(title, text); }
-unique_ptr<SystemNavigationView> SystemNavigationView::Create(const string &style, const string &theme) { return make_unique<iOSNavigationView>(style, theme); }
+unique_ptr<AlertViewInterface> SystemToolkit::CreateAlert(AlertItemVec items) { return make_unique<iOSAlertView>(move(items)); }
+unique_ptr<PanelViewInterface> SystemToolkit::CreatePanel(const Box &b, const string &title, PanelItemVec items) { return nullptr; }
+unique_ptr<ToolbarViewInterface> SystemToolkit::CreateToolbar(const string &theme, MenuItemVec items) { return make_unique<iOSToolbarView>(theme, move(items)); }
+unique_ptr<MenuViewInterface> SystemToolkit::CreateMenu(const string &title, MenuItemVec items) { return make_unique<iOSMenuView>(title, move(items)); }
+unique_ptr<MenuViewInterface> SystemToolkit::CreateEditMenu(vector<MenuItem> items) { return nullptr; }
+unique_ptr<TableViewInterface> SystemToolkit::CreateTableView(const string &title, const string &style, const string &theme, TableItemVec items) { return make_unique<iOSTableView>(title, style, theme, move(items)); }
+unique_ptr<TextViewInterface> SystemToolkit::CreateTextView(const string &title, File *file) { return make_unique<iOSTextView>(title, file); }
+unique_ptr<TextViewInterface> SystemToolkit::CreateTextView(const string &title, const string &text) { return make_unique<iOSTextView>(title, text); }
+unique_ptr<NavigationViewInterface> SystemToolkit::CreateNavigationView(const string &style, const string &theme) { return make_unique<iOSNavigationView>(style, theme); }
 
 }; // namespace LFL

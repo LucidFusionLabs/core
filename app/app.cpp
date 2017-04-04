@@ -277,7 +277,7 @@ void RateLimiter::Limit() {
   if (sleep != Time(0)) { MSleep(sleep.count()); sleep_bias.Add((timer.GetTime(true) - sleep).count()); }
 }
 
-FrameWakeupTimer::FrameWakeupTimer(Window *w) : root(w), timer(SystemTimer::Create([=](){
+FrameWakeupTimer::FrameWakeupTimer(Window *w) : root(w), timer(SystemToolkit::CreateTimer([=](){
   needs_frame=1; app->scheduler.Wakeup(root, FrameScheduler::WakeupFlag::InMainThread);
 })) {}
 
@@ -748,7 +748,7 @@ Window::~Window() {
 
 void Window::ClearChildren() {
   dialogs.clear();
-  my_gui.clear();
+  my_view.clear();
   my_input.clear();
 }
 
@@ -767,14 +767,14 @@ void Window::SetBox(const LFL::Box &b) {
 }
 
 void Window::InitConsole(const Callback &animating_cb) {
-  gui.push_back((console = make_unique<Console>(this, animating_cb)).get());
+  view.push_back((console = make_unique<Console>(this, animating_cb)).get());
   console->ReadHistory(app->savedir, StrCat(app->name, "_console"));
   console->Write(StrCat(caption, " started"));
   console->Write("Try console commands 'cmds' and 'flags'");
 }
 
-size_t Window::NewGUI() { my_gui.emplace_back(unique_ptr<GUI>()); return my_gui.size()-1; }
-void Window::DelGUI(GUI *g) { RemoveGUI(g); VectorRemoveUnique(&my_gui, g); }
+size_t Window::NewView() { my_view.emplace_back(unique_ptr<View>()); return my_view.size()-1; }
+void Window::DelView(View *g) { RemoveView(g); VectorRemoveUnique(&my_view, g); }
 
 void Window::OnDialogAdded(Dialog *d) {
   // if (dialogs.size() == 1)
@@ -811,7 +811,7 @@ void Window::Reshaped(const LFL::Box &b) {
   if (!gd) return;
   gd->ViewPort(LFL::Box(b.right(), b.top()));
   gd->DrawMode(gd->default_draw_mode);
-  for (auto g = gui.begin(); g != gui.end(); ++g) (*g)->Layout();
+  for (auto v = view.begin(); v != view.end(); ++v) (*v)->Layout();
   if (reshaped_cb) reshaped_cb();
 }
 
@@ -820,8 +820,8 @@ void Window::ResetGL(int flag) {
   INFO("Window::ResetGL forget=", forget, " reload=", reload);
   if (forget) for (auto b : gd->buffers) *b = -1;
   if (forget && reload) gd->Init(Box());
-  for (auto &g : gui    ) g->ResetGL(flag);
-  for (auto &g : dialogs) g->ResetGL(flag);
+  for (auto &v : view   ) v->ResetGL(flag);
+  for (auto &v : dialogs) v->ResetGL(flag);
   FrameBuffer(gd).Release();
 }
 

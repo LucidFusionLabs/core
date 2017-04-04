@@ -31,27 +31,27 @@ DEFINE_bool(draw_grid, false, "Draw lines intersecting mouse x,y");
 DEFINE_FLAG(testbox, Box, Box(), "Test box; change via console: testbox x,y,w,h");
 DEFINE_FLAG(testcolor, Color, Color::red, "Test color; change via console: testcolor hexval");
 
-void GUI::UpdateBox(const Box &b, int draw_box_ind, int input_box_ind) {
+void View::UpdateBox(const Box &b, int draw_box_ind, int input_box_ind) {
   if (draw_box_ind  >= 0) child_box.data[draw_box_ind ].box = b;
   if (input_box_ind >= 0) mouse.hit     [input_box_ind].box = b;
 }
 
-void GUI::UpdateBoxX(int x, int draw_box_ind, int input_box_ind) {
+void View::UpdateBoxX(int x, int draw_box_ind, int input_box_ind) {
   if (draw_box_ind  >= 0) child_box.data[draw_box_ind ].box.x = x;
   if (input_box_ind >= 0) mouse.hit     [input_box_ind].box.x = x;
 }
 
-void GUI::UpdateBoxY(int y, int draw_box_ind, int input_box_ind) {
+void View::UpdateBoxY(int y, int draw_box_ind, int input_box_ind) {
   if (draw_box_ind  >= 0) child_box.data[draw_box_ind ].box.y = y;
   if (input_box_ind >= 0) mouse.hit     [input_box_ind].box.y = y;
 }
 
-void GUI::IncrementBoxY(int y, int draw_box_ind, int input_box_ind) {
+void View::IncrementBoxY(int y, int draw_box_ind, int input_box_ind) {
   if (draw_box_ind  >= 0) child_box.data[draw_box_ind ].box.y += y;
   if (input_box_ind >= 0) mouse.hit     [input_box_ind].box.y += y;
 }
 
-void GUI::Draw() {
+void View::Draw() {
   if (child_box.data.empty()) Layout();
   child_box.Draw(root->gd, box.TopLeft());
 }
@@ -109,7 +109,7 @@ void Widget::Button::LayoutComplete(Flow *flow, Font *f, const Box &b) {
   }
 }
 
-Widget::Slider::Slider(GUI *Gui, int f) : Interface(Gui), flag(f),
+Widget::Slider::Slider(View *V, int f) : Interface(V), flag(f),
   menuicon(app->fonts->Get("MenuAtlas", "", 0, Color::white, Color::clear, 0)) {}
 
 void Widget::Slider::LayoutAttached(const Box &w) {
@@ -128,10 +128,10 @@ void Widget::Slider::LayoutAttached(const Box &w) {
 void Widget::Slider::Layout(int, int, bool flip) {
   if (outline_topleft && outline_bottomright) {
     track.DelBorder(Border(outline_w, 0, 0, outline_w));
-    int attr_id = gui->child_box.attr.GetAttrId(Drawable::Attr(NullPointer<Font>(), outline_topleft, nullptr, false, true, outline_w));
-    gui->child_box.PushBack(track, attr_id, Singleton<BoxTopLeftOutline>::Get());
-    attr_id = gui->child_box.attr.GetAttrId(Drawable::Attr(NullPointer<Font>(), outline_bottomright, nullptr, false, true, outline_w));
-    gui->child_box.PushBack(track, attr_id, Singleton<BoxBottomRightOutline>::Get());
+    int attr_id = view->child_box.attr.GetAttrId(Drawable::Attr(NullPointer<Font>(), outline_topleft, nullptr, false, true, outline_w));
+    view->child_box.PushBack(track, attr_id, Singleton<BoxTopLeftOutline>::Get());
+    attr_id = view->child_box.attr.GetAttrId(Drawable::Attr(NullPointer<Font>(), outline_bottomright, nullptr, false, true, outline_w));
+    view->child_box.PushBack(track, attr_id, Singleton<BoxBottomRightOutline>::Get());
     track.DelBorder(Border(0, outline_w, outline_w, 0));
   }
 
@@ -144,10 +144,10 @@ void Widget::Slider::Layout(int, int, bool flip) {
   else      { arrow_up.h = track.w; track.h -= 2*track.w; arrow_up.y += track.h; }
 
   if (1) {
-    int attr_id = gui->child_box.attr.GetAttrId(Drawable::Attr(menuicon, &Color::white, nullptr, false, true));
-    if (arrows) gui->child_box.PushBack(arrow_up,   attr_id, menuicon ? menuicon->FindGlyph(flip ? 2 : 4) : 0);
-    if (arrows) gui->child_box.PushBack(arrow_down, attr_id, menuicon ? menuicon->FindGlyph(flip ? 3 : 1) : 0);
-    if (1)      gui->child_box.PushBack(scroll_dot, attr_id, menuicon ? menuicon->FindGlyph(           5) : 0, &drawbox_ind);
+    int attr_id = view->child_box.attr.GetAttrId(Drawable::Attr(menuicon, &Color::white, nullptr, false, true));
+    if (arrows) view->child_box.PushBack(arrow_up,   attr_id, menuicon ? menuicon->FindGlyph(flip ? 2 : 4) : 0);
+    if (arrows) view->child_box.PushBack(arrow_down, attr_id, menuicon ? menuicon->FindGlyph(flip ? 3 : 1) : 0);
+    if (1)      view->child_box.PushBack(scroll_dot, attr_id, menuicon ? menuicon->FindGlyph(           5) : 0, &drawbox_ind);
 
     if (1)      AddDragBox (scroll_dot, MouseController::CB(bind(&Slider::DragScrollDot, this)));
     if (arrows) AddClickBox(arrow_up,   MouseController::CB(bind(flip ? &Slider::ScrollDown : &Slider::ScrollUp,   this)));
@@ -161,11 +161,11 @@ void Widget::Slider::Update(bool force) {
   if (!dragging && !dirty && !force) return;
   bool flip = flag & Flag::Horizontal;
   if (dragging) {
-    if (flip) scrolled = Clamp(    float(gui->RelativePosition(gui->root->mouse).x - track.x) / track.w, 0.0f, 1.0f);
-    else      scrolled = Clamp(1 - float(gui->RelativePosition(gui->root->mouse).y - track.y) / track.h, 0.0f, 1.0f);
+    if (flip) scrolled = Clamp(    float(view->RelativePosition(view->root->mouse).x - track.x) / track.w, 0.0f, 1.0f);
+    else      scrolled = Clamp(1 - float(view->RelativePosition(view->root->mouse).y - track.y) / track.h, 0.0f, 1.0f);
   }
-  if (flip) { int aw = arrows ? dot_size : 0; gui->UpdateBoxX(track.x          + int((track.w - aw) * scrolled), drawbox_ind, IndexOrDefault(hitbox, 0, -1)); }
-  else      { int ah = arrows ? dot_size : 0; gui->UpdateBoxY(track.top() - ah - int((track.h - ah) * scrolled), drawbox_ind, IndexOrDefault(hitbox, 0, -1)); }
+  if (flip) { int aw = arrows ? dot_size : 0; view->UpdateBoxX(track.x          + int((track.w - aw) * scrolled), drawbox_ind, IndexOrDefault(hitbox, 0, -1)); }
+  else      { int ah = arrows ? dot_size : 0; view->UpdateBoxY(track.top() - ah - int((track.h - ah) * scrolled), drawbox_ind, IndexOrDefault(hitbox, 0, -1)); }
   dirty = false;
 }
 
@@ -253,8 +253,8 @@ const Drawable::Attr *TextBox::Style::GetAttr(int attr) const {
   return &last_attr;
 }
 
-TextBox::Control::Control(TextBox::Line *P, GUI *G, const Box3 &b, string v, MouseControllerCallback cb) :
-  Interface(G), box(b), val(move(v)), line(P) {
+TextBox::Control::Control(TextBox::Line *P, View *V, const Box3 &b, string v, MouseControllerCallback cb) :
+  Interface(V), box(b), val(move(v)), line(P) {
   AddClickBox(b, move(cb));
 #ifndef LFL_MOBILE
   AddHoverBox(b, MouseController::CoordCB(bind(&Control::Hover, this, _1, _2, _3, _4)));
@@ -265,7 +265,7 @@ TextBox::Control::Control(TextBox::Line *P, GUI *G, const Box3 &b, string v, Mou
 void TextBox::LineData::AddControlsDelta(int delta_y) {
   for (auto &i : controls) {
     i.second->box += point(0, delta_y);
-    for (auto &j : i.second->hitbox) i.second->gui->IncrementBoxY(delta_y, -1, j);
+    for (auto &j : i.second->hitbox) i.second->view->IncrementBoxY(delta_y, -1, j);
   }
 }
 
@@ -492,7 +492,7 @@ TextBox::LineUpdate::~LineUpdate() {
   else fb->Update(v);
 }
 
-TextBox::TextBox(Window *W, const FontRef &F, int LC) : GUI(W), style(F), cmd_fb(W?W->gd:0), cmd_last(LC) {
+TextBox::TextBox(Window *W, const FontRef &F, int LC) : View(W), style(F), cmd_fb(W?W->gd:0), cmd_last(LC) {
   if (style.font.Load()) cmd_line.GetAttrId(Drawable::Attr(style.font));
   layout.pad_wide_chars = 1;
   cmd_line.Init(this, 0);
@@ -2140,7 +2140,7 @@ void Console::Draw(const Box &b, int flag, Shader *shader) {
 
 /* Dialog */
 
-Dialog::Dialog(Window *W, float w, float h, int flag) : GUI(W),
+Dialog::Dialog(Window *W, float w, float h, int flag) : View(W),
   color(85,85,85,220), title_gradient{Color(127,0,0), Color(0,0,127), Color(0,0,178), Color(208,0,127)},
   font(FontDesc(FLAGS_font, "", 14, Color(Color::white,.8), Color::clear, FLAGS_font_flag)),
   menuicon(FontDesc("MenuAtlas", "", 0, Color::white, Color::clear, 0)), deleted_cb([=]{ deleted=true; })
@@ -2158,7 +2158,7 @@ void Dialog::LayoutTabbed(int tab, const Box &b, const point &tab_dim, MouseCont
 }
 
 void Dialog::Layout() {
-  ResetGUI();
+  ResetView();
   int fh = font->Height();
   content = Box(0, -box.h, box.w, box.h + ((fullscreen && !tabbed) ? 0 : -fh));
   if (fullscreen) return;
@@ -2235,21 +2235,21 @@ void DialogTab::Draw(GraphicsDevice *gd, const Box &b, const point &tab_dim, con
   for (int i=0, l=t.size(); i<l; ++i) t[i].child_box.Draw(gd, b.TopLeft() + point(i*tab_dim.x, 0));
 }
 
-TabbedDialogInterface::TabbedDialogInterface(GUI *g, const point &d): gui(g), tab_dim(d) {}
+TabbedDialogInterface::TabbedDialogInterface(View *v, const point &d) : view(v), tab_dim(d) {}
 void TabbedDialogInterface::Layout() {
   for (auto b=tab_list.begin(), e=tab_list.end(), t=b; t != e; ++t) {
     int tab_no = t-b;
-    t->dialog->LayoutTabbed(tab_no, box, tab_dim, &gui->mouse, &t->child_box);
-    gui->mouse.AddClickBox(t->dialog->title + point(box.x + tab_no*tab_dim.x, 0),
-                           MouseController::CB(bind(&TabbedDialogInterface::SelectTabIndex, this, tab_no)));
+    t->dialog->LayoutTabbed(tab_no, box, tab_dim, &view->mouse, &t->child_box);
+    view->mouse.AddClickBox(t->dialog->title + point(box.x + tab_no*tab_dim.x, 0),
+                            MouseController::CB(bind(&TabbedDialogInterface::SelectTabIndex, this, tab_no)));
   }
   if (tab_list.size() && tab_list.size() * tab_dim.x > box.w) {
     auto t = tab_list.begin();
     int fh = t->dialog->font->Height();
     Font *menuicon = t->dialog->menuicon.ptr;
-    int attr_id = gui->child_box.attr.GetAttrId(Drawable::Attr(menuicon, &Color::white, nullptr, false, true));
-    gui->child_box.PushBack(Box(box.x,          -fh, fh, fh), attr_id, menuicon ? menuicon->FindGlyph(6) : 0);
-    gui->child_box.PushBack(Box(box.right()-fh, -fh, fh, fh), attr_id, menuicon ? menuicon->FindGlyph(7) : 0);
+    int attr_id = view->child_box.attr.GetAttrId(Drawable::Attr(menuicon, &Color::white, nullptr, false, true));
+    view->child_box.PushBack(Box(box.x,          -fh, fh, fh), attr_id, menuicon ? menuicon->FindGlyph(6) : 0);
+    view->child_box.PushBack(Box(box.right()-fh, -fh, fh, fh), attr_id, menuicon ? menuicon->FindGlyph(7) : 0);
   }
 }
 
@@ -2356,13 +2356,13 @@ struct BoostForceDirectedLayout {
 namespace LFL {
 #endif // LFL_BOOST
 
-void HelperGUI::ForceDirectedLayout() {
+void HelperView::ForceDirectedLayout() {
 #ifdef LFL_BOOST
   BoostForceDirectedLayout().Layout(this);
 #endif
 }
 
-HelperGUI::Label::Label(const Box &w, const string &d, int h, Font *f, const point &p) :
+HelperView::Label::Label(const Box &w, const string &d, int h, Font *f, const point &p) :
   target(w), target_center(target.center()), hint(h), description(d) {
   label_center = target_center;
   if      (h == Hint::UP   || h == Hint::UPLEFT   || h == Hint::UPRIGHT)   label_center.y += p.y;
@@ -2373,7 +2373,7 @@ HelperGUI::Label::Label(const Box &w, const string &d, int h, Font *f, const poi
   AssignLabelBox();
 }
 
-void HelperGUI::Draw() {
+void HelperView::Draw() {
   GraphicsContext gc(root->gd);
   for (auto i = label.begin(); i != label.end(); ++i) {
     glLine(root->gd, point(i->label_center.x, i->label_center.y),

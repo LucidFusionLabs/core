@@ -96,7 +96,7 @@
   @property (nonatomic, retain) UILabel *header_label;
   @property (nonatomic, retain) UIToolbar *toolbar;
   @property (nonatomic, retain) UIColor *orig_bg_color, *orig_separator_color;
-  @property (nonatomic, assign) LFL::SystemTableView *lfl_self;
+  @property (nonatomic, assign) LFL::TableViewInterface *lfl_self;
   @property (nonatomic, assign) LFL::IntIntCB delete_row_cb;
   @property (nonatomic, assign) std::string style;
   @property (nonatomic, assign) int editable_section, editable_start_row, selected_section, selected_row;
@@ -117,14 +117,14 @@ struct iOSWindow : public Window {
   bool Reshape(int w, int h);
 };
 
-struct iOSTableView : public SystemTableView {
+struct iOSTableView : public TableViewInterface {
   IOSTable *table;
   ~iOSTableView();
   iOSTableView(const string &title, const string &style, const string &theme, TableItemVec items);
 
   void DelNavigationButton(int align);
   void AddNavigationButton(int align, const TableItem &item);
-  void SetToolbar(SystemToolbarView *t);
+  void SetToolbar(ToolbarViewInterface *t);
   void Show(bool show_or_hide);
 
   string GetKey(int section, int row);
@@ -152,9 +152,9 @@ struct iOSTableView : public SystemTableView {
   void SetEditableSection(int section, int start_row, LFL::IntIntCB cb);
 };
 
-UIAlertView            *GetUIAlertView(SystemAlertView*);
-UIActionSheet          *GetUIActionSheet(SystemMenuView*);
-UIToolbar              *GetUIToolbar(SystemToolbarView*);
-UITableViewController  *GetUITableViewController(SystemTableView*);
-UINavigationController *GetUINavigationController(SystemNavigationView*);
+UIAlertView            *GetUIAlertView(AlertViewInterface*);
+UIActionSheet          *GetUIActionSheet(MenuViewInterface*);
+UIToolbar              *GetUIToolbar(ToolbarViewInterface*);
+UITableViewController  *GetUITableViewController(TableViewInterface*);
+UINavigationController *GetUINavigationController(NavigationViewInterface*);
 }; // namespace LFL

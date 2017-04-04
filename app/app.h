@@ -447,8 +447,8 @@ struct PickerItem {
 };
 
 struct TableItem {
-  enum { None=0, Label=1, Separator=2, Command=3, Button=4, Toggle=5, Selector=6, Picker=7, TextInput=8,
-    NumberInput=9, PasswordInput=10, FontPicker=11 }; 
+  enum { None=0, Label=1, Separator=2, Command=3, Button=4, Toggle=5, Selector=6, Picker=7, Slider=8,
+    TextInput=9, NumberInput=10, PasswordInput=11, FontPicker=12 }; 
   struct Flag { enum { LeftText=1, SubText=2, FixDropdown=4, HideKey=8, PlaceHolderVal=16, ColoredSubText=32,
     ColoredRightText=64, User1=128 }; };
   string key, val, right_text, dropdown_key;
@@ -459,6 +459,7 @@ struct TableItem {
   bool hidden;
   unsigned char fg_r=0, fg_g=0, fg_b=0, fg_a=0;
   unsigned char bg_r=0, bg_g=0, bg_b=0, bg_a=0;
+  float minval=0, maxval=0;
   virtual ~TableItem() {}
   TableItem(string K=string(), int T=0, string V=string(), string RT=string(), int TG=0, int LI=0, int RI=0,
             Callback CB=Callback(), StringCB RC=StringCB(), int F=0, bool H=false, PickerItem *P=0, string DDK=string()) :
@@ -475,7 +476,7 @@ struct TableItem {
 
 struct TableSection {
   struct Flag { enum { EditButton=1, EditableIfHasTag=2, DoubleRowHeight=4, HighlightSelectedRow=8,
-    DeleteRowsWhenAllHidden=16, User1=32 }; };
+    DeleteRowsWhenAllHidden=16, ClearLeftNavWhenEmpty=32, User1=64 }; };
   struct Change { int section, row; string val; bool hidden; int left_icon, right_icon, type; string key; Callback cb; int flags; };
   typedef vector<Change> ChangeList;
   typedef unordered_map<string, ChangeList> ChangeSet;
@@ -553,7 +554,7 @@ struct FrameScheduler {
 struct FrameWakeupTimer {
   Window *root;
   bool needs_frame=false;
-  unique_ptr<SystemTimer> timer;
+  unique_ptr<TimerInterface> timer;
   FrameWakeupTimer(Window *w);
   void ClearWakeupIn();
   bool WakeupIn(Time interval);
@@ -600,9 +601,9 @@ struct Window : public ::LFAppWindow {
   Timer frame_time;
   RollingAvg<unsigned> fps;
   unique_ptr<Console> console;
-  vector<GUI*> gui;
+  vector<View*> view;
   vector<InputController*> input;
-  vector<unique_ptr<GUI>> my_gui;
+  vector<unique_ptr<View>> my_view;
   vector<unique_ptr<InputController>> my_input;
   vector<unique_ptr<Dialog>> dialogs;
   FontRef default_font = FontRef(FontDesc::Default(), false);
@@ -638,29 +639,29 @@ struct Window : public ::LFAppWindow {
   void RenderToFrameBuffer(FrameBuffer *fb);
   void InitConsole(const Callback &animating_cb);
 
-  template <class X> X* GetGUI(size_t i) { return i < gui.size() ? dynamic_cast<X*>(gui[i]) : nullptr; }
-  template <class X> X* GetOwnGUI(size_t i) { return i < my_gui.size() ? dynamic_cast<X*>(my_gui[i].get()) : nullptr; }
+  template <class X> X* GetView(size_t i) { return i < view.size() ? dynamic_cast<X*>(view[i]) : nullptr; }
+  template <class X> X* GetOwnView(size_t i) { return i < my_view.size() ? dynamic_cast<X*>(my_view[i].get()) : nullptr; }
   template <class X> X* GetInputController(size_t i) { return i < input.size() ? dynamic_cast<X*>(input[i]) : nullptr; }
   template <class X> X* GetOwnInputController(size_t i) { return i < my_input.size() ? dynamic_cast<X*>(my_input[i].get()) : nullptr; }
   template <class X> X* AddInputController(unique_ptr<X> g) { auto gp = VectorAddUnique(&my_input, move(g)); input.push_back(gp); return gp; }
-  template <class X> void DelGUIPointer(X **g) { DelGUI(*g); *g = nullptr; }
-  template <class X> X* AddGUI(unique_ptr<X> g) {
-    auto gp = VectorAddUnique(&my_gui, move(g));
-    gui.push_back(gp);
-    DEBUGf("AddGUI[%zd] %s %p", gui.size()-1, typeid(X).name(), gui.back());
+  template <class X> void DelViewPointer(X **g) { DelView(*g); *g = nullptr; }
+  template <class X> X* AddView(unique_ptr<X> g) {
+    auto gp = VectorAddUnique(&my_view, move(g));
+    view.push_back(gp);
+    DEBUGf("AddView[%zd] %s %p", view.size()-1, typeid(X).name(), view.back());
     return gp;
   }
-  template <class X> X* ReplaceGUI(size_t i, unique_ptr<X> g) {
+  template <class X> X* ReplaceView(size_t i, unique_ptr<X> g) {
     auto gp = g.get();
-    if (auto p = my_gui[i].get()) RemoveGUI(p);
-    gui.push_back((my_gui[i] = move(g)).get());
+    if (auto p = my_view[i].get()) RemoveView(p);
+    view.push_back((my_view[i] = move(g)).get());
     return gp;
   }
   void DelInputController(InputController *g) { RemoveInputController(g); VectorRemoveUnique(&my_input, g); }
   void RemoveInputController(InputController *g) { VectorEraseByValue(&input, g); }
-  void RemoveGUI(GUI *g) { VectorEraseByValue(&gui, g); }
-  void DelGUI(GUI *g);
-  size_t NewGUI();
+  void RemoveView(View *v) { VectorEraseByValue(&view, v); }
+  void DelView(View *v);
+  size_t NewView();
 
   template <class X> X* AddDialog(unique_ptr<X> d) { auto dp = VectorAddUnique(&dialogs, move(d)); OnDialogAdded(dp); return dp; }
   virtual void OnDialogAdded(Dialog *d);
@@ -814,54 +815,46 @@ struct Application : public ::LFApp {
   static void WriteDebugLine(const char *message, const char *file, int line);
 };
 
-struct SystemTimer {
-  static unique_ptr<SystemTimer> Create(Callback cb);
-  virtual ~SystemTimer() {}
+struct TimerInterface {
+  virtual ~TimerInterface() {}
   virtual void Clear() = 0;
   virtual void Run(Time interval, bool force=false) = 0;
 };
 
-struct SystemAlertView {
-  static unique_ptr<SystemAlertView> Create(AlertItemVec items);
-  virtual ~SystemAlertView() {}
+struct AlertViewInterface {
+  virtual ~AlertViewInterface() {}
   virtual void Hide() = 0;
   virtual void Show(const string &arg) = 0;
   virtual void ShowCB(const string &title, const string &msg, const string &arg, StringCB confirm_cb) = 0;
   virtual string RunModal(const string &arg) = 0;
 };
 
-struct SystemPanelView {
-  static unique_ptr<SystemPanelView> Create(const Box&, const string &title, PanelItemVec);
-  virtual ~SystemPanelView() {}
+struct PanelViewInterface {
+  virtual ~PanelViewInterface() {}
   virtual void Show() = 0;
   virtual void SetTitle(const string &title) = 0;
 };
 
-struct SystemToolbarView {
-  static unique_ptr<SystemToolbarView> Create(const string &theme, MenuItemVec items);
-  virtual ~SystemToolbarView() {}
+struct ToolbarViewInterface {
+  virtual ~ToolbarViewInterface() {}
   virtual void Show(bool show_or_hide) = 0;
   virtual void ToggleButton(const string &n) = 0;
   virtual void SetTheme(const string &theme) = 0;
 };
 
-struct SystemMenuView {
-  static unique_ptr<SystemMenuView> Create(const string &title, MenuItemVec items);
-  static unique_ptr<SystemMenuView> CreateEditMenu(MenuItemVec items);
-  virtual ~SystemMenuView() {}
+struct MenuViewInterface {
+  virtual ~MenuViewInterface() {}
   virtual void Show() = 0;
 };
 
-struct SystemTableView {
-  static unique_ptr<SystemTableView> Create(const string &title, const string &style, const string &theme,
-                                            TableItemVec items);
+struct TableViewInterface {
   bool changed=0;
   Callback hide_cb, show_cb = [=](){ changed=0; }; 
-  virtual ~SystemTableView() {}
+  virtual ~TableViewInterface() {}
 
   virtual void DelNavigationButton(int id) = 0;
   virtual void AddNavigationButton(int id, const TableItem &item) = 0;
-  virtual void SetToolbar(SystemToolbarView*) = 0;
+  virtual void SetToolbar(ToolbarViewInterface*) = 0;
   virtual void Show(bool show_or_hide) = 0;
 
   virtual string GetKey(int section, int row) = 0;
@@ -892,62 +885,57 @@ struct SystemTableView {
   void ApplyChangeSet(const string &v, const TableSection::ChangeSet &changes) { auto it = changes.find(v); if (it != changes.end()) ApplyChangeList(it->second); }
 };
 
-struct SystemTableViewController {
-  unique_ptr<SystemTableView> view;
-  SystemTableViewController() {}
-  SystemTableViewController(unique_ptr<SystemTableView> v) : view(move(v)) {}
-  virtual ~SystemTableViewController() {}
+struct TableViewController {
+  unique_ptr<TableViewInterface> view;
+  TableViewController() {}
+  TableViewController(unique_ptr<TableViewInterface> v) : view(move(v)) {}
+  virtual ~TableViewController() {}
 };
 
-struct SystemTextView {
-  static unique_ptr<SystemTextView> Create(const string &title, File *file);
-  static unique_ptr<SystemTextView> Create(const string &title, const string &text);
+struct TextViewInterface {
   Callback hide_cb, show_cb;
-  virtual ~SystemTextView() {}
+  virtual ~TextViewInterface() {}
 };
 
-struct SystemNavigationView {
-  static unique_ptr<SystemNavigationView> Create(const string &style, const string &theme);
+struct NavigationViewInterface {
   bool shown=0;
-  SystemTableView *root=0;
-  virtual ~SystemNavigationView() {}
-  virtual SystemTableView *Back() = 0;
+  TableViewInterface *root=0;
+  virtual ~NavigationViewInterface() {}
+  virtual TableViewInterface *Back() = 0;
   virtual void Show(bool show_or_hide) = 0;
-  virtual void PushTableView(SystemTableView*) = 0;
-  virtual void PushTextView(SystemTextView*) = 0;
+  virtual void PushTableView(TableViewInterface*) = 0;
+  virtual void PushTextView(TextViewInterface*) = 0;
   virtual void PopView(int num=1) = 0;
   virtual void PopToRoot() = 0;
   virtual void PopAll() = 0;
   virtual void SetTheme(const string &theme) = 0;
 };
 
-struct SystemAdvertisingView {
+struct AdvertisingViewInterface {
   struct Type { enum { BANNER=1 }; };
-  static unique_ptr<SystemAdvertisingView> Create(int type, int placement, const string &id, const StringVec &test_devices);
-  virtual ~SystemAdvertisingView() {}
+  virtual ~AdvertisingViewInterface() {}
   virtual void Show(bool show_or_hide) = 0;
-  virtual void Show(SystemTableView*, bool show_or_hide) = 0;
+  virtual void Show(TableViewInterface*, bool show_or_hide) = 0;
 };
 
-struct SystemProduct {
+struct ProductInterface {
   string id;
-  SystemProduct(const string &i) : id(i) {}
-  virtual ~SystemProduct() {}
+  ProductInterface(const string &i) : id(i) {}
+  virtual ~ProductInterface() {}
   virtual string Name() = 0;
   virtual string Description() = 0;
   virtual string Price() = 0;
 };
 
-struct SystemPurchases {
-  typedef function<void(unique_ptr<SystemProduct>)> ProductCB;
-  static unique_ptr<SystemPurchases> Create();
-  virtual ~SystemPurchases() {}
+struct PurchasesInterface {
+  typedef function<void(unique_ptr<ProductInterface>)> ProductCB;
+  virtual ~PurchasesInterface() {}
   virtual bool CanPurchase() = 0;
   virtual void LoadPurchases() = 0;
   virtual bool HavePurchase(const string&) = 0;
   virtual void RestorePurchases(Callback done_cb) = 0;
   virtual void PreparePurchase(const StringVec&, Callback done_cb, ProductCB product_cb) = 0;
-  virtual bool MakePurchase(SystemProduct*, IntCB result_cb) = 0;
+  virtual bool MakePurchase(ProductInterface*, IntCB result_cb) = 0;
 };
 
 unique_ptr<Module> CreateFrameworkModule();
@@ -955,6 +943,23 @@ unique_ptr<GraphicsDevice> CreateGraphicsDevice(Window*, int ver);
 unique_ptr<Module> CreateAudioModule(Audio*);
 unique_ptr<Module> CreateCameraModule(CameraState*);
 void InitCrashReporting(const string &id, const string &name, const string &email);
+
+struct SystemToolkit {
+  static unique_ptr<TimerInterface> CreateTimer(Callback cb);
+  static unique_ptr<AlertViewInterface> CreateAlert(AlertItemVec items);
+  static unique_ptr<PanelViewInterface> CreatePanel(const Box&, const string &title, PanelItemVec);
+  static unique_ptr<ToolbarViewInterface> CreateToolbar(const string &theme, MenuItemVec items);
+  static unique_ptr<MenuViewInterface> CreateMenu(const string &title, MenuItemVec items);
+  static unique_ptr<MenuViewInterface> CreateEditMenu(MenuItemVec items);
+  static unique_ptr<TableViewInterface> CreateTableView
+    (const string &title, const string &style, const string &theme, TableItemVec items);
+  static unique_ptr<TextViewInterface> CreateTextView(const string &title, File *file);
+  static unique_ptr<TextViewInterface> CreateTextView(const string &title, const string &text);
+  static unique_ptr<NavigationViewInterface> CreateNavigationView(const string &style, const string &theme);
+  static unique_ptr<AdvertisingViewInterface> CreateAdvertisingView
+    (int type, int placement, const string &id, const StringVec &test_devices);
+  static unique_ptr<PurchasesInterface> CreatePurchases();
+};
 
 }; // namespace LFL
 #endif // LFL_CORE_APP_APP_H__

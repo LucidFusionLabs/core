@@ -32,6 +32,6 @@ Connection *Application::ConnectTCP(const string &hostport, int default_port, Co
   return app->net->tcp_client->Connect(hostport, default_port, connected_cb);
 }
 
-unique_ptr<SystemTimer> SystemTimer::Create(Callback cb) { return nullptr; }
+unique_ptr<TimerInterface> SystemToolkit::CreateTimer(Callback cb) { return nullptr; }
 
 }; // namespace LFL

@@ -29,19 +29,19 @@ DECLARE_string(console_font);
 DECLARE_int(console_font_flag);
 DECLARE_FLAG(testbox, Box);
 
-struct GUI {
+struct View {
   Window *root;
   Box box;
   DrawableBoxArray child_box;
   MouseController mouse;
-  GUI *child_gui=0;
+  View *child_view=0;
   bool active=0;
 
-  GUI(Window *R, const Box &B=Box()) : root(R), box(B), mouse(this) {}
-  virtual ~GUI() {}
+  View(Window *R, const Box &B=Box()) : root(R), box(B), mouse(this) {}
+  virtual ~View() {}
 
-  DrawableBoxArray *ResetGUI() { ClearGUI(); return &child_box; }
-  void ClearGUI() { child_box.Clear(); mouse.Clear(); }
+  DrawableBoxArray *ResetView() { ClearView(); return &child_box; }
+  void ClearView() { child_box.Clear(); mouse.Clear(); }
   void UpdateBox(const Box &b, int draw_box_ind, int input_box_ind);
   void UpdateBoxX(int x, int draw_box_ind, int input_box_ind);
   void UpdateBoxY(int y, int draw_box_ind, int input_box_ind);
@@ -62,23 +62,23 @@ struct GUI {
 
 struct Widget {
   struct Interface {
-    GUI *gui;
+    View *view;
     vector<int> hitbox;
     int drawbox_ind=-1;
     bool del_hitbox=0;
     virtual ~Interface() { if (del_hitbox) DelHitBox(); }
-    Interface(GUI *g) : gui(g) {}
+    Interface(View *v) : view(v) {}
 
-    void AddClickBox(const Box  &b, MouseControllerCallback cb) {                   hitbox.push_back(gui->mouse.AddClickBox(b, move(cb))); }
-    void AddHoverBox(const Box  &b, MouseControllerCallback cb) {                   hitbox.push_back(gui->mouse.AddHoverBox(b, move(cb))); }
-    void AddDragBox (const Box  &b, MouseControllerCallback cb) {                   hitbox.push_back(gui->mouse.AddDragBox (b, move(cb))); }
-    void AddClickBox(const Box3 &t, MouseControllerCallback cb) { for (auto &b : t) hitbox.push_back(gui->mouse.AddClickBox(b, move(cb))); }
-    void AddHoverBox(const Box3 &t, MouseControllerCallback cb) { for (auto &b : t) hitbox.push_back(gui->mouse.AddHoverBox(b, move(cb))); }
-    void AddDragBox (const Box3 &t, MouseControllerCallback cb) { for (auto &b : t) hitbox.push_back(gui->mouse.AddDragBox (b, move(cb))); }
-    void DelHitBox() { for (auto &i : hitbox) gui->mouse.hit.Erase(i); hitbox.clear(); }
-    MouseController::HitBox &GetHitBox(int i=0) const { return gui->mouse.hit[hitbox[i]]; }
-    Box GetHitBoxBox(int i=0) const { return Box::Add(GetHitBox(i).box, gui->box.TopLeft()); }
-    DrawableBox *GetDrawBox() const { return drawbox_ind >= 0 ? VectorGet(gui->child_box.data, drawbox_ind) : 0; }
+    void AddClickBox(const Box  &b, MouseControllerCallback cb) {                   hitbox.push_back(view->mouse.AddClickBox(b, move(cb))); }
+    void AddHoverBox(const Box  &b, MouseControllerCallback cb) {                   hitbox.push_back(view->mouse.AddHoverBox(b, move(cb))); }
+    void AddDragBox (const Box  &b, MouseControllerCallback cb) {                   hitbox.push_back(view->mouse.AddDragBox (b, move(cb))); }
+    void AddClickBox(const Box3 &t, MouseControllerCallback cb) { for (auto &b : t) hitbox.push_back(view->mouse.AddClickBox(b, move(cb))); }
+    void AddHoverBox(const Box3 &t, MouseControllerCallback cb) { for (auto &b : t) hitbox.push_back(view->mouse.AddHoverBox(b, move(cb))); }
+    void AddDragBox (const Box3 &t, MouseControllerCallback cb) { for (auto &b : t) hitbox.push_back(view->mouse.AddDragBox (b, move(cb))); }
+    void DelHitBox() { for (auto &i : hitbox) view->mouse.hit.Erase(i); hitbox.clear(); }
+    MouseController::HitBox &GetHitBox(int i=0) const { return view->mouse.hit[hitbox[i]]; }
+    Box GetHitBoxBox(int i=0) const { return Box::Add(GetHitBox(i).box, view->box.TopLeft()); }
+    DrawableBox *GetDrawBox() const { return drawbox_ind >= 0 ? VectorGet(view->child_box.data, drawbox_ind) : 0; }
   };
 
   struct Button : public Interface {
@@ -93,8 +93,8 @@ struct Widget {
     bool init=0, hover=0;
     int decay=0, v_align=VAlign::Center, v_offset=0, outline_w=3;
     Button() : Interface(0) {}
-    Button(GUI *G, Drawable *I, const string &T, const MouseControllerCallback &CB)
-      : Interface(G), text(T), image(I), cb(CB), init(1) {}
+    Button(View *V, Drawable *I, const string &T, const MouseControllerCallback &CB)
+      : Interface(V), text(T), image(I), cb(CB), init(1) {}
 
     Color *SetOutlineColor(Color *c) { return (outline_topleft = outline_bottomright = c); }
     void SetBox(const Box &b) { box=b; hitbox.clear(); AddClickBox(box, cb); init=0; }
@@ -117,7 +117,7 @@ struct Widget {
     Font *menuicon=0;
     bool dragging=0, dirty=0, arrows=1;
     virtual ~Slider() {}
-    Slider(GUI *Gui, int f=Flag::Attached);
+    Slider(View *V, int f=Flag::Attached);
 
     float Percent() const { return scrolled * doc_height; }
     void LayoutFixed(const Box &w) { track = w; Layout(dot_size, dot_size, flag & Flag::Horizontal); }
@@ -136,7 +136,7 @@ struct Widget {
   struct Divider : public Interface {
     int size=0, start=0, start_size=0, min_size=0, max_size=-1;
     bool horizontal=1, direction=0, changing=0, changed=0;
-    Divider(GUI *G, bool H, int S) : Interface(G), size(S), horizontal(H) {}
+    Divider(View *V, bool H, int S) : Interface(V), size(S), horizontal(H) {}
     void ApplyConstraints();
     void LayoutDivideTop   (const Box &in, Box *top,  Box *bottom, int offset=0);
     void LayoutDivideBottom(const Box &in, Box *top,  Box *bottom, int offset=0);
@@ -146,7 +146,7 @@ struct Widget {
   };
 };
 
-struct TextBox : public GUI, public TextboxController {
+struct TextBox : public View, public TextboxController {
   struct Line;
   struct Lines;
   struct Colors {
@@ -174,7 +174,7 @@ struct TextBox : public GUI, public TextboxController {
     string val;
     Line *line=0;
     shared_ptr<Texture> image;
-    Control(Line *P, GUI *G, const Box3 &b, string, MouseControllerCallback);
+    Control(Line *P, View *V, const Box3 &b, string, MouseControllerCallback);
     virtual ~Control() { if (line->parent->hover_control == this) line->parent->hover_control = 0; }
     void Hover(int, point, point, int down) { line->parent->hover_control = down ? this : 0; }
   };
@@ -331,7 +331,7 @@ struct TextBox : public GUI, public TextboxController {
   virtual void Run(const string &cmd) { if (runcb) runcb(cmd); }
   virtual bool NotActive(const point &p) const { return !box.within(p) && mouse.drag.empty(); }
   virtual bool Active() const { return root->active_textbox == this; }
-  virtual bool Activate()   { if ( Active()) return 0; if (auto g = dynamic_cast<GUI*>(root->active_textbox)) g->Deactivate(); root->active_textbox = this; return 1; }
+  virtual bool Activate()   { if ( Active()) return 0; if (auto g = dynamic_cast<View*>(root->active_textbox)) g->Deactivate(); root->active_textbox = this; return 1; }
   virtual bool Deactivate() { if (!Active()) return 0; root->active_textbox = root->default_textbox(); return 1; }
   virtual bool ToggleActive() { if (!Active()) Activate(); else Deactivate(); return Active(); }
   virtual void Input(char k) { cmd_line.UpdateText(cursor.i.x++, String16(1, *MakeUnsigned<char>(&k)), cursor.attr); UpdateCommandFB(); UpdateCursor(); }
@@ -735,7 +735,7 @@ struct Console : public TextArea {
   void StartAnimating();
 };
 
-struct Dialog : public GUI {
+struct Dialog : public View {
   struct Flag { enum { None=0, Fullscreen=1, Next=2 }; };
   static const int min_width = 50, min_height = 25;
   Color color, title_gradient[4];
@@ -776,14 +776,14 @@ struct DialogTab {
 };
 
 struct TabbedDialogInterface {
-  GUI *gui;
+  View *view;
   Box box;
   point tab_dim;
   vector<DialogTab> tab_list;
-  TabbedDialogInterface(GUI *g, const point &d=point(200,16));
+  TabbedDialogInterface(View *V, const point &d=point(200,16));
   virtual void SelectTabIndex(size_t i) {}
   virtual void Layout();
-  virtual void Draw() { DialogTab::Draw(gui->root->gd, box, tab_dim, tab_list); }
+  virtual void Draw() { DialogTab::Draw(view->root->gd, box, tab_dim, tab_list); }
 };
 
 template <class D=Dialog> struct TabbedDialog : public TabbedDialogInterface {
@@ -794,7 +794,7 @@ template <class D=Dialog> struct TabbedDialog : public TabbedDialogInterface {
   int TabIndex(D *t) const { for (auto b=tab_list.begin(), e=tab_list.end(), i=b; i!=e; ++i) if (*i == t) return i-b; return -1; }
   void AddTab(D *t) { tabs.insert(t); tab_list.emplace_back(t); SelectTab(t); }
   void DelTab(D *t) { tabs.erase(t); VectorEraseByValue(&tab_list, DialogTab(t)); ReleaseTab(t); }
-  void SelectTab(D *t) { if ((gui->child_gui = top = t)) t->TakeFocus(); }
+  void SelectTab(D *t) { if ((view->child_view = top = t)) t->TakeFocus(); }
   void ReleaseTab(D *t) { if (top == t) { top=0; t->LoseFocus(); SelectTab(FirstTab()); } }
   void SelectTabIndex(size_t i) { CHECK_LT(i, tab_list.size()); SelectTab(dynamic_cast<D*>(tab_list[i].dialog)); }
   void SelectNextTab() { if (top) SelectTabIndex(RingIndex::Wrap(TabIndex(top)+1, tab_list.size())); }
@@ -841,7 +841,7 @@ template <class X> struct TextViewDialogT  : public Dialog {
   Widget::Slider v_scrollbar, h_scrollbar;
   TextViewDialogT(Window *W, const FontRef &F, float w=0.5, float h=.5, int flag=0) :
     Dialog(W, w, h, flag), view(W, F), v_scrollbar(this, Widget::Slider::Flag::AttachedNoCorner),
-    h_scrollbar(this, Widget::Slider::Flag::AttachedHorizontalNoCorner) { child_gui = &view; }
+    h_scrollbar(this, Widget::Slider::Flag::AttachedHorizontalNoCorner) { child_view = &view; }
   void Layout() {
     Dialog::Layout();
     Widget::Slider::AttachContentBox(&content, &v_scrollbar, view.Wrap() ? nullptr : &h_scrollbar);
@@ -878,9 +878,9 @@ struct EditorDialog : public TextViewDialogT<Editor> {
   }
 };
 
-struct HelperGUI : public GUI {
+struct HelperView : public View {
   FontRef font;
-  HelperGUI(Window *W) : GUI(W), font(FontDesc(FLAGS_font, "", 9, Color::white)) {}
+  HelperView(Window *W) : View(W), font(FontDesc(FLAGS_font, "", 9, Color::white)) {}
   struct Hint { enum { UP, UPLEFT, UPRIGHT, DOWN, DOWNLEFT, DOWNRIGHT }; };
   struct Label {
     Box target, label;
@@ -894,6 +894,66 @@ struct HelperGUI : public GUI {
   bool Activate() { if (active) return 0; active=1; /* ForceDirectedLayout(); */ return 1; }
   void ForceDirectedLayout();
   void Draw();
+};
+
+struct ToolbarView : public View, public ToolbarViewInterface {
+  ToolbarView(Window *w, const string &theme, MenuItemVec items);
+  void Layout();
+  void Draw();
+
+  void Show(bool show_or_hide);
+  void ToggleButton(const string &n);
+  void SetTheme(const string &theme);
+};
+
+struct TableView : public View, public TableViewInterface {
+  TableView(Window *w, const string &title, const string &style, const string &theme, TableItemVec items);
+  void Layout();
+  void Draw();
+
+  void DelNavigationButton(int id);
+  void AddNavigationButton(int id, const TableItem &item);
+  void SetToolbar(ToolbarViewInterface*);
+  void Show(bool show_or_hide);
+
+  string GetKey(int section, int row);
+  string GetValue(int section, int row);
+  int GetTag(int section, int row);
+  PickerItem *GetPicker(int section, int row);
+  StringPairVec GetSectionText(int section);
+
+  void BeginUpdates();
+  void EndUpdates();
+  void AddRow(int section, TableItem item);
+  void SelectRow(int section, int row);
+  void ReplaceRow(int section, int row, TableItem item);
+  void ReplaceSection(int section, TableItem header, int flag, TableItemVec item);
+  void ApplyChangeList(const TableSection::ChangeList&);
+  void SetSectionValues(int section, const StringVec&);
+  void SetHeader(int section, TableItem header);
+  void SetKey(int secton, int row, const string &key);
+  void SetTag(int section, int row, int val);
+  void SetValue(int section, int row, const string &val);
+  void SetSelected(int section, int row, int selected);
+  void SetHidden(int section, int row, bool val);
+  void SetTitle(const string &title);
+  void SetTheme(const string &theme);
+  void SetEditableSection(int section, int start_row, IntIntCB cb=IntIntCB());
+};
+
+struct NavigationView : public View, public NavigationViewInterface {
+  NavigationView(Window *w, const string &style, const string &theme);
+  void Layout();
+  void Draw();
+
+  TableViewInterface *Back();
+  void Show(bool show_or_hide);
+  void PushTableView(TableViewInterface*);
+  void PushTextView(TextViewInterface*);
+  void PopView(int num=1);
+  void PopToRoot();
+  void PopAll();
+  void SetTheme(const string &theme);
 };
 
 }; // namespace LFL

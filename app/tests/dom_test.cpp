@@ -85,8 +85,8 @@ TEST(DOMTest, DOMNode) {
 }
 
 TEST(DOMTest, DOMTree) {
-  GUI sb_gui(app->focused);
-  Browser sb(&sb_gui, app->focused->Box());
+  View sb_view(app->focused);
+  Browser sb(&sb_view, app->focused->Box());
   sb.doc.parser->OpenHTML("<html>\n"
                           "<head><style> h1 { background-color: #123456; } </style></head>\n"
                           "<body style=\"background-color: #654321\">\n"

@@ -116,7 +116,7 @@
 @end
 
 namespace LFL {
-struct AppleTimer : public SystemTimer{
+struct AppleTimer : public TimerInterface {
   ObjcTimer *timer;
   ~AppleTimer() { [timer release]; }
   AppleTimer(Callback c) : timer([[ObjcTimer alloc] initWithCB: move(c)]) {}
@@ -297,6 +297,6 @@ string Application::PrintCallStack() {
   return ret;
 }
 
-unique_ptr<SystemTimer> SystemTimer::Create(Callback cb) { return make_unique<AppleTimer>(move(cb)); }
+unique_ptr<TimerInterface> SystemToolkit::CreateTimer(Callback cb) { return make_unique<AppleTimer>(move(cb)); }
 
 }; // namespace LFL

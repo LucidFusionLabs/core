@@ -279,7 +279,7 @@ static std::vector<NSImage*> app_images;
 @interface OSXTable : NSViewController<NSTableViewDataSource, NSTableViewDelegate>
   @property (nonatomic, retain) OSXTableView *tableView;
   @property (nonatomic, copy)   NSScrollView *tableContainer;
-  @property (nonatomic, assign) LFL::SystemTableView *lfl_self;
+  @property (nonatomic, assign) LFL::TableViewInterface *lfl_self;
   @property (nonatomic, assign) LFL::IntIntCB delete_row_cb;
   @property (nonatomic)         std::string style;
   @property (nonatomic)         int editable_section, editable_start_row, selected_section, selected_row,
@@ -292,7 +292,7 @@ static std::vector<NSImage*> app_images;
     std::vector<LFL::TableSection> data;
   }
 
-  - (id)init: (LFL::SystemTableView*)lself withTitle:(const std::string&)title andStyle:(const std::string&)style items:(std::vector<LFL::TableSection>)item { 
+  - (id)init: (LFL::TableViewInterface*)lself withTitle:(const std::string&)title andStyle:(const std::string&)style items:(std::vector<LFL::TableSection>)item { 
     self = [super init];
     self.title = LFL::MakeNSString(title);
     _lfl_self = lself;
@@ -585,7 +585,7 @@ static void AddNSMenuItems(NSMenu *menu, vector<MenuItem> items) {
   }
 }
 
-struct OSXAlertView : public SystemAlertView {
+struct OSXAlertView : public AlertViewInterface {
   OSXAlert *alert;
   ~OSXAlertView() { [alert release]; }
   OSXAlertView(AlertItemVec items) : alert([[OSXAlert alloc] init: move(items)]) {}
@@ -617,7 +617,7 @@ struct OSXAlertView : public SystemAlertView {
   }
 };
 
-struct OSXMenuView : public SystemMenuView {
+struct OSXMenuView : public MenuViewInterface {
   NSMenu *menu;
   ~OSXMenuView() { [menu release]; }
   OSXMenuView(const string &title, MenuItemVec items) :
@@ -632,7 +632,7 @@ struct OSXMenuView : public SystemMenuView {
   void Show() {}
 };
 
-struct OSXPanelView : public SystemPanelView {
+struct OSXPanelView : public PanelViewInterface {
   OSXPanel *panel;
   ~OSXPanelView() { [panel release]; }
   OSXPanelView(const Box &b, const string &title, PanelItemVec items) :
@@ -662,7 +662,7 @@ struct OSXPanelView : public SystemPanelView {
   }
 };
 
-struct OSXToolbarView : public SystemToolbarView {
+struct OSXToolbarView : public ToolbarViewInterface {
   ~OSXToolbarView() {}
   OSXToolbarView(MenuItemVec items) {}
   void Show(bool show_or_hide) {}
@@ -670,7 +670,7 @@ struct OSXToolbarView : public SystemToolbarView {
   void SetTheme(const string &theme) {}
 };
 
-struct OSXTableView : public SystemTableView {
+struct OSXTableView : public TableViewInterface {
   OSXTable *table;
   ~OSXTableView() { [table release]; }
   OSXTableView(const string &title, const string &style, TableItemVec items) :
@@ -678,7 +678,7 @@ struct OSXTableView : public SystemTableView {
 
   void DelNavigationButton(int align) {}
   void AddNavigationButton(int align, const TableItem &item) {}
-  void SetToolbar(SystemToolbarView *t) {}
+  void SetToolbar(ToolbarViewInterface *t) {}
 
   void Show(bool show_or_hide) {
     NSView *contentView = dynamic_cast<OSXWindow*>(app->focused)->view.window.contentView;
@@ -720,7 +720,7 @@ struct OSXTableView : public SystemTableView {
   }
 };
 
-struct OSXTextView : public SystemTextView {
+struct OSXTextView : public TextViewInterface {
   OSXText *view;
   ~OSXTextView() { [view release]; }
   OSXTextView(const string &title, File *f) : OSXTextView(title, f ? f->Contents() : "") {}
@@ -729,7 +729,7 @@ struct OSXTextView : public SystemTextView {
          initWithBytes:text.data() length:text.size() encoding:NSASCIIStringEncoding] autorelease]]) {}
 };
 
-struct OSXNavigationView : public SystemNavigationView {
+struct OSXNavigationView : public NavigationViewInterface {
   OSXNavigation *nav;
   ~OSXNavigationView() { [nav release]; }
   OSXNavigationView() : nav([[OSXNavigation alloc] init]) {}
@@ -744,7 +744,7 @@ struct OSXNavigationView : public SystemNavigationView {
       [nav.view removeFromSuperview];
   }
 
-  SystemTableView *Back() {
+  TableViewInterface *Back() {
     for (NSViewController *c in [nav.viewControllers reverseObjectEnumerator]) {
       if ([c isKindOfClass:[OSXTable class]])
         if (auto lself = static_cast<OSXTable*>(c).lfl_self) return lself;
@@ -752,13 +752,13 @@ struct OSXNavigationView : public SystemNavigationView {
     return nullptr;
   }
 
-  void PushTableView(SystemTableView *t) {
+  void PushTableView(TableViewInterface *t) {
     if (!root) root = t;
     if (t->show_cb) t->show_cb();
     [nav pushViewController: dynamic_cast<OSXTableView*>(t)->table animated: YES];
   }
 
-  void PushTextView(SystemTextView *t) {
+  void PushTextView(TextViewInterface *t) {
     if (t->show_cb) t->show_cb();
     [nav pushViewController: dynamic_cast<OSXTextView*>(t)->view animated: YES];
   }
@@ -828,12 +828,12 @@ int Application::LoadSystemImage(const string &n) {
 }
 
 
-unique_ptr<SystemAlertView> SystemAlertView::Create(AlertItemVec items) { return make_unique<OSXAlertView>(move(items)); }
-unique_ptr<SystemPanelView> SystemPanelView::Create(const Box &b, const string &title, PanelItemVec items) { return make_unique<OSXPanelView>(b, title, move(items)); }
-unique_ptr<SystemToolbarView> SystemToolbarView::Create(const string &theme, MenuItemVec items) { return make_unique<OSXToolbarView>(move(items)); }
+unique_ptr<AlertViewInterface> SystemToolkit::CreateAlert(AlertItemVec items) { return make_unique<OSXAlertView>(move(items)); }
+unique_ptr<PanelViewInterface> SystemToolkit::CreatePanel(const Box &b, const string &title, PanelItemVec items) { return make_unique<OSXPanelView>(b, title, move(items)); }
+unique_ptr<ToolbarViewInterface> SystemToolkit::CreateToolbar(const string &theme, MenuItemVec items) { return make_unique<OSXToolbarView>(move(items)); }
 
-unique_ptr<SystemMenuView> SystemMenuView::Create(const string &title, MenuItemVec items) { return make_unique<OSXMenuView>(title, move(items)); }
-unique_ptr<SystemMenuView> SystemMenuView::CreateEditMenu(MenuItemVec items) {
+unique_ptr<MenuViewInterface> SystemToolkit::CreateMenu(const string &title, MenuItemVec items) { return make_unique<OSXMenuView>(title, move(items)); }
+unique_ptr<MenuViewInterface> SystemToolkit::CreateEditMenu(MenuItemVec items) {
   NSMenuItem *item; 
   NSMenu *menu = [[NSMenu alloc] initWithTitle:@"Edit"];
   item = [menu addItemWithTitle:@"Copy"  action:@selector(copy:)  keyEquivalent:@"c"];
@@ -847,9 +847,9 @@ unique_ptr<SystemMenuView> SystemMenuView::CreateEditMenu(MenuItemVec items) {
   return make_unique<OSXMenuView>("", MenuItemVec());
 }
 
-unique_ptr<SystemTableView> SystemTableView::Create(const string &title, const string &style, const string &theme, TableItemVec items) { return make_unique<OSXTableView>(title, style, move(items)); }
-unique_ptr<SystemTextView> SystemTextView::Create(const string &title, File *file) { return make_unique<OSXTextView>(title, file); }
-unique_ptr<SystemTextView> SystemTextView::Create(const string &title, const string &text) { return make_unique<OSXTextView>(title, text); }
-unique_ptr<SystemNavigationView> SystemNavigationView::Create(const string &style, const string &theme) { return make_unique<OSXNavigationView>(); }
+unique_ptr<TableViewInterface> SystemToolkit::CreateTableView(const string &title, const string &style, const string &theme, TableItemVec items) { return make_unique<OSXTableView>(title, style, move(items)); }
+unique_ptr<TextViewInterface> SystemToolkit::CreateTextView(const string &title, File *file) { return make_unique<OSXTextView>(title, file); }
+unique_ptr<TextViewInterface> SystemToolkit::CreateTextView(const string &title, const string &text) { return make_unique<OSXTextView>(title, text); }
+unique_ptr<NavigationViewInterface> SystemToolkit::CreateNavigationView(const string &style, const string &theme) { return make_unique<OSXNavigationView>(); }
 
 }; // namespace LFL

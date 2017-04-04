@@ -44,11 +44,11 @@
 #endif
 
 namespace LFL {
-unique_ptr<BrowserInterface> CreateDefaultBrowser(GUI *g, int w, int h) {
+unique_ptr<BrowserInterface> CreateDefaultBrowser(View *v, int w, int h) {
   unique_ptr<BrowserInterface> ret;
-  if ((ret = CreateQTWebKitBrowser (g, w, h))) return ret;
-  if ((ret = CreateBerkeliumBrowser(g, w, h))) return ret;
-  return make_unique<Browser>(g, Box(w, h));
+  if ((ret = CreateQTWebKitBrowser (v, w, h))) return ret;
+  if ((ret = CreateBerkeliumBrowser(v, w, h))) return ret;
+  return make_unique<Browser>(v, Box(w, h));
 }
 
 string DOM::Node::HTML4Style() { 
@@ -361,8 +361,8 @@ void Browser::Document::Clear() {
   active_input = 0;
 }
 
-Browser::Browser(GUI *gui, const Box &V) :
-  doc(V), v_scrollbar(gui), h_scrollbar(gui, Widget::Slider::Flag::AttachedHorizontal) {
+Browser::Browser(View *v, const Box &b) :
+  doc(b), v_scrollbar(v), h_scrollbar(v, Widget::Slider::Flag::AttachedHorizontal) {
   if (Font *maf = app->fonts->Get("MenuAtlas", "", 0, Color::white, Color::clear, 0, 0)) {
     missing_image = maf->FindGlyph(0)->tex;
     missing_image.width = missing_image.height = 16;
@@ -990,9 +990,9 @@ class QTWebKitBrowser : public QObject, public BrowserInterface {
 
 #include "browser.moc"
 
-unique_ptr<BrowserInterface> CreateQTWebKitBrowser(GUI *g, int w, int h) { return make_unique<QTWebKitBrowser>(w, h); }
+unique_ptr<BrowserInterface> CreateQTWebKitBrowser(View*, int w, int h) { return make_unique<QTWebKitBrowser>(w, h); }
 #else /* LFL_QT */
-unique_ptr<BrowserInterface> CreateQTWebKitBrowser(GUI *g, int w, int h) { return nullptr; }
+unique_ptr<BrowserInterface> CreateQTWebKitBrowser(View*, int w, int h) { return nullptr; }
 #endif /* LFL_QT */
 
 #ifdef LFL_BERKELIUM
@@ -1140,7 +1140,7 @@ unique_ptr<BrowserInterface> CreateBerkeliumBrowser(GUI *g, int W, int H) {
   return browser;
 }
 #else /* LFL_BERKELIUM */
-unique_ptr<BrowserInterface> CreateBerkeliumBrowser(GUI *g, int W, int H) { return nullptr; }
+unique_ptr<BrowserInterface> CreateBerkeliumBrowser(View*, int W, int H) { return nullptr; }
 #endif /* LFL_BERKELIUM */
 
 }; // namespace LFL

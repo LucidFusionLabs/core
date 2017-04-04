@@ -142,7 +142,7 @@ struct Browser : public BrowserInterface {
   Widget::Slider v_scrollbar, h_scrollbar;
   StringCB url_cb;
 
-  Browser(GUI *gui=0, const Box &V=Box());
+  Browser(View *v=0, const Box &b=Box());
 
   void Navigate(const string &url);
   void Open(const string &url);
@@ -186,9 +186,9 @@ struct Browser : public BrowserInterface {
   static int ToWebKitY(const Box &w) { return -w.y - w.h; }
 };
 
-unique_ptr<BrowserInterface> CreateQTWebKitBrowser (GUI *g, int w=1024, int h=1024);
-unique_ptr<BrowserInterface> CreateBerkeliumBrowser(GUI *g, int w=1024, int h=1024);
-unique_ptr<BrowserInterface> CreateDefaultBrowser  (GUI *g, int w=1024, int h=1024);
+unique_ptr<BrowserInterface> CreateQTWebKitBrowser (View *v, int w=1024, int h=1024);
+unique_ptr<BrowserInterface> CreateBerkeliumBrowser(View *v, int w=1024, int h=1024);
+unique_ptr<BrowserInterface> CreateDefaultBrowser  (View *v, int w=1024, int h=1024);
 
 }; // namespace LFL
 #endif // LFL_CORE_APP_BROWSER_H__

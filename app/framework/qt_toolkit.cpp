@@ -31,7 +31,7 @@ namespace LFL {
 static vector<unique_ptr<QIcon>> app_images;
 struct QtTableView;
 
-struct QtAlertView : public SystemAlertView {
+struct QtAlertView : public AlertViewInterface {
   string style;
   bool add_text = 0;
   StringCB cancel_cb, confirm_cb;
@@ -89,7 +89,7 @@ struct QtAlertView : public SystemAlertView {
   }
 };
 
-struct QtPanelView : public SystemPanelView {
+struct QtPanelView : public PanelViewInterface {
   unique_ptr<QDialog> dialog;
   QHBoxLayout *layout=0;
   QLabel *title=0;
@@ -115,7 +115,7 @@ struct QtPanelView : public SystemPanelView {
   void Show() { dialog->show(); }
 };
  
-struct QtToolbarView : public SystemToolbarView {
+struct QtToolbarView : public ToolbarViewInterface {
   unique_ptr<QToolBar> toolbar;
   bool init=0;
   QtToolbarView(MenuItemVec v) : toolbar(make_unique<QToolBar>()) {
@@ -135,7 +135,7 @@ struct QtToolbarView : public SystemToolbarView {
   }
 };
 
-struct QtMenuView : public SystemMenuView {
+struct QtMenuView : public MenuViewInterface {
   QMenu *menu;
   ~QtMenuView() { delete menu; }
   QtMenuView(const string &title_text, MenuItemVec v) {
@@ -283,7 +283,7 @@ class QtTableWidget : public QTableView {
   QtTableWidget(QtTableView *P) : parent(P) {}
 };
 
-struct QtTableView : public QtTableInterface, public SystemTableView {
+struct QtTableView : public QtTableInterface, public TableViewInterface {
   TableItem left_nav, right_nav;
   unique_ptr<QTableView> table;
   unique_ptr<QtTableModel> model;
@@ -363,7 +363,7 @@ struct QtTableView : public QtTableInterface, public SystemTableView {
     else if (align == HAlign::Right) right_nav = item;
   }
 
-  void SetToolbar(SystemToolbarView *t) {}
+  void SetToolbar(ToolbarViewInterface *t) {}
 
   void Show(bool show_or_hide) {
     auto w = dynamic_cast<QtWindowInterface*>(app->focused);
@@ -562,7 +562,7 @@ struct QtTableView : public QtTableInterface, public SystemTableView {
   }
 };
 
-struct QtTextView : public SystemTextView {
+struct QtTextView : public TextViewInterface {
   QPlainTextEdit *text;
   ~QtTextView() { delete text; }
   QtTextView(const string &title, File *f) : QtTextView(title, f ? f->Contents() : "") {}
@@ -572,7 +572,7 @@ struct QtTextView : public SystemTextView {
   }
 };
 
-struct QtNavigationView : public SystemNavigationView {
+struct QtNavigationView : public NavigationViewInterface {
   unique_ptr<QWidget> header_widget, content_widget;
   unique_ptr<QLabel> header_label;
   unique_ptr<QPushButton> header_back, header_forward;
@@ -655,7 +655,7 @@ struct QtNavigationView : public SystemNavigationView {
     }
   }
 
-  SystemTableView *Back() { 
+  TableViewInterface *Back() { 
     for (int i = content_layout->count()-1; i >= 0; --i) {
       QWidget *qw = content_layout->widget(i);
       if (auto qt = dynamic_cast<QtTableWidget*>(qw)) return qt->parent;
@@ -663,7 +663,7 @@ struct QtNavigationView : public SystemNavigationView {
     return nullptr;
   }
 
-  void PushTableView(SystemTableView *t) {
+  void PushTableView(TableViewInterface *t) {
     if (!root) root = t;
     if (t->show_cb) t->show_cb();
     auto table = dynamic_cast<QtTableView*>(t);
@@ -673,7 +673,7 @@ struct QtNavigationView : public SystemNavigationView {
     UpdateBackButton();
   }
 
-  void PushTextView(SystemTextView *t) {
+  void PushTextView(TextViewInterface *t) {
     if (t->show_cb) t->show_cb();
     auto text = dynamic_cast<QtTextView*>(t)->text;
     content_layout->addWidget(text);
@@ -736,14 +736,14 @@ void Application::UpdateSystemImage(int n, Texture &t) {
   app_images[n-1] = make_unique<QIcon>(move(pixmap));
 }
 
-unique_ptr<SystemAlertView> SystemAlertView::Create(AlertItemVec items) { return make_unique<QtAlertView>(move(items)); }
-unique_ptr<SystemPanelView> SystemPanelView::Create(const Box &b, const string &title, PanelItemVec items) { return nullptr; }
-unique_ptr<SystemToolbarView> SystemToolbarView::Create(const string &theme, MenuItemVec items) { return make_unique<QtToolbarView>(move(items)); }
-unique_ptr<SystemMenuView> SystemMenuView::Create(const string &title, MenuItemVec items) { return make_unique<QtMenuView>(title, move(items)); }
-unique_ptr<SystemMenuView> SystemMenuView::CreateEditMenu(MenuItemVec items) { return make_unique<QtMenuView>("Edit", move(items)); }
-unique_ptr<SystemTableView> SystemTableView::Create(const string &title, const string &style, const string &theme, TableItemVec items) { return make_unique<QtTableView>(title, style, move(items)); }
-unique_ptr<SystemTextView> SystemTextView::Create(const string &title, File *file) { return make_unique<QtTextView>(title, file); }
-unique_ptr<SystemTextView> SystemTextView::Create(const string &title, const string &text) { return make_unique<QtTextView>(title, text); }
-unique_ptr<SystemNavigationView> SystemNavigationView::Create(const string &style, const string &theme) { return make_unique<QtNavigationView>(); }
+unique_ptr<AlertViewInterface> SystemToolkit::CreateAlert(AlertItemVec items) { return make_unique<QtAlertView>(move(items)); }
+unique_ptr<PanelViewInterface> SystemToolkit::CreatePanel(const Box &b, const string &title, PanelItemVec items) { return nullptr; }
+unique_ptr<ToolbarViewInterface> SystemToolkit::CreateToolbar(const string &theme, MenuItemVec items) { return make_unique<QtToolbarView>(move(items)); }
+unique_ptr<MenuViewInterface> SystemToolkit::CreateMenu(const string &title, MenuItemVec items) { return make_unique<QtMenuView>(title, move(items)); }
+unique_ptr<MenuViewInterface> SystemToolkit::CreateEditMenu(MenuItemVec items) { return make_unique<QtMenuView>("Edit", move(items)); }
+unique_ptr<TableViewInterface> SystemToolkit::CreateTableView(const string &title, const string &style, const string &theme, TableItemVec items) { return make_unique<QtTableView>(title, style, move(items)); }
+unique_ptr<TextViewInterface> SystemToolkit::CreateTextView(const string &title, File *file) { return make_unique<QtTextView>(title, file); }
+unique_ptr<TextViewInterface> SystemToolkit::CreateTextView(const string &title, const string &text) { return make_unique<QtTextView>(title, text); }
+unique_ptr<NavigationViewInterface> SystemToolkit::CreateNavigationView(const string &style, const string &theme) { return make_unique<QtNavigationView>(); }
 
 }; // namespace LFL

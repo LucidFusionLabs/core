@@ -406,31 +406,31 @@ int Input::MouseClick(int button, bool down, const point &p) {
 }
 
 int Input::MouseEventDispatch(InputEvent::Id event, const point &p, const point &d, int down) {
-  Window *screen = app->focused;
+  Window *w = app->focused;
   if      (event == paste_bind.key)      return KeyEventDispatch(event, down);
-  else if (event == Mouse::Event::Wheel) screen->mouse_wheel = p;
-  else                                   screen->mouse       = p;
+  else if (event == Mouse::Event::Wheel) w->mouse_wheel = p;
+  else                                   w->mouse       = p;
   InputDebug("Input::MouseEventDispatch %s %s down=%d",
-             InputEvent::Name(event), screen->mouse.DebugString().c_str(), down);
+             InputEvent::Name(event), w->mouse.DebugString().c_str(), down);
 
   int fired = 0, active_guis = 0, events;
   Dialog *bring_to_front = 0;
-  for (auto i = screen->dialogs.begin(); i != screen->dialogs.end(); /**/) {
+  for (auto i = w->dialogs.begin(); i != w->dialogs.end(); /**/) {
     Dialog *g = i->get();
-    if (g->NotActive(screen->mouse)) { i++; continue; }
-    fired += g->mouse.SendMouseEvent(event, g->RelativePosition(screen->mouse), d, down, 0);
-    if (g->deleted) { screen->GiveDialogFocusAway(g); i = screen->dialogs.erase(i); continue; }
-    if (event == Mouse::Event::Click && down && g->box.within(screen->mouse)) { bring_to_front = g; break; }
+    if (g->NotActive(w->mouse)) { i++; continue; }
+    fired += g->mouse.SendMouseEvent(event, g->RelativePosition(w->mouse), d, down, 0);
+    if (g->deleted) { w->GiveDialogFocusAway(g); i = w->dialogs.erase(i); continue; }
+    if (event == Mouse::Event::Click && down && g->box.within(w->mouse)) { bring_to_front = g; break; }
     i++;
   }
-  if (bring_to_front) screen->BringDialogToFront(bring_to_front);
+  if (bring_to_front) w->BringDialogToFront(bring_to_front);
 
-  if (auto mc = screen->active_controller) {
-    if ((events = mc->SendMouseEvent(event, mc->parent_gui ? mc->parent_gui->RelativePosition(p) : p, d, down, 0))) {
+  if (auto mc = w->active_controller) {
+    if ((events = mc->SendMouseEvent(event, mc->parent_view ? mc->parent_view->RelativePosition(p) : p, d, down, 0))) {
       InputDebug("Input::MouseEventDispatch sent MouseController[%p] %s events = %d", mc, InputEvent::Name(event), events);
       return events;
     }
-  } else for (auto b = screen->gui.begin(), e = screen->gui.end(), i = b; i != e; ++i) {
+  } else for (auto b = w->view.begin(), e = w->view.end(), i = b; i != e; ++i) {
     if ((events = MouseEventDispatchGUI(event, p, d, down, *i, &active_guis))) {
       InputDebug("Input::MouseEventDispatch sent GUI[%d] %s events = %d", i - b, InputEvent::Name(event), events);
       return events;
@@ -438,15 +438,15 @@ int Input::MouseEventDispatch(InputEvent::Id event, const point &p, const point 
   }
 
   InputDebugIfDown("Input::MouseEventDispatch %s fired=%d, guis=%d/%zd",
-                   screen->mouse.DebugString().c_str(), fired, active_guis, screen->gui.size());
+                   w->mouse.DebugString().c_str(), fired, active_guis, w->view.size());
   return fired;
 }
 
-int Input::MouseEventDispatchGUI(InputEvent::Id event, const point &p, const point &d, int down, GUI *g, int *active_guis) {
-  if (g->NotActive(g->root->mouse)) return 0;
-  else (*active_guis)++;
-  int events = g->mouse.SendMouseEvent(event, g->RelativePosition(g->root->mouse), d, down, 0);
-  if (!events && g->child_gui) return MouseEventDispatchGUI(event, p, d, down, g->child_gui, active_guis);
+int Input::MouseEventDispatchGUI(InputEvent::Id event, const point &p, const point &d, int down, View *v, int *active_views) {
+  if (v->NotActive(v->root->mouse)) return 0;
+  else (*active_views)++;
+  int events = v->mouse.SendMouseEvent(event, v->RelativePosition(v->root->mouse), d, down, 0);
+  if (!events && v->child_view) return MouseEventDispatchGUI(event, p, d, down, v->child_view, active_views);
   return events;
 }
 
