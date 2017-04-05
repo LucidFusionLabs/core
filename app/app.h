@@ -943,6 +943,7 @@ unique_ptr<GraphicsDevice> CreateGraphicsDevice(Window*, int ver);
 unique_ptr<Module> CreateAudioModule(Audio*);
 unique_ptr<Module> CreateCameraModule(CameraState*);
 void InitCrashReporting(const string &id, const string &name, const string &email);
+void TestCrashReporting();
 
 struct SystemToolkit {
   static unique_ptr<TimerInterface> CreateTimer(Callback cb);

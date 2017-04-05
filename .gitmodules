@@ -99,12 +99,6 @@
 [submodule "imports/mosh"]
 	path = imports/mosh
 	url = https://github.com/mobile-shell/mosh
-[submodule "imports/crittercism"]
-	path = imports/crittercism
-	url = https://github.com/LucidFusionLabs/crittercism
-[submodule "imports/hockeyapp"]
-	path = imports/hockeyapp
-	url = https://github.com/LucidFusionLabs/hockeyapp
 [submodule "imports/Stockfish"]
 	path = imports/Stockfish
 	url = https://github.com/official-stockfish/Stockfish
@@ -117,3 +111,6 @@
 [submodule "imports/glew"]
 	path = imports/glew
 	url = https://github.com/LucidFusionLabs/glew
+[submodule "imports/fabric-ios"]
+	path = imports/fabric-ios
+	url = https://github.com/LucidFusionLabs/fabric-ios

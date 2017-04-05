@@ -73,6 +73,13 @@ if(LFL_APPLE)
   target_link_libraries(app_apple_billing "-framework StoreKit")
 endif()
 
+if(LFL_FABRIC AND LFL_IOS)
+  lfl_add_target(app_fabric_crashreporting STATIC_LIBRARY SOURCES fabric_crashreporting.mm
+                 COMPILE_OPTIONS -fobjc-abi-version=2 -fobjc-legacy-dispatch
+                 INCLUDE_DIRECTORIES ${FABRIC_INCLUDE}
+                 LINK_LIBRARIES ${FABRIC_LIB} "-framework SystemConfiguration")
+endif()
+
 if(LFL_CRITTERCISM AND (LFL_IOS OR LFL_OSX))
   lfl_add_target(app_crittercism_crashreporting STATIC_LIBRARY SOURCES crittercism_crashreporting.mm
                  COMPILE_OPTIONS -fobjc-abi-version=2 -fobjc-legacy-dispatch
