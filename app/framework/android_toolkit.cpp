@@ -309,7 +309,7 @@ struct AndroidTableView : public SystemTableView {
   void SetTheme(const string &theme) {
   }
 
-  void SetEditableSection(int section, int start_row, IntIntCB iicb) {
+  void SetSectionEditable(int section, int start_row, int skip_last_rows, IntIntCB iicb) {
     static jmethodID mid = CheckNotNull
       (jni->env->GetMethodID(jni->jtable_class, "setEditable", "(Lcom/lucidfusionlabs/app/MainActivity;IILcom/lucidfusionlabs/app/LIntIntCB;)V"));
     jobject cb = iicb ? jni->ToLIntIntCB(move(iicb)) : nullptr;

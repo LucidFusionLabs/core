@@ -128,10 +128,13 @@ function(lfl_add_target _name)
     target_link_libraries(${_name} PUBLIC ${_LINK_LIBRARIES})
   endif()
 
-  if(LFL_IOS AND LFL_XCODE)
-    set_target_properties(${_name} PROPERTIES
-                          XCODE_ATTRIBUTE_SDKROOT iphoneos
-                          XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET "${IOS_VERSION_MIN}")
+  if(LFL_XCODE)
+    set_target_properties(${_name} PROPERTIES XCODE_ATTRIBUTE_GCC_GENERATE_DEBUGGING_SYMBOLS YES)
+    if(LFL_IOS)
+      set_target_properties(${_name} PROPERTIES
+                            XCODE_ATTRIBUTE_SDKROOT iphoneos
+                            XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET "${IOS_VERSION_MIN}")
+    endif()
   endif()
 
   if(_EXECUTABLE AND LFL_ADD_BITCODE_TARGETS)

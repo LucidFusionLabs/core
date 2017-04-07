@@ -713,7 +713,7 @@ struct OSXTableView : public TableViewInterface {
   void SetHidden(int section, int row, bool val) { [table setHidden:section row:row val:val]; }
   void SetTitle(const string &title) { table.title = LFL::MakeNSString(title); }
   void SetTheme(const string &theme) {}
-  void SetEditableSection(int section, int start_row, LFL::IntIntCB cb) {
+  void SetSectionEditable(int section, int start_row, int skip_last_rows, LFL::IntIntCB cb) {
     table.delete_row_cb = move(cb);
     table.editable_section = section;
     table.editable_start_row = start_row;

@@ -930,6 +930,7 @@ struct TableView : public View, public TableViewInterface {
   void ReplaceSection(int section, TableItem header, int flag, TableItemVec item);
   void ApplyChangeList(const TableSection::ChangeList&);
   void SetSectionValues(int section, const StringVec&);
+  void SetSectionEditable(int section, int start_row, int skip_last_rows, IntIntCB cb=IntIntCB());
   void SetHeader(int section, TableItem header);
   void SetKey(int secton, int row, const string &key);
   void SetTag(int section, int row, int val);
@@ -938,7 +939,6 @@ struct TableView : public View, public TableViewInterface {
   void SetHidden(int section, int row, bool val);
   void SetTitle(const string &title);
   void SetTheme(const string &theme);
-  void SetEditableSection(int section, int start_row, IntIntCB cb=IntIntCB());
 };
 
 struct NavigationView : public View, public NavigationViewInterface {

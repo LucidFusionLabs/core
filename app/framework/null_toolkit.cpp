@@ -83,7 +83,7 @@ struct NullTableView : public TableViewInterface {
   void SetHidden(int section, int row, bool val) {}
   void SetTitle(const string &title) {}
   void SetTheme(const string &theme) {}
-  void SetEditableSection(int section, int start_row, LFL::IntIntCB cb) {}
+  void SetSectionEditable(int section, int start_row, int skip_last_rows, LFL::IntIntCB cb) {}
 };
 
 struct NullTextView : public TextViewInterface {

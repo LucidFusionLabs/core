@@ -450,7 +450,6 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
     _lfl_self = lself;
     _style = sty;
     _needs_reload = true;
-    _editable_section = _editable_start_row = -1;
     data = move(item);
     self.title = LFL::MakeNSString(title);
     if (_style != "indent") self.tableView.separatorInset = UIEdgeInsetsZero;
@@ -469,8 +468,10 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
   - (void)replaceSection:(int)section items:(std::vector<LFL::TableItem>)item header:(LFL::TableItem)h flag:(int)f {
     if (section == data.size()) data.emplace_back();
     CHECK_LT(section, data.size());
-    data[section] = LFL::TableSection(move(h), f);
-    data[section].item = move(item);
+    auto &hi = data[section];
+    hi.header = move(h);
+    hi.flag = f;
+    hi.item = move(item);
     [self.tableView reloadSections:[NSIndexSet indexSetWithIndex: section]
       withRowAnimation:UITableViewRowAnimationNone];
   }
@@ -548,6 +549,12 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
     for (int i=0, l=data[section].item.size(); i != l; ++i) [self setValue:section row:i val:item[i]];
     [self.tableView reloadSections:[NSIndexSet indexSetWithIndex: section]
       withRowAnimation:UITableViewRowAnimationNone];
+  }
+
+  - (void)setSectionEditable:(int)section startRow:(int)sr skipLastRows:(int)sll withCb:(LFL::IntIntCB)cb {
+    if (section == data.size()) data.emplace_back();
+    CHECK_LT(section, data.size());
+    data[section].SetEditable(sr, sll, move(cb));
   }
 
   - (void)applyChangeList:(const LFL::TableSection::ChangeList&)changes {
@@ -832,7 +839,7 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
     [self checkExists:path.section row:path.row];
     if (editingStyle == UITableViewCellEditingStyleDelete) {
       auto &hi = data[path.section];
-      if (_delete_row_cb) _delete_row_cb(path.row, hi.item[path.row].tag);
+      if (hi.delete_row_cb) hi.delete_row_cb(path.row, hi.item[path.row].tag);
       hi.item.erase(hi.item.begin() + path.row);
       [tableView beginUpdates];
       [tableView deleteRowsAtIndexPaths:@[path] withRowAnimation:UITableViewRowAnimationNone];
@@ -930,12 +937,14 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
   }
 
   - (BOOL)tableView:(UITableView *)tableView canEditRowAtIndexPath:(NSIndexPath *)path {
-    return path.section == _editable_section;
+    if (path.section >= data.size()) return NO;
+    auto &hi = data[path.section];
+    return hi.editable_startrow >= 0 && path.item >= hi.editable_startrow &&
+      path.item < (hi.item.size() - hi.editable_skiplastrows);
   }
 
   - (UITableViewCellEditingStyle)tableView:(UITableView *)tableView editingStyleForRowAtIndexPath:(NSIndexPath *)path {
-    if (path.section != _editable_section || path.row < _editable_start_row) return UITableViewCellEditingStyleNone;
-    [self checkExists:path.section row:path.row];
+    if (![self tableView:tableView canEditRowAtIndexPath: path]) return UITableViewCellEditingStyleNone;
     return (data[path.section].flag & LFL::TableSection::Flag::EditableIfHasTag && !data[path.section].item[path.row].tag) ?
       UITableViewCellEditingStyleNone : UITableViewCellEditingStyleDelete;
   }
@@ -1304,10 +1313,8 @@ void iOSTableView::SetTitle(const string &title) { table.title = LFL::MakeNSStri
 void iOSTableView::SetTheme(const string &theme) { [table setTheme:theme]; }
 PickerItem *iOSTableView::GetPicker(int section, int row) { return [table getPicker:section row:row]; }
 StringPairVec iOSTableView::GetSectionText(int section) { return [table dumpDataForSection:section]; }
-void iOSTableView::SetEditableSection(int section, int start_row, LFL::IntIntCB cb) {
-  table.delete_row_cb = move(cb);
-  table.editable_section = section;
-  table.editable_start_row = start_row;
+void iOSTableView::SetSectionEditable(int section, int start_row, int skip_last_rows, LFL::IntIntCB cb) {
+  [table setSectionEditable:section startRow:start_row skipLastRows:skip_last_rows withCb:move(cb)];
 }
 
 void iOSTableView::SelectRow(int section, int row) {

@@ -97,9 +97,8 @@
   @property (nonatomic, retain) UIToolbar *toolbar;
   @property (nonatomic, retain) UIColor *orig_bg_color, *orig_separator_color;
   @property (nonatomic, assign) LFL::TableViewInterface *lfl_self;
-  @property (nonatomic, assign) LFL::IntIntCB delete_row_cb;
   @property (nonatomic, assign) std::string style;
-  @property (nonatomic, assign) int editable_section, editable_start_row, selected_section, selected_row;
+  @property (nonatomic, assign) int selected_section, selected_row;
   @property (nonatomic, assign) bool needs_reload;
   - (id)initWithStyle: (UITableViewStyle)style;
 @end
@@ -141,6 +140,7 @@ struct iOSTableView : public TableViewInterface {
   void ReplaceSection(int section, TableItem h, int flag, TableItemVec item);
   void ApplyChangeList(const TableSection::ChangeList &changes);
   void SetSectionValues(int section, const StringVec &item);
+  void SetSectionEditable(int section, int start_row, int skip_last_rows, LFL::IntIntCB cb);
   void SetHeader(int section, TableItem h);
   void SetKey(int section, int row, const string &val);
   void SetTag(int section, int row, int val);
@@ -149,7 +149,6 @@ struct iOSTableView : public TableViewInterface {
   void SetHidden(int section, int row, bool val);
   void SetTitle(const string &title);
   void SetTheme(const string &title);
-  void SetEditableSection(int section, int start_row, LFL::IntIntCB cb);
 };
 
 UIAlertView            *GetUIAlertView(AlertViewInterface*);

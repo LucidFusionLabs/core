@@ -511,7 +511,7 @@ struct QtTableView : public QtTableInterface, public TableViewInterface {
 
   void SetTitle(const string &title) { table->setWindowTitle(MakeQString(title)); }
   void SetTheme(const string &theme) {}
-  void SetEditableSection(int section, int start_row, LFL::IntIntCB cb) {
+  void SetSectionEditable(int section, int start_row, int skip_last_rows, LFL::IntIntCB cb) {
     delete_row_cb = move(cb);
     editable_section = section;
     editable_start_row = start_row;

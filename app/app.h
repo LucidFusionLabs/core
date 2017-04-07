@@ -480,11 +480,13 @@ struct TableSection {
   struct Change { int section, row; string val; bool hidden; int left_icon, right_icon, type; string key; Callback cb; int flags; };
   typedef vector<Change> ChangeList;
   typedef unordered_map<string, ChangeList> ChangeSet;
-  int header_height=0, start_row=0, flag=0;
+  int header_height=0, start_row=0, flag=0, editable_startrow=-1, editable_skiplastrows=0;
   TableItem header;
   vector<TableItem> item;
+  IntIntCB delete_row_cb;
   TableSection(int sr=0) : start_row(sr) {}
   TableSection(TableItem h, int f=0, int sr=0) : start_row(sr), flag(f), header(move(h)) {}
+  void SetEditable(int sr, int sll, IntIntCB cb) { editable_startrow=sr; editable_skiplastrows=sll; delete_row_cb=move(cb); }
   static vector<TableSection> Convert(vector<TableItem> in);
   static void FindSectionOffset(const vector<TableSection> &in, int collapsed_row, int *section_out, int *row_out);
   static void ApplyChangeList(const ChangeList &in, vector<TableSection> *out, function<void(const Change&)>);
@@ -871,6 +873,7 @@ struct TableViewInterface {
   virtual void ReplaceSection(int section, TableItem header, int flag, TableItemVec item) = 0;
   virtual void ApplyChangeList(const TableSection::ChangeList&) = 0;
   virtual void SetSectionValues(int section, const StringVec&) = 0;
+  virtual void SetSectionEditable(int section, int start_row, int skip_last_rows, IntIntCB cb=IntIntCB()) = 0;
   virtual void SetHeader(int section, TableItem header) = 0;
   virtual void SetKey(int secton, int row, const string &key) = 0;
   virtual void SetTag(int section, int row, int val) = 0;
@@ -879,7 +882,6 @@ struct TableViewInterface {
   virtual void SetHidden(int section, int row, bool val) = 0;
   virtual void SetTitle(const string &title) = 0;
   virtual void SetTheme(const string &theme) = 0;
-  virtual void SetEditableSection(int section, int start_row, IntIntCB cb=IntIntCB()) = 0;
 
   bool GetSectionText(int section, vector<string*> out, bool check=1) { return GetPairValues(GetSectionText(section), move(out), check); }
   void ApplyChangeSet(const string &v, const TableSection::ChangeSet &changes) { auto it = changes.find(v); if (it != changes.end()) ApplyChangeList(it->second); }
