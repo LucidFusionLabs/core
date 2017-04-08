@@ -257,6 +257,12 @@ if(LFL_HOCKEYAPP)
   endif()
 endif()
 
+# AdMob
+if(LFL_IOS)
+  set(ADMOB_OPTIONS -F${CMAKE_CURRENT_SOURCE_DIR}/AdMob-ios PARENT_SCOPE)
+  set(ADMOB_LIBS -F${CMAKE_CURRENT_SOURCE_DIR}/AdMob-ios PARENT_SCOPE)
+endif()
+
 # openssl
 if(LFL_OPENSSL)
   if(LFL_WINDOWS)

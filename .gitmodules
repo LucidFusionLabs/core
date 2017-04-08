@@ -114,3 +114,6 @@
 [submodule "imports/fabric-ios"]
 	path = imports/fabric-ios
 	url = https://github.com/LucidFusionLabs/fabric-ios
+[submodule "imports/AdMob-ios"]
+	path = imports/AdMob-ios
+	url = https://github.com/LucidFusionLabs/AdMob-ios

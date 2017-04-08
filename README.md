@@ -13,16 +13,16 @@ The key implementation files are:
 
 ## Projects
 
-* **[term](http://lucidfusionlabs.com/terminal)**:          LTerminal, a modern terminal
-* **[editor](http://lucidfusionlabs.com/editor)**:          LEditor, a text editor and IDE
-* **[browser](http://lucidfusionlabs.com/browser)**:        LBrowser, a HTML4/CSS2 web browser with V8 javascript
-* **[chess](http://lucidfusionlabs.com/chess)**:            LChess, a magic bitboard chess engine and FICS client
-* **[fs](http://lucidfusionlabs.com/fs)**:                  Fusion Sensor, a speech and image recognition client/server
-* **[spaceball](http://spaceballfuture.com)**:              Spaceball Future, a multiplayer 3d game
-* **[quake](http://github.com/LucidFusionLabs/quake)**:     LQuake, a quake clone
+* **[LTerminal](http://lucidfusionlabs.com/terminal)**:      modern terminal
+* **[LEditor](http://lucidfusionlabs.com/editor)**:          text editor and IDE
+* **[LBrowser](http://lucidfusionlabs.com/browser)**:        HTML4/CSS2 web browser with V8 javascript
+* **[LChess](http://lucidfusionlabs.com/chess)**:            magic bitboard chess engine and FICS client
+* **[FusionSensor](http://lucidfusionlabs.com/fs)**:         speech and image recognition client/server
+* **[SpaceballFuture](http://spaceballfuture.com)**:         multiplayer 3d game
+* **[LQuake](http://github.com/LucidFusionLabs/quake)**:     quake clone
 
 The following build procedures apply to any app cloned from [new_app_template](new_app_template).
-Replace "LTerminal" and "lterm" with "YourPackage" and "YourApp" to build other apps.
+Replace "LTerminal" with "YourApp" to build other apps.
 See [new_app_template/README.txt](new_app_template/README.txt) to quick start your next app.
 
 
@@ -35,7 +35,7 @@ See [new_app_template/README.txt](new_app_template/README.txt) to quick start yo
 
 `cd core; git checkout master; git pull origin master; cd ..`
 
-`cd term; git checkout master; git pull origin master; cd ..`
+`cd LTerminal; git checkout master; git pull origin master; cd ..`
 
 
 ### Build Windows
@@ -62,10 +62,10 @@ See [new_app_template/README.txt](new_app_template/README.txt) to quick start yo
 * Use Visual Studio C++ 2015
 * Tools > Options > Text Editor > All Languages > Tabs > Insert Spaces
 
-        c:\lfl\win32\term\lterm.sln
-        [Build lterm]
+        c:\lfl\win32\LTerminal\LTerminal.sln
+        [Build LTerminal]
 
-        cd c:\lfl\win32\term
+        cd c:\lfl\win32\LTerminal
         mkdir assets
         copy ..\..\term\assets\* assets
         copy ..\..\core\app\*.glsl assets
@@ -89,9 +89,9 @@ See [new_app_template/README.txt](new_app_template/README.txt) to quick start yo
         mkdir linux && cd linux
         cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=../core/CMake/LinuxToolchain.cmake ..
 
-        cd term
-        make lterm_run
-        make lterm_pkg
+        cd LTerminal
+        make LTerminal_run
+        make LTerminal_pkg
 
 * Linux package LTerminal.tgz results
 
@@ -105,9 +105,9 @@ See [new_app_template/README.txt](new_app_template/README.txt) to quick start yo
         mkdir osx && cd osx
         cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=../core/CMake/OSXToolchain.cmake ..
 
-        cd term
-        make lterm_run
-        make lterm_pkg
+        cd LTerminal
+        make LTerminal_run
+        make LTerminal_pkg
 
 * OSX installer LTerminal.dmg results
 * For libclang build llvm following http://clang.llvm.org/get_started.html
@@ -137,9 +137,9 @@ then cmake -DCMAKE_INSTALL_PREFIX=~/llvm -P cmake_install.cmake
         ** Modify LFL_IOS_ROOT in ../core/CMake/iOSToolchain.cmake
         cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=../core/CMake/iOSToolchain.cmake ..
 
-        cd term
-        make lterm_run
-        make lterm_pkg
+        cd LTerminal
+        make LTerminal_run
+        make LTerminal_pkg
 
 * iOS Installer iLTerminal.ipa results
 
@@ -156,8 +156,8 @@ then cmake -DCMAKE_INSTALL_PREFIX=~/llvm -P cmake_install.cmake
         ** Modify LFL_ANDROID_ROOT in ../core/CMake/AndroidToolchain.cmake
         cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=../core/CMake/AndroidToolchain.cmake ..
 
-        cd term
-        make lterm_release
+        cd LTerminal
+        make LTerminal_release
 
 ## Contribute
 
