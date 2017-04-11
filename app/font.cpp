@@ -138,6 +138,7 @@ GlyphCache::GlyphCache(unsigned T, int W, int H) :
   dim(W, H ? H : W), tex(nullptr, dim.w, dim.h, Texture::preferred_pf, T), flow(make_unique<Flow>(&dim)) {}
 
 void GlyphCache::Clear(bool reopen) {
+  INFO("GlyphCache::Clear reopen=", reopen);    
   flow = make_unique<Flow>(&dim);
   for (auto g : glyph) g->ready = false;
   glyph.clear();

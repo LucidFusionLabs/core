@@ -49,6 +49,7 @@ struct Shell {
   void savedir(const vector<string>&);
   void savesettings(const vector<string>&);
   void screenshot(const vector<string>&);
+  void testcrash(const StringVec&);
 
   void fillmode(const vector<string>&);
   void grabmode(const vector<string>&);

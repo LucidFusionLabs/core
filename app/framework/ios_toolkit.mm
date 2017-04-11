@@ -949,6 +949,26 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
       UITableViewCellEditingStyleNone : UITableViewCellEditingStyleDelete;
   }
 
+  - (BOOL)tableView:(UITableView *)tableView canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
+    if (indexPath.section >= data.size()) return NO;
+    return data[indexPath.section].flag & LFL::TableSection::Flag::MovableRows;
+  }
+
+  - (void)tableView:(UITableView *)tableView moveRowAtIndexPath:(NSIndexPath *)sourceIndexPath toIndexPath:(NSIndexPath *)destinationIndexPath {
+    CHECK_LT(sourceIndexPath.section, data.size());
+    auto &ss = data[sourceIndexPath.section];
+    CHECK_LT(sourceIndexPath.row, ss.item.size());
+    auto si = ss.item.begin() + sourceIndexPath.row;
+    auto v = move(*si);
+    ss.item.erase(si);
+
+    CHECK_LT(destinationIndexPath.section, data.size());
+    auto &ts = data[destinationIndexPath.section];
+    CHECK_LE(destinationIndexPath.row, ts.item.size());
+    ts.item.insert(ts.item.begin() + destinationIndexPath.row, move(v));
+    _lfl_self->changed = true;
+  }
+
   - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)path {
     [self checkExists:path.section row:path.row];
     [self.tableView deselectRowAtIndexPath:path animated:NO];
@@ -1155,30 +1175,13 @@ struct iOSTextView : public TextViewInterface {
 };
 
 struct iOSNavigationView : public NavigationViewInterface {
-  IOSNavigation *nav;
+  NSMutableArray *stack;
+  IOSNavigation *nav=0;
+  string theme;
   bool overlay;
-  ~iOSNavigationView() { [nav release]; }
-  iOSNavigationView(const string &style, const string &theme) : nav([[IOSNavigation alloc] initWithNavigationBarClass:nil toolbarClass:nil]) {
-    [nav setToolbarHidden:YES animated:NO];
-    [nav setTheme: theme];
-    overlay = style == "overlay";
-  }
-
-  void Show(bool show_or_hide) {
-    LFUIApplication *uiapp = [LFUIApplication sharedAppDelegate];
-    if ((shown = show_or_hide)) {
-      if (root->show_cb) root->show_cb();
-      INFO("LFViewController.presentViewController IOSNavigation frame=", LFL::GetCGRect(uiapp.controller.view.frame).DebugString());
-      uiapp.overlay_top_controller = overlay;
-      uiapp.top_controller = nav;
-      if (uiapp.controller.presentedViewController != nav)
-        [uiapp.controller presentViewController:nav animated:YES completion:nil];
-    } else {
-      INFO("LFViewController.dismissViewController ", GetNSString(NSStringFromClass([uiapp.controller.presentedViewController class])), " frame=", LFL::GetCGRect(uiapp.controller.view.frame).DebugString());
-      uiapp.top_controller = uiapp.root_controller;
-      [uiapp.controller dismissViewControllerAnimated:YES completion:nil];
-    }
-  }
+  ~iOSNavigationView() { if (nav) [nav release]; if (stack) [stack release]; }
+  iOSNavigationView(const string &style, const string &t) : stack([[NSMutableArray alloc] init]),
+    theme(t), overlay(style == "overlay") {}
 
   TableViewInterface *Back() {
     for (UIViewController *c in [nav.viewControllers reverseObjectEnumerator]) {
@@ -1188,32 +1191,75 @@ struct iOSNavigationView : public NavigationViewInterface {
     return nullptr;
   }
 
+  void Show(bool show_or_hide) {
+    LFUIApplication *uiapp = [LFUIApplication sharedAppDelegate];
+    if ((shown = show_or_hide)) {
+      if (!nav) {
+        nav = [[IOSNavigation alloc] initWithNavigationBarClass:nil toolbarClass:nil];
+        [nav setViewControllers:stack animated:NO];
+        [nav setToolbarHidden:YES animated:NO];
+        [nav setTheme: theme];
+        [stack release];
+        stack = 0;
+      }
+      if (auto back = Back()) if (back->show_cb) back->show_cb();
+      INFO("LFViewController.presentViewController IOSNavigation frame=", LFL::GetCGRect(uiapp.controller.view.frame).DebugString());
+      uiapp.overlay_top_controller = overlay;
+      uiapp.top_controller = nav;
+      if (uiapp.controller.ready && uiapp.controller.presentedViewController != nav)
+        [uiapp.controller presentViewController:nav animated:YES completion:nil];
+    } else if (nav) {
+      INFO("LFViewController.dismissViewController ", GetNSString(NSStringFromClass([uiapp.controller.presentedViewController class])), " frame=", LFL::GetCGRect(uiapp.controller.view.frame).DebugString());
+      stack = [NSMutableArray arrayWithArray: nav.viewControllers];
+      [stack retain];
+      [nav release];
+      nav = 0;
+      uiapp.top_controller = uiapp.root_controller;
+      [uiapp.controller dismissViewControllerAnimated:NO completion:nil];
+    }
+  }
+
   void PushTableView(TableViewInterface *t) {
     if (t->show_cb) t->show_cb();
-    if (root) {
-      [nav pushViewController: dynamic_cast<iOSTableView*>(t)->table animated: YES];
-    } else if ((root = t)) {
-      [nav setViewControllers:@[ dynamic_cast<iOSTableView*>(t)->table ] animated: YES];
+    if (nav) {
+      if (root) {
+        [nav pushViewController: dynamic_cast<iOSTableView*>(t)->table animated: YES];
+      } else if ((root = t)) {
+        [nav setViewControllers:@[ dynamic_cast<iOSTableView*>(t)->table ] animated: YES];
+      }
+    } else {
+      if (!root) root = t;
+      [stack addObject: dynamic_cast<iOSTableView*>(t)->table];
     }
   }
 
   void PushTextView(TextViewInterface *t) {
-    if (t->show_cb) t->show_cb();
-    [nav pushViewController: dynamic_cast<iOSTextView*>(t)->view animated: YES];
+    if (nav) {
+      if (t->show_cb) t->show_cb();
+      [nav pushViewController: dynamic_cast<iOSTextView*>(t)->view animated: YES];
+    } else {
+      [stack addObject: dynamic_cast<iOSTextView*>(t)->view];
+    }
   }
 
   void PopToRoot() {
-    [nav popToRootViewControllerAnimated: YES];
+    if (nav) {
+      [nav popToRootViewControllerAnimated: NO];
+    } else if (stack.count > 1) [stack removeObjectsInRange: NSMakeRange(1, stack.count-1)];
   }
 
   void PopAll() {
-    [nav setViewControllers:@[] animated: NO];
-    root = 0;
+    if (nav) {
+      [nav setViewControllers:@[] animated: NO];
+      root = 0;
+    } else [stack removeAllObjects];
   }
 
   void PopView(int n) {
-    for (int i = 0; i != n; ++i)
-      [nav popViewControllerAnimated: (i == n - 1)];
+    if (nav) {
+      for (int i = 0; i != n; ++i)
+        [nav popViewControllerAnimated: (i == n - 1)];
+    } else if (n && stack.count >= n) [stack removeObjectsInRange: NSMakeRange(stack.count-n, stack.count-1)];
   }
 
   void SetTheme(const string &theme) { [nav setTheme: theme]; }
@@ -1270,6 +1316,7 @@ void Application::UpdateSystemImage(int n, Texture &t) {
 iOSTableView::~iOSTableView() { [table release]; }
 iOSTableView::iOSTableView(const string &title, const string &style, const string &theme, TableItemVec items) :
   table([[IOSTable alloc] initWithStyle: UITableViewStyleGrouped]) {
+    // INFOf("iOSTableView %s IOSTable: %p", title.c_str(), table);
     [table load:this withTitle:title withStyle:style items:TableSection::Convert(move(items))];
     [table setTheme: theme];
   }

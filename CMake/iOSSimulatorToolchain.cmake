@@ -39,7 +39,7 @@ add_definitions("-isysroot ${LFL_IOS_SDK} ${IOS_VERSION_MIN_FULL_FLAGS}")
 
 if(CMAKE_GENERATOR MATCHES Xcode)
   set(LFL_XCODE TRUE)
-  set(ENV_CPP "/usr/bin/clang -E -arch arm")
+  set(ENV_CPP "/usr/bin/clang -E")
 else()
   set(ZLIB_INCLUDE_DIR ${LFL_IOS_SDK}/usr/include)
   set(ZLIB_LIBRARY ${LFL_IOS_SDK}/usr/lib/libz.dylib)

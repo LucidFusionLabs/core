@@ -21,7 +21,7 @@
 
 @interface LFViewController : UIViewController<UIActionSheetDelegate> {}
   @property (nonatomic, retain) UIToolbar *input_accessory_toolbar;
-  @property BOOL showing_keyboard, pinch_occurring;
+  @property BOOL ready, showing_keyboard, pinch_occurring;
   - (CGRect)getKeyboardFrame;
   - (CGRect)getKeyboardToolbarFrame;
   - (void)initNotifications;

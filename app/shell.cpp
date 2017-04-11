@@ -37,6 +37,7 @@ Shell::Shell(Window *W) : parent(W) {
   command.emplace_back("savedir",      bind(&Shell::savedir,       this, _1));
   command.emplace_back("savesettings", bind(&Shell::savesettings,  this, _1));
   command.emplace_back("screenshot",   bind(&Shell::screenshot,    this, _1));
+  command.emplace_back("testcrash",    bind(&Shell::testcrash,     this, _1));
   command.emplace_back("fillmode",     bind(&Shell::fillmode,      this, _1));
   command.emplace_back("texmode",      bind(&Shell::texmode,       this, _1));
   command.emplace_back("swapaxis",     bind(&Shell::swapaxis,      this, _1));
@@ -127,6 +128,11 @@ void Shell::screenshot(const vector<string> &a) {
   else               parent->gd->DumpTexture(&tex, atoi(a[1]));
   LocalFile lf(a[0], "w");
   PngWriter::Write(&lf, tex);
+}
+
+void Shell::testcrash(const StringVec&) {
+  INFO("Calling TestCrashReporting()");
+  TestCrashReporting();
 }
 
 void Shell::fillmode(const vector<string>&) {

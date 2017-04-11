@@ -475,8 +475,8 @@ struct TableItem {
 };
 
 struct TableSection {
-  struct Flag { enum { EditButton=1, EditableIfHasTag=2, DoubleRowHeight=4, HighlightSelectedRow=8,
-    DeleteRowsWhenAllHidden=16, ClearLeftNavWhenEmpty=32, User1=64 }; };
+  struct Flag { enum { EditButton=1, EditableIfHasTag=2, MovableRows=4, DoubleRowHeight=8,
+    HighlightSelectedRow=16, DeleteRowsWhenAllHidden=32, ClearLeftNavWhenEmpty=64, User1=128 }; };
   struct Change { int section, row; string val; bool hidden; int left_icon, right_icon, type; string key; Callback cb; int flags; };
   typedef vector<Change> ChangeList;
   typedef unordered_map<string, ChangeList> ChangeSet;

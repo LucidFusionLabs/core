@@ -399,6 +399,7 @@ static const char* const* ios_argv = 0;
 
   - (void)viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
+    _ready = true;
     current_orientation = next_orientation = [UIApplication sharedApplication].statusBarOrientation;
     if (uiapp.top_controller != uiapp.root_controller &&
         uiapp.root_controller.presentedViewController != uiapp.top_controller)
