@@ -753,6 +753,11 @@ struct iOSAssetLoader : public SimpleAssetLoader {
   virtual int RefillAudio(SoundAsset *a, int reset) { return 0; }
 };
 
+void Application::RunCallbackInMainThread(Callback cb) {
+  ObjcCallback *ocb = [[ObjcCallback alloc] initWithCB: move(cb)];
+  [ocb performSelectorOnMainThread:@selector(runAndRelease) withObject:nil waitUntilDone:NO];
+}
+
 void Application::MakeCurrentWindow(Window *W) {}
 void Application::CloseWindow(Window *W) {}
 

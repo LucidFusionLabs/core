@@ -617,15 +617,23 @@ int Application::Start() {
 
 int Application::HandleEvents(unsigned clicks) {
   int events = 0, module_events;
+  if (FLAGS_frame_debug) INFO("frame_debug Application::modules");
   for (auto i = modules.begin(); i != modules.end() && run; ++i)
     if ((module_events = (*i)->Frame(clicks)) > 0) events += module_events;
 
   // handle messages sent to main thread
-  if (run) events += message_queue.HandleMessages();
+  if (run) {
+    if (FLAGS_frame_debug) INFO("frame_debug Application::message_queue");
+    events += message_queue.HandleMessages();
+  }
 
   // fake threadpool that executes in main thread
-  if (run && !FLAGS_threadpool_size) events += thread_pool.worker[0].queue->HandleMessages();
+  if (run && !FLAGS_threadpool_size) {
+    if (FLAGS_frame_debug) INFO("frame_debug Application::threadpool");
+    events += thread_pool.worker[0].queue->HandleMessages();
+  }
 
+  if (FLAGS_frame_debug) INFO("frame_debug HandleEvents events=", events);
   return events;
 }
 

@@ -478,7 +478,7 @@ void Fonts::ResetGL(int flag) {
   for (auto &i : desc_map) {
     auto f = i.second.get();
     if (f->engine == atlas_engine.get() && f == dynamic_cast<AtlasFontEngine::Resource*>(f->resource.get())->primary) {
-      if (forget) f->glyph->cache->tex.owner = false;
+      if (!forget) f->glyph->cache->tex.Clear();
       f->glyph->cache->tex = Texture();
       if (!reload) continue;
       Asset::LoadTexture(StrCat(f->desc->Filename(), ".0000.png"), &f->glyph->cache->tex);

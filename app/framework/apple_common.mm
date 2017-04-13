@@ -6,6 +6,7 @@
 @implementation ObjcCallback { LFL::Callback cb; }
   - (id)initWithCB:(LFL::Callback)v { self = [super init]; cb = move(v); return self; }
   - (void)run { if (cb) cb(); }
+  - (void)runAndRelease { [self run]; [self release]; }
 @end
 
 @implementation ObjcStringCallback { LFL::StringCB cb; }

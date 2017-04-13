@@ -264,6 +264,11 @@ bool WinWindow::RestrictResize(int m, RECT *r) {
   return true;
 }
 
+void Application::RunCallbackInMainThread(Callback cb) {
+  message_queue.Write(new Callback(move(cb)));
+  if (!FLAGS_target_fps) scheduler.Wakeup(focused);
+}
+
 void Application::MakeCurrentWindow(Window *W) { if (auto w = dynamic_cast<WinWindow*>(W)) wglMakeCurrent(w->surface, w->gl); }
 void Application::CloseWindow(Window *W) {
   windows.erase(W->id);

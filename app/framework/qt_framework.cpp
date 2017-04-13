@@ -245,6 +245,19 @@ bool Video::CreateWindow(Window *W) {
   return true;
 }
 
+void Video::StartWindow(Window*) {}
+int Video::Swap() {
+  Window *screen = app->focused;
+  if (auto w = dynamic_cast<QtWindow*>(screen)) w->glc->swapBuffers(w->opengl_window);
+  screen->gd->CheckForError(__FILE__, __LINE__);
+  return 0;
+}
+
+void Application::RunCallbackInMainThread(Callback cb) {
+  message_queue.Write(new Callback(move(cb)));
+  if (!FLAGS_target_fps) scheduler.Wakeup(focused);
+}
+
 void Application::CloseWindow(Window *W) {
   windows.erase(W->id);
   if (windows.empty()) app->run = false;
@@ -254,14 +267,6 @@ void Application::CloseWindow(Window *W) {
 
 void Application::MakeCurrentWindow(Window *W) {
   if (auto w = dynamic_cast<QtWindow*>((focused = W))) w->glc->makeCurrent(w->opengl_window);
-}
-
-void Video::StartWindow(Window*) {}
-int Video::Swap() {
-  Window *screen = app->focused;
-  if (auto w = dynamic_cast<QtWindow*>(screen)) w->glc->swapBuffers(w->opengl_window);
-  screen->gd->CheckForError(__FILE__, __LINE__);
-  return 0;
 }
 
 void Application::LoseFocus() {}

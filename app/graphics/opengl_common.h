@@ -24,7 +24,7 @@ void PointSize(float n) { glPointSize(n); }
 void LineWidth(float n) { glLineWidth(n); }
 void DelTextures(int n, const unsigned *id) {
   ClearDeferred();
-  if (FLAGS_gd_debug) for (int i=0; i<n; i++) GDDebug("DelTexture ", id[i]);
+  if (FLAGS_gd_debug) for (int i=0; i<n; i++) GDLogRef("DelTexture ", id[i]);
   glDeleteTextures(n, id);
 }
 
@@ -42,7 +42,7 @@ void GenTextures(int t, int n, unsigned *out) {
     glBindTexture(t, out[i]);
     glTexParameteri(t, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(t, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    GDDebug("GenTexture ", t, ",", out[i]);
+    GDLogRef("GenTexture ", t, ",", out[i]);
   }
 }
 
@@ -108,11 +108,11 @@ void BindRenderBuffer(int id) { glBindRenderbufferEXT(GL_RENDERBUFFER, id); }
 void RenderBufferStorage(int d, int w, int h) { glRenderbufferStorageEXT(GL_RENDERBUFFER, d, w, h); }
 void GenFrameBuffers(int n, unsigned *out) {
   glGenFramebuffersEXT(n, out);
-  if (FLAGS_gd_debug) for (int i=0; i<n; i++) GDDebug("GenFrameBuffer ", out[i]);
+  if (FLAGS_gd_debug) for (int i=0; i<n; i++) GDLogRef("GenFrameBuffer ", out[i]);
 }
 
 void DelFrameBuffers(int n, const unsigned *id) {
-  if (FLAGS_gd_debug) for (int i=0; i<n; i++) GDDebug("DelFrameBuffer ", id[i]);
+  if (FLAGS_gd_debug) for (int i=0; i<n; i++) GDLogRef("DelFrameBuffer ", id[i]);
   glDeleteFramebuffersEXT(n, id);
 }
 

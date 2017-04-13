@@ -190,7 +190,7 @@ struct Texture : public Drawable {
   Texture(GraphicsDevice *D=0, int w=0, int h=0, int PF=preferred_pf, unsigned id=0) : gd(D), ID(id), buf(0), owner(1), buf_owner(1), width(w), height(h), pf(PF), cubemap(0) {}
   Texture(                     int w,   int h,   int PF,           unsigned char *B) : gd(0), ID(0),  buf(B), owner(1), buf_owner(0), width(w), height(h), pf(PF), cubemap(0) {}
   Texture(const Texture &t) : gd(t.gd), ID(t.ID), buf(t.buf), owner(ID?0:1), buf_owner(buf?0:1), width(t.width), height(t.height), pf(t.pf), cubemap(t.cubemap) { memcpy(&coord, t.coord, sizeof(coord)); }
-  virtual ~Texture() { ClearBuffer(); if (owner) ClearGL(); }
+  virtual ~Texture() { Clear(); }
 
   void Bind() const;
   int TexId() const { return ID; }
@@ -221,6 +221,7 @@ struct Texture : public Drawable {
   void Create      (int W, int H, int PF=0) { Resize(W, H, PF, Flag::CreateGL); }
   void CreateBacked(int W, int H, int PF=0) { Resize(W, H, PF, Flag::CreateGL | Flag::CreateBuf); }
   void Resize(int W, int H, int PF=0, int flag=0);
+  void Clear() { if (buf_owner) ClearBuffer(); if (owner) ClearGL(); }
 
   void AssignBuffer(Texture *t, bool become_owner=0) { AssignBuffer(t->buf, point(t->width, t->height), t->pf, become_owner); if (become_owner) t->buf_owner=0; }
   void AssignBuffer(      unsigned char *B, const point &dim, int PF, bool become_owner=0) { buf=B; width=dim.x; height=dim.y; pf=PF; buf_owner=become_owner; }

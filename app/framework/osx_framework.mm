@@ -474,6 +474,11 @@ bool OSXWindow::Reshape(int w, int h) {
   return true;
 }
 
+void Application::RunCallbackInMainThread(Callback cb) {
+  message_queue.Write(new Callback(move(cb)));
+  if (!FLAGS_target_fps) scheduler.Wakeup(focused);
+}
+
 void Application::MakeCurrentWindow(Window *W) { 
   if (!(focused = W)) return;
   [[dynamic_cast<OSXWindow*>(W)->view openGLContext] makeCurrentContext];

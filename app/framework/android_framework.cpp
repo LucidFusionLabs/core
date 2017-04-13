@@ -123,6 +123,11 @@ struct AndroidAssetLoader : public SimpleAssetLoader {
   virtual int RefillAudio(SoundAsset *a, int reset) { return 0; }
 };
 
+void Application::RunCallbackInMainThread(Callback *cb) {
+  message_queue.Write(new Callback(move(cb)));
+  if (!FLAGS_target_fps) scheduler.Wakeup(focused);
+}
+
 void Application::CloseWindow(Window *W) {}
 void Application::MakeCurrentWindow(Window *W) {}
 

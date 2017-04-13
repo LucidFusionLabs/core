@@ -71,6 +71,11 @@ struct NullFrameworkModule : public Module {
   }
 };
 
+void Application::RunCallbackInMainThread(Callback cb) {
+  message_queue.Write(new Callback(move(cb)));
+  if (!FLAGS_target_fps) scheduler.Wakeup(focused);
+}
+
 void Application::MakeCurrentWindow(Window *W) {}
 void Application::CloseWindow(Window *W) {
   windows.erase(W->id);

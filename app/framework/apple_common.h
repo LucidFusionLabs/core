@@ -19,6 +19,7 @@
 @interface ObjcCallback : NSObject {}
   - (id)initWithCB:(LFL::Callback)cb;
   - (void)run;
+  - (void)runAndRelease;
 @end
 
 @interface ObjcStringCallback : NSObject {}

@@ -607,9 +607,8 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
   }
 
   - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)path {
-    static NSString *cellIdentifier = @"cellIdentifier";
-    UITableViewCell *cell = [self.tableView dequeueReusableCellWithIdentifier:cellIdentifier];
-    if (cell) { [cell release]; cell = nil; }
+    UITableViewCell *cell = [self.tableView dequeueReusableCellWithIdentifier: @""];
+    CHECK_EQ(nullptr, cell);
     if (cell == nil) {
       int row = path.row, section = path.section;
       CHECK_LT(section, data.size());
@@ -622,7 +621,7 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
       UIColor *blue  = [UIColor colorWithRed: 0.0/255 green:122.0/255 blue:255.0/255 alpha:1];
 
       cell = [[UITableViewCell alloc] initWithStyle: (subtext ? UITableViewCellStyleSubtitle : UITableViewCellStyleDefault)
-        reuseIdentifier:cellIdentifier];
+        reuseIdentifier: nil];
       cell.selectionStyle = UITableViewCellSelectionStyleNone;
       if      (ci.bg_a)                                                                      [cell setBackgroundColor:[UIColor colorWithRed:ci.bg_r/255.0 green:ci.bg_g/255.0 blue:ci.bg_b/255.0 alpha:ci.bg_a/255.0]];
       else if (is_selected_row && (hi.flag & LFL::TableSection::Flag::HighlightSelectedRow)) [cell setBackgroundColor:[UIColor lightGrayColor]];
@@ -870,6 +869,13 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
       [image_view release];
       return hi.header_height;
     }
+    return 35; // UITableViewAutomaticDimension;
+  }
+
+  - (CGFloat)tableView:(UITableView *)tableView heightForFooterInSection:(NSInteger)section {
+    CHECK_LT(section, data.size());
+    auto &hi = data[section];
+    if (!hi.item.size() && !hi.header.left_icon) return 0.001;
     return UITableViewAutomaticDimension;
   }
 
@@ -1209,6 +1215,7 @@ struct iOSNavigationView : public NavigationViewInterface {
       if (uiapp.controller.ready && uiapp.controller.presentedViewController != nav)
         [uiapp.controller presentViewController:nav animated:YES completion:nil];
     } else if (nav) {
+      if (auto back = Back()) if (back->hide_cb) back->hide_cb();
       INFO("LFViewController.dismissViewController ", GetNSString(NSStringFromClass([uiapp.controller.presentedViewController class])), " frame=", LFL::GetCGRect(uiapp.controller.view.frame).DebugString());
       stack = [NSMutableArray arrayWithArray: nav.viewControllers];
       [stack retain];

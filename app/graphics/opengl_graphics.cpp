@@ -80,6 +80,14 @@
 #define GDDebug(...)
 #endif
 
+#if defined(LFL_GDDEBUG) || defined(LFL_GDLOGREF)
+#define GDLogRef(...) { \
+  if (app->focused) app->focused->gd->CheckForError(__FILE__, __LINE__); \
+  if (FLAGS_gd_debug) DebugPrintf("%s", StrCat(__VA_ARGS__).c_str()); }
+#else 
+#define GDLogRef(...)
+#endif
+
 namespace LFL {
 const int GraphicsDevice::Float                = GL_FLOAT;
 const int GraphicsDevice::Points               = GL_POINTS;
