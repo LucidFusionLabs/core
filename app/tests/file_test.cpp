@@ -35,7 +35,7 @@ TEST(FileTest, BufferFile) {
 
 TEST(FileTest, LocalFileRead) {
   {
-    string fn = "../../../../core/www/lfl/assets/img/lbrowser256.png", contents = LocalFile::FileContents(fn), buf;
+    string fn = "../../../../core/app/assets/MenuAtlas,0,255,255,255,0.0000.png", contents = LocalFile::FileContents(fn), buf;
     INFO("Read ", fn, " ", contents.size(), " bytes");
     LocalFile f(fn, "r");
     NextRecordReader nr(&f);
