@@ -140,6 +140,7 @@ struct iOSTableView : public TableViewInterface {
   void ReplaceSection(int section, TableItem h, int flag, TableItemVec item);
   void ApplyChangeList(const TableSection::ChangeList &changes);
   void SetSectionValues(int section, const StringVec &item);
+  void SetSectionColors(int section, const vector<Color> &item);
   void SetSectionEditable(int section, int start_row, int skip_last_rows, LFL::IntIntCB cb);
   void SetHeader(int section, TableItem h);
   void SetKey(int section, int row, const string &val);
@@ -147,6 +148,7 @@ struct iOSTableView : public TableViewInterface {
   void SetValue(int section, int row, const string &val);
   void SetSelected(int section, int row, int selected);
   void SetHidden(int section, int row, bool val);
+  void SetColor(int section, int row, const Color&);
   void SetTitle(const string &title);
   void SetTheme(const string &title);
 };

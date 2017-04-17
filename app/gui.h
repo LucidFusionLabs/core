@@ -650,6 +650,7 @@ struct Terminal : public TextArea {
   string parse_text, parse_csi, parse_osc;
   unsigned char parse_charset=0;
   bool parse_osc_escape=0, first_resize=1, newline_mode=0;
+  char erase_char = 0x7f, enter_char = '\r'; 
   point term_cursor=point(1,1), saved_term_cursor=point(1,1);
   LinesFrameBuffer::FromLineCB fb_cb;
   LinesFrameBuffer *last_fb=0;
@@ -665,8 +666,8 @@ struct Terminal : public TextArea {
   virtual void Draw(const Box &b, int flag=DrawFlag::Default, Shader *shader=0);
   virtual void Write(const StringPiece &s, bool update_fb=true, bool release_fb=true);
   virtual void Input(char k) {                       sink->Write(StringPiece(&k, 1)); }
-  virtual void Erase      () { char k = 0x7f;        sink->Write(StringPiece(&k, 1)); }
-  virtual void Enter      () { char k = '\r';        sink->Write(StringPiece(&k, 1)); }
+  virtual void Erase      () {                       sink->Write(StringPiece(&erase_char, 1)); }
+  virtual void Enter      () {                       sink->Write(StringPiece(&enter_char, 1)); }
   virtual void Tab        () { char k = '\t';        sink->Write(StringPiece(&k, 1)); }
   virtual void Escape     () { char k = 0x1b;        sink->Write(StringPiece(&k, 1)); }
   virtual void HistUp     () { char k[] = "\x1bOA";  sink->Write(StringPiece( k, 3)); }

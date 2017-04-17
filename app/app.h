@@ -466,7 +466,7 @@ struct TableItem {
     key(move(K)), val(move(V)), right_text(move(RT)), dropdown_key(move(DDK)), type(T), tag(TG), flags(F),
     left_icon(LI), right_icon(RI), cb(move(CB)), right_cb(move(RC)), picker(P), hidden(H) {}
   TableItem(string K, int T, string V, string RT, int TG, int LI, int RI, Callback CB, StringCB RC, int F,
-            bool H, PickerItem *P, string DDK, const Color &fg, const Color &bg);
+            bool H, PickerItem *P, string DDK, const Color &fg, const Color &bg, float MinV=0, float MaxV=0);
   bool HasPlaceholderValue() const { return val.size() && (val[0] == 1 || val[0] == 2); }
   string GetPlaceholderValue() const { return val.substr(1); }
   void CheckAssign(const string &k, Callback c) { CHECK_EQ(k, key); cb=move(c); }
@@ -839,6 +839,7 @@ struct ToolbarViewInterface {
   virtual void Show(bool show_or_hide) = 0;
   virtual void ToggleButton(const string &n) = 0;
   virtual void SetTheme(const string &theme) = 0;
+  virtual string GetTheme() = 0;
 };
 
 struct MenuViewInterface {
@@ -870,6 +871,7 @@ struct TableViewInterface {
   virtual void ReplaceSection(int section, TableItem header, int flag, TableItemVec item) = 0;
   virtual void ApplyChangeList(const TableSection::ChangeList&) = 0;
   virtual void SetSectionValues(int section, const StringVec&) = 0;
+  virtual void SetSectionColors(int seciton, const vector<Color>&) = 0;
   virtual void SetSectionEditable(int section, int start_row, int skip_last_rows, IntIntCB cb=IntIntCB()) = 0;
   virtual void SetHeader(int section, TableItem header) = 0;
   virtual void SetKey(int secton, int row, const string &key) = 0;
@@ -877,6 +879,7 @@ struct TableViewInterface {
   virtual void SetValue(int section, int row, const string &val) = 0;
   virtual void SetSelected(int section, int row, int selected) = 0;
   virtual void SetHidden(int section, int row, bool val) = 0;
+  virtual void SetColor(int section, int row, const Color &val) = 0;
   virtual void SetTitle(const string &title) = 0;
   virtual void SetTheme(const string &theme) = 0;
 

@@ -189,25 +189,17 @@ static const char* const* ios_argv = 0;
   }
 
   - (void)applicationWillResignActive:(UIApplication*)application {
-    if (LFL::app->focused->unfocused_cb) LFL::app->focused->unfocused_cb();
-    LFL::app->ResetGL(LFL::ResetGLFlag::Delete);
   }
 
   - (void)applicationDidBecomeActive:(UIApplication*)application {
     if (!has_become_active && (has_become_active = true)) {}
-    if (LFL::app->focused->focused_cb) LFL::app->focused->focused_cb();
-  }
-
-  - (void)applicationWillEnterForeground:(UIApplication *)application{
-    if (bg_task != UIBackgroundTaskInvalid) {
-      [application endBackgroundTask:bg_task];
-      bg_task = UIBackgroundTaskInvalid;
-    }
-    LFL::app->focused->gd->default_framebuffer = 0;
-    _glk_controller.needs_gl_reset = true;
   }
 
   - (void)applicationDidEnterBackground:(UIApplication *)application {
+    if (LFL::app->focused->unfocused_cb) LFL::app->focused->unfocused_cb();
+    LFL::app->ResetGL(LFL::ResetGLFlag::Delete);
+    glFinish();
+
     if (bg_task_cb) {
       bg_task = [application beginBackgroundTaskWithName:@"MyTask" expirationHandler:^{
         [application endBackgroundTask:bg_task];
@@ -219,6 +211,16 @@ static const char* const* ios_argv = 0;
                        bg_task = UIBackgroundTaskInvalid;
                      });
     }
+  }
+
+  - (void)applicationWillEnterForeground:(UIApplication *)application{
+    if (bg_task != UIBackgroundTaskInvalid) {
+      [application endBackgroundTask:bg_task];
+      bg_task = UIBackgroundTaskInvalid;
+    }
+    LFL::app->focused->gd->default_framebuffer = 0;
+    _glk_controller.needs_gl_reset = true;
+    if (LFL::app->focused->focused_cb) LFL::app->focused->focused_cb();
   }
 
   - (void)application:(UIApplication *)application performFetchWithCompletionHandler:(nonnull void (^)(UIBackgroundFetchResult))completionHandler {

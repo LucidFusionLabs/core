@@ -34,9 +34,11 @@ struct NullPanelView : public PanelViewInterface {
 };
 
 struct NullToolbarView : public ToolbarViewInterface {
+  string theme;
   void Show(bool show_or_hide) {}
   void ToggleButton(const string &n) {}
-  void SetTheme(const string &theme) {}
+  void SetTheme(const string &x) { theme=x; }
+  string GetTheme() { return theme; }
 };
 
 struct NullTableView : public TableViewInterface {
@@ -75,12 +77,20 @@ struct NullTableView : public TableViewInterface {
     for (int i=0, l=data[section].item.size(); i != l; ++i) data[section].item[i].val = item[i];
   }
 
+  void SetSectionColors(int section, const vector<Color> &item) {
+    if (section == data.size()) data.emplace_back();
+    CHECK_LT(section, data.size());
+    CHECK_EQ(item.size(), data[section].item.size());
+    for (int i=0, l=data[section].item.size(); i != l; ++i) data[section].item[i].SetFGColor(item[i]);
+  }
+
   void SetHeader(int section, TableItem) {}
   void SetKey(int section, int row, const string &val) {}
   void SetTag(int section, int row, int val) {}
   void SetValue(int section, int row, const string &val) {}
   void SetSelected(int section, int row, int selected) {}
   void SetHidden(int section, int row, bool val) {}
+  void SetColor(int section, int row, const Color &val) {}
   void SetTitle(const string &title) {}
   void SetTheme(const string &theme) {}
   void SetSectionEditable(int section, int start_row, int skip_last_rows, LFL::IntIntCB cb) {}

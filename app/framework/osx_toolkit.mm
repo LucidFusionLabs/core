@@ -404,6 +404,12 @@ static std::vector<NSImage*> app_images;
     auto &ci = data[section].item[r];
     ci.val = v;
   }
+  
+  - (void)setColor:(int)section row:(int)r val:(const LFL::Color&)v {
+    [self checkExists:section row:r];
+    auto &ci = data[section].item[r];
+    ci.SetFGColor(v);
+  }
 
   - (void)setSectionValues:(int)section items:(const LFL::StringVec&)item {
     if (section == data.size()) data.emplace_back();
@@ -412,6 +418,13 @@ static std::vector<NSImage*> app_images;
     for (int i=0, l=data[section].item.size(); i != l; ++i) [self setValue:section row:i val:item[i]];
     // [self.tableView reloadSections:[NSIndexSet indexSetWithIndex: section]
     //  withRowAnimation:UITableViewRowAnimationNone];
+  }
+
+  - (void)setSectionColors:(int)section items:(const LFL::vector<LFL::Color>&)item {
+    if (section == data.size()) data.emplace_back();
+    CHECK_LT(section, data.size());
+    CHECK_EQ(item.size(), data[section].item.size());
+    for (int i=0, l=data[section].item.size(); i != l; ++i) [self setColor:section row:i val:item[i]];
   }
 
   - (void)applyChangeList:(const LFL::TableSection::ChangeList&)changes {
@@ -663,11 +676,13 @@ struct OSXPanelView : public PanelViewInterface {
 };
 
 struct OSXToolbarView : public ToolbarViewInterface {
+  string theme;
   ~OSXToolbarView() {}
   OSXToolbarView(MenuItemVec items) {}
   void Show(bool show_or_hide) {}
   void ToggleButton(const string &n) {}
-  void SetTheme(const string &theme) {}
+  void SetTheme(const string &x) { theme=x; }
+  string GetTheme() { return theme; }
 };
 
 struct OSXTableView : public TableViewInterface {
@@ -705,12 +720,14 @@ struct OSXTableView : public TableViewInterface {
 
   void ApplyChangeList(const TableSection::ChangeList &changes) { [table applyChangeList:changes]; }
   void SetSectionValues(int section, const StringVec &item) { [table setSectionValues:section items:item]; }
+  void SetSectionColors(int section, const vector<Color> &item) { [table setSectionColors:section items:item]; }
   void SetHeader(int section, TableItem header) {}
   void SetKey(int section, int row, const string &val) { [table setKey:section row:row val:val]; }
   void SetTag(int section, int row, int val) { [table setTag:section row:row val:val]; }
   void SetValue(int section, int row, const string &val) { [table setValue:section row:row val:val]; }
   void SetSelected(int section, int row, int selected) {}
   void SetHidden(int section, int row, bool val) { [table setHidden:section row:row val:val]; }
+  void SetColor(int section, int row, const Color &val) { [table setColor:section row:row val:val]; }
   void SetTitle(const string &title) { table.title = LFL::MakeNSString(title); }
   void SetTheme(const string &theme) {}
   void SetSectionEditable(int section, int start_row, int skip_last_rows, LFL::IntIntCB cb) {

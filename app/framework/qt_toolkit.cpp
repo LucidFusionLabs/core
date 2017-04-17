@@ -117,6 +117,7 @@ struct QtPanelView : public PanelViewInterface {
  
 struct QtToolbarView : public ToolbarViewInterface {
   unique_ptr<QToolBar> toolbar;
+  string theme;
   bool init=0;
   QtToolbarView(MenuItemVec v) : toolbar(make_unique<QToolBar>()) {
     for (auto b = v.begin(), e = v.end(), i = b; i != e; ++i) {
@@ -125,7 +126,8 @@ struct QtToolbarView : public ToolbarViewInterface {
     }
   }
 
-  void SetTheme(const string&) {}
+  string GetTheme() { return theme; }
+  void SetTheme(const string &x) { theme=x; }
   void ToggleButton(const string &n) {}
   void Show(bool show_or_hide) {  
     if (!init && (init=1)) 
@@ -470,6 +472,13 @@ struct QtTableView : public QtTableInterface, public TableViewInterface {
     for (int i=0, l=data[section].item.size(); i != l; ++i) SetValue(section, i, item[i]);
   }
 
+  void SetSectionColors(int section, const vector<Color> &item) {
+    if (section == data.size()) AddSection();
+    CHECK_LT(section, data.size());
+    CHECK_EQ(item.size(), data[section].item.size());
+    for (int i=0, l=data[section].item.size(); i != l; ++i) SetColor(section, i, item[i]);
+  }
+
   void SetHeader(int section, TableItem header) {
   }
 
@@ -507,6 +516,11 @@ struct QtTableView : public QtTableInterface, public TableViewInterface {
   void SetSelected(int section, int row, int v) {
     CheckExists(section, row);
     data[section].item[row].selected = v;
+  }
+
+  void SetColor(int section, int row, const Color &v) {
+    CheckExists(section, row);
+    data[section].item[row].SetFGColor(v);
   }
 
   void SetTitle(const string &title) { table->setWindowTitle(MakeQString(title)); }

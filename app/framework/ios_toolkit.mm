@@ -61,6 +61,13 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
 @implementation IOSSwitch
 @end
 
+@interface IOSSlider : UISlider
+  @property (nonatomic, retain) UILabel *label;
+  @property (nonatomic, assign) LFL::StringCB changed_cb;
+@end
+@implementation IOSSlider
+@end
+
 @implementation IOSAlert
   - (id)init:(const LFL::AlertItemVec&) kv {
     self = [super init];
@@ -197,8 +204,10 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
   }
 
   - (void)setTheme:(const std::string&)n {
-    if (n == "Dark") { [_toolbar setBarStyle: UIBarStyleBlackTranslucent]; [_toolbar2 setBarStyle: UIBarStyleBlackTranslucent]; }
-    else             { [_toolbar setBarStyle: UIBarStyleDefault];          [_toolbar2 setBarStyle: UIBarStyleDefault]; }
+    if      (n == "Red")   { _toolbar.barTintColor = _toolbar2.barTintColor = [UIColor colorWithRed:255/255.0 green: 59/255.0 blue: 48/255.0 alpha:.3]; }
+    else if (n == "Green") { _toolbar.barTintColor = _toolbar2.barTintColor = [UIColor colorWithRed: 76/255.0 green:217/255.0 blue:100/255.0 alpha:.8]; }
+    else if (n == "Dark")  { [_toolbar setBarStyle: UIBarStyleBlackTranslucent]; [_toolbar2 setBarStyle: UIBarStyleBlackTranslucent]; }
+    else                   { [_toolbar setBarStyle: UIBarStyleDefault];          [_toolbar2 setBarStyle: UIBarStyleDefault]; }
   }
   
   - (NSMutableArray*)createUIToolbarItems: (BOOL)resignAfterClick {
@@ -535,6 +544,12 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
     ci.selected = v;
   }
 
+  - (void)setColor:(int)section row:(int)r val:(const LFL::Color&)v {
+    [self checkExists:section row:r];
+    auto &ci = data[section].item[r];
+    ci.SetFGColor(v);
+  }
+
   - (void)replaceRow:(int)section row:(int)r val:(LFL::TableItem)v {
     [self checkExists:section row:r];
     data[section].item[r] = move(v);
@@ -549,6 +564,13 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
     for (int i=0, l=data[section].item.size(); i != l; ++i) [self setValue:section row:i val:item[i]];
     [self.tableView reloadSections:[NSIndexSet indexSetWithIndex: section]
       withRowAnimation:UITableViewRowAnimationNone];
+  }
+
+  - (void)setSectionColors:(int)section items:(const LFL::vector<LFL::Color>&)item {
+    if (section == data.size()) data.emplace_back();
+    CHECK_LT(section, data.size());
+    CHECK_EQ(item.size(), data[section].item.size());
+    for (int i=0, l=data[section].item.size(); i != l; ++i) [self setColor:section row:i val:item[i]];
   }
 
   - (void)setSectionEditable:(int)section startRow:(int)sr skipLastRows:(int)sll withCb:(LFL::IntIntCB)cb {
@@ -760,6 +782,30 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
         cell.accessoryView = onoff;
         [onoff release];
 
+      } else if (ci.type == LFL::TableItem::Slider) {
+        cell.textLabel.text = LFL::MakeNSString(ci.key);
+        [cell.textLabel sizeToFit];
+
+        UILabel *label = [[UILabel alloc] initWithFrame: CGRectMake(-40, 0, 40, 44)];
+        label.text = LFL::MakeNSString(ci.val);
+        label.textColor = cell.textLabel.textColor;
+        label.hidden = YES;
+
+        IOSSlider *slider = [[IOSSlider alloc] initWithFrame:
+          [self getCellFrame: cell.textLabel.frame.size.width + label.frame.size.width]];
+        slider.minimumValue = ci.minval;
+        slider.maximumValue = ci.maxval;
+        slider.continuous = YES;
+        slider.value = LFL::atof(ci.val);
+        slider.label = label;
+        [slider addTarget:self action:@selector(sliderMoved:) forControlEvents:UIControlEventValueChanged];
+        [slider addTarget:self action:@selector(sliderDone:)  forControlEvents:(UIControlEventTouchUpInside | UIControlEventTouchUpOutside)];
+        [slider addSubview: label];
+        [label release];
+
+        cell.accessoryView = slider;
+        [slider release];
+
       } else if (ci.type == LFL::TableItem::Label) {
         cell.textLabel.text = LFL::MakeNSString(ci.key);
         if (subtext) {
@@ -876,7 +922,7 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
     CHECK_LT(section, data.size());
     auto &hi = data[section];
     if (!hi.item.size() && !hi.header.left_icon) return 0.001;
-    return UITableViewAutomaticDimension;
+    return 5; // UITableViewAutomaticDimension;
   }
 
   - (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section {
@@ -1025,6 +1071,17 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
     _lfl_self->changed = true;
   }
 
+  - (void) sliderMoved: (IOSSlider*)slider {
+    int progressAsInt = (int)roundf(slider.value);
+    slider.label.text = LFL::MakeNSString(LFL::StrCat(progressAsInt));
+    slider.label.hidden = NO;
+    _lfl_self->changed = true;
+  }
+
+  - (void) sliderDone: (IOSSlider*)slider {
+    slider.label.hidden = YES;
+  }
+
   - (void)pickerPicked:(LFL::PickerItem*)x withSection:(int)section andRow:(int)row {
     _lfl_self->changed = true;
     data[section].item[row].hidden = true;
@@ -1073,6 +1130,10 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
     } else if (ci.type == LFL::TableItem::Toggle) {
       UISwitch *onoff = LFL::objc_dynamic_cast<UISwitch>(cell.accessoryView);
       val = onoff.on ? "1" : "";
+    } else if (ci.type == LFL::TableItem::Slider) {
+      IOSSlider *slider = LFL::objc_dynamic_cast<IOSSlider>(cell.accessoryView);
+      int progressAsInt = (int)roundf(slider.value);
+      val = LFL::StrCat(progressAsInt);
     } else if (ci.type == LFL::TableItem::Picker || ci.type == LFL::TableItem::FontPicker) {
       IOSPicker *picker_control = [[cell.contentView subviews] lastObject];
       val = [picker_control getItem]->PickedString();
@@ -1163,12 +1224,14 @@ struct iOSMenuView : public MenuViewInterface {
 };
 
 struct iOSToolbarView : public ToolbarViewInterface {
+  string theme;
   IOSToolbar *toolbar;
   ~iOSToolbarView() { [toolbar release]; }
   iOSToolbarView(const string &theme, MenuItemVec items) : toolbar([[IOSToolbar alloc] init: move(items)]) { [toolbar setTheme: theme]; }
   void Show(bool show_or_hide) { [toolbar show:show_or_hide]; }
   void ToggleButton(const string &n) { [toolbar toggleButtonNamed: n]; }
-  void SetTheme(const string &theme) { [toolbar setTheme: theme]; }
+  void SetTheme(const string &x) { theme=x; [toolbar setTheme: theme]; }
+  string GetTheme() { return theme; }
 };
 
 struct iOSTextView : public TextViewInterface {
@@ -1363,6 +1426,7 @@ void iOSTableView::SetTag(int section, int row, int val) { [table setTag:section
 void iOSTableView::SetValue(int section, int row, const string &val) { [table setValue:section row:row val:val]; }
 void iOSTableView::SetSelected(int section, int row, int val) { [table setSelected:section row:row val:val]; }
 void iOSTableView::SetHidden(int section, int row, bool val) { [table setHidden:section row:row val:val]; }
+void iOSTableView::SetColor(int section, int row, const Color &val) { [table setColor:section row:row val:val]; }
 void iOSTableView::SetTitle(const string &title) { table.title = LFL::MakeNSString(title); }
 void iOSTableView::SetTheme(const string &theme) { [table setTheme:theme]; }
 PickerItem *iOSTableView::GetPicker(int section, int row) { return [table getPicker:section row:row]; }
@@ -1379,6 +1443,7 @@ void iOSTableView::SelectRow(int section, int row) {
 void iOSTableView::BeginUpdates() { [table.tableView beginUpdates]; }
 void iOSTableView::EndUpdates() { [table.tableView endUpdates]; }
 void iOSTableView::SetSectionValues(int section, const StringVec &item) { [table setSectionValues:section items:item]; }
+void iOSTableView::SetSectionColors(int section, const vector<Color> &item) { [table setSectionColors:section items:item]; }
 void iOSTableView::ApplyChangeList(const TableSection::ChangeList &changes) { [table applyChangeList:changes]; }
 void iOSTableView::ReplaceRow(int section, int row, TableItem h) { [table replaceRow:section row:row val:move(h)]; }
 void iOSTableView::ReplaceSection(int section, TableItem h, int flag, TableItemVec item)

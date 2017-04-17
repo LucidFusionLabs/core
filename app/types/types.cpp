@@ -155,8 +155,10 @@ void RingSampler::Handle::CopyFrom(const RingSampler::Handle *src) {
 }
 
 TableItem::TableItem(string K, int T, string V, string RT, int TG, int LI, int RI, Callback CB, StringCB RC,
-                     int F, bool H, PickerItem *P, string DDK, const Color &fg, const Color &bg)
+                     int F, bool H, PickerItem *P, string DDK, const Color &fg, const Color &bg, float MinV, float MaxV)
   : TableItem(move(K), T, move(V), move(RT), TG, LI, RI, move(CB), move(RC), F, H, P, DDK) {
+  minval = MinV;
+  maxval = MaxV;
   SetFGColor(fg);
   SetBGColor(bg);
 }
