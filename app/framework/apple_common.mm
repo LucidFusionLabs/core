@@ -98,7 +98,7 @@
 
   - (id)initWithCB:(LFL::Callback)v { self = [super init]; cb = move(v); return self; }
   - (void)dealloc { [self clearTrigger]; [super dealloc]; }
-  - (void)clearTrigger { if (timer) [timer invalidate]; timer = nil; }
+  - (bool)clearTrigger { if (!timer) return false; [timer invalidate]; timer = nil; return true; }
   - (void)triggerFired:(id)sender { [self clearTrigger]; if (cb) cb(); }
 
   - (void)triggerIn:(int)ms force:(bool)force {
@@ -122,7 +122,7 @@ struct AppleTimer : public TimerInterface {
   ~AppleTimer() { [timer release]; }
   AppleTimer(Callback c) : timer([[ObjcTimer alloc] initWithCB: move(c)]) {}
   void Run(Time interval, bool force=false) { [timer triggerIn:interval.count() force:force]; }
-  void Clear() { [timer clearTrigger]; }
+  bool Clear() { return [timer clearTrigger]; }
 };
 
 static AppleURLSessions *apple_url_sessions = 0;

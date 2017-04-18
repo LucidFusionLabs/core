@@ -816,7 +816,7 @@ struct Application : public ::LFApp {
 
 struct TimerInterface {
   virtual ~TimerInterface() {}
-  virtual void Clear() = 0;
+  virtual bool Clear() = 0;
   virtual void Run(Time interval, bool force=false) = 0;
 };
 

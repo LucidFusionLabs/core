@@ -196,7 +196,9 @@ static const char* const* ios_argv = 0;
   }
 
   - (void)applicationDidEnterBackground:(UIApplication *)application {
+    LFL::app->suspended = true;
     if (LFL::app->focused->unfocused_cb) LFL::app->focused->unfocused_cb();
+    while (LFL::app->message_queue.HandleMessages()) {}
     LFL::app->ResetGL(LFL::ResetGLFlag::Delete);
     glFinish();
 
@@ -214,6 +216,7 @@ static const char* const* ios_argv = 0;
   }
 
   - (void)applicationWillEnterForeground:(UIApplication *)application{
+    LFL::app->suspended = false;
     if (bg_task != UIBackgroundTaskInvalid) {
       [application endBackgroundTask:bg_task];
       bg_task = UIBackgroundTaskInvalid;
@@ -757,8 +760,13 @@ struct iOSAssetLoader : public SimpleAssetLoader {
 };
 
 void Application::RunCallbackInMainThread(Callback cb) {
+#if 0
   ObjcCallback *ocb = [[ObjcCallback alloc] initWithCB: move(cb)];
   [ocb performSelectorOnMainThread:@selector(runAndRelease) withObject:nil waitUntilDone:NO];
+#else
+  message_queue.Write(new Callback(move(cb)));
+  if (!FLAGS_target_fps && !app->suspended) scheduler.Wakeup(focused);
+#endif
 }
 
 void Application::MakeCurrentWindow(Window *W) {}

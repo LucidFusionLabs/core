@@ -125,7 +125,7 @@ struct AndroidAssetLoader : public SimpleAssetLoader {
 
 struct AndroidTimer : public TimerInterface {
   AndroidTimer(Callback cb) {}
-  void Clear() {}
+  bool Clear() { return false; }
   void Run(Time interval, bool force=false) {}
 };
 

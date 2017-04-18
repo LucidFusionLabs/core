@@ -250,7 +250,7 @@ struct const_void_ptr { const void *v; };
 struct LFApp {
   struct Log { enum { Fatal=-1, Error=0, Info=3, Debug=7 }; int unused; };
   struct Frame { enum { DontSkip=8 }; int unused; };
-  bool run, initialized;
+  bool run, initialized, suspended;
   size_t main_thread_id;
   long long frames_ran;
 };
