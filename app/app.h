@@ -948,6 +948,7 @@ void InitCrashReporting(const string &id, const string &name, const string &emai
 void TestCrashReporting();
 
 struct SystemToolkit {
+  static void DisableAdvertisingCrashReporting();
   static unique_ptr<TimerInterface> CreateTimer(Callback cb);
   static unique_ptr<AlertViewInterface> CreateAlert(AlertItemVec items);
   static unique_ptr<PanelViewInterface> CreatePanel(const Box&, const string &title, PanelItemVec);

@@ -19,14 +19,14 @@
 #include "core/app/app.h"
 
 namespace LFL {
-struct AndroidAdvertisingView : public SystemAdvertisingView {
+struct AndroidAdvertisingView : public AdvertisingViewInterface {
   virtual ~AndroidAdvertisingView() {}
   AndroidAdvertisingView(int type, int placement, const string &adid, const StringVec &test_devices) {}
   void Show(bool show_or_hide) {}
-  void Show(SystemTableView *t, bool show_or_hide) {}
+  void Show(TableViewInterface *t, bool show_or_hide) {}
 };
 
-unique_ptr<SystemAdvertisingView> SystemAdvertisingView::Create(int type, int placement, const string &adid, const StringVec &test_devices) {
+unique_ptr<AdvertisingViewInterface> SystemToolkit::CreateAdvertisingView(int type, int placement, const string &adid, const StringVec &test_devices) {
   return make_unique<AndroidAdvertisingView>(type, placement, adid, test_devices);
 }
 

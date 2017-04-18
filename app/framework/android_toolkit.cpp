@@ -19,7 +19,7 @@
 namespace LFL {
 static JNI *jni = Singleton<JNI>::Get();
 
-struct AndroidAlertView : public SystemAlertView {
+struct AndroidAlertView : public AlertViewInterface {
   jobject impl;
   ~AndroidAlertView() { jni->env->DeleteGlobalRef(impl); }
   AndroidAlertView(AlertItemVec items) {
@@ -33,6 +33,7 @@ struct AndroidAlertView : public SystemAlertView {
     jni->env->DeleteLocalRef(v);
   }
 
+  void Hide() {}
   void Show(const string &arg) {
     static jmethodID mid = CheckNotNull
       (jni->env->GetMethodID(jni->jalert_class, "showText", "(Lcom/lucidfusionlabs/app/MainActivity;Ljava/lang/String;)V"));
@@ -55,8 +56,9 @@ struct AndroidAlertView : public SystemAlertView {
   }
 };
 
-struct AndroidToolbarView : public SystemToolbarView {
+struct AndroidToolbarView : public ToolbarViewInterface {
   jobject impl;
+  string theme;
   ~AndroidToolbarView() { jni->env->DeleteGlobalRef(impl); }
   AndroidToolbarView(MenuItemVec items) {
     static jmethodID mid = CheckNotNull
@@ -69,6 +71,9 @@ struct AndroidToolbarView : public SystemToolbarView {
     jni->env->DeleteLocalRef(l);
   }
 
+  void SetTheme(const string &x) { theme=x; }
+  string GetTheme() { return theme; }
+
   void ToggleButton(const string &n) {
   }
 
@@ -79,7 +84,7 @@ struct AndroidToolbarView : public SystemToolbarView {
   }
 };
 
-struct AndroidMenuView : public SystemMenuView {
+struct AndroidMenuView : public MenuViewInterface {
   jobject impl;
   ~AndroidMenuView() { jni->env->DeleteGlobalRef(impl); }
   AndroidMenuView(const string &title, MenuItemVec items) {
@@ -102,7 +107,7 @@ struct AndroidMenuView : public SystemMenuView {
   }
 };
 
-struct AndroidTableView : public SystemTableView {
+struct AndroidTableView : public TableViewInterface {
   jobject impl;
   ~AndroidTableView() { jni->env->DeleteGlobalRef(impl); }
   AndroidTableView(const string &title, const string &style, TableItemVec items) {
@@ -135,7 +140,7 @@ struct AndroidTableView : public SystemTableView {
     jni->env->CallVoidMethod(impl, mid, jni->activity, jint(halign_type));
   }
   
-  void AddToolbar(SystemToolbarView *toolbar) {
+  void SetToolbar(ToolbarViewInterface *toolbar) {
     ERROR("not implemented");
   }
 
@@ -263,6 +268,9 @@ struct AndroidTableView : public SystemTableView {
     jni->env->DeleteLocalRef(v);
   }
 
+  void SetSectionColors(int seciton, const vector<Color>&) {
+  }
+
   void SetTag(int section, int row, int val) {
     static jmethodID mid = CheckNotNull
       (jni->env->GetMethodID(jni->jtable_class,
@@ -297,6 +305,9 @@ struct AndroidTableView : public SystemTableView {
     jni->env->CallVoidMethod(impl, mid, jni->activity, jint(section), jint(row), jboolean(val));
   }
 
+  void SetColor(int section, int row, const Color &val) {
+  }
+
   void SetTitle(const string &title) {
     static jmethodID mid = CheckNotNull
       (jni->env->GetMethodID(jni->jtable_class,
@@ -316,9 +327,12 @@ struct AndroidTableView : public SystemTableView {
     jni->env->CallVoidMethod(impl, mid, jni->activity, jint(section), jint(start_row), cb);
     if (cb) jni->env->DeleteLocalRef(cb);
   }
+
+  void SetHeader(int section, TableItem header) {
+  }
 };
 
-struct AndroidTextView : public SystemTextView {
+struct AndroidTextView : public TextViewInterface {
   jobject impl;
   ~AndroidTextView() { jni->env->DeleteGlobalRef(impl); }
   AndroidTextView(const string &title, File *f) : AndroidTextView(title, f ? f->Contents() : "") {}
@@ -335,7 +349,7 @@ struct AndroidTextView : public SystemTextView {
   }
 };
 
-struct AndroidNavigationView : public SystemNavigationView {
+struct AndroidNavigationView : public NavigationViewInterface {
   jobject impl;
   ~AndroidNavigationView() { jni->env->DeleteGlobalRef(impl); }
   AndroidNavigationView() {
@@ -347,14 +361,15 @@ struct AndroidNavigationView : public SystemNavigationView {
     jni->env->DeleteLocalRef(v);
   }
 
-  SystemTableView *Back() {
+  TableViewInterface *Back() {
     static jmethodID mid = CheckNotNull
       (jni->env->GetMethodID(jni->jnavigation_class,
                              "getBackTableSelf", "(Lcom/lucidfusionlabs/app/MainActivity;)J"));
     intptr_t v = jni->env->CallLongMethod(impl, mid, jni->activity);
-    return v ? static_cast<SystemTableView*>(Void(v)) : nullptr;
+    return v ? static_cast<TableViewInterface*>(Void(v)) : nullptr;
   }
 
+  void SetTheme(const string &theme) {}
   void Show(bool show_or_hide) {
     shown == show_or_hide;
     static jmethodID mid = CheckNotNull
@@ -362,7 +377,7 @@ struct AndroidNavigationView : public SystemNavigationView {
     jni->env->CallVoidMethod(impl, mid, jni->activity, show_or_hide);
   }
 
-  void PushTableView(SystemTableView *t) {
+  void PushTableView(TableViewInterface *t) {
     if (!root) root = t;
     if (t->show_cb) t->show_cb();
     static jmethodID mid = CheckNotNull
@@ -370,7 +385,7 @@ struct AndroidNavigationView : public SystemNavigationView {
     jni->env->CallVoidMethod(impl, mid, jni->activity, dynamic_cast<AndroidTableView*>(t)->impl);
   }
 
-  void PushTextView(SystemTextView *t) {
+  void PushTextView(TextViewInterface *t) {
     if (t->show_cb) t->show_cb();
     static jmethodID mid = CheckNotNull
       (jni->env->GetMethodID(jni->jnavigation_class, "pushTextView", "(Lcom/lucidfusionlabs/app/MainActivity;Lcom/lucidfusionlabs/app/JTextView;)V"));
@@ -396,7 +411,7 @@ struct AndroidNavigationView : public SystemNavigationView {
   }
 };
 
-struct AndroidAdvertisingView : public SystemAlertView {
+struct AndroidAdvertisingView : public AdvertisingViewInterface {
   void Show() {
     static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "showAds", "()V"));
     jni->env->CallVoidMethod(jni->activity, mid);
@@ -433,14 +448,14 @@ int Application::LoadSystemImage(const string &n) {
   return ret;
 }
 
-unique_ptr<SystemAlertView> SystemAlertView::Create(AlertItemVec items) { return make_unique<AndroidAlertView>(move(items)); }
-unique_ptr<SystemPanelView> SystemPanelView::Create(const Box &b, const string &title, PanelItemVec items) { return nullptr; }
-unique_ptr<SystemToolbarView> SystemToolbarView::Create(MenuItemVec items) { return make_unique<AndroidToolbarView>(move(items)); }
-unique_ptr<SystemMenuView> SystemMenuView::Create(const string &title, MenuItemVec items) { return make_unique<AndroidMenuView>(title, move(items)); }
-unique_ptr<SystemMenuView> SystemMenuView::CreateEditMenu(MenuItemVec items) { return nullptr; }
-unique_ptr<SystemTableView> SystemTableView::Create(const string &title, const string &style, TableItemVec items) { return make_unique<AndroidTableView>(title, style, move(items)); }
-unique_ptr<SystemTextView> SystemTextView::Create(const string &title, File *file) { return make_unique<AndroidTextView>(title, file); }
-unique_ptr<SystemTextView> SystemTextView::Create(const string &title, const string &text) { return make_unique<AndroidTextView>(title, text); }
-unique_ptr<SystemNavigationView> SystemNavigationView::Create() { return make_unique<AndroidNavigationView>(); }
+unique_ptr<AlertViewInterface> SystemToolkit::CreateAlert(AlertItemVec items) { return make_unique<AndroidAlertView>(move(items)); }
+unique_ptr<PanelViewInterface> SystemToolkit::CreatePanel(const Box &b, const string &title, PanelItemVec items) { return nullptr; }
+unique_ptr<ToolbarViewInterface> SystemToolkit::CreateToolbar(const string &theme, MenuItemVec items) { return make_unique<AndroidToolbarView>(move(items)); }
+unique_ptr<MenuViewInterface> SystemToolkit::CreateMenu(const string &title, MenuItemVec items) { return make_unique<AndroidMenuView>(title, move(items)); }
+unique_ptr<MenuViewInterface> SystemToolkit::CreateEditMenu(MenuItemVec items) { return nullptr; }
+unique_ptr<TableViewInterface> SystemToolkit::CreateTableView(const string &title, const string &style, const string &theme, TableItemVec items) { return make_unique<AndroidTableView>(title, style, move(items)); }
+unique_ptr<TextViewInterface> SystemToolkit::CreateTextView(const string &title, File *file) { return make_unique<AndroidTextView>(title, file); }
+unique_ptr<TextViewInterface> SystemToolkit::CreateTextView(const string &title, const string &text) { return make_unique<AndroidTextView>(title, text); }
+unique_ptr<NavigationViewInterface> SystemToolkit::CreateNavigationView(const string &style, const string &theme) { return make_unique<AndroidNavigationView>(); }
 
 }; // namespace LFL

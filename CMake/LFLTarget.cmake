@@ -129,7 +129,14 @@ function(lfl_add_target _name)
   endif()
 
   if(LFL_XCODE)
-    set_target_properties(${_name} PROPERTIES XCODE_ATTRIBUTE_GCC_GENERATE_DEBUGGING_SYMBOLS YES)
+    if(LFL_DEBUG)
+      set(XCODE_OPT_FLAG "0")
+    else()
+      set(XCODE_OPT_FLAG "2")
+    endif()
+    set_target_properties(${_name} PROPERTIES
+                          XCODE_ATTRIBUTE_GCC_GENERATE_DEBUGGING_SYMBOLS YES
+                          XCODE_ATTRIBUTE_GCC_OPTIMIZATION_LEVEL ${XCODE_OPT_FLAG})
     if(LFL_IOS)
       set_target_properties(${_name} PROPERTIES
                             XCODE_ATTRIBUTE_SDKROOT iphoneos

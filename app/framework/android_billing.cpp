@@ -19,9 +19,9 @@
 #include "core/app/app.h"
 
 namespace LFL {
-struct AndroidProduct : public SystemProduct {
+struct AndroidProduct : public ProductInterface {
   ~AndroidProduct() {}
-  AndroidProduct(const string &i) : SystemProduct(i) {}
+  AndroidProduct(const string &i) : ProductInterface(i) {}
   string Name() { return ""; }
   string Description() { return ""; }
   string Price() {
@@ -29,16 +29,16 @@ struct AndroidProduct : public SystemProduct {
   }
 };
 
-struct AndroidPurchases : public SystemPurchases {
+struct AndroidPurchases : public PurchasesInterface {
   ~AndroidPurchases() {}
   AndroidPurchases() {}
   bool CanPurchase() {}
   bool HavePurchase(const string &product_id) {}
   void PreparePurchase(const StringVec &products, Callback done_cb, ProductCB product_cb) {}
-  bool MakePurchase(SystemProduct *product, IntCB result_cb) { return false; }
+  bool MakePurchase(ProductInterface *product, IntCB result_cb) { return false; }
   void RestorePurchases(Callback done_cb) {}
   void LoadPurchases() {}
 };
 
-unique_ptr<SystemPurchases> SystemPurchases::Create() { return make_unique<AndroidPurchases>(); }
+unique_ptr<PurchasesInterface> SystemToolkit::CreatePurchases() { return make_unique<AndroidPurchases>(); }
 }; // namespace LFL

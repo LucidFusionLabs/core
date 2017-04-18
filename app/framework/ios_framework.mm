@@ -221,6 +221,7 @@ static const char* const* ios_argv = 0;
     LFL::app->focused->gd->default_framebuffer = 0;
     _glk_controller.needs_gl_reset = true;
     if (LFL::app->focused->focused_cb) LFL::app->focused->focused_cb();
+    [_glk_view setNeedsDisplay];
   }
 
   - (void)application:(UIApplication *)application performFetchWithCompletionHandler:(nonnull void (^)(UIBackgroundFetchResult))completionHandler {
@@ -632,7 +633,7 @@ static const char* const* ios_argv = 0;
                pinch.state == UIGestureRecognizerStateFailed) {
       _pinch_occurring = false;
     }
-    CGFloat p_scale = 1.0 - (pinch_scale - pinch.scale);
+    CGFloat p_scale = 1.0 + (pinch_scale - pinch.scale);
     LFL::v2 p(pinch_point.x, s->y + s->height - pinch_point.y), d(p_scale, p_scale);
     int fired = LFL::app->input->MouseZoom(p, d, begin);
     if (fired && uiapp.frame_on_mouse_input) [uiapp.glk_view setNeedsDisplay];

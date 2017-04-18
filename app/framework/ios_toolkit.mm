@@ -304,30 +304,36 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
 @interface IOSPicker : UIPickerView<UIPickerViewDelegate>
   {
     LFL::PickerItem item;
+    bool dark_theme;
   }
   - (LFL::PickerItem*)getItem;
 @end
 
 @implementation IOSPicker
-  - (id)initWithColumns:(LFL::PickerItem)in {
+  - (id)initWithColumns:(LFL::PickerItem)in andTheme:(const LFL::string&)theme {
     self = [super init];
-    return [self finishInit:in];
+    return [self finishInit:in withTheme:theme];
   }
 
-  - (id)initWithColumns:(LFL::PickerItem)in andFrame:(CGRect)r {
+  - (id)initWithColumns:(LFL::PickerItem)in andTheme:(const LFL::string&)theme andFrame:(CGRect)r {
     self = [super initWithFrame:r];
-    return [self finishInit:in];
+    return [self finishInit:in withTheme:theme];
   }
 
-  - (id)finishInit:(LFL::PickerItem)in {
+  - (id)finishInit:(LFL::PickerItem)in withTheme:(const LFL::string&)theme {
     item = move(in);
     super.delegate = self;
     super.showsSelectionIndicator = YES;
     super.hidden = NO;
     super.layer.borderColor = [UIColor grayColor].CGColor;
     super.layer.borderWidth = 4;
-    [self setBackgroundColor:[UIColor whiteColor]];
+    [self setTheme: theme];
     return self;
+  }
+
+  - (void)setTheme: (const LFL::string&)x {
+    if ((dark_theme = (x == "Dark"))) [self setBackgroundColor:[UIColor colorWithWhite:0.249 alpha:.5]];
+    else                              [self setBackgroundColor:[UIColor whiteColor]];
   }
 
   - (void)pickerView:(UIPickerView *)pV didSelectRow:(NSInteger)row inComponent:(NSInteger)component {
@@ -348,6 +354,16 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
     CHECK_RANGE(component, 0, item.data.size());
     CHECK_RANGE(row, 0, item.data[component].size());
     return [NSString stringWithUTF8String: item.data[component][row].c_str()];
+  }
+
+  - (NSAttributedString *)pickerView:(UIPickerView *)pickerView attributedTitleForRow:(NSInteger)row forComponent:(NSInteger)component {
+    CHECK_RANGE(component, 0, item.data.size());
+    CHECK_RANGE(row, 0, item.data[component].size());
+    NSString *title = [NSString stringWithUTF8String: item.data[component][row].c_str()];
+    NSAttributedString *attString = 
+      [[NSAttributedString alloc] initWithString:title attributes:@{
+        NSForegroundColorAttributeName:(dark_theme ? [UIColor whiteColor] : [UIColor blackColor]) }];
+    return attString;
   }
 
   - (void)selectRows:(const LFL::StringVec&)v {
@@ -371,7 +387,7 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
     LFL::StringVecCB font_change_cb;
   }
 
-  - (id)init {
+  - (id)initWithTheme: (const LFL::string&)theme {
     LFL::PickerItem p;
     p.cb = [=](LFL::PickerItem *x) -> bool {
       if (font_change_cb) font_change_cb(LFL::StringVec{x->data[0][x->picked[0]], x->data[1][x->picked[1]]});
@@ -379,7 +395,7 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
     };
     [IOSFontPicker getSystemFonts:     &LFL::PushBack(p.data, {})];
     [IOSFontPicker getSystemFontSizes: &LFL::PushBack(p.data, {})];
-    self = [super initWithColumns: move(p)];
+    self = [super initWithColumns: move(p) andTheme: theme];
     return self;
   }
 
@@ -738,7 +754,7 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
         };
 
         int picker_cols = item.data.size();
-        IOSPicker *picker = [[IOSPicker alloc] initWithColumns: move(item)];
+        IOSPicker *picker = [[IOSPicker alloc] initWithColumns: move(item) andTheme:(dark_theme ? "Dark" : "Light")];
         picker.autoresizingMask = UIViewAutoresizingFlexibleWidth;
         if (row > 0) {
           LFL::StringVec v, joined(picker_cols, "");
@@ -747,7 +763,10 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
           [picker selectRows: joined];
         }
         [cell.contentView addSubview:picker];
-        ci.height = picker.frame.size.height;
+        CGRect r = picker.frame;
+        ci.height = r.size.height;
+        r.size.width = cell.frame.size.width;
+        picker.frame = r;
 
       } else if (ci.type == LFL::TableItem::Button) {
         if (int icon = ci.left_icon) {
@@ -1332,11 +1351,11 @@ struct iOSNavigationView : public NavigationViewInterface {
     } else if (n && stack.count >= n) [stack removeObjectsInRange: NSMakeRange(stack.count-n, stack.count-1)];
   }
 
-  void SetTheme(const string &theme) { [nav setTheme: theme]; }
+  void SetTheme(const string &x) { [nav setTheme: (theme=x)]; }
 };
 
 void Application::ShowSystemFontChooser(const FontDesc &cur_font, const StringVecCB &cb) {
-  static IOSFontPicker *font_chooser = [[IOSFontPicker alloc] init];
+  static IOSFontPicker *font_chooser = [[IOSFontPicker alloc] initWithTheme: "Light"];
   [font_chooser selectFont:cur_font.name size:cur_font.size cb:cb];
   [[LFUIApplication sharedAppDelegate].glk_view addSubview: font_chooser];
 }

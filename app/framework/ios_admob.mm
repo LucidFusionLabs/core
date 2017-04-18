@@ -106,6 +106,10 @@ struct iOSAdvertisingView : public AdvertisingViewInterface {
   }
 };
 
+void SystemToolkit::DisableAdvertisingCrashReporting() {
+  [GADMobileAds disableSDKCrashReporting];
+}
+
 unique_ptr<AdvertisingViewInterface> SystemToolkit::CreateAdvertisingView(int type, int placement, const string &adid, const StringVec &test_devices) {
   return make_unique<iOSAdvertisingView>(type, placement, adid, test_devices);
 }

@@ -123,7 +123,13 @@ struct AndroidAssetLoader : public SimpleAssetLoader {
   virtual int RefillAudio(SoundAsset *a, int reset) { return 0; }
 };
 
-void Application::RunCallbackInMainThread(Callback *cb) {
+struct AndroidTimer : public TimerInterface {
+  AndroidTimer(Callback cb) {}
+  void Clear() {}
+  void Run(Time interval, bool force=false) {}
+};
+
+void Application::RunCallbackInMainThread(Callback cb) {
   message_queue.Write(new Callback(move(cb)));
   if (!FLAGS_target_fps) scheduler.Wakeup(focused);
 }
@@ -137,8 +143,8 @@ void Application::ReleaseMouseFocus() {}
 string Application::GetClipboardText() { return ""; }
 void Application::SetClipboardText(const string &s) {}
 
-void Application::OpenTouchKeyboard(bool enable_frame) {
-  if (enable_frame) frame_disabled = false;
+void Application::OpenTouchKeyboard() {
+  if (1/* || enable_frame*/) frame_disabled = false;
   static jmethodID jni_activity_method_show_keyboard =
     CheckNotNull(jni->env->GetMethodID(jni->activity_class, "showKeyboard", "()V"));
   jni->env->CallVoidMethod(jni->activity, jni_activity_method_show_keyboard);
@@ -187,6 +193,7 @@ int  Application::SetMultisample(bool v) {}
 int  Application::SetExtraScale(bool v) {}
 void Application::SetDownScale(bool v) {}
 void Application::ShowSystemStatusBar(bool v) {}
+string Application::PrintCallStack() { return ""; }
 
 void Application::SetTitleBar(bool v) {
   if (!v) {
@@ -260,6 +267,7 @@ void FrameScheduler::DelMainWaitSocket(Window*, Socket fd) {
 Window *Window::Create() { return new AndroidWindow(); }
 unique_ptr<Module> CreateFrameworkModule() { return make_unique<AndroidFrameworkModule>(); }
 unique_ptr<AssetLoaderInterface> CreateAssetLoader() { return make_unique<AndroidAssetLoader>(); }
+unique_ptr<TimerInterface> SystemToolkit::CreateTimer(Callback cb) { return make_unique<AndroidTimer>(move(cb)); };
 
 extern "C" jint JNI_OnLoad(JavaVM* vm, void* reserved) { return JNI_VERSION_1_4; }
 
@@ -429,16 +437,16 @@ extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppFocusedShellRun(JNI
 }
 
 extern "C" void Java_com_lucidfusionlabs_app_LCallback_RunCallbackInMainThread(JNIEnv *e, jlong cb) {
-  app->RunCallbackInMainThread(new Callback(*static_cast<Callback*>(Void(cb))));
+  app->RunCallbackInMainThread(move(*static_cast<Callback*>(Void(cb))));
 }
 
 extern "C" void Java_com_lucidfusionlabs_app_LStringCB_RunStringCBInMainThread(JNIEnv *e, jlong cb, jstring text) {
   string t = JNI::GetEnvJString(e, text);
-  app->RunCallbackInMainThread(new Callback([=](){ (*static_cast<StringCB*>(Void(cb)))(t); }));
+  app->RunCallbackInMainThread([=](){ (*static_cast<StringCB*>(Void(cb)))(t); });
 }
 
 extern "C" void Java_com_lucidfusionlabs_app_LIntIntCB_RunIntIntCBInMainThread(JNIEnv *e, jlong cb, jint x, jint y) {
-  app->RunCallbackInMainThread(new Callback([=](){ (*static_cast<IntIntCB*>(Void(cb)))(x, y); }));
+  app->RunCallbackInMainThread([=](){ (*static_cast<IntIntCB*>(Void(cb)))(x, y); });
 }
 
 extern "C" void Java_com_lucidfusionlabs_app_LCallback_FreeCallback(JNIEnv *e, jlong cb) {
@@ -461,9 +469,9 @@ extern "C" void Java_com_lucidfusionlabs_app_JTable_RunHideCB(JNIEnv *e, jobject
   static jfieldID self_fid    = CheckNotNull(e->GetFieldID(jni->jtable_class, "lfl_self", "J"));
   static jfieldID changed_fid = CheckNotNull(e->GetFieldID(jni->jtable_class, "changed",  "Z"));
   intptr_t self = CheckNotNull(e->GetLongField(a, self_fid));
-  SystemTableView *view = static_cast<SystemTableView*>(Void(self));
+  TableViewInterface *view = static_cast<TableViewInterface*>(Void(self));
   view->changed = e->GetBooleanField(a, changed_fid);
-  if (view->hide_cb) app->RunCallbackInMainThread(new Callback(view->hide_cb));
+  if (view->hide_cb) app->RunCallbackInMainThread(view->hide_cb);
 }
 
 extern "C" void Java_com_lucidfusionlabs_app_GPlusClient_startGame(JNIEnv *e, jobject a, jboolean server, jstring pid) {
