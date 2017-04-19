@@ -1,8 +1,8 @@
 set(LFL_ANDROID 1)
-set(LFL_ANDROID_SDK "$ENV{HOME}/android-sdk-macosx")
-set(LFL_ANDROID_NDK "$ENV{HOME}/android-ndk-r13b")
-set(LFL_ANDROID_ROOT "$ENV{HOME}/android-toolchain")
-set(LFL_GRADLE_BIN "$ENV{HOME}/gradle-2.4/bin/gradle")
+set(LFL_ANDROID_SDK "$ENV{HOME}/android-sdk-macosx" CACHE STRING "Android SDK path")
+set(LFL_ANDROID_NDK "$ENV{HOME}/android-ndk-r13b" CACHE STRING "Android NDK path")
+set(LFL_ANDROID_ROOT "$ENV{HOME}/android-toolchain" CACHE STRING "Android toolchain path")
+set(LFL_GRADLE_BIN "$ENV{HOME}/gradle-2.4/bin/gradle" CACHE STRING "Gradle path")
 
 #include(core/CMake/LFLOS.cmake)
 if(NOT LFL_OS)
