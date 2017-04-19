@@ -70,6 +70,19 @@ macro(lfl_project _name)
   set(LFL_PROJECT_BINDIR ${CMAKE_CURRENT_BINARY_DIR})
 endmacro(lfl_project)
 
+function(lfl_set_xcode_properties _name)
+  if(LFL_XCODE)
+    if(LFL_DEBUG)
+      set(XCODE_OPT_FLAG "0")
+    else()
+      set(XCODE_OPT_FLAG "2")
+    endif()
+    set_target_properties(${_name} PROPERTIES
+                          XCODE_ATTRIBUTE_GCC_GENERATE_DEBUGGING_SYMBOLS YES
+                          XCODE_ATTRIBUTE_GCC_OPTIMIZATION_LEVEL ${XCODE_OPT_FLAG})
+  endif()
+endfunction()
+
 function(lfl_add_target _name)
   set(options EXECUTABLE SHARED_LIBRARY STATIC_LIBRARY WIN32)
   set(one_value_args)
@@ -127,6 +140,7 @@ function(lfl_add_target _name)
   if(_LINK_LIBRARIES)
     target_link_libraries(${_name} PUBLIC ${_LINK_LIBRARIES})
   endif()
+  lfl_set_xcode_properties(${_name})
 
   if(_EXECUTABLE AND LFL_ADD_BITCODE_TARGETS)
     add_library(${_name}_bitcode STATIC ${_SOURCES})
