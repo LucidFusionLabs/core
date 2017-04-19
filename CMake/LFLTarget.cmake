@@ -80,31 +80,31 @@ function(lfl_add_target _name)
     set(_WIN32)
   endif()
 
-  set(${_name}_LIB_FILES ${_LIB_FILES} PARENT_SCOPE)
-  set(${_name}_ASSET_DIRS ${_ASSET_DIRS} PARENT_SCOPE)
-  set(${_name}_ASSET_FILES ${_ASSET_FILES} PARENT_SCOPE)
-
-  if(LFL_IOS OR LFL_OSX)
-    if(LFL_OSX)
-      set(BUNDLE_PREFIX Resources/) 
-    elseif(LFL_IOS AND LFL_XCODE)
-      set(BUNDLE_PREFIX ${_name}.app/)
-    endif()
-    file(GLOB ASSET_FILES ${_ASSET_FILES})
-    set_source_files_properties(${ASSET_FILES} PROPERTIES HEADER_FILE_ONLY ON
-                                MACOSX_PACKAGE_LOCATION ${BUNDLE_PREFIX}assets)
-    foreach(_dir ${_ASSET_DIRS})
-      file(GLOB ASSET_DIR_FILES ${_dir}/*)
-      get_filename_component(_dirname ${_dir} NAME)
-      set_source_files_properties(${ASSET_DIR_FILES} PROPERTIES HEADER_FILE_ONLY ON
-                                  MACOSX_PACKAGE_LOCATION ${BUNDLE_PREFIX}${_dirname})
-      set(ASSET_FILES ${ASSET_FILES} ${ASSET_DIR_FILES})
-    endforeach()
-  else()
-    set(ASSET_FILES)
-  endif()
-
   if(_EXECUTABLE)
+    set(${_name}_LIB_FILES ${_LIB_FILES} PARENT_SCOPE)
+    set(${_name}_ASSET_DIRS ${_ASSET_DIRS} PARENT_SCOPE)
+    set(${_name}_ASSET_FILES ${_ASSET_FILES} PARENT_SCOPE)
+
+    if(LFL_IOS OR LFL_OSX)
+      if(LFL_OSX)
+        set(BUNDLE_PREFIX Resources/) 
+      elseif(LFL_IOS AND LFL_XCODE)
+        set(BUNDLE_PREFIX ${_name}.app/)
+      endif()
+      file(GLOB ASSET_FILES ${_ASSET_FILES})
+      set_source_files_properties(${ASSET_FILES} PROPERTIES HEADER_FILE_ONLY ON
+                                  MACOSX_PACKAGE_LOCATION ${BUNDLE_PREFIX}assets)
+      foreach(_dir ${_ASSET_DIRS})
+        file(GLOB ASSET_DIR_FILES ${_dir}/*)
+        get_filename_component(_dirname ${_dir} NAME)
+        set_source_files_properties(${ASSET_DIR_FILES} PROPERTIES HEADER_FILE_ONLY ON
+                                    MACOSX_PACKAGE_LOCATION ${BUNDLE_PREFIX}${_dirname})
+        set(ASSET_FILES ${ASSET_FILES} ${ASSET_DIR_FILES})
+      endforeach()
+    else()
+      set(ASSET_FILES)
+    endif()
+
     if(_WIN32)
       add_executable(${_name} WIN32 ${_SOURCES} ${ASSET_FILES})
     else()
@@ -126,22 +126,6 @@ function(lfl_add_target _name)
   set_property(TARGET ${_name} PROPERTY NO_SYSTEM_FROM_IMPORTED ON)
   if(_LINK_LIBRARIES)
     target_link_libraries(${_name} PUBLIC ${_LINK_LIBRARIES})
-  endif()
-
-  if(LFL_XCODE)
-    if(LFL_DEBUG)
-      set(XCODE_OPT_FLAG "0")
-    else()
-      set(XCODE_OPT_FLAG "2")
-    endif()
-    set_target_properties(${_name} PROPERTIES
-                          XCODE_ATTRIBUTE_GCC_GENERATE_DEBUGGING_SYMBOLS YES
-                          XCODE_ATTRIBUTE_GCC_OPTIMIZATION_LEVEL ${XCODE_OPT_FLAG})
-    if(LFL_IOS)
-      set_target_properties(${_name} PROPERTIES
-                            XCODE_ATTRIBUTE_SDKROOT iphoneos
-                            XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET "${IOS_VERSION_MIN}")
-    endif()
   endif()
 
   if(_EXECUTABLE AND LFL_ADD_BITCODE_TARGETS)
