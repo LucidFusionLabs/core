@@ -794,9 +794,8 @@ template <class D=Dialog> struct TabbedDialog : public TabbedDialogInterface {
   D *FirstTab() const { return tab_list.size() ? dynamic_cast<D*>(tab_list.begin()->dialog) : 0; }
   int TabIndex(D *t) const { for (auto b=tab_list.begin(), e=tab_list.end(), i=b; i!=e; ++i) if (*i == t) return i-b; return -1; }
   void AddTab(D *t) { tabs.insert(t); tab_list.emplace_back(t); SelectTab(t); }
-  void DelTab(D *t) { tabs.erase(t); VectorEraseByValue(&tab_list, DialogTab(t)); ReleaseTab(t); }
-  void SelectTab(D *t) { if ((view->child_view = top = t)) t->TakeFocus(); }
-  void ReleaseTab(D *t) { if (top == t) { top=0; t->LoseFocus(); SelectTab(FirstTab()); } }
+  void DelTab(D *t) { tabs.erase(t); VectorEraseByValue(&tab_list, DialogTab(t)); if (top == t) SelectTab(FirstTab()); }
+  void SelectTab(D *t) { if (top) top->LoseFocus(); if ((view->child_view = top = t)) t->TakeFocus(); }
   void SelectTabIndex(size_t i) { CHECK_LT(i, tab_list.size()); SelectTab(dynamic_cast<D*>(tab_list[i].dialog)); }
   void SelectNextTab() { if (top) SelectTabIndex(RingIndex::Wrap(TabIndex(top)+1, tab_list.size())); }
   void SelectPrevTab() { if (top) SelectTabIndex(RingIndex::Wrap(TabIndex(top)-1, tab_list.size())); }
