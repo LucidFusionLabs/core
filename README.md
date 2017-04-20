@@ -145,7 +145,7 @@ then cmake -DCMAKE_INSTALL_PREFIX=~/llvm -P cmake_install.cmake
 
 ### Build Android
 
-* Install Android Developer Console, Android SDK (android-20 + PlayServices),
+* Install Android Developer Console, Android SDK (android-23 + PlayServices),
   Android NDK, and Gradle
 
 * $HOME/android-ndk-r13b/build/tools/make_standalone_toolchain.py \
