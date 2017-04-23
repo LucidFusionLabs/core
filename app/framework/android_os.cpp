@@ -193,11 +193,12 @@ jobject JNI::ToJModelItemChangeSet(TableSection::ChangeSet items) {
 }
 
 jobject JNI::ToJModelItem(AlertItem item) {
-  jobject k = ToJString(item.first), v = ToJString(item.second), rt = ToJString(""), ddk = ToJString(""), p = nullptr, dep = nullptr, lcb = nullptr, rcb = nullptr;
-  jobject cb = item.cb ? ToLStringCB(move(item.cb)) : nullptr;
-  jobject ret = env->NewObject(jmodelitem_class, jmodelitem_construct, k, v, rt, ddk, jint(0), jint(0),
-                               jint(0), jint(0), lcb, rcb, cb, false, p, dep);
-  if (cb) env->DeleteLocalRef(cb);
+  jobject k = ToJString(item.first), v = ToJString(item.second), rt = ToJString(""), ddk = ToJString("");
+  jobject rcb = item.cb ? ToLStringCB(move(item.cb)) : nullptr;
+  jobject ret = env->NewObject(jmodelitem_class, jmodelitem_construct, k, v, rt, ddk, jint(0),
+                               jint(0), jint(0), jint(0), jint(0), jint(0), jint(0), nullptr, rcb, nullptr,
+                               false, jint(0), jint(0));
+  if (rcb) env->DeleteLocalRef(rcb);
   env->DeleteLocalRef(ddk);
   env->DeleteLocalRef(rt);
   env->DeleteLocalRef(v);
@@ -206,10 +207,11 @@ jobject JNI::ToJModelItem(AlertItem item) {
 }
 
 jobject JNI::ToJModelItem(MenuItem item) {
-  jobject k = ToJString(item.shortcut), v = ToJString(item.name), rt = ToJString(""), ddk = ToJString(""), p = nullptr, dep = nullptr, rcb = nullptr, scb = nullptr;
+  jobject k = ToJString(item.shortcut), v = ToJString(item.name), rt = ToJString(""), ddk = ToJString("");
   jobject cb = item.cb ? ToLCallback(move(item.cb)) : nullptr;
-  jobject ret = env->NewObject(jmodelitem_class, jmodelitem_construct, k, v, rt, ddk, jint(0), jint(0),
-                               jint(0), jint(0), cb, rcb, scb, false, p, dep);
+  jobject ret = env->NewObject(jmodelitem_class, jmodelitem_construct, k, v, rt, ddk, jint(0),
+                               jint(0), jint(0), jint(0), jint(0), jint(0), jint(0), cb, nullptr, nullptr,
+                               false, jint(0), jint(0));
   if (cb) env->DeleteLocalRef(cb);
   env->DeleteLocalRef(ddk);
   env->DeleteLocalRef(rt);

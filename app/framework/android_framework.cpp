@@ -437,7 +437,7 @@ extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppFocusedShellRun(JNI
 }
 
 extern "C" void Java_com_lucidfusionlabs_app_LCallback_RunCallbackInMainThread(JNIEnv *e, jlong cb) {
-  app->RunCallbackInMainThread(move(*static_cast<Callback*>(Void(cb))));
+  app->RunCallbackInMainThread(*static_cast<Callback*>(Void(cb)));
 }
 
 extern "C" void Java_com_lucidfusionlabs_app_LStringCB_RunStringCBInMainThread(JNIEnv *e, jlong cb, jstring text) {

@@ -58,6 +58,7 @@ Shell::Shell(Window *W) : parent(W) {
   command.emplace_back("messagebox",   bind(&Shell::MessageBox,    this, _1));
   command.emplace_back("texturebox",   bind(&Shell::TextureBox,    this, _1));
   command.emplace_back("edit",         bind(&Shell::Edit,          this, _1));
+  command.emplace_back("cleardialogs", bind(&Shell::ClearDialogs,  this, _1));
   command.emplace_back("slider",       bind(&Shell::Slider,        this, _1));
 }
 
@@ -329,6 +330,10 @@ void Shell::Edit(const vector<string> &a) {
   string s = Asset::FileContents("default.vert");
   if (s.empty()) INFO("missing file default.vert");
   parent->AddDialog(make_unique<EditorDialog>(parent, FontDesc::Default(), new BufferFile(s, "default.vert")));
+}
+
+void Shell::ClearDialogs(const vector<string>&) {
+  for (auto &i : app->focused->dialogs) i->deleted_cb();
 }
 
 void Shell::cmds(const vector<string>&) {

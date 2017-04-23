@@ -986,13 +986,13 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
         [button addTarget:self action:@selector(toggleEditMode:) forControlEvents:UIControlEventTouchUpInside];
       } else {
         button.showsTouchWhenHighlighted = TRUE;
-        button.cb = [=](){ auto &item = hi.header; if (item.right_cb) item.right_cb(""); };
+        button.cb = [=](){ auto &item = data[section].header; if (item.right_cb) item.right_cb(""); };
         [button setTitle:LFL::MakeNSString(hi.header.right_text) forState:UIControlStateNormal];
         [button addTarget:button action:@selector(buttonClicked:) forControlEvents:UIControlEventTouchUpInside];
       }
       [button sizeToFit];
       [button setFrame:CGRectMake(tableView.frame.size.width - button.frame.size.width - 11,
-                                  key_size ? 11 : -11, button.frame.size.width, 21)];
+                                   headerView.frame.size.height-1-21-11, button.frame.size.width, 21)];
       button.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin;
       [headerView addSubview:button];
     }

@@ -26,6 +26,7 @@ struct AndroidAdvertisingView : public AdvertisingViewInterface {
   void Show(TableViewInterface *t, bool show_or_hide) {}
 };
 
+void SystemToolkit::DisableAdvertisingCrashReporting() {}
 unique_ptr<AdvertisingViewInterface> SystemToolkit::CreateAdvertisingView(int type, int placement, const string &adid, const StringVec &test_devices) {
   return make_unique<AndroidAdvertisingView>(type, placement, adid, test_devices);
 }

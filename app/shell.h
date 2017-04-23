@@ -73,6 +73,7 @@ struct Shell {
   void TextureBox(const vector<string>&);
   void Slider    (const vector<string>&);
   void Edit      (const vector<string>&);
+  void ClearDialogs(const vector<string>&);
 
   void cmds (const vector<string>&);
   void flags(const vector<string>&);
