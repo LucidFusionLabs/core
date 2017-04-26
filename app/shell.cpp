@@ -349,7 +349,7 @@ void Shell::binds(const vector<string>&) {
 }
 
 void Shell::constants(const vector<string>&) {
-  INFO("DEBUG=", DEBUG, ", MOBILE=", MOBILE, ", IOS=", IOS, ", ANDROID=", ANDROID);
+  INFO("DEBUG=", DEBUG, ", MOBILE=", MOBILE, ", IOS=", IOS, ", ANDROIDOS=", ANDROIDOS);
 }
 
 void Shell::AddSceneCommands(Scene *scene) {

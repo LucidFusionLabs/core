@@ -268,7 +268,7 @@ void Log(int level, const char *file, int line, const string &m);
 namespace LFL {
 extern Application *app;
 extern const char *not_implemented;
-extern const bool DEBUG, MOBILE, IOS, ANDROID;
+extern const bool DEBUG, MOBILE, IOS, ANDROIDOS;
 
 struct FatalMessage {
   const char *file; int line; string msg; std::stringstream stream;

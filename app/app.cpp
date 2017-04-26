@@ -116,9 +116,9 @@ const bool IOS = true;
 const bool IOS = false;
 #endif
 #ifdef LFL_ANDROID
-const bool ANDROID = true;
+const bool ANDROIDOS = true;
 #else
-const bool ANDROID = false;
+const bool ANDROIDOS = false;
 #endif
 
 Application *app = nullptr;

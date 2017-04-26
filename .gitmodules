@@ -102,9 +102,6 @@
 [submodule "imports/Stockfish"]
 	path = imports/Stockfish
 	url = https://github.com/official-stockfish/Stockfish
-[submodule "imports/openssl_prebuilt_for_android"]
-	path = imports/openssl_prebuilt_for_android
-	url = https://github.com/felipejfc/openssl_prebuilt_for_android
 [submodule "imports/libarchive"]
 	path = imports/libarchive
 	url = https://github.com/LucidFusionLabs/libarchive

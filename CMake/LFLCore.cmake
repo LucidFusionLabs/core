@@ -286,7 +286,9 @@ endmacro()
 # proto vars
 if(LFL_PROTOBUF)
   set(PROTOBUF_INCLUDE_DIR ${LFL_SOURCE_DIR}/core/imports/protobuf/src)
-  set(PROTOBUF_PROTOC_EXECUTABLE ${LFL_OS_CORE_BINARY_DIR}/imports/protobuf/protoc)
+  if(NOT PROTOBUF_PROTOC_EXECUTABLE AND LFL_OS_CORE_BINARY_DIR)
+    set(PROTOBUF_PROTOC_EXECUTABLE ${LFL_OS_CORE_BINARY_DIR}/imports/protobuf/protoc)
+  endif()
 endif()
 
 if(LFL_FLATBUFFERS AND LFL_XCODE)
@@ -295,7 +297,7 @@ if(LFL_FLATBUFFERS AND LFL_XCODE)
 endif()
 
 # imports
-add_subdirectory(${LFL_SOURCE_DIR}/core/imports)
+add_subdirectory(${LFL_SOURCE_DIR}/core/imports ${LFL_CORE_BINARY_DIR}/imports)
 
 # proto macros
 if(LFL_PROTOBUF)
@@ -307,10 +309,12 @@ endif()
 
 if(LFL_FLATBUFFERS)
   set(FLATBUFFERS_INCLUDE_DIR ${LFL_SOURCE_DIR}/core/imports/flatbuffers/include)
-  if(LFL_WINDOWS)
-    set(FLATBUFFERS_FLATC_EXECUTABLE ${LFL_OS_CORE_BINARY_DIR}/imports/flatbuffers/${CMAKE_BUILD_TYPE}/flatc.exe)
-  else()
-    set(FLATBUFFERS_FLATC_EXECUTABLE ${LFL_OS_CORE_BINARY_DIR}/imports/flatbuffers/flatc)
+  if(NOT FLATBUFFERS_FLATC_EXECUTABLE AND LFL_OS_CORE_BINARY_DIR)
+    if(LFL_WINDOWS)
+      set(FLATBUFFERS_FLATC_EXECUTABLE ${LFL_OS_CORE_BINARY_DIR}/imports/flatbuffers/${CMAKE_BUILD_TYPE}/flatc.exe)
+    else()
+      set(FLATBUFFERS_FLATC_EXECUTABLE ${LFL_OS_CORE_BINARY_DIR}/imports/flatbuffers/flatc)
+    endif()
   endif()
   include(${LFL_SOURCE_DIR}/core/imports/flatbuffers/CMake/FindFlatBuffers.cmake)
   if(NOT FLATBUFFERS_FOUND)
@@ -324,8 +328,12 @@ if(LFL_CAPNPROTO)
   set(CAPNP_LIB_CAPNP       ${LFL_CORE_BINARY_DIR}/imports/capnproto/lib/libcapnp.a)
   set(CAPNP_LIB_CAPNP-RPC   ${LFL_CORE_BINARY_DIR}/imports/capnproto/lib/libcapnp-rpc.a)
   set(CAPNP_INCLUDE_DIRS    ${LFL_CORE_BINARY_DIR}/imports/capnproto/include)
-  set(CAPNP_EXECUTABLE      ${LFL_OS_CORE_BINARY_DIR}/imports/capnproto/bin/capnp)
-  set(CAPNPC_CXX_EXECUTABLE ${LFL_OS_CORE_BINARY_DIR}/imports/capnproto/bin/capnpc-c++)
+  if(NOT CAPNP_EXECUTABLE AND LFL_OS_CORE_BINARY_DIR)
+    set(CAPNP_EXECUTABLE ${LFL_OS_CORE_BINARY_DIR}/imports/capnproto/bin/capnp)
+  endif()
+  if(NOT CAPNPC_CXX_EXECUTABLE AND LFL_OS_CORE_BINARY_DIR)
+    set(CAPNPC_CXX_EXECUTABLE ${LFL_OS_CORE_BINARY_DIR}/imports/capnproto/bin/capnpc-c++)
+  endif()
   include(FindCapnProto)
 endif(LFL_CAPNPROTO)
 
@@ -356,16 +364,16 @@ macro(lfl_set_os_toolkit _prefix)
 endmacro()
 
 # app
-add_subdirectory(${LFL_SOURCE_DIR}/core/app)
+add_subdirectory(${LFL_SOURCE_DIR}/core/app ${LFL_CORE_BINARY_DIR}/app)
 
 # web
-add_subdirectory(${LFL_SOURCE_DIR}/core/web)
+add_subdirectory(${LFL_SOURCE_DIR}/core/web ${LFL_CORE_BINARY_DIR}/web)
 
 # game
-add_subdirectory(${LFL_SOURCE_DIR}/core/game)
+add_subdirectory(${LFL_SOURCE_DIR}/core/game ${LFL_CORE_BINARY_DIR}/game)
 
 # nlp
-add_subdirectory(${LFL_SOURCE_DIR}/core/nlp)
+add_subdirectory(${LFL_SOURCE_DIR}/core/nlp ${LFL_CORE_BINARY_DIR}/nlp)
 
 # speech
-add_subdirectory(${LFL_SOURCE_DIR}/core/speech)
+add_subdirectory(${LFL_SOURCE_DIR}/core/speech ${LFL_CORE_BINARY_DIR}/speech)

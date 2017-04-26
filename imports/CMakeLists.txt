@@ -71,8 +71,9 @@ if(LFL_PNG AND NOT LFL_EMSCRIPTEN)
     ExternalProject_Add(libpng SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libpng
                         PREFIX ${CMAKE_CURRENT_BINARY_DIR}/libpng
                         CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_CURRENT_BINARY_DIR}/libpng
-                        -DCMAKE_TOOLCHAIN_FILE:string=${CMAKE_TOOLCHAIN_FILE}
-                        -DPNG_SHARED=FALSE -DPNG_TESTS=FALSE)
+                        -DCMAKE_TOOLCHAIN_FILE:string=${CMAKE_TOOLCHAIN_FILE} ${CONFIGURE_CMAKE}
+                        -DPNG_SHARED=FALSE -DPNG_TESTS=FALSE
+                        BUILD_BYPRODUCTS ${CMAKE_CURRENT_BINARY_DIR}/libpng/lib/libpng16.a)
     add_library(libpng16 IMPORTED STATIC GLOBAL)
     add_dependencies(libpng16 libpng)
     set_property(TARGET libpng16 PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/libpng/lib/libpng16.a)
@@ -139,7 +140,8 @@ if(LFL_FREETYPE)
     ExternalProject_Add(freetype SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/freetype
                         PREFIX ${CMAKE_CURRENT_BINARY_DIR}/freetype
                         CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_CURRENT_BINARY_DIR}/freetype
-                        -DCMAKE_TOOLCHAIN_FILE:string=${CMAKE_TOOLCHAIN_FILE} ${FREETYPE_CMAKE_DEF})
+                        -DCMAKE_TOOLCHAIN_FILE:string=${CMAKE_TOOLCHAIN_FILE} ${CONFIGURE_CMAKE} ${FREETYPE_CMAKE_DEF}
+                        BUILD_BYPRODUCTS ${CMAKE_CURRENT_BINARY_DIR}/freetype/lib/libfreetype.a)
     add_library(libfreetype IMPORTED STATIC GLOBAL)
     add_dependencies(libfreetype freetype)
     set_property(TARGET libfreetype PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/freetype/lib/libfreetype.a)
@@ -269,9 +271,9 @@ if(LFL_OPENSSL)
     set(OPENSSL_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/openssl/include)
     set(OPENSSL_LIB ${CMAKE_CURRENT_BINARY_DIR}/openssl/lib/ssleay32.lib ${CMAKE_CURRENT_BINARY_DIR}/openssl/lib/libeay32.lib)
   elseif(LFL_ANDROID)
-    set(OPENSSL_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/openssl_prebuilt_for_android/include)
-    set(OPENSSL_CRYPTO_LIB ${CMAKE_CURRENT_SOURCE_DIR}/openssl_prebuilt_for_android/armeabi-v7a/libcrypto.a)
-    set(OPENSSL_LIB ${CMAKE_CURRENT_SOURCE_DIR}/openssl_prebuilt_for_android/armeabi-v7a/libssl.a ${OPENSSL_CRYPTO_LIB})
+    set(OPENSSL_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/OpenSSL-1.1-Android-Prebuilt/include)
+    set(OPENSSL_CRYPTO_LIB ${CMAKE_CURRENT_SOURCE_DIR}/OpenSSL-1.1-Android-Prebuilt/${ANDROID_ABI}/lib/libcrypto.a)
+    set(OPENSSL_LIB ${CMAKE_CURRENT_SOURCE_DIR}/OpenSSL-1.1-Android-Prebuilt/${ANDROID_ABI}/lib/libssl.a ${OPENSSL_CRYPTO_LIB})
   elseif(LFL_IOS)
     set(OPENSSL_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/ios-openssl/include)
     set(OPENSSL_LIB ${CMAKE_CURRENT_SOURCE_DIR}/ios-openssl/lib/libssl.a ${CMAKE_CURRENT_SOURCE_DIR}/ios-openssl/lib/libcrypto.a)
@@ -377,7 +379,8 @@ if(LFL_SQLCIPHER)
                       CONFIGURE_COMMAND ${CMAKE_COMMAND} -E env ${CONFIG_ENV}
                       <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> ${CONFIG_OPTS}
                       BUILD_COMMAND env -i ${CMAKE_COMMAND} -E env HOME=$ENV{HOME} PATH=$ENV{PATH} ${CONFIG_ENV}
-                      make libsqlcipher.la)
+                      make libsqlcipher.la
+                      BUILD_BYPRODUCTS ${CMAKE_CURRENT_BINARY_DIR}/sqlcipher/lib/libsqlcipher.a)
   add_library(libsqlcipher IMPORTED SHARED GLOBAL)
   add_dependencies(libsqlcipher sqlcipher)
   set_property(TARGET libsqlcipher PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/sqlcipher/lib/libsqlcipher.a)

@@ -44,35 +44,33 @@ elseif(LFL_ANDROID)
   endfunction()
 
   function(lfl_post_build_start target)
-    add_custom_command(TARGET ${target} POST_BUILD WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${target}-android/jni
-      COMMAND echo LFL_BIN_DIR := `basename ${LFL_BINARY_DIR}` > LFL_BIN_DIR.mk
-      COMMAND ${LFL_ANDROID_NDK}/ndk-build
-      COMMAND mkdir -p ${CMAKE_CURRENT_SOURCE_DIR}/${target}-android/res/raw
+    add_custom_command(TARGET ${target} POST_BUILD WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${target}-android
+      COMMAND mkdir -p res/raw
       COMMAND cp ${LFL_APP_ASSET_FILES} ${CMAKE_CURRENT_SOURCE_DIR}/assets
-      COMMAND for d in ${CMAKE_CURRENT_SOURCE_DIR}/drawable-*\; do dbn=`basename $$d`\; if [ -d ../res/$$dbn ]; then cp $$d/* ../res/$$dbn\; fi\; done
-      COMMAND if [ $$\(find ${CMAKE_CURRENT_SOURCE_DIR}/assets -name "*.wav" | wc -l\) != "0" ]; then cp ${CMAKE_CURRENT_SOURCE_DIR}/assets/*.wav ../res/raw\; fi
-      COMMAND if [ $$\(find ${CMAKE_CURRENT_SOURCE_DIR}/assets -name "*.mp3" | wc -l\) != "0" ]; then cp ${CMAKE_CURRENT_SOURCE_DIR}/assets/*.mp3 ../res/raw\; fi
-      COMMAND if [ $$\(find ${CMAKE_CURRENT_SOURCE_DIR}/assets -name "*.ogg" | wc -l\) != "0" ]; then cp ${CMAKE_CURRENT_SOURCE_DIR}/assets/*.ogg ../res/raw\; fi)
-    
+      COMMAND for d in ${CMAKE_CURRENT_SOURCE_DIR}/drawable-*\; do dbn=`basename $$d`\; if [ -d res/$$dbn ]; then cp $$d/* res/$$dbn\; fi\; done
+      COMMAND if [ $$\(find ${CMAKE_CURRENT_SOURCE_DIR}/assets -name "*.wav" | wc -l\) != "0" ]; then cp ${CMAKE_CURRENT_SOURCE_DIR}/assets/*.wav res/raw\; fi
+      COMMAND if [ $$\(find ${CMAKE_CURRENT_SOURCE_DIR}/assets -name "*.mp3" | wc -l\) != "0" ]; then cp ${CMAKE_CURRENT_SOURCE_DIR}/assets/*.mp3 res/raw\; fi
+      COMMAND if [ $$\(find ${CMAKE_CURRENT_SOURCE_DIR}/assets -name "*.ogg" | wc -l\) != "0" ]; then cp ${CMAKE_CURRENT_SOURCE_DIR}/assets/*.ogg res/raw\; fi)
+
     add_custom_target(${target}_release WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${target}-android DEPENDS ${target}
-      COMMAND "ANDROID_HOME=${LFL_ANDROID_SDK}" ${LFL_GRADLE_BIN} uninstallRelease
-      COMMAND "ANDROID_HOME=${LFL_ANDROID_SDK}" ${LFL_GRADLE_BIN} assembleRelease
-      COMMAND ${LFL_ANDROID_SDK}/platform-tools/adb install ./build/outputs/apk/${target}-android-release.apk
-      COMMAND ${LFL_ANDROID_SDK}/platform-tools/adb shell am start -n `${LFL_ANDROID_SDK}/build-tools/19.1.0/aapt dump badging ./build/outputs/apk/${target}-android-release.apk | grep package | cut -d\\' -f2`/`${LFL_ANDROID_SDK}/build-tools/19.1.0/aapt dump badging ./build/outputs/apk/${target}-android-release.apk | grep launchable-activity | cut -d\\' -f2`
-      COMMAND ${LFL_ANDROID_SDK}/platform-tools/adb logcat | tee ${CMAKE_CURRENT_BINARY_DIR}/debug.txt)
+      COMMAND "JAVA_HOME=${JAVA_HOME}" "ANDROID_HOME=${ANDROID_HOME}" ${GRADLE_HOME}/bin/gradle uninstallRelease
+      COMMAND "JAVA_HOME=${JAVA_HOME}" "ANDROID_HOME=${ANDROID_HOME}" ${GRADLE_HOME}/bin/gradle assembleRelease
+      COMMAND ${ANDROID_HOME}/platform-tools/adb install ./build/outputs/apk/${target}-android-release.apk
+      COMMAND ${ANDROID_HOME}/platform-tools/adb shell am start -n `${ANDROID_HOME}/build-tools/19.1.0/aapt dump badging ./build/outputs/apk/${target}-android-release.apk | grep package | cut -d\\' -f2`/`${ANDROID_HOME}/build-tools/19.1.0/aapt dump badging ./build/outputs/apk/${target}-android-release.apk | grep launchable-activity | cut -d\\' -f2`
+      COMMAND ${ANDROID_HOME}/platform-tools/adb logcat | tee ${CMAKE_CURRENT_BINARY_DIR}/debug.txt)
 
     add_custom_target(${target}_debug WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${target}-android DEPENDS ${target}
-      COMMAND "ANDROID_HOME=${LFL_ANDROID_SDK}" ${LFL_GRADLE_BIN} uninstallDebug
-      COMMAND "ANDROID_HOME=${LFL_ANDROID_SDK}" ${LFL_GRADLE_BIN}   installDebug
-      COMMAND ${LFL_ANDROID_SDK}/platform-tools/adb shell am start -n `${LFL_ANDROID_SDK}/build-tools/19.1.0/aapt dump badging ./build/outputs/apk/${target}-android-debug.apk | grep package | cut -d\\' -f2`/`${LFL_ANDROID_SDK}/build-tools/19.1.0/aapt dump badging ./build/outputs/apk/${target}-android-debug.apk | grep launchable-activity | cut -d\\' -f2`
-      COMMAND ${LFL_ANDROID_SDK}/platform-tools/adb logcat | tee ${CMAKE_CURRENT_BINARY_DIR}/debug.txt)
+      COMMAND "JAVA_HOME=${JAVA_HOME}" "ANDROID_HOME=${ANDROID_HOME}" ${GRADLE_HOME}/bin/gradle uninstallDebug
+      COMMAND "JAVA_HOME=${JAVA_HOME}" "ANDROID_HOME=${ANDROID_HOME}" ${GRADLE_HOME}/bin/gradle   installDebug
+      COMMAND ${ANDROID_HOME}/platform-tools/adb shell am start -n `${ANDROID_HOME}/build-tools/19.1.0/aapt dump badging ./build/outputs/apk/${target}-android-debug.apk | grep package | cut -d\\' -f2`/`${ANDROID_HOME}/build-tools/19.1.0/aapt dump badging ./build/outputs/apk/${target}-android-debug.apk | grep launchable-activity | cut -d\\' -f2`
+      COMMAND ${ANDROID_HOME}/platform-tools/adb logcat | tee ${CMAKE_CURRENT_BINARY_DIR}/debug.txt)
 
     add_custom_target(${target}_debug_start WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${target}-android DEPENDS ${target}
-      COMMAND ${LFL_ANDROID_SDK}/platform-tools/adb shell am start -n `${LFL_ANDROID_SDK}/build-tools/19.1.0/aapt dump badging ./build/outputs/apk/${target}-android-debug.apk | grep package | cut -d\\' -f2`/`${LFL_ANDROID_SDK}/build-tools/19.1.0/aapt dump badging ./build/outputs/apk/${target}-android-debug.apk | grep launchable-activity | cut -d\\' -f2`
-      COMMAND ${LFL_ANDROID_SDK}/platform-tools/adb logcat | tee ${CMAKE_CURRENT_BINARY_DIR}/debug.txt)
+      COMMAND ${ANDROID_HOME}/platform-tools/adb shell am start -n `${ANDROID_HOME}/build-tools/19.1.0/aapt dump badging ./build/outputs/apk/${target}-android-debug.apk | grep package | cut -d\\' -f2`/`${ANDROID_HOME}/build-tools/19.1.0/aapt dump badging ./build/outputs/apk/${target}-android-debug.apk | grep launchable-activity | cut -d\\' -f2`
+      COMMAND ${ANDROID_HOME}/platform-tools/adb logcat | tee ${CMAKE_CURRENT_BINARY_DIR}/debug.txt)
 
     add_custom_target(${target}_help WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-      COMMAND echo "Symbolicate with: ${LFL_ANDROID_NDK}/toolchains/arm-linux-androideabi-4.9/prebuilt/darwin-x86_64/bin/arm-linux-androideabi-addr2line -C -f -e libapp.so 008bd340")
+      COMMAND echo "Symbolicate with: ${ANDROID_NDK}/toolchains/arm-linux-androideabi-4.9/prebuilt/darwin-x86_64/bin/arm-linux-androideabi-addr2line -C -f -e libapp.so 008bd340")
   endfunction()
 
   macro(lfl_add_package target)
@@ -98,8 +96,6 @@ elseif(LFL_IOS)
                         XCODE_ATTRIBUTE_PROVISIONING_PROFILE_SPECIFIER "${LFL_IOS_PROVISION_NAME}")
 
     if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/iphone-Info.plist)
-      # For the Info.plist files, Xcode inserts BuildMachineOSBuild, DTCompiler, DTPlatformBuild,
-      # DTPlatformVersion, DTSDKBuild, DTSDKName, DTXcode, DTXcodeBuild keys.
       set_target_properties(${target} PROPERTIES MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/iphone-Info.plist)
     endif()
 
