@@ -1,7 +1,7 @@
 set(JAVA_HOME "/Applications/Android Studio.app/Contents/jre/jdk/Contents/Home")
 set(GRADLE_HOME "$ENV{HOME}/gradle-2.4" CACHE PATH "Gradle path")
 set(ANDROID_HOME "$ENV{HOME}/android-sdk-macosx" CACHE PATH "Android SDK path")
-set(ANDROID_NDK "$ENV{HOME}/android-ndk-r13b" CACHE PATH "Android NDK path")
+set(ANDROID_NDK_HOME "$ENV{HOME}/android-ndk-r13b" CACHE PATH "Android NDK path")
 set(ANDROID_TOOLCHAIN_ROOT "$ENV{HOME}/android-toolchain" CACHE PATH "Android toolchain path")
 set(ANDROID_ABI "armeabi-v7a" CACHE STRING "Android ABI")
 
