@@ -931,7 +931,7 @@ void FrameScheduler::SetAnimating(Window *w, bool is_animating) {
 
 void TableViewInterface::ApplyChangeSet(const string &v, const TableSection::ChangeSet &changes) {
   auto it = changes.find(v);
-  if (it == changes.end()) return ERRORv("Missing TableView ChangeSet ", v);
+  if (it == changes.end()) return ERROR("Missing TableView ChangeSet ", v);
   ApplyChangeList(it->second);
 }
 
