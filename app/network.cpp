@@ -312,7 +312,7 @@ Socket SystemNetwork::Listen(int protocol, IPV4::Addr addr, int port, int backlo
   if (!blocking && SetSocketBlocking(fd, 0))
   { ERROR("Network::socket_blocking: ", SystemNetwork::LastError()); CloseSocket(fd); return InvalidSocket; }
 
-  INFO("listen(port=", port, ", protocol=", (protocol == Protocol::TCP) ? "TCP" : "UDP", ")");
+  INFO("listen(port=", port, ", protocol=", (protocol == Protocol::TCP) ? "TCP" : "UDP", "), socket=", fd);
   return fd;
 }
 
@@ -735,14 +735,14 @@ SocketConnection *SocketService::Connect(IPV4::Addr addr, int port, IPV4Endpoint
     delete c;
     return 0;
   }
-  INFO(c->Name(), ": connecting");
+  INFO(c->Name(), ": connecting, socket=", c->socket);
   conn[c->socket] = unique_ptr<SocketConnection>(c);
 
   if (connected) {
     /* connected 3 */ 
     c->SetConnected();
     c->SetSourceAddress();
-    INFO(c->Name(), ": connected");
+    INFO(c->Name(), ": connected, socket=", c->socket);
     if (this->Connected(c) < 0) c->SetError();
     if (c->handler) { if (c->handler->Connected(c) < 0) { ERROR(c->Name(), ": handler connected"); c->SetError(); } }
     if (c->detach) { Detach(c); conn.erase(c->socket); }
@@ -847,11 +847,13 @@ void SocketService::EndpointClose(const string &endpoint_name) {
 }
 
 void SocketService::Detach(SocketConnection *c) {
-  INFO(c->Name(), ": detached from ", name);
+  INFO(c->Name(), ": detached from ", name, " state=", c->state, " socket=", c->socket);
   SocketService::Close(c);
   c->readable = c->writable = 0;
-  app->RunInMainThread([=]() { (*c->detach)(c); });
-  app->scheduler.Wakeup(app->focused);
+  app->RunInMainThread([=](){
+    if (c->detach_delete) { if (c->state == Connection::Connected) c->Close(); delete c; }
+    else if (c->detach) (*c->detach)(c);
+  });
 }
 
 /* SocketServices */
@@ -1082,7 +1084,7 @@ void SocketServices::TCPConnectionFrame(SocketService *svc, SocketConnection *c,
       /* connected 2 */ 
       c->SetConnected();
       c->SetSourceAddress();
-      INFO(c->Name(), ": connected");
+      INFO(c->Name(), ": connected, socket=", c->socket);
       if (svc->Connected(c) < 0) c->SetError();
       if (c->handler) { if (c->handler->Connected(c) < 0) { ERROR(c->Name(), ": handler connected"); c->SetError(); } }
       if (c->detach) { svc->Detach(c); removelist->AddSocket(svc, c->socket); }
@@ -1091,7 +1093,7 @@ void SocketServices::TCPConnectionFrame(SocketService *svc, SocketConnection *c,
     }
 
     errno = res;
-    INFO(c->Name(), ": connect failed: ", SystemNetwork::LastError());
+    INFO(c->Name(), ": socket=", c->socket, " connect failed: ", SystemNetwork::LastError(), " socket=", c->socket);
     c->SetError();
   }
 
@@ -1125,7 +1127,10 @@ void SocketServices::TCPConnectionFrame(SocketService *svc, SocketConnection *c,
   } while(0);
 
   /* error */
-  if (c->state == Connection::Error) ConnClose(svc, c, removelist);
+  if (c->state == Connection::Error) {
+    if (c->detach) { svc->Detach(c); removelist->AddSocket(svc, c->socket); }
+    else ConnClose(svc, c, removelist);
+  }
 }
 
 void SocketServices::UDPConnectionFrame(SocketService *svc, SocketConnection *c, SocketServiceEndpointEraseList *removelist, const string &epk) {

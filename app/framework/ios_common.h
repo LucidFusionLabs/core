@@ -35,6 +35,7 @@
 @interface LFGLKView : GLKView<UIKeyInput> {}
   @property (nonatomic, strong) UIView *inputAccessoryView;
   @property (nonatomic, assign) LFL::Callback copy_cb;
+  @property (readwrite, copy) UITextRange *selectedTextRange;
   @property BOOL resign_textfield_on_return, frame_on_keyboard_input;
 @end
 

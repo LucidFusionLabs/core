@@ -596,9 +596,10 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
   }
 
   - (void)applyChangeList:(const LFL::TableSection::ChangeList&)changes {
+    UITableView *tv = _tableView;
     LFL::TableSection::ApplyChangeList(changes, &data, [=](const LFL::TableSection::Change &d){
       NSIndexPath *p = [NSIndexPath indexPathForRow:d.row inSection:d.section];
-      [self.tableView reloadRowsAtIndexPaths:@[p] withRowAnimation:UITableViewRowAnimationNone];
+      [tv reloadRowsAtIndexPaths:@[p] withRowAnimation:UITableViewRowAnimationNone];
     });
   }
 

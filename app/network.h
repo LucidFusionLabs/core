@@ -319,7 +319,7 @@ struct Connection {
   SocketService *svc;
   Time ct, rt, wt;
   string endpoint_name;
-  bool readable=1, writable=0, control_messages=0;
+  bool readable=1, writable=0, control_messages=0, detach_delete=0;
   int state;
   StringBuffer rb, wb;
   typed_ptr self_reference;

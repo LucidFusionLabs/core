@@ -927,4 +927,12 @@ void FrameScheduler::SetAnimating(Window *w, bool is_animating) {
   }
 }
 
+/* ViewInterface */
+
+void TableViewInterface::ApplyChangeSet(const string &v, const TableSection::ChangeSet &changes) {
+  auto it = changes.find(v);
+  if (it == changes.end()) return ERRORv("Missing TableView ChangeSet ", v);
+  ApplyChangeList(it->second);
+}
+
 }; // namespace LFL

@@ -884,7 +884,7 @@ struct TableViewInterface {
   virtual void SetTheme(const string &theme) = 0;
 
   bool GetSectionText(int section, vector<string*> out, bool check=1) { return GetPairValues(GetSectionText(section), move(out), check); }
-  void ApplyChangeSet(const string &v, const TableSection::ChangeSet &changes) { auto it = changes.find(v); if (it != changes.end()) ApplyChangeList(it->second); }
+  void ApplyChangeSet(const string &v, const TableSection::ChangeSet &changes);
 };
 
 struct TableViewController {

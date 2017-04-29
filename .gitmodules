@@ -114,3 +114,6 @@
 [submodule "imports/AdMob-ios"]
 	path = imports/AdMob-ios
 	url = https://github.com/LucidFusionLabs/AdMob-ios
+[submodule "imports/OpenSSL-for-Android-Prebuilt"]
+	path = imports/OpenSSL-for-Android-Prebuilt
+	url = https://github.com/PurpleI2P/OpenSSL-for-Android-Prebuilt
