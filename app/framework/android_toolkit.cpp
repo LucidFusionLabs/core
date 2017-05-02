@@ -114,7 +114,7 @@ struct AndroidTableView : public TableViewInterface {
     static jmethodID mid = CheckNotNull
       (jni->env->GetMethodID(jni->jtable_class,
                              "<init>", "(Lcom/lucidfusionlabs/app/MainActivity;Ljava/lang/String;Ljava/util/ArrayList;J)V"));
-    jlong lsp = intptr_t(this);
+    jlong lsp = uintptr_t(this);
     jstring tstr = jni->ToJString(title);
     jobject l = jni->ToJModelItemArrayList(move(items));
     jobject v = jni->env->NewObject(jni->jtable_class, mid, jni->activity, tstr, l, lsp);
@@ -180,7 +180,7 @@ struct AndroidTableView : public TableViewInterface {
 
     jobject al = CheckNotNull(jni->env->GetObjectField(a, jni->pair_second));
     jobject pl = CheckNotNull(jni->env->GetObjectField(a, jni->pair_first));
-    intptr_t pp = CheckNotNull(jni->env->CallLongMethod(pl, jni->long_longval));
+    uintptr_t pp = CheckNotNull(jni->env->CallLongMethod(pl, jni->long_longval));
     auto picker = static_cast<PickerItem*>(Void(pp));
     if (picker->picked.size() != picker->data.size()) picker->picked.resize(picker->data.size());
     for (int i = 0, l = jni->env->CallIntMethod(al, jni->arraylist_size), l2 = picker->picked.size();
@@ -365,7 +365,7 @@ struct AndroidNavigationView : public NavigationViewInterface {
     static jmethodID mid = CheckNotNull
       (jni->env->GetMethodID(jni->jnavigation_class,
                              "getBackTableSelf", "(Lcom/lucidfusionlabs/app/MainActivity;)J"));
-    intptr_t v = jni->env->CallLongMethod(impl, mid, jni->activity);
+    uintptr_t v = jni->env->CallLongMethod(impl, mid, jni->activity);
     return v ? static_cast<TableViewInterface*>(Void(v)) : nullptr;
   }
 

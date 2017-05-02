@@ -362,6 +362,9 @@ struct Connection {
   int Add(const char *buf, int len);
   int AddPacket(const char *buf, int len);
   int ReadFlush(int len);
+
+  static const char *StateName(int n);
+  static bool ConnectState(int n);
 };
 
 struct SocketConnection : public Connection {

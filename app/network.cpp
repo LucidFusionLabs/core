@@ -497,6 +497,25 @@ int Connection::WriteFlush() {
   return wrote;
 }
 
+const char *Connection::StateName(int n) {
+  switch(n) {
+    case Connection::Connected:  return "Connected";
+    case Connection::Connecting: return "Connecting";
+    case Connection::Reconnect:  return "Reconnect";
+    case Connection::Handshake:  return "Handshake";
+    case Connection::Error:
+    default:                     return "Disconnected";
+  }
+}
+
+bool Connection::ConnectState(int n) {
+  switch(n) {
+    case Connection::Connected:
+    case Connection::Connecting: return true;
+    default:                     return false;
+  }
+}
+
 /* SocketConnection */
 
 void SocketConnection::Close() {

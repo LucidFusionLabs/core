@@ -32,8 +32,8 @@ struct AndroidProduct : public ProductInterface {
 struct AndroidPurchases : public PurchasesInterface {
   ~AndroidPurchases() {}
   AndroidPurchases() {}
-  bool CanPurchase() {}
-  bool HavePurchase(const string &product_id) {}
+  bool CanPurchase() { return 0; }
+  bool HavePurchase(const string &product_id) { return 0; }
   void PreparePurchase(const StringVec &products, Callback done_cb, ProductCB product_cb) {}
   bool MakePurchase(ProductInterface *product, IntCB result_cb) { return false; }
   void RestorePurchases(Callback done_cb) {}

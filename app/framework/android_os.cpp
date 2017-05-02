@@ -256,7 +256,7 @@ jobject JNI::ToJModelItemChange(TableSection::Change item) {
 jobject JNI::ToJPickerItem(PickerItem *picker_in) {
   if (!picker_in) return nullptr;
   const PickerItem *picker = picker_in;
-  jlong self = intptr_t(picker_in);
+  jlong self = uintptr_t(picker_in);
   jobject cb = picker->cb ? ToLPickerItemCB(picker->cb) : nullptr;
   jobject l = env->NewObject(arraylist_class, arraylist_construct);
   for (auto &i : picker->data) {
@@ -272,25 +272,25 @@ jobject JNI::ToJPickerItem(PickerItem *picker_in) {
 
 jobject JNI::ToLCallback(Callback c) {
   static jmethodID mid = CheckNotNull(env->GetMethodID(lcallback_class, "<init>", "(J)V"));
-  jlong cb = intptr_t(new Callback(move(c)));
-  return env->NewObject(lcallback_class, mid, cb);
+  jlong cbp = uintptr_t(new Callback(move(c)));
+  return env->NewObject(lcallback_class, mid, cbp);
 }
 
 jobject JNI::ToLStringCB(StringCB c) {
   static jmethodID mid = CheckNotNull(env->GetMethodID(lstringcb_class, "<init>", "(J)V"));
-  jlong cb = intptr_t(new StringCB(move(c)));
+  jlong cb = uintptr_t(new StringCB(move(c)));
   return env->NewObject(lstringcb_class, mid, cb);
 }
 
 jobject JNI::ToLIntIntCB(IntIntCB c) {
   static jmethodID mid = CheckNotNull(env->GetMethodID(lintintcb_class, "<init>", "(J)V"));
-  jlong cb = intptr_t(new IntIntCB(move(c)));
+  jlong cb = uintptr_t(new IntIntCB(move(c)));
   return env->NewObject(lintintcb_class, mid, cb);
 }
 
 jobject JNI::ToLPickerItemCB(const PickerItem::CB &c) {
   static jmethodID mid = CheckNotNull(env->GetMethodID(lpickeritemcb_class, "<init>", "(J)V"));
-  jlong cb = intptr_t(new PickerItem::CB(c));
+  jlong cb = uintptr_t(new PickerItem::CB(c));
   return env->NewObject(lpickeritemcb_class, mid, cb);
 }
 

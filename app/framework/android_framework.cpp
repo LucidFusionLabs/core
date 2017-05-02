@@ -189,8 +189,8 @@ void Application::SetAutoRotateOrientation(bool) {}
 void Application::SetVerticalSwipeRecognizer(int touches) {}
 void Application::SetHorizontalSwipeRecognizer(int touches) {}
 void Application::SetTouchKeyboardTiled(bool v) {}
-int  Application::SetMultisample(bool v) {}
-int  Application::SetExtraScale(bool v) {}
+int  Application::SetMultisample(bool v) { return 0; }
+int  Application::SetExtraScale(bool v) { return 0; }
 void Application::SetDownScale(bool v) {}
 void Application::ShowSystemStatusBar(bool v) {}
 string Application::PrintCallStack() { return ""; }
@@ -432,43 +432,43 @@ extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppScale(JNIEnv *e, jo
   LFAppWakeup();
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppFocusedShellRun(JNIEnv *e, jstring text) {
+extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppFocusedShellRun(JNIEnv *e, jclass c, jstring text) {
   app->focused->shell->Run(e->GetStringUTFChars(text, 0));
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_LCallback_RunCallbackInMainThread(JNIEnv *e, jlong cb) {
+extern "C" void Java_com_lucidfusionlabs_app_LCallback_RunCallbackInMainThread(JNIEnv *e, jclass c, jlong cb) {
   app->RunCallbackInMainThread(*static_cast<Callback*>(Void(cb)));
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_LStringCB_RunStringCBInMainThread(JNIEnv *e, jlong cb, jstring text) {
+extern "C" void Java_com_lucidfusionlabs_app_LStringCB_RunStringCBInMainThread(JNIEnv *e, jclass c, jlong cb, jstring text) {
   string t = JNI::GetEnvJString(e, text);
   app->RunCallbackInMainThread([=](){ (*static_cast<StringCB*>(Void(cb)))(t); });
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_LIntIntCB_RunIntIntCBInMainThread(JNIEnv *e, jlong cb, jint x, jint y) {
+extern "C" void Java_com_lucidfusionlabs_app_LIntIntCB_RunIntIntCBInMainThread(JNIEnv *e, jclass c, jlong cb, jint x, jint y) {
   app->RunCallbackInMainThread([=](){ (*static_cast<IntIntCB*>(Void(cb)))(x, y); });
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_LCallback_FreeCallback(JNIEnv *e, jlong cb) {
+extern "C" void Java_com_lucidfusionlabs_app_LCallback_FreeCallback(JNIEnv *e, jclass c, jlong cb) {
   delete static_cast<Callback*>(Void(cb));
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_LStringCB_FreeStringCB(JNIEnv *e, jlong cb) {
+extern "C" void Java_com_lucidfusionlabs_app_LStringCB_FreeStringCB(JNIEnv *e, jclass c, jlong cb) {
   delete static_cast<StringCB*>(Void(cb));
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_LIntIntCB_FreeIntIntCB(JNIEnv *e, jlong cb) {
+extern "C" void Java_com_lucidfusionlabs_app_LIntIntCB_FreeIntIntCB(JNIEnv *e, jclass c, jlong cb) {
   delete static_cast<IntIntCB*>(Void(cb));
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_LPickerItemCB_FreePickerItemCB(JNIEnv *e, jlong cb) {
+extern "C" void Java_com_lucidfusionlabs_app_LPickerItemCB_FreePickerItemCB(JNIEnv *e, jclass c, jlong cb) {
   delete static_cast<PickerItem::CB*>(Void(cb));
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_JTable_RunHideCB(JNIEnv *e, jobject a) {
+extern "C" void Java_com_lucidfusionlabs_app_JTable_RunHideCB(JNIEnv *e, jclass c, jobject a) {
   static jfieldID self_fid    = CheckNotNull(e->GetFieldID(jni->jtable_class, "lfl_self", "J"));
   static jfieldID changed_fid = CheckNotNull(e->GetFieldID(jni->jtable_class, "changed",  "Z"));
-  intptr_t self = CheckNotNull(e->GetLongField(a, self_fid));
+  uintptr_t self = CheckNotNull(e->GetLongField(a, self_fid));
   TableViewInterface *view = static_cast<TableViewInterface*>(Void(self));
   view->changed = e->GetBooleanField(a, changed_fid);
   if (view->hide_cb) app->RunCallbackInMainThread(view->hide_cb);
