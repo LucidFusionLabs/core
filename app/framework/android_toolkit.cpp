@@ -351,8 +351,9 @@ struct AndroidTextView : public TextViewInterface {
 
 struct AndroidNavigationView : public NavigationViewInterface {
   jobject impl;
+  bool overlay;
   ~AndroidNavigationView() { jni->env->DeleteGlobalRef(impl); }
-  AndroidNavigationView() {
+  AndroidNavigationView(const string &style, const string &t) : overlay(style == "overlay") {
     static jmethodID mid = CheckNotNull
       (jni->env->GetMethodID(jni->jnavigation_class,
                              "<init>", "(Lcom/lucidfusionlabs/app/MainActivity;)V"));
@@ -375,6 +376,8 @@ struct AndroidNavigationView : public NavigationViewInterface {
     static jmethodID mid = CheckNotNull
       (jni->env->GetMethodID(jni->jnavigation_class, "show", "(Lcom/lucidfusionlabs/app/MainActivity;Z)V"));
     jni->env->CallVoidMethod(impl, mid, jni->activity, show_or_hide);
+    if (show_or_hide) { if (!overlay) app->SetAppFrameEnabled(false); }
+    else              {               app->SetAppFrameEnabled(true);  }
   }
 
   void PushTableView(TableViewInterface *t) {
@@ -456,6 +459,6 @@ unique_ptr<MenuViewInterface> SystemToolkit::CreateEditMenu(MenuItemVec items) {
 unique_ptr<TableViewInterface> SystemToolkit::CreateTableView(const string &title, const string &style, const string &theme, TableItemVec items) { return make_unique<AndroidTableView>(title, style, move(items)); }
 unique_ptr<TextViewInterface> SystemToolkit::CreateTextView(const string &title, File *file) { return make_unique<AndroidTextView>(title, file); }
 unique_ptr<TextViewInterface> SystemToolkit::CreateTextView(const string &title, const string &text) { return make_unique<AndroidTextView>(title, text); }
-unique_ptr<NavigationViewInterface> SystemToolkit::CreateNavigationView(const string &style, const string &theme) { return make_unique<AndroidNavigationView>(); }
+unique_ptr<NavigationViewInterface> SystemToolkit::CreateNavigationView(const string &style, const string &theme) { return make_unique<AndroidNavigationView>(style, theme); }
 
 }; // namespace LFL

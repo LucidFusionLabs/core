@@ -420,6 +420,7 @@ struct GraphicsDevice {
   virtual void SetDontClearDeferred(bool v) {}
   virtual void ClearDeferred() {}
 
+  virtual void Finish() = 0;
   virtual void Flush() = 0;
   virtual void Clear() = 0;
   virtual void ClearDepth() = 0;

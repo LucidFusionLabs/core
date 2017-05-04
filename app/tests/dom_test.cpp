@@ -25,7 +25,7 @@
 extern "C" {
 #include "libcss/libcss.h"
 };
-#include "core/app/bindings/libcss.h"
+#include "core/web/libcss.h"
 #endif
 
 namespace LFL {

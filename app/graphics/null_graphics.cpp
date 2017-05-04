@@ -117,6 +117,7 @@ struct NullGraphicsDevice : public GraphicsDevice {
   void DrawArrays(int t, int o, int n) {}
   void DeferDrawArrays(int t, int o, int n) {}
 
+  void Finish() {}
   void Flush() {}
   void Clear() {}
   void ClearDepth() {}

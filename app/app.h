@@ -500,7 +500,7 @@ typedef vector<TableItem> TableItemVec;
 }; // namespace LFL
 
 #ifdef LFL_ANDROID
-#include "core/app/bindings/jni.h"
+#include "core/app/framework/android_common.h"
 #endif
 #include "core/app/audio.h"
 #include "core/app/video.h"
@@ -739,6 +739,7 @@ struct Application : public ::LFApp {
   int TimerDrivenFrame(bool got_wakeup);
   int Main();
   int MainLoop();
+  int Suspended();
   void DrawSplash(const Color &c);
   void ResetGL(int flag);
   void MakeCurrentWindow(Window*);

@@ -683,9 +683,7 @@ int Application::MainLoop() {
   while (run) {
     bool got_wakeup = scheduler.MainWait();
     TimerDrivenFrame(got_wakeup);
-#ifdef LFL_ANDROID
-    if (focused->minimized) { INFO("MainLoop: minimized"); return 0; }
-#endif
+    if (app->suspended) return Suspended();
     if (scheduler.rate_limit && app->run && FLAGS_target_fps) scheduler.maxfps.Limit();
     MSleep(1);
   }

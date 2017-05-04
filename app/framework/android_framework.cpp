@@ -129,6 +129,14 @@ struct AndroidTimer : public TimerInterface {
   void Run(Time interval, bool force=false) {}
 };
 
+int Application::Suspended() {
+  INFO("Application::Suspended");
+  if (focused->unfocused_cb) focused->unfocused_cb();
+  while (message_queue.HandleMessages()) {}
+  focused->gd->Finish();
+  return 0;
+}
+
 void Application::RunCallbackInMainThread(Callback cb) {
   message_queue.Write(new Callback(move(cb)));
   if (!FLAGS_target_fps) scheduler.Wakeup(focused);
@@ -347,9 +355,9 @@ extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppNewMainLoop(JNIEnv 
   CHECK(jni->env = e);
   INFOf("NewMainLoop: env=%p reset=%d", jni->env, reset);
   jni->Init(a, false);
+  app->suspended = false;
   SetLFAppMainThread();
   if (reset) LFAppResetGL();
-  app->focused->UnMinimized();
   int ret = LFAppMainLoop();
   INFOf("NewMainLoop: env=%p ret=%d", jni->env, ret);
   jni->Free();
@@ -357,7 +365,7 @@ extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppNewMainLoop(JNIEnv 
 
 extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppMinimize(JNIEnv* env, jobject a) {
   INFOf("%s", "minimize");
-  app->RunInMainThread([=](){ app->focused->Minimized(); });
+  app->RunInMainThread([=](){ app->suspended = true; });
 }
 
 extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppReshaped(JNIEnv *e, jobject a, jint x, jint y, jint w, jint h) { 
@@ -465,7 +473,7 @@ extern "C" void Java_com_lucidfusionlabs_app_LPickerItemCB_FreePickerItemCB(JNIE
   delete static_cast<PickerItem::CB*>(Void(cb));
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_JTable_RunHideCB(JNIEnv *e, jclass c, jobject a) {
+extern "C" void Java_com_lucidfusionlabs_app_JTable_RunHideCB(JNIEnv *e, jobject a) {
   static jfieldID self_fid    = CheckNotNull(e->GetFieldID(jni->jtable_class, "lfl_self", "J"));
   static jfieldID changed_fid = CheckNotNull(e->GetFieldID(jni->jtable_class, "changed",  "Z"));
   uintptr_t self = CheckNotNull(e->GetLongField(a, self_fid));

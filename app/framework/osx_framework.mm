@@ -474,6 +474,7 @@ bool OSXWindow::Reshape(int w, int h) {
   return true;
 }
 
+int Application::Suspended() { return 0; }
 void Application::RunCallbackInMainThread(Callback cb) {
   message_queue.Write(new Callback(move(cb)));
   if (!FLAGS_target_fps) scheduler.Wakeup(focused);

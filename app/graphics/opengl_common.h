@@ -16,6 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+void Finish() { ClearDeferred(); glFinish(); GDDebug("Finish"); }
 void Flush() { ClearDeferred(); glFlush(); GDDebug("Flush"); }
 void Clear() { glClear(GL_COLOR_BUFFER_BIT | (draw_mode == DrawMode::_3D ? GL_DEPTH_BUFFER_BIT : 0)); }
 void ClearDepth() { glClear(GL_DEPTH_BUFFER_BIT); }

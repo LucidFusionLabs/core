@@ -235,7 +235,7 @@ public class MainActivity extends android.app.Activity {
     }
 
     public void startRenderThread(boolean app_reset) {
-        Log.i("lfl", "startRenderThread app_init= " + app_init);
+        Log.i("lfl", "startRenderThread app_init=" + app_init + " app_reset=" + app_reset);
         if      (!app_init) thread = new Thread(new Runnable() { public void run() { view.initEGL();        AppMain       ();      } }, "JNIMainThread");
         else if (app_reset) thread = new Thread(new Runnable() { public void run() { view.initEGL();        AppNewMainLoop(true);  } }, "JNIMainThread");
         else                thread = new Thread(new Runnable() { public void run() { view.makeCurrentEGL(); AppNewMainLoop(false); } }, "JNIMainThread");
@@ -244,7 +244,7 @@ public class MainActivity extends android.app.Activity {
     }
 
     public void forceExit() {
-        Log.i("lfl", "MainActivity.froceExit()");
+        Log.i("lfl", "MainActivity.forceExit()");
         android.os.Process.killProcess(android.os.Process.myPid());
     }
 
