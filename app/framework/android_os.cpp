@@ -193,11 +193,13 @@ jobject JNI::ToJModelItemChangeSet(TableSection::ChangeSet items) {
 }
 
 jobject JNI::ToJModelItem(AlertItem item) {
+  jboolean hidden=0;
   jobject k = ToJString(item.first), v = ToJString(item.second), rt = ToJString(""), ddk = ToJString("");
-  jobject rcb = item.cb ? ToLStringCB(move(item.cb)) : nullptr;
-  jobject ret = env->NewObject(jmodelitem_class, jmodelitem_construct, k, v, rt, ddk, jint(0),
-                               jint(0), jint(0), jint(0), jint(0), jint(0), jint(0), nullptr, rcb, nullptr,
-                               false, jint(0), jint(0));
+  jobject lcb = nullptr, rcb = item.cb ? ToLStringCB(move(item.cb)) : nullptr, picker = nullptr;
+  jint type=0, tag=0, flags=0, left_icon=0, right_icon=0, selected=0, height=0, fg=0, bg=0;
+  jobject ret = env->NewObject(jmodelitem_class, jmodelitem_construct, k, v, rt, ddk, type,
+                               tag, flags, left_icon, right_icon, selected, height, lcb, rcb, picker,
+                               hidden, fg, bg);
   if (rcb) env->DeleteLocalRef(rcb);
   env->DeleteLocalRef(ddk);
   env->DeleteLocalRef(rt);

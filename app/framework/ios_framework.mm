@@ -320,6 +320,7 @@ static const char* const* ios_argv = 0;
   }
 
   - (void)copy:(id)sender { if (_copy_cb) _copy_cb(); }
+  - (void)paste:(id)sender { [self insertText: [UIPasteboard generalPasteboard].string]; }
   - (void)toggleKeyboard:(id)sender { LFL::app->ToggleTouchKeyboard(); }
 @end
 
@@ -648,6 +649,7 @@ static const char* const* ios_argv = 0;
   }
 
   - (void)copy:(id)sender { if (uiapp.glk_view.copy_cb) uiapp.glk_view.copy_cb(); }
+  - (void)paste:(id)sender { [uiapp.glk_view paste: sender]; }
   - (void)toggleKeyboard:(id)sender { LFL::app->ToggleTouchKeyboard(); }
 @end
 

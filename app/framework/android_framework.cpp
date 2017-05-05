@@ -378,7 +378,7 @@ extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppReshaped(JNIEnv *e,
 }
 
 extern "C" void Java_com_lucidfusionlabs_app_MainActivity_AppKeyPress(JNIEnv *e, jobject a, jint keycode, jint mod, jint down) {
-  app->input->KeyPress(keycode, mod, down);
+  app->input->QueueKeyPress(keycode, mod, down);
   LFAppWakeup();
 }
 
@@ -449,12 +449,11 @@ extern "C" void Java_com_lucidfusionlabs_app_LCallback_RunCallbackInMainThread(J
 }
 
 extern "C" void Java_com_lucidfusionlabs_app_LStringCB_RunStringCBInMainThread(JNIEnv *e, jclass c, jlong cb, jstring text) {
-  string t = JNI::GetEnvJString(e, text);
-  app->RunCallbackInMainThread([=](){ (*static_cast<StringCB*>(Void(cb)))(t); });
+  app->RunCallbackInMainThread(bind(*static_cast<StringCB*>(Void(cb)), JNI::GetEnvJString(e, text)));
 }
 
 extern "C" void Java_com_lucidfusionlabs_app_LIntIntCB_RunIntIntCBInMainThread(JNIEnv *e, jclass c, jlong cb, jint x, jint y) {
-  app->RunCallbackInMainThread([=](){ (*static_cast<IntIntCB*>(Void(cb)))(x, y); });
+  app->RunCallbackInMainThread(bind(*static_cast<IntIntCB*>(Void(cb)), x, y));
 }
 
 extern "C" void Java_com_lucidfusionlabs_app_LCallback_FreeCallback(JNIEnv *e, jclass c, jlong cb) {

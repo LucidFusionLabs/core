@@ -45,7 +45,7 @@ import android.text.TextWatcher;
 public class JListAdapter extends BaseAdapter {
     public static class ViewHolder {
         public View root;
-        public TextView textView, label;
+        public TextView textView, label, subtext;
         public ColorStateList textViewTextColors, textViewLinkColors;
         public EditText editText;
         public ImageView leftIcon, rightIcon;
@@ -136,6 +136,7 @@ public class JListAdapter extends BaseAdapter {
                     holder.root = convertView.findViewById(R.id.listview_cell_root);
                     holder.textView = null;
                     holder.label = null;
+                    holder.subtext = null;
                     holder.editText = null;
                     holder.leftIcon = null;
                     holder.rightIcon = null;
@@ -151,6 +152,7 @@ public class JListAdapter extends BaseAdapter {
                     holder.root = convertView.findViewById(R.id.listview_cell_root);
                     holder.setTextView((TextView)convertView.findViewById(R.id.listview_cell_title));
                     holder.label = null;
+                    holder.subtext = null;
                     holder.editText = null;
                     holder.leftIcon = (ImageView)convertView.findViewById(R.id.listview_cell_left_icon);
                     holder.rightIcon = null;
@@ -166,6 +168,7 @@ public class JListAdapter extends BaseAdapter {
                     holder.root = convertView.findViewById(R.id.listview_cell_root);
                     holder.setTextView((TextView)convertView.findViewById(R.id.listview_cell_title));
                     holder.label = null;
+                    holder.subtext = null;
                     holder.editText = null;
                     holder.leftIcon = (ImageView)convertView.findViewById(R.id.listview_cell_left_icon);
                     holder.rightIcon = null;
@@ -181,6 +184,7 @@ public class JListAdapter extends BaseAdapter {
                     holder.root = convertView.findViewById(R.id.listview_cell_root);
                     holder.textView = null;
                     holder.label = null;
+                    holder.subtext = null;
                     holder.editText = null;
                     holder.leftIcon = null;
                     holder.rightIcon = null;
@@ -198,6 +202,7 @@ public class JListAdapter extends BaseAdapter {
                     holder.root = convertView.findViewById(R.id.listview_cell_root);
                     holder.setTextView((TextView)convertView.findViewById(R.id.listview_cell_title));
                     holder.label = null;
+                    holder.subtext = null;
                     holder.editText = (EditText)convertView.findViewById(R.id.listview_cell_textinput);
                     holder.leftIcon = (ImageView)convertView.findViewById(R.id.listview_cell_left_icon);
                     holder.rightIcon = null;
@@ -213,6 +218,7 @@ public class JListAdapter extends BaseAdapter {
                     holder.root = convertView.findViewById(R.id.listview_cell_root);
                     holder.textView = null;
                     holder.label = null;
+                    holder.subtext = null;
                     holder.editText = null;
                     holder.leftIcon = null;
                     holder.rightIcon = null;
@@ -228,6 +234,7 @@ public class JListAdapter extends BaseAdapter {
                     holder.root = convertView.findViewById(R.id.listview_cell_root);
                     holder.setTextView((TextView)convertView.findViewById(R.id.listview_cell_title));
                     holder.label = (TextView)convertView.findViewById(R.id.listview_cell_value);
+                    holder.subtext = (TextView)convertView.findViewById(R.id.listview_cell_subtext);
                     holder.editText = null;
                     holder.leftIcon = (ImageView)convertView.findViewById(R.id.listview_cell_left_icon);
                     holder.rightIcon = (ImageView)convertView.findViewById(R.id.listview_cell_right_icon);
@@ -280,8 +287,13 @@ public class JListAdapter extends BaseAdapter {
             }
         }
 
+        boolean subtext = (item.flags & JModelItem.TABLE_FLAG_SUBTEXT) != 0;
+        if (holder.subtext != null) {
+            holder.subtext.setText(subtext ? item.val : "");
+        }
+
         if (holder.label != null) {
-            holder.label.setText(item.right_text.length() > 0 ? item.right_text : item.val);
+            holder.label.setText(item.right_text.length() > 0 ? item.right_text : (subtext ? "" : item.val));
             if (holder.textView != null) {
                 if (type == JModelItem.TYPE_BUTTON || type == JModelItem.TYPE_COMMAND ||
                     type == JModelItem.TYPE_NONE) {

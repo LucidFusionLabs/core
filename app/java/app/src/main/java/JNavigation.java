@@ -136,7 +136,7 @@ public class JNavigation extends JWidget {
     public long getBackTableSelf(final MainActivity activity) {
         Fragment frag = getBack(activity);
         if (frag == null || !(frag instanceof JFragment)) return 0;
-        JFragment jfrag = (JListViewFragment)frag;
+        JFragment jfrag = (JFragment)frag;
         return (jfrag.parent_widget instanceof JTable) ? jfrag.parent_widget.lfl_self : 0;
     }
 }

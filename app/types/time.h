@@ -109,6 +109,8 @@ int intervaltime(time_t t, int ms, char *buf, int size);
 string intervaltime(Time t);
 int intervalminutes(time_t t, int ms, char *buf, int size);
 string intervalminutes(Time t);
+int intervalfraction(time_t t, int ms, char *buf, int size);
+string intervalfraction(Time t);
 
 int RFC822TimeZone(const char *text);
 Time RFC822Date(const char *text);

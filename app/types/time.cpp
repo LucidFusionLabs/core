@@ -206,6 +206,16 @@ int intervalminutes(time_t t, int ms, char *buf, int size) {
   return snprintf(buf, size, "%02d:%02d", minutes, seconds);
 }
 
+string intervalfraction(Time t) { time_t tt=Time2time_t(t); char buf[64] = {0}; intervalfraction(tt, (t-Seconds(tt)).count(), buf, sizeof(buf)); return buf; }
+int intervalfraction(time_t t, int ms, char *buf, int size) {
+  if      (t < 60)           return snprintf(buf, size, "%.0f seconds", t + ms/1000.0f);
+  else if (t < 60*60)        return snprintf(buf, size, "%.0f minutes", t/(          60.0f));
+  else if (t < 60*60*24)     return snprintf(buf, size, "%.1f hours",   t/(       60*60.0f));
+  else if (t < 60*60*24*31)  return snprintf(buf, size, "%.1f days",    t/(    24*60*60.0f));
+  else if (t < 60*60*24*365) return snprintf(buf, size, "%.1f months",  t/( 31*24*60*60.0f));
+  else                       return snprintf(buf, size, "%.1f years",   t/(365*24*60*60.0f));
+}
+
 bool RFC822Time(const char *text, int *hour, int *min, int *sec) {
   int textlen = strlen(text);
   if (textlen < 5 || text[2] != ':') return false;
