@@ -211,8 +211,8 @@ public class MainActivity extends android.app.Activity {
         } else if (back_count == 1) {
             runBackFragmentHideCB(1);
             Fragment frag = getFragmentManager().findFragmentByTag("0");
-            if (frag != null && frag instanceof JListViewFragment) {
-                JModelItem nav_left = ((JListViewFragment)frag).data.nav_left;
+            if (frag != null && frag instanceof JRecyclerViewFragment) {
+                JModelItem nav_left = ((JRecyclerViewFragment)frag).data.nav_left;
                 if (nav_left != null && nav_left.cb != null) {
                     nav_left.cb.run();
                     return;
@@ -354,11 +354,6 @@ public class MainActivity extends android.app.Activity {
 
     public void openBrowser(String url) {
         final Intent intent = new Intent(Intent.ACTION_VIEW).setData(Uri.parse(url));
-        startActivity(intent);
-    }
-
-    public void openListViewActivity() {
-        final Intent intent = new Intent(this, com.lucidfusionlabs.app.JListViewActivity.class);
         startActivity(intent);
     }
 

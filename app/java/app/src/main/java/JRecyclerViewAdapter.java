@@ -15,8 +15,6 @@ import android.widget.RelativeLayout;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
-import android.widget.BaseAdapter;
-import android.widget.ListView;
 import android.widget.ImageView;
 import android.widget.Switch;
 import android.widget.NumberPicker;
@@ -41,9 +39,10 @@ import android.app.ActionBar;
 import android.app.AlertDialog;
 import android.text.InputType;
 import android.text.TextWatcher;
+import android.support.v7.widget.RecyclerView;
 
-public class JListAdapter extends BaseAdapter {
-    public static class ViewHolder {
+public class JRecyclerViewAdapter extends RecyclerView.Adapter<JRecyclerViewAdapter.ViewHolder> {
+    public static class ViewHolder extends RecyclerView.ViewHolder {
         public View root;
         public TextView textView, label, subtext;
         public ColorStateList textViewTextColors, textViewLinkColors;
@@ -53,6 +52,10 @@ public class JListAdapter extends BaseAdapter {
         public Switch toggle;
         public NumberPicker picker;
         public RadioGroup radio;
+
+        public ViewHolder(View itemView) {
+            super(itemView);
+        }
 
         public void setTextView(TextView v) {
             textView = v;
@@ -66,7 +69,7 @@ public class JListAdapter extends BaseAdapter {
         public Section(Integer v) { start_row = v; }
     }
 
-    public LayoutInflater inflater = null;
+    public RecyclerView recyclerview = null;
     public ArrayList<JModelItem> data = new ArrayList<JModelItem>();
     public ArrayList<Section> sections = new ArrayList<Section>();
     public JModelItem nav_left = null, nav_right = null;
@@ -92,8 +95,26 @@ public class JListAdapter extends BaseAdapter {
         public void afterTextChanged(android.text.Editable s) {}
     };
 
-    public JListAdapter(final MainActivity activity, final ArrayList<JModelItem> v, final JWidget p) {
-        inflater = (LayoutInflater)activity.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
+    View.OnClickListener click_listener = new View.OnClickListener() {
+        @Override
+        public void onClick(View v) {
+            if (recyclerview == null) return;
+            int position = recyclerview.indexOfChild(v);
+            JModelItem i = data.get(position);
+            if (i.type == JModelItem.TYPE_COMMAND || i.type == JModelItem.TYPE_BUTTON) {
+                if (i.cb != null) i.cb.run();
+            } else if (i.type == JModelItem.TYPE_LABEL && position+1 < data.size()) {
+                JModelItem ni = data.get(position+1);
+                if (ni.type == JModelItem.TYPE_PICKER || ni.type == JModelItem.TYPE_FONTPICKER) {
+                    beginUpdates();
+                    ni.hidden = !ni.hidden;
+                    endUpdates();
+                }
+            }
+        }
+    };
+
+    public JRecyclerViewAdapter(final MainActivity activity, final ArrayList<JModelItem> v, final JWidget p) {
         parent_widget = p;
         data = v;
         beginUpdates();
@@ -105,7 +126,10 @@ public class JListAdapter extends BaseAdapter {
         }
         endUpdates();
     }
-    
+
+    @Override
+    public int getItemCount() { return data.size(); }
+
     @Override
     public int getItemViewType(int position) {
         JModelItem item = data.get(position);
@@ -113,144 +137,104 @@ public class JListAdapter extends BaseAdapter {
     }
 
     @Override
-    public int getViewTypeCount() { return JModelItem.TYPE_COUNT; }
+    public void onAttachedToRecyclerView(RecyclerView recyclerView) {
+        super.onAttachedToRecyclerView(recyclerView);
+        recyclerview = recyclerView;
+    }
 
     @Override
-    public int getCount() { return data.size(); }
-
-    @Override
-    public String getItem(int position) { return data.get(position).key; }
-
-    @Override
-    public long getItemId(int position) { return position; }
-
-    @Override
-    public View getView(int position, View convertView, ViewGroup parent) {
-        int type = getItemViewType(position);
-        ViewHolder holder = null;
-        if (convertView == null) {
-            holder = new ViewHolder();
-            switch (type) {
-                case JModelItem.TYPE_HIDDEN:
-                    convertView = inflater.inflate(R.layout.listview_cell_hidden, null);
-                    holder.root = convertView.findViewById(R.id.listview_cell_root);
-                    holder.textView = null;
-                    holder.label = null;
-                    holder.subtext = null;
-                    holder.editText = null;
-                    holder.leftIcon = null;
-                    holder.rightIcon = null;
-                    holder.toggle = null;
-                    holder.leftNav = null;
-                    holder.rightNav = null;
-                    holder.picker = null;
-                    holder.radio = null;
-                    break;
-
-                case JModelItem.TYPE_SEPARATOR:
-                    convertView = inflater.inflate(R.layout.listview_cell_separator, null);
-                    holder.root = convertView.findViewById(R.id.listview_cell_root);
-                    holder.setTextView((TextView)convertView.findViewById(R.id.listview_cell_title));
-                    holder.label = null;
-                    holder.subtext = null;
-                    holder.editText = null;
-                    holder.leftIcon = (ImageView)convertView.findViewById(R.id.listview_cell_left_icon);
-                    holder.rightIcon = null;
-                    holder.toggle = null;
-                    holder.leftNav = (Button)convertView.findViewById(R.id.listview_cell_nav_left);
-                    holder.rightNav = (Button)convertView.findViewById(R.id.listview_cell_nav_right);
-                    holder.picker = null;
-                    holder.radio = null;
-                    break;
-
-                case JModelItem.TYPE_TOGGLE:
-                    convertView = inflater.inflate(R.layout.listview_cell_toggle, null);
-                    holder.root = convertView.findViewById(R.id.listview_cell_root);
-                    holder.setTextView((TextView)convertView.findViewById(R.id.listview_cell_title));
-                    holder.label = null;
-                    holder.subtext = null;
-                    holder.editText = null;
-                    holder.leftIcon = (ImageView)convertView.findViewById(R.id.listview_cell_left_icon);
-                    holder.rightIcon = null;
-                    holder.toggle = (Switch)convertView.findViewById(R.id.listview_cell_toggle);
-                    holder.leftNav = null;
-                    holder.rightNav = null;
-                    holder.picker = null;
-                    holder.radio = null;
-                    break;
-
-                case JModelItem.TYPE_PICKER:
-                    convertView = inflater.inflate(R.layout.listview_cell_picker, null);
-                    holder.root = convertView.findViewById(R.id.listview_cell_root);
-                    holder.textView = null;
-                    holder.label = null;
-                    holder.subtext = null;
-                    holder.editText = null;
-                    holder.leftIcon = null;
-                    holder.rightIcon = null;
-                    holder.toggle = null;
-                    holder.leftNav = null;
-                    holder.rightNav = null;
-                    holder.picker = (NumberPicker)convertView.findViewById(R.id.listview_cell_picker);
-                    holder.radio = null;
-                    break;
-
-                case JModelItem.TYPE_TEXTINPUT:
-                case JModelItem.TYPE_NUMBERINPUT:
-                case JModelItem.TYPE_PASSWORDINPUT:
-                    convertView = inflater.inflate(R.layout.listview_cell_textinput, null);
-                    holder.root = convertView.findViewById(R.id.listview_cell_root);
-                    holder.setTextView((TextView)convertView.findViewById(R.id.listview_cell_title));
-                    holder.label = null;
-                    holder.subtext = null;
-                    holder.editText = (EditText)convertView.findViewById(R.id.listview_cell_textinput);
-                    holder.leftIcon = (ImageView)convertView.findViewById(R.id.listview_cell_left_icon);
-                    holder.rightIcon = null;
-                    holder.toggle = null;
-                    holder.leftNav = null;
-                    holder.rightNav = null;
-                    holder.picker = null;
-                    holder.radio = null;
-                    break;
-
-                case JModelItem.TYPE_SELECTOR:
-                    convertView = inflater.inflate(R.layout.listview_cell_radio, null);
-                    holder.root = convertView.findViewById(R.id.listview_cell_root);
-                    holder.textView = null;
-                    holder.label = null;
-                    holder.subtext = null;
-                    holder.editText = null;
-                    holder.leftIcon = null;
-                    holder.rightIcon = null;
-                    holder.toggle = null;
-                    holder.leftNav = null;
-                    holder.rightNav = null;
-                    holder.picker = null;
-                    holder.radio = (RadioGroup)convertView.findViewById(R.id.listview_cell_radio);
-                    break;
-
-                default:
-                    convertView = inflater.inflate(R.layout.listview_cell, null);
-                    holder.root = convertView.findViewById(R.id.listview_cell_root);
-                    holder.setTextView((TextView)convertView.findViewById(R.id.listview_cell_title));
-                    holder.label = (TextView)convertView.findViewById(R.id.listview_cell_value);
-                    holder.subtext = (TextView)convertView.findViewById(R.id.listview_cell_subtext);
-                    holder.editText = null;
-                    holder.leftIcon = (ImageView)convertView.findViewById(R.id.listview_cell_left_icon);
-                    holder.rightIcon = (ImageView)convertView.findViewById(R.id.listview_cell_right_icon);
-                    holder.toggle = null;
-                    holder.leftNav = null;
-                    holder.rightNav = null;
-                    holder.picker = null;
-                    holder.radio = null;
-                    break;
+    public ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
+        LayoutInflater inflater = LayoutInflater.from(parent.getContext());
+        switch (viewType) {
+            case JModelItem.TYPE_HIDDEN: {
+                View itemView = inflater.inflate(R.layout.listview_cell_hidden, parent, false);
+                ViewHolder holder = new ViewHolder(itemView);
+                itemView.setOnClickListener(click_listener);
+                itemView.setTag(holder);
+                holder.root = itemView.findViewById(R.id.listview_cell_root);
+                return holder;
             }
-            convertView.setTag(holder);
-        } else {
-            holder = (ViewHolder)convertView.getTag();
-        }
 
+            case JModelItem.TYPE_SEPARATOR: {
+                View itemView = inflater.inflate(R.layout.listview_cell_separator, parent, false);
+                ViewHolder holder = new ViewHolder(itemView);
+                itemView.setOnClickListener(click_listener);
+                itemView.setTag(holder);
+                holder.root = itemView.findViewById(R.id.listview_cell_root);
+                holder.setTextView((TextView) itemView.findViewById(R.id.listview_cell_title));
+                holder.leftIcon = (ImageView) itemView.findViewById(R.id.listview_cell_left_icon);
+                holder.leftNav = (Button) itemView.findViewById(R.id.listview_cell_nav_left);
+                holder.rightNav = (Button) itemView.findViewById(R.id.listview_cell_nav_right);
+                return holder;
+            }
+
+            case JModelItem.TYPE_TOGGLE: {
+                View itemView = inflater.inflate(R.layout.listview_cell_toggle, parent, false);
+                ViewHolder holder = new ViewHolder(itemView);
+                itemView.setOnClickListener(click_listener);
+                itemView.setTag(holder);
+                holder.root = itemView.findViewById(R.id.listview_cell_root);
+                holder.setTextView((TextView) itemView.findViewById(R.id.listview_cell_title));
+                holder.leftIcon = (ImageView) itemView.findViewById(R.id.listview_cell_left_icon);
+                holder.toggle = (Switch) itemView.findViewById(R.id.listview_cell_toggle);
+                return holder;
+            }
+
+            case JModelItem.TYPE_PICKER: {
+                View itemView = inflater.inflate(R.layout.listview_cell_picker, parent, false);
+                ViewHolder holder = new ViewHolder(itemView);
+                itemView.setOnClickListener(click_listener);
+                itemView.setTag(holder);
+                holder.root = itemView.findViewById(R.id.listview_cell_root);
+                holder.picker = (NumberPicker) itemView.findViewById(R.id.listview_cell_picker);
+                return holder;
+            }
+
+            case JModelItem.TYPE_TEXTINPUT:
+            case JModelItem.TYPE_NUMBERINPUT:
+            case JModelItem.TYPE_PASSWORDINPUT: {
+                View itemView = inflater.inflate(R.layout.listview_cell_textinput, parent, false);
+                ViewHolder holder = new ViewHolder(itemView);
+                itemView.setOnClickListener(click_listener);
+                itemView.setTag(holder);
+                holder.root = itemView.findViewById(R.id.listview_cell_root);
+                holder.setTextView((TextView) itemView.findViewById(R.id.listview_cell_title));
+                holder.editText = (EditText) itemView.findViewById(R.id.listview_cell_textinput);
+                holder.leftIcon = (ImageView) itemView.findViewById(R.id.listview_cell_left_icon);
+                return holder;
+            }
+
+            case JModelItem.TYPE_SELECTOR: {
+                View itemView = inflater.inflate(R.layout.listview_cell_radio, parent, false);
+                ViewHolder holder = new ViewHolder(itemView);
+                itemView.setOnClickListener(click_listener);
+                itemView.setTag(holder);
+                holder.root = itemView.findViewById(R.id.listview_cell_root);
+                holder.radio = (RadioGroup) itemView.findViewById(R.id.listview_cell_radio);
+                return holder;
+            }
+
+            default: {
+                View itemView = inflater.inflate(R.layout.listview_cell, parent, false);
+                ViewHolder holder = new ViewHolder(itemView);
+                itemView.setOnClickListener(click_listener);
+                itemView.setTag(holder);
+                holder.root = itemView.findViewById(R.id.listview_cell_root);
+                holder.setTextView((TextView) itemView.findViewById(R.id.listview_cell_title));
+                holder.label = (TextView) itemView.findViewById(R.id.listview_cell_value);
+                holder.subtext = (TextView) itemView.findViewById(R.id.listview_cell_subtext);
+                holder.leftIcon = (ImageView) itemView.findViewById(R.id.listview_cell_left_icon);
+                holder.rightIcon = (ImageView) itemView.findViewById(R.id.listview_cell_right_icon);
+                return holder;
+            }
+        }
+    }
+
+    @Override
+    public void onBindViewHolder(ViewHolder holder, int position) {
         final JModelItem item = data.get(position);
+        int type = getItemViewType(position);
+
         if (holder.textView != null) {
             if (item.dropdown_key.length() > 0 && item.key.length() > 0 && item.cb != null &&
                 (item.flags & JModelItem.TABLE_FLAG_FIXDROPDOWN) == 0) {
@@ -334,20 +318,19 @@ public class JListAdapter extends BaseAdapter {
                 String[] arr = new String[picker_items.size()];
                 arr = picker_items.toArray(arr);
                 holder.picker.setDisplayedValues(arr);
-                if (parent instanceof ListView &&
-                    position > 1 && data.get(position-1).type == JModelItem.TYPE_LABEL) {
+                if (position > 1 && data.get(position-1).type == JModelItem.TYPE_LABEL) {
                     String v = data.get(position-1).val;
                     for (int i = 0; i < arr.length; i++)
                         if (v.equals(arr[i])) { holder.picker.setValue(i); break; }
 
-                    final ListView par = (ListView)parent;
+                    final RecyclerView par = recyclerview;
                     final int pos = position;
                     holder.picker.setOnValueChangedListener(new NumberPicker.OnValueChangeListener() {
                         @Override
                         public void onValueChange(NumberPicker numberPicker, int i, int i2) {
                             parent_widget.changed = true;
                             String v = numberPicker.getDisplayedValues()[numberPicker.getValue()];
-                            ViewHolder h = (ViewHolder)getViewByPosition(par, pos-1).getTag();
+                            ViewHolder h = (ViewHolder)par.findViewHolderForAdapterPosition(pos-1);
                             h.label.setText(v);
                             data.get(pos-1).val = v;
                         }});
@@ -356,7 +339,7 @@ public class JListAdapter extends BaseAdapter {
         }
 
         if (holder.radio != null) {
-            final JListAdapter self = this;
+            final JRecyclerViewAdapter self = this;
             holder.radio.setOnCheckedChangeListener(null);
             holder.radio.removeAllViews();
 
@@ -365,7 +348,7 @@ public class JListAdapter extends BaseAdapter {
                 RadioGroup.LayoutParams layout = new RadioGroup.LayoutParams
                     (RadioGroup.LayoutParams.MATCH_PARENT, RadioGroup.LayoutParams.WRAP_CONTENT);
                 layout.weight = 1;
-                RadioButton button = new RadioButton(parent.getContext());
+                RadioButton button = new RadioButton(holder.radio.getContext());
                 button.setLayoutParams(layout);
                 button.setId(i);
                 button.setText(v[i]);  
@@ -382,20 +365,6 @@ public class JListAdapter extends BaseAdapter {
                     if (button != null && item.right_cb != null)
                         item.right_cb.run(button.getText().toString());
                 }});
-        }
-
-        return convertView;
-    }
-
-    public View getViewByPosition(ListView listview, int pos) {
-        final int firstListItemPosition = listview.getFirstVisiblePosition();
-        final int lastListItemPosition = firstListItemPosition + listview.getChildCount() - 1;
-   
-        if (pos < firstListItemPosition || pos > lastListItemPosition ) {
-            return listview.getAdapter().getView(pos, null, listview);
-        } else {
-            final int childIndex = pos - firstListItemPosition;
-            return listview.getChildAt(childIndex);
         }
     }
 
@@ -508,16 +477,15 @@ public class JListAdapter extends BaseAdapter {
         return new Pair<Long, ArrayList<Integer>>(picker.lfl_self, picker.picked);
     }
 
-    public ArrayList<Pair<String, String>> getSectionText(ListView listview, final int section) {
+    public ArrayList<Pair<String, String>> getSectionText(RecyclerView recyclerview, final int section) {
         if (section >= sections.size()) throw new java.lang.IllegalArgumentException();
         ArrayList<Pair<String, String>> ret = new ArrayList<Pair<String, String>>();
         int section_size = getSectionSize(section), section_row = getSectionBeginRowId(section);
         for (int i = 0; i < section_size; ++i) {
             String val = "";
             JModelItem item = data.get(section_row + 1 + i);
-            if (listview != null) {
-                View itemview = getViewByPosition(listview, section_row + 1 + i);
-                ViewHolder holder = (ViewHolder)itemview.getTag();
+            if (recyclerview != null) {
+                ViewHolder holder = (ViewHolder)recyclerview.findViewHolderForAdapterPosition(section_row + 1 + i);
                 if (holder.toggle != null) val = holder.toggle.isChecked() ? "1" : "0";
                 else if (holder.radio != null) {
                     int checked = holder.radio.getCheckedRadioButtonId();

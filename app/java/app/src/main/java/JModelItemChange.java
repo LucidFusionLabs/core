@@ -35,7 +35,7 @@ public final class JModelItemChange {
         if (type != 0)                       item.type       = type;
     }
 
-    public static void applyChangeList(ArrayList<JModelItemChange> changes, JListAdapter target) {
+    public static void applyChangeList(ArrayList<JModelItemChange> changes, JRecyclerViewAdapter target) {
         for (JModelItemChange i : changes) {
             int row_id = target.getCollapsedRowId(i.section, i.row);
             if (row_id >= target.data.size()) throw new java.lang.IllegalArgumentException();

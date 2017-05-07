@@ -33,27 +33,27 @@ import android.app.ActionBar;
 import android.app.AlertDialog;
 
 public class JTable extends JWidget {
-    public JListAdapter model;
-    public JListViewFragment view;
+    public JRecyclerViewAdapter model;
+    public JRecyclerViewFragment view;
     public native void RunHideCB();
 
     public JTable(final MainActivity activity, String t, ArrayList<JModelItem> m, long lsp) {
         super(JWidget.TYPE_TABLE, activity, t, lsp);
-        model = new JListAdapter(activity, m, this);
+        model = new JRecyclerViewAdapter(activity, m, this);
     }
 
     public void clear() { view = null; }
 
-    public JListViewFragment get(final MainActivity activity) {
+    public JRecyclerViewFragment get(final MainActivity activity) {
         if (view == null) {
-            view = new JListViewFragment(activity, this, model, null);
+            view = new JRecyclerViewFragment(activity, this, model, null);
         }
         return view;
     }
 
     public void show(final MainActivity activity, final boolean show_or_hide) {
         activity.runOnUiThread(new Runnable() { public void run() {
-            JListViewFragment table = get(activity);
+            JRecyclerViewFragment table = get(activity);
             if (show_or_hide) {
                 activity.action_bar.show();
                 activity.getFragmentManager().beginTransaction().replace(R.id.content_frame, table).commit();
@@ -96,7 +96,7 @@ public class JTable extends JWidget {
         FutureTask<Pair<Long, ArrayList<Integer>>> future = new FutureTask<Pair<Long, ArrayList<Integer>>>
             (new Callable<Pair<Long, ArrayList<Integer>>>(){
                 public Pair<Long, ArrayList<Integer>> call() throws Exception {
-                    JListViewFragment table = get(activity);
+                    JRecyclerViewFragment table = get(activity);
                     return table.data.getPicked(section, row);
                 }});
         try { activity.runOnUiThread(future); return future.get(); }
@@ -107,8 +107,8 @@ public class JTable extends JWidget {
         FutureTask<ArrayList<Pair<String, String>>> future = new FutureTask<ArrayList<Pair<String, String>>>
             (new Callable<ArrayList<Pair<String, String>>>(){
                 public ArrayList<Pair<String, String>> call() throws Exception {
-                    JListViewFragment table = get(activity);
-                    return table.data.getSectionText(table.listview, section);
+                    JRecyclerViewFragment table = get(activity);
+                    return table.data.getSectionText(table.recyclerview, section);
                 }});
         try { activity.runOnUiThread(future); return future.get(); }
         catch(Exception e) { return new ArrayList<Pair<String, String>>(); }

@@ -74,7 +74,7 @@ public class JNavigation extends JWidget {
         activity.runOnUiThread(new Runnable() { public void run() {
             x.changed = false;
             String tag = Integer.toString(activity.getFragmentManager().getBackStackEntryCount());
-            JListViewFragment frag = x.get(activity);
+            JRecyclerViewFragment frag = x.get(activity);
             activity.getFragmentManager().beginTransaction()
                 .replace(R.id.content_frame, frag, tag).addToBackStack(tag).commit();
             activity.setTitle(frag.parent_widget.title);
