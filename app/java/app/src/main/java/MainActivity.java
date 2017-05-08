@@ -202,27 +202,9 @@ public class MainActivity extends android.app.Activity {
     }
 
     @Override
-    public void onBackPressed() {
-        int back_count = getFragmentManager().getBackStackEntryCount();
-        if (back_count > 1) {
-            runBackFragmentHideCB(1);
-            super.onBackPressed();
-            showBackFragment(false, true);
-        } else if (back_count == 1) {
-            runBackFragmentHideCB(1);
-            Fragment frag = getFragmentManager().findFragmentByTag("0");
-            if (frag != null && frag instanceof JRecyclerViewFragment) {
-                JModelItem nav_left = ((JRecyclerViewFragment)frag).data.nav_left;
-                if (nav_left != null && nav_left.cb != null) {
-                    nav_left.cb.run();
-                    return;
-                }
-            }
-            moveTaskToBack(true);
-        } else {
-            super.onBackPressed();
-        }
-    } 
+    public void onBackPressed() { JNavigation.onBackPressed(this); }
+
+    public void superOnBackPressed() { super.onBackPressed(); } 
 
     public void surfaceChanged(int format, int width, int height) {
         surface_width = width;
@@ -377,29 +359,6 @@ public class MainActivity extends android.app.Activity {
             if (id < 0 || id >= bitmaps.size()) throw new java.lang.IllegalArgumentException();
             bitmaps.set(id, Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888));
         }});
-    }
-
-    public int runBackFragmentHideCB(int n) {
-        int stack_size = getFragmentManager().getBackStackEntryCount();
-        if (stack_size == 0) return stack_size;
-        for (int i = 0, l = Math.min(n, stack_size); i < l; i++) {
-            String tag = Integer.toString(stack_size-1-i);
-            Fragment frag = getFragmentManager().findFragmentByTag(tag);
-            if (frag == null || !(frag instanceof JFragment)) continue;
-            JFragment jfrag = (JFragment)frag;
-            if (jfrag.parent_widget.lfl_self == 0) continue;
-            if (jfrag.parent_widget instanceof JTable) ((JTable)jfrag.parent_widget).RunHideCB();
-        }
-        return stack_size;
-    }
-
-    public void showBackFragment(boolean show_content, boolean show_title) {
-        int stack_size = getFragmentManager().getBackStackEntryCount();
-        if (stack_size == 0) return;
-        String tag = Integer.toString(stack_size-1);
-        Fragment frag = getFragmentManager().findFragmentByTag(tag);
-        if (show_content) getFragmentManager().beginTransaction().replace(R.id.content_frame, frag, tag).commit();
-        if (show_title && frag instanceof JFragment) setTitle(((JFragment)frag).parent_widget.title);
     }
 
     public String getVersionName() {

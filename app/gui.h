@@ -904,6 +904,7 @@ struct ToolbarView : public View, public ToolbarViewInterface {
   void Show(bool show_or_hide);
   void ToggleButton(const string &n);
   void SetTheme(const string &theme);
+  string GetTheme();
 };
 
 struct TableView : public View, public TableViewInterface {
@@ -930,6 +931,7 @@ struct TableView : public View, public TableViewInterface {
   void ReplaceSection(int section, TableItem header, int flag, TableItemVec item);
   void ApplyChangeList(const TableSection::ChangeList&);
   void SetSectionValues(int section, const StringVec&);
+  void SetSectionColors(int seciton, const vector<Color>&);
   void SetSectionEditable(int section, int start_row, int skip_last_rows, IntIntCB cb=IntIntCB());
   void SetHeader(int section, TableItem header);
   void SetKey(int secton, int row, const string &key);
@@ -937,6 +939,7 @@ struct TableView : public View, public TableViewInterface {
   void SetValue(int section, int row, const string &val);
   void SetSelected(int section, int row, int selected);
   void SetHidden(int section, int row, bool val);
+  void SetColor(int section, int row, const Color &val);
   void SetTitle(const string &title);
   void SetTheme(const string &theme);
 };
@@ -954,6 +957,19 @@ struct NavigationView : public View, public NavigationViewInterface {
   void PopToRoot();
   void PopAll();
   void SetTheme(const string &theme);
+};
+
+struct Toolkit {
+  unique_ptr<AlertViewInterface> CreateAlert(AlertItemVec items);
+  unique_ptr<PanelViewInterface> CreatePanel(const Box&, const string &title, PanelItemVec);
+  unique_ptr<ToolbarViewInterface> CreateToolbar(const string &theme, MenuItemVec items);
+  unique_ptr<MenuViewInterface> CreateMenu(const string &title, MenuItemVec items);
+  unique_ptr<MenuViewInterface> CreateEditMenu(MenuItemVec items);
+  unique_ptr<TableViewInterface> CreateTableView
+    (const string &title, const string &style, const string &theme, TableItemVec items);
+  unique_ptr<TextViewInterface> CreateTextView(const string &title, File *file);
+  unique_ptr<TextViewInterface> CreateTextView(const string &title, const string &text);
+  unique_ptr<NavigationViewInterface> CreateNavigationView(const string &style, const string &theme);
 };
 
 }; // namespace LFL

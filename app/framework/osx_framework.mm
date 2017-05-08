@@ -602,6 +602,7 @@ void FrameScheduler::DelMainWaitSocket(Window *w, Socket fd) {
 
 Window *Window::Create() { return new OSXWindow(); }
 unique_ptr<Module> CreateFrameworkModule() { return make_unique<OSXFrameworkModule>(); }
+unique_ptr<TimerInterface> SystemToolkit::CreateTimer(Callback cb) { return make_unique<AppleTimer>(move(cb)); }
 
 }; // namespace LFL
 

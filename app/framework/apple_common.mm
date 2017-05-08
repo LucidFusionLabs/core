@@ -86,9 +86,6 @@
 #endif
 @end
 
-@interface ObjcTimer : NSObject
-@end
-
 @implementation ObjcTimer
   {
     NSTimer *timer;
@@ -117,13 +114,10 @@
 @end
 
 namespace LFL {
-struct AppleTimer : public TimerInterface {
-  ObjcTimer *timer;
-  ~AppleTimer() { [timer release]; }
-  AppleTimer(Callback c) : timer([[ObjcTimer alloc] initWithCB: move(c)]) {}
-  void Run(Time interval, bool force=false) { [timer triggerIn:interval.count() force:force]; }
-  bool Clear() { return [timer clearTrigger]; }
-};
+AppleTimer::~AppleTimer() { [timer release]; }
+AppleTimer::AppleTimer(Callback c) : timer([[ObjcTimer alloc] initWithCB: move(c)]) {}
+void AppleTimer::Run(Time interval, bool force) { [timer triggerIn:interval.count() force:force]; }
+bool AppleTimer::Clear() { return [timer clearTrigger]; }
 
 static AppleURLSessions *apple_url_sessions = 0;
 NSURLSession* NSURLSessionStreamConnection::session = 0;
@@ -297,7 +291,5 @@ string Application::PrintCallStack() {
   for (NSString *symbol in callstack) StrAppend(&ret, GetNSString(symbol), "\n");
   return ret;
 }
-
-unique_ptr<TimerInterface> SystemToolkit::CreateTimer(Callback cb) { return make_unique<AppleTimer>(move(cb)); }
 
 }; // namespace LFL

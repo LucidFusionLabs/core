@@ -51,7 +51,7 @@ public class JNavigation extends JWidget {
                 else {
                     activity.jwidgets.navigations.add(self);
                     activity.action_bar.show();
-                    activity.showBackFragment(true, true);
+                    showBackFragment(activity, true, true);
                     shown_index = activity.jwidgets.navigations.size()-1;
                 }
             } else {
@@ -94,12 +94,12 @@ public class JNavigation extends JWidget {
 
     public void popView(final MainActivity activity, final int n) {
         activity.runOnUiThread(new Runnable() { public void run() {
-            int stack_size = activity.runBackFragmentHideCB(n);
+            int stack_size = runBackFragmentHideCB(activity, n);
             if (stack_size <= 0 || n <= 0) return;
             int target = Math.max(0, stack_size - n);
             activity.getFragmentManager().popBackStackImmediate
                 ((target >= 0 ? Integer.toString(target) : null), FragmentManager.POP_BACK_STACK_INCLUSIVE);
-            activity.showBackFragment(false, true);
+            showBackFragment(activity, false, true);
         }});
     }
 
@@ -107,16 +107,16 @@ public class JNavigation extends JWidget {
         activity.runOnUiThread(new Runnable() { public void run() {
             int stack_size = activity.getFragmentManager().getBackStackEntryCount();
             if (stack_size < 2) return;
-            activity.runBackFragmentHideCB(stack_size - 1);
+            runBackFragmentHideCB(activity, stack_size - 1);
             activity.getFragmentManager().popBackStackImmediate("1", FragmentManager.POP_BACK_STACK_INCLUSIVE);
-            activity.showBackFragment(false, true);
+            showBackFragment(activity, false, true);
         }});
     }
 
     public void popAll(final MainActivity activity) {
         activity.runOnUiThread(new Runnable() { public void run() {
             int stack_size = activity.getFragmentManager().getBackStackEntryCount();
-            activity.runBackFragmentHideCB(stack_size);
+            runBackFragmentHideCB(activity, stack_size);
             activity.getFragmentManager().popBackStackImmediate(null, FragmentManager.POP_BACK_STACK_INCLUSIVE);
         }});
     }
@@ -138,5 +138,50 @@ public class JNavigation extends JWidget {
         if (frag == null || !(frag instanceof JFragment)) return 0;
         JFragment jfrag = (JFragment)frag;
         return (jfrag.parent_widget instanceof JTable) ? jfrag.parent_widget.lfl_self : 0;
+    }
+
+    public static void onBackPressed(final MainActivity activity) {
+        int back_count = activity.getFragmentManager().getBackStackEntryCount();
+        if (back_count > 1) {
+            runBackFragmentHideCB(activity, 1);
+            activity.superOnBackPressed();
+            showBackFragment(activity, false, true);
+        } else if (back_count == 1) {
+            runBackFragmentHideCB(activity, 1);
+            Fragment frag = activity.getFragmentManager().findFragmentByTag("0");
+            if (frag != null && frag instanceof JRecyclerViewFragment) {
+                JModelItem nav_left = ((JRecyclerViewFragment)frag).data.nav_left;
+                if (nav_left != null && nav_left.cb != null) {
+                    nav_left.cb.run();
+                    return;
+                }
+            }
+            activity.moveTaskToBack(true);
+        } else {
+            activity.superOnBackPressed();
+        }
+    } 
+
+    public static int runBackFragmentHideCB(final MainActivity activity, int n) {
+        int stack_size = activity.getFragmentManager().getBackStackEntryCount();
+        if (stack_size == 0) return stack_size;
+        for (int i = 0, l = Math.min(n, stack_size); i < l; i++) {
+            String tag = Integer.toString(stack_size-1-i);
+            Fragment frag = activity.getFragmentManager().findFragmentByTag(tag);
+            if (frag == null || !(frag instanceof JFragment)) continue;
+            JFragment jfrag = (JFragment)frag;
+            if (jfrag.parent_widget.lfl_self == 0) continue;
+            if (jfrag.parent_widget instanceof JTable) ((JTable)jfrag.parent_widget).RunHideCB();
+        }
+        return stack_size;
+    }
+
+    public static void showBackFragment(final MainActivity activity, boolean show_content, boolean show_title) {
+        int stack_size = activity.getFragmentManager().getBackStackEntryCount();
+        if (stack_size == 0) return;
+        String tag = Integer.toString(stack_size-1);
+        Fragment frag = activity.getFragmentManager().findFragmentByTag(tag);
+        if (show_content) activity.getFragmentManager().beginTransaction().replace(R.id.content_frame, frag, tag).commit();
+        if (show_title && frag instanceof JFragment) activity.setTitle(((JFragment)frag).parent_widget.title);
     }
 }

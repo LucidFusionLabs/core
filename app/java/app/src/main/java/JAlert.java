@@ -41,41 +41,43 @@ public class JAlert extends JWidget {
 
     public void clear() { view = null; }
 
-    public Pair<AlertDialog, EditText> get(final MainActivity activity) {
-        if (view == null) {
-            if (model.size() < 3) return null;
-            AlertDialog.Builder alert = new AlertDialog.Builder(activity);
-            alert.setTitle(model.get(1).key);
-            alert.setMessage(model.get(1).val);
-
-            JModelItem style = model.get(0);
-            boolean pw = style.val.equals("pwinput");
-            final EditText input = (pw || style.val.equals("textinput")) ? new EditText(activity) : null;
-            if (input != null) {
-                input.setInputType(android.text.InputType.TYPE_CLASS_TEXT |
-                                   (pw ? android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD : 0));
-                alert.setView(input);
-            }
-            
-            alert.setPositiveButton(model.get(3).key, new DialogInterface.OnClickListener() {
-                                    public void onClick(DialogInterface dialog, int which) {
-                JModelItem confirm = model.get(3);
-                if (confirm.right_cb != null)
-                    confirm.right_cb.run((input == null) ? confirm.val :
-                                         (confirm.val + (confirm.val.length() > 0 ? " " : "") + input.getText().toString()));
-            }});
-
-            alert.setNegativeButton(model.get(2).key, new DialogInterface.OnClickListener() {
-                                    public void onClick(DialogInterface dialog, int which) {
-                JModelItem cancel = model.get(2);
-                if (cancel.right_cb != null)
-                    cancel.right_cb.run((input == null) ? cancel.val :
-                                        (cancel.val + (cancel.val.length() > 0 ? " " : "") + input.getText().toString()));
-            }});
-
-            view = new Pair<AlertDialog, EditText>(alert.create(), input);
-        }
+    private Pair<AlertDialog, EditText> get(final MainActivity activity) {
+        if (view == null) view = createView(activity);
         return view;
+    }
+
+    private Pair<AlertDialog, EditText> createView(final MainActivity activity) {
+        if (model.size() < 3) return null;
+        AlertDialog.Builder alert = new AlertDialog.Builder(activity);
+        alert.setTitle(model.get(1).key);
+        alert.setMessage(model.get(1).val);
+
+        JModelItem style = model.get(0);
+        boolean pw = style.val.equals("pwinput");
+        final EditText input = (pw || style.val.equals("textinput")) ? new EditText(activity) : null;
+        if (input != null) {
+            input.setInputType(android.text.InputType.TYPE_CLASS_TEXT |
+                               (pw ? android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD : 0));
+            alert.setView(input);
+        }
+        
+        alert.setPositiveButton(model.get(3).key, new DialogInterface.OnClickListener() {
+                                public void onClick(DialogInterface dialog, int which) {
+            JModelItem confirm = model.get(3);
+            if (confirm.right_cb != null)
+                confirm.right_cb.run((input == null) ? confirm.val :
+                                     (confirm.val + (confirm.val.length() > 0 ? " " : "") + input.getText().toString()));
+        }});
+
+        alert.setNegativeButton(model.get(2).key, new DialogInterface.OnClickListener() {
+                                public void onClick(DialogInterface dialog, int which) {
+            JModelItem cancel = model.get(2);
+            if (cancel.right_cb != null)
+                cancel.right_cb.run((input == null) ? cancel.val :
+                                    (cancel.val + (cancel.val.length() > 0 ? " " : "") + input.getText().toString()));
+        }});
+
+        return new Pair<AlertDialog, EditText>(alert.create(), input);
     }
     
     public void show(final MainActivity activity, final boolean show_or_hide) {

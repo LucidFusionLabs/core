@@ -126,6 +126,7 @@ extern "C" int main(int argc, const char *argv[]) {
 }
 
 Window *Window::Create() { return new NullWindow(); }
+unique_ptr<TimerInterface> SystemToolkit::CreateTimer(Callback cb) { return nullptr; }
 unique_ptr<Module> CreateFrameworkModule() { return unique_ptr<NullFrameworkModule>(); }
 
 }; // namespace LFL

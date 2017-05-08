@@ -42,36 +42,39 @@ public class JToolbar extends JWidget {
 
     public void clear() { view = null; }
 
-    public View get(final MainActivity activity) {
-        if (view == null) {
-            LinearLayout toolbar = new LinearLayout(activity);
-            View.OnClickListener listener = new View.OnClickListener() { public void onClick(View bt) {
-                JModelItem r = model.get(bt.getId());
-                if (r != null && r.cb != null) r.cb.run();
-            }};
-          
-            for (int i = 0, l = model.size(); i != l; ++i) {
-                JModelItem r = model.get(i);
-                View bt = null;
-                if (r.key.equals("\u2699")) {
-                    ImageButton b = new ImageButton(activity);
-                    b.setImageResource(android.R.drawable.ic_menu_preferences);
-                    bt = b;
-                } else {
-                    Button b = new Button(activity);
-                    b.setSingleLine(true);
-                    b.setText(r.key);
-                    bt = b;
-                }
-                bt.setId(i);
-                bt.setTag(r.val);
-                bt.setOnClickListener(listener);
-                bt.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f)); 
-                toolbar.addView(bt);
-            }
-            view = toolbar;
-        }
+    private View get(final MainActivity activity) {
+        if (view == null) view = createView(activity);
         return view;
+    }
+
+    private View createView(final MainActivity activity) {
+        LinearLayout toolbar = new LinearLayout(activity);
+        View.OnClickListener listener = new View.OnClickListener() { public void onClick(View bt) {
+            JModelItem r = model.get(bt.getId());
+            if (r != null && r.cb != null) r.cb.run();
+        }};
+        
+        for (int i = 0, l = model.size(); i != l; ++i) {
+            JModelItem r = model.get(i);
+            View bt = null;
+            if (r.key.equals("\u2699")) {
+                ImageButton b = new ImageButton(activity);
+                b.setImageResource(android.R.drawable.ic_menu_preferences);
+                bt = b;
+            } else {
+                Button b = new Button(activity);
+                b.setSingleLine(true);
+                b.setText(r.key);
+                bt = b;
+            }
+            bt.setId(i);
+            bt.setTag(r.val);
+            bt.setOnClickListener(listener);
+            bt.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f)); 
+            toolbar.addView(bt);
+        }
+
+        return toolbar;
     }
 
     public void show(final MainActivity activity, final boolean show_or_hide) {

@@ -690,9 +690,10 @@ struct Application : public ::LFApp {
   unordered_map<const void*, Window*> windows;
   function<void(Window*)> window_init_cb, window_start_cb, window_closed_cb = [](Window *w){ delete w; };
   Window *focused=0;
+  ToolkitInterface *toolkit;
+
   unordered_map<string, StringPiece> asset_cache;
   const Color *splash_color = &Color::black;
-  bool log_pid=0, frame_disabled=0;
   StringCB open_url_cb;
   Callback exit_cb;
 
@@ -941,30 +942,44 @@ struct PurchasesInterface {
   virtual bool MakePurchase(ProductInterface*, IntCB result_cb) = 0;
 };
 
+struct ToolkitInterface {
+  virtual unique_ptr<AlertViewInterface> CreateAlert(AlertItemVec items) = 0;
+  virtual unique_ptr<PanelViewInterface> CreatePanel(const Box&, const string &title, PanelItemVec) = 0;
+  virtual unique_ptr<ToolbarViewInterface> CreateToolbar(const string &theme, MenuItemVec items) = 0;
+  virtual unique_ptr<MenuViewInterface> CreateMenu(const string &title, MenuItemVec items) = 0;
+  virtual unique_ptr<MenuViewInterface> CreateEditMenu(MenuItemVec items) = 0;
+  virtual unique_ptr<TableViewInterface> CreateTableView
+    (const string &title, const string &style, const string &theme, TableItemVec items) = 0;
+  virtual unique_ptr<TextViewInterface> CreateTextView(const string &title, File *file) = 0;
+  virtual unique_ptr<TextViewInterface> CreateTextView(const string &title, const string &text) = 0;
+  virtual unique_ptr<NavigationViewInterface> CreateNavigationView(const string &style, const string &theme) = 0;
+};
+
+struct SystemToolkit : public ToolkitInterface {
+  unique_ptr<AlertViewInterface> CreateAlert(AlertItemVec items);
+  unique_ptr<PanelViewInterface> CreatePanel(const Box&, const string &title, PanelItemVec);
+  unique_ptr<ToolbarViewInterface> CreateToolbar(const string &theme, MenuItemVec items);
+  unique_ptr<MenuViewInterface> CreateMenu(const string &title, MenuItemVec items);
+  unique_ptr<MenuViewInterface> CreateEditMenu(MenuItemVec items);
+  unique_ptr<TableViewInterface> CreateTableView
+    (const string &title, const string &style, const string &theme, TableItemVec items);
+  unique_ptr<TextViewInterface> CreateTextView(const string &title, File *file);
+  unique_ptr<TextViewInterface> CreateTextView(const string &title, const string &text);
+  unique_ptr<NavigationViewInterface> CreateNavigationView(const string &style, const string &theme);
+
+  static void DisableAdvertisingCrashReporting();
+  static unique_ptr<TimerInterface> CreateTimer(Callback cb);
+  static unique_ptr<AdvertisingViewInterface> CreateAdvertisingView
+    (int type, int placement, const string &id, const StringVec &test_devices);
+  static unique_ptr<PurchasesInterface> CreatePurchases();
+};
+
 unique_ptr<Module> CreateFrameworkModule();
 unique_ptr<GraphicsDevice> CreateGraphicsDevice(Window*, int ver);
 unique_ptr<Module> CreateAudioModule(Audio*);
 unique_ptr<Module> CreateCameraModule(CameraState*);
 void InitCrashReporting(const string &id, const string &name, const string &email);
 void TestCrashReporting();
-
-struct SystemToolkit {
-  static void DisableAdvertisingCrashReporting();
-  static unique_ptr<TimerInterface> CreateTimer(Callback cb);
-  static unique_ptr<AlertViewInterface> CreateAlert(AlertItemVec items);
-  static unique_ptr<PanelViewInterface> CreatePanel(const Box&, const string &title, PanelItemVec);
-  static unique_ptr<ToolbarViewInterface> CreateToolbar(const string &theme, MenuItemVec items);
-  static unique_ptr<MenuViewInterface> CreateMenu(const string &title, MenuItemVec items);
-  static unique_ptr<MenuViewInterface> CreateEditMenu(MenuItemVec items);
-  static unique_ptr<TableViewInterface> CreateTableView
-    (const string &title, const string &style, const string &theme, TableItemVec items);
-  static unique_ptr<TextViewInterface> CreateTextView(const string &title, File *file);
-  static unique_ptr<TextViewInterface> CreateTextView(const string &title, const string &text);
-  static unique_ptr<NavigationViewInterface> CreateNavigationView(const string &style, const string &theme);
-  static unique_ptr<AdvertisingViewInterface> CreateAdvertisingView
-    (int type, int placement, const string &id, const StringVec &test_devices);
-  static unique_ptr<PurchasesInterface> CreatePurchases();
-};
 
 }; // namespace LFL
 #endif // LFL_CORE_APP_APP_H__

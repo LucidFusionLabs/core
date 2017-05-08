@@ -289,8 +289,13 @@ bool FrameWakeupTimer::WakeupIn(Time interval) {
 
 /* Application */
 
-Application::Application(int ac, const char* const* av) : argc(ac), argv(av) {
-  run=1; initialized=suspended=0; main_thread_id=0; frames_ran=0; memzero(log_time); 
+Application::Application(int ac, const char* const* av) :
+  argc(ac), argv(av), toolkit(Singleton<SystemToolkit>::Get()) {
+  run = 1;
+  initialized = suspended = log_pid = frame_disabled = 0;
+  main_thread_id = 0; 
+  frames_ran = 0;
+  memzero(log_time); 
   fonts = make_unique<Fonts>();
 }
 

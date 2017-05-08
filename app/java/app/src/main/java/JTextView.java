@@ -42,11 +42,13 @@ public class JTextView extends JWidget {
 
     public void clear() { view = null; }
 
-    public JTextViewFragment get(final MainActivity activity) {
-        if (view == null) {
-            view = new JTextViewFragment(activity, this, text);
-        }
+    private JTextViewFragment get(final MainActivity activity) {
+        if (view == null) view = createView(activity);
         return view;
+    }
+
+    private JTextViewFragment createView(final MainActivity activity) {
+        return new JTextViewFragment(activity, this, text);
     }
 
     public void show(final MainActivity activity, final boolean show_or_hide) {

@@ -16,6 +16,9 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+@interface ObjcTimer : NSObject
+@end
+
 @interface ObjcCallback : NSObject {}
   - (id)initWithCB:(LFL::Callback)cb;
   - (void)run;
@@ -57,6 +60,14 @@ CGImageRef MakeCGImage(Texture&);
 template<typename T> inline T* objc_dynamic_cast(id from) {
   return ([from isKindOfClass:[T class]]) ? static_cast<T*>(from) : nil;
 }
+
+struct AppleTimer : public TimerInterface {
+  ObjcTimer *timer;
+  ~AppleTimer();
+  AppleTimer(Callback c);
+  void Run(Time interval, bool force=false);
+  bool Clear();
+};
 
 struct NSURLSessionStreamConnection : public Connection {
   static NSURLSession *session;

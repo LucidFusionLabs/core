@@ -45,10 +45,12 @@ public class JTable extends JWidget {
     public void clear() { view = null; }
 
     public JRecyclerViewFragment get(final MainActivity activity) {
-        if (view == null) {
-            view = new JRecyclerViewFragment(activity, this, model, null);
-        }
+        if (view == null) view = createView(activity);
         return view;
+    }
+
+    public JRecyclerViewFragment createView(final MainActivity activity) {
+        return new JRecyclerViewFragment(activity, this, model, null);
     }
 
     public void show(final MainActivity activity, final boolean show_or_hide) {

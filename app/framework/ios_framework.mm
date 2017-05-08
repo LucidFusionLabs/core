@@ -870,6 +870,7 @@ void FrameScheduler::DelMainWaitSocket(Window *w, Socket fd) {
 Window *Window::Create() { return new iOSWindow(); }
 unique_ptr<Module> CreateFrameworkModule() { return make_unique<iOSFrameworkModule>(); }
 unique_ptr<AssetLoaderInterface> CreateAssetLoader() { return make_unique<iOSAssetLoader>(); }
+unique_ptr<TimerInterface> SystemToolkit::CreateTimer(Callback cb) { return make_unique<AppleTimer>(move(cb)); }
 
 extern "C" int main(int ac, const char* const* av) {
   ios_argc = ac;
