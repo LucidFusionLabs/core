@@ -1,0 +1,14 @@
+# $Id: CMakeLists.txt 1298 2011-12-11 18:46:06Z justin $
+
+lfl_add_target(app_ide STATIC_LIBRARY SOURCES syntax.cpp)
+
+if(LFL_LIBCLANG)
+  lfl_add_target(app_clang_tu STATIC_LIBRARY SOURCES clang_tu.cpp
+                 INCLUDE_DIRECTORIES ${LIBCLANG_INCLUDE} LINK_LIBRARIES ${LIBCLANG_LIB})
+endif()
+
+if(LFL_JSONCPP)
+  lfl_add_target(app_cmake_daemon STATIC_LIBRARY SOURCES cmake.cpp
+                 INCLUDE_DIRECTORIES ${JSONCPP_INCLUDE} LINK_LIBRARIES ${JSONCPP_LIB})
+  add_dependencies(app_cmake_daemon cmakedaemon)
+endif()

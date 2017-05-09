@@ -80,6 +80,10 @@ function(lfl_set_xcode_properties _name)
     set_target_properties(${_name} PROPERTIES
                           XCODE_ATTRIBUTE_GCC_GENERATE_DEBUGGING_SYMBOLS YES
                           XCODE_ATTRIBUTE_GCC_OPTIMIZATION_LEVEL ${XCODE_OPT_FLAG})
+    if(LFL_IOS)
+      set_target_properties(${_name} PROPERTIES
+                            XCODE_ATTRIBUTE_TARGETED_DEVICE_FAMILY "1,2")
+    endif()
   endif()
 endfunction()
 

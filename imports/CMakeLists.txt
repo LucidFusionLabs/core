@@ -281,7 +281,7 @@ if(LFL_OPENSSL)
     set(OPENSSL_CONFIGURE_ENV ${CONFIGURE_ENV} PATH=$ENV{PATH}:/opt/X11/bin)
     ExternalProject_Add(openssl PREFIX openssl LOG_CONFIGURE ON LOG_BUILD ON BUILD_IN_SOURCE ON
                         CONFIGURE_COMMAND ${CMAKE_COMMAND} -E env ${OPENSSL_CONFIGURE_ENV}
-                        <SOURCE_DIR>/Configure darwin64-x86_64-cc shared enable-ec_nistp_64_gcc_128 no-ssl2 no-ssl3 no-comp $ENV{CFLAGS} --prefix=<INSTALL_DIR>
+                        <SOURCE_DIR>/Configure darwin64-x86_64-cc shared enable-ec_nistp_64_gcc_128 no-ssl2 no-ssl3 no-comp ${ENV_CFLAGS} --prefix=<INSTALL_DIR>
                         COMMAND ${CMAKE_COMMAND} -E env ${OPENSSL_CONFIGURE_ENV} make depend
                         DOWNLOAD_COMMAND rm -rf openssl
                         COMMAND cp -R ${CMAKE_CURRENT_SOURCE_DIR}/openssl openssl
@@ -313,24 +313,6 @@ if(LFL_REF10EXTRACT)
   set(REF10EXTRACT_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/ref10_extract
       ${CMAKE_CURRENT_SOURCE_DIR}/ref10_extract/ed25519/nacl_includes PARENT_SCOPE)
   set(REF10EXTRACT_LIB libcurve25519 libed25519 PARENT_SCOPE)
-endif()
-
-# mosh
-if(LFL_MOSH)
-  set(CONFIG_OPTS ${CONFIGURE_OPTIONS})
-  set(CONFIG_ENV ${CONFIGURE_ENV} PROTOC=${PROTOBUF_PROTOC_EXECUTABLE} protobuf_CFLAGS=-I${PROTOBUF_INCLUDE_DIR})
-  if(LFL_IOS OR LFL_APPLE)
-    set(CONFIG_OPTS --with-crypto-library=apple-common-crypto)
-  endif()
-  ExternalProject_Add(mosh PREFIX mosh LOG_CONFIGURE ON LOG_BUILD ON BUILD_IN_SOURCE ON
-                      CONFIGURE_COMMAND <SOURCE_DIR>/autogen.sh
-                      COMMAND ${CMAKE_COMMAND} -E env ${CONFIG_ENV} protobuf_LIBS=$<TARGET_FILE:libprotobuf>
-                      <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> ${CONFIG_OPTS}
-                      DOWNLOAD_COMMAND rm -rf mosh COMMAND cp -R ${CMAKE_CURRENT_SOURCE_DIR}/mosh mosh)
-  add_library(libmosh IMPORTED STATIC GLOBAL)
-  add_dependencies(libmosh mosh)
-  add_dependencies(mosh libprotobuf)
-  set_property(TARGET libmosh PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/ogg/lib/libogg.a)
 endif()
 
 # box2d
@@ -807,71 +789,4 @@ if(LFL_PCAP)
   set_property(TARGET libpcap PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/libpcap/lib/libpcap.a)
   set(PCAP_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/libpcap/include PARENT_SCOPE)
   set(PCAP_LIB libpcap PARENT_SCOPE)
-endif()
-
-# GeoIP
-if(LFL_GEOIP)
-  if(WIN32)
-    #nmake -f Makefile.vc
-  else()
-    ExternalProject_Add(geoip LOG_CONFIGURE ON LOG_BUILD ON
-                        PREFIX ${CMAKE_CURRENT_BINARY_DIR}/geoip-api-c
-                        SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/geoip-api-c
-                        CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR>)
-    add_library(libGeoIP IMPORTED STATIC GLOBAL)
-    add_dependencies(libGeoIP geoip)
-    set_property(TARGET libGeoIP PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/geoip-aip-c/libGeoIP/lib/libGeoIP.a)
-    set(GEOIP_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/geoip-api-c/libGeoIP/include PARENT_SCOPE)
-    set(GEOIP_LIB libGeoIP PARENT_SCOPE)
-  endif()
-endif()
-
-# libuv
-if(LFL_LIBUV)
-  ExternalProject_Add(uv LOG_CONFIGURE ON LOG_BUILD ON
-                      PREFIX ${CMAKE_CURRENT_BINARY_DIR}/libuv
-                      SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libuv
-                      CONFIGURE_COMMAND <SOURCE_DIR>/autogen.sh --prefix=<INSTALL_DIR>
-                      COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR>)
-  add_library(libuv IMPORTED STATIC GLOBAL)
-  add_dependencies(libuv uv)
-  set_property(TARGET libuv PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/libuv/lib/libuv.a)
-  set(LIBUV_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/libuv/include PARENT_SCOPE)
-  set(LIBUV_LIB libuv PARENT_SCOPE)
-endif()
-
-# cmake-daemon
-if(LFL_CMAKEDAEMON)
-  ExternalProject_Add(cmake-daemon LOG_CONFIGURE ON LOG_BUILD ON
-                      PREFIX ${CMAKE_CURRENT_BINARY_DIR}/cmake-daemon
-                      SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/cmake-daemon
-                      CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_CURRENT_BINARY_DIR}/cmake-daemon
-                      -DLIBUV_INCLUDE_DIR=${CMAKE_CURRENT_BINARY_DIR}/libuv/include
-                      -DLIBUV_LIBRARY=${CMAKE_CURRENT_BINARY_DIR}/libuv/lib/libuv.a
-                      -DDTL_INCLUDE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/dtl)
-  add_dependencies(cmake-daemon libuv)
-  add_executable(cmakedaemon IMPORTED GLOBAL)
-  add_dependencies(cmakedaemon cmake-daemon)
-  set_property(TARGET cmakedaemon PROPERTY IMPORTED_LOCATION
-               ${CMAKE_CURRENT_BINARY_DIR}/cmake-daemon/bin/cmake)
-endif()
-
-if(LFL_STOCKFISH)
-  if(LFL64)
-    set(BUILD_ARCH x86-64)
-  else()
-    set(BUILD_ARCH x86-32)
-  endif()
-  if(LFL_OSX OR LFL_IOS)
-    set(BUILD_ARGS ARCH=${BUILD_ARCH} COMP=clang)
-  else()
-    set(BUILD_ARGS ARCH=${BUILD_ARCH} COMP=gcc)
-  endif()
-  ExternalProject_Add(Stockfish LOG_BUILD ON BUILD_IN_SOURCE ON CONFIGURE_COMMAND "" INSTALL_COMMAND ""
-                      PREFIX ${CMAKE_CURRENT_BINARY_DIR}/Stockfish
-                      DOWNLOAD_COMMAND rm -rf Stockfish
-                      COMMAND cp -R ${CMAKE_CURRENT_SOURCE_DIR}/Stockfish/src Stockfish
-                      BUILD_COMMAND make build ${BUILD_ARGS})
-  ExternalProject_Get_Property(Stockfish SOURCE_DIR)
-  set(STOCKFISH_BIN ${SOURCE_DIR}/stockfish PARENT_SCOPE)
 endif()

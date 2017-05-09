@@ -372,6 +372,9 @@ add_subdirectory(${LFL_SOURCE_DIR}/core/web ${LFL_CORE_BINARY_DIR}/web)
 # game
 add_subdirectory(${LFL_SOURCE_DIR}/core/game ${LFL_CORE_BINARY_DIR}/game)
 
+# ide
+add_subdirectory(${LFL_SOURCE_DIR}/core/ide ${LFL_CORE_BINARY_DIR}/ide)
+
 # nlp
 add_subdirectory(${LFL_SOURCE_DIR}/core/nlp ${LFL_CORE_BINARY_DIR}/nlp)
 

@@ -18,7 +18,7 @@
 
 #include "core/app/gui.h"
 #include "core/app/ipc.h"
-#include "core/app/bindings/ide.h"
+#include "core/ide/ide.h"
 
 #ifdef LFL_FLATBUFFERS
 #include "flatbuffers/flatbuffers.h"

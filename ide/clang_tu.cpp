@@ -18,7 +18,7 @@
 
 #include "core/app/gui.h"
 #include "core/app/ipc.h"
-#include "core/app/bindings/ide.h"
+#include "core/ide/ide.h"
 #include "clang-c/Index.h"
 #include "clang-c/CXCompilationDatabase.h"
 
@@ -386,7 +386,7 @@ void ClangCPlusPlusHighlighter::UpdateAnnotation(TranslationUnit *tu, Editor::Sy
   static unordered_set<string> inc_w{ "include", "import" }, ctype_w{
 #   define LFL_C_SYNTAX_TYPE
 #   define XX(x) #x,
-#   include "core/app/bindings/c_syntax.h"
+#   include "core/ide/c_syntax.h"
 #   undef LFL_C_SYNTAX_TYPE
   }; 
 

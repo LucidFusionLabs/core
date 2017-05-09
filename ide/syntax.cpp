@@ -17,7 +17,7 @@
  */
 
 #include "core/app/gui.h"
-#include "core/app/bindings/syntax.h"
+#include "core/ide/syntax.h"
 
 // #define LFL_SYTNAX_DEBUG
 #ifdef LFL_SYTNAX_DEBUG
@@ -354,8 +354,8 @@ RegexCPlusPlusHighlighter::RegexCPlusPlusHighlighter
 #define XX(x) #x,
 #define LFL_C_SYNTAX_STATEMENT
 #define LFL_CPP_SYNTAX_STATEMENT
-#include "core/app/bindings/c_syntax.h"
-#include "core/app/bindings/cpp_syntax.h"
+#include "core/ide/c_syntax.h"
+#include "core/ide/cpp_syntax.h"
 #undef LFL_C_SYNTAX_STATEMENT
 #undef LFL_CPP_SYNTAX_STATEMENT
   } },
@@ -364,33 +364,33 @@ RegexCPlusPlusHighlighter::RegexCPlusPlusHighlighter
 #define XX(x) #x,
 #define LFL_C_SYNTAX_STRUCTURE
 #define LFL_CPP_SYNTAX_STRUCTURE
-#include "core/app/bindings/c_syntax.h"
-#include "core/app/bindings/cpp_syntax.h"
+#include "core/ide/c_syntax.h"
+#include "core/ide/cpp_syntax.h"
 #undef LFL_C_SYNTAX_STRUCTURE
 #undef LFL_CPP_SYNTAX_STRUCTURE
   } },
 
   Keyword{ "Label", {
 #define LFL_C_SYNTAX_LABEL
-#include "core/app/bindings/c_syntax.h"
+#include "core/ide/c_syntax.h"
 #undef LFL_C_SYNTAX_LABEL
   } },
 
   Keyword{ "Conditional", {
 #define LFL_C_SYNTAX_CONDITIONAL
-#include "core/app/bindings/c_syntax.h"
+#include "core/ide/c_syntax.h"
 #undef LFL_C_SYNTAX_CONDITIONAL
   } },
 
   Keyword{ "Repeat", {
 #define LFL_C_SYNTAX_REPEAT
-#include "core/app/bindings/c_syntax.h"
+#include "core/ide/c_syntax.h"
 #undef LFL_C_SYNTAX_REPEAT
   } },
 
   Keyword{ "Todo", {
 #define LFL_C_SYNTAX_TODO
-#include "core/app/bindings/c_syntax.h"
+#include "core/ide/c_syntax.h"
 #undef LFL_C_SYNTAX_TODO
   } },
 
@@ -398,8 +398,8 @@ RegexCPlusPlusHighlighter::RegexCPlusPlusHighlighter
 #define XX(x) #x,
 #define LFL_C_SYNTAX_OPERATOR
 #define LFL_CPP_SYNTAX_OPERATOR
-#include "core/app/bindings/c_syntax.h"
-#include "core/app/bindings/cpp_syntax.h"
+#include "core/ide/c_syntax.h"
+#include "core/ide/cpp_syntax.h"
 #undef LFL_C_SYNTAX_OPERATOR
 #undef LFL_CPP_SYNTAX_OPERATOR
   } },
@@ -408,8 +408,8 @@ RegexCPlusPlusHighlighter::RegexCPlusPlusHighlighter
 #define XX(x) #x,
 #define LFL_C_SYNTAX_TYPE
 #define LFL_CPP_SYNTAX_TYPE
-#include "core/app/bindings/c_syntax.h"
-#include "core/app/bindings/cpp_syntax.h"
+#include "core/ide/c_syntax.h"
+#include "core/ide/cpp_syntax.h"
 #undef LFL_C_SYNTAX_TYPE
 #undef LFL_CPP_SYNTAX_TYPE
   } },
@@ -418,45 +418,45 @@ RegexCPlusPlusHighlighter::RegexCPlusPlusHighlighter
 #define XX(x) #x,
 #define LFL_C_SYNTAX_STORAGECLASS
 #define LFL_CPP_SYNTAX_STORAGECLASS
-#include "core/app/bindings/c_syntax.h"
-#include "core/app/bindings/cpp_syntax.h"
+#include "core/ide/c_syntax.h"
+#include "core/ide/cpp_syntax.h"
 #undef LFL_C_SYNTAX_STORAGECLASS
 #undef LFL_CPP_SYNTAX_STORAGECLASS
   } },
 
   Keyword{ "Constant", {
 #define LFL_C_SYNTAX_CONSTANT
-#include "core/app/bindings/c_syntax.h"
+#include "core/ide/c_syntax.h"
 #undef LFL_C_SYNTAX_CONSTANT
   } },
 
   Keyword{ "Access", {
 #define LFL_CPP_SYNTAX_ACCESS
-#include "core/app/bindings/cpp_syntax.h"
+#include "core/ide/cpp_syntax.h"
 #undef LFL_CPP_SYNTAX_ACCESS
   } },
 
   Keyword{ "Exceptions", {
 #define LFL_CPP_SYNTAX_EXCEPTIONS
-#include "core/app/bindings/cpp_syntax.h"
+#include "core/ide/cpp_syntax.h"
 #undef LFL_CPP_SYNTAX_EXCEPTIONS
   } },
 
   Keyword{ "Cast", {
 #define LFL_CPP_SYNTAX_CAST
-#include "core/app/bindings/cpp_syntax.h"
+#include "core/ide/cpp_syntax.h"
 #undef LFL_CPP_SYNTAX_CAST
   } },
 
   Keyword{ "Number", {
 #define LFL_CPP_SYNTAX_NUMBER
-#include "core/app/bindings/cpp_syntax.h"
+#include "core/ide/cpp_syntax.h"
 #undef LFL_CPP_SYNTAX_NUMBER
   } },
 
   Keyword{ "Bool", {
 #define LFL_CPP_SYNTAX_BOOL
-#include "core/app/bindings/cpp_syntax.h"
+#include "core/ide/cpp_syntax.h"
 #undef LFL_CPP_SYNTAX_BOOL
   } },
 

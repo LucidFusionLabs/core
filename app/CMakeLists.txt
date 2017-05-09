@@ -53,8 +53,8 @@ add_subdirectory(cuda)
 add_subdirectory(db)
 
 add_library(lfl_app ${LFL_APP_TYPE} gui.cpp font.cpp flow.cpp app.cpp types/types.cpp
-            types/string.cpp types/time.cpp bindings/syntax.cpp "file.cpp" assets.cpp loader.cpp
-            audio.cpp video.cpp input.cpp math.cpp ipc.cpp network.cpp net/http.cpp net/resolver.cpp
+            types/string.cpp types/time.cpp "file.cpp" assets.cpp loader.cpp audio.cpp video.cpp
+            input.cpp math.cpp ipc.cpp network.cpp net/http.cpp net/resolver.cpp
             camera.cpp scene.cpp shell.cpp crypto.cpp bindings.cpp
             ${CAPNP_SRC} ${FLATBUFFERS_SRC_OUTPUTS})
 

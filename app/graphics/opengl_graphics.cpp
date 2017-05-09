@@ -153,7 +153,7 @@ const int GraphicsDevice::GLPreferredBuffer    = GL_UNSIGNED_BYTE;
 #endif                                         
 const int GraphicsDevice::GLInternalFormat     = GL_RGBA;
 const int GraphicsDevice::MaxVertexUniformComp = GL_MAX_VERTEX_UNIFORM_COMPONENTS;
-const int GraphicsDevice::FramebufferBinding   = 0;
+const int GraphicsDevice::FramebufferBinding   = GL_FRAMEBUFFER_BINDING;
 const int GraphicsDevice::FramebufferUndefined = GL_FRAMEBUFFER_UNDEFINED;
 #endif
 
