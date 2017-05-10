@@ -70,12 +70,12 @@ elseif(LFL_ANDROID)
       COMMAND ${ANDROID_HOME}/platform-tools/adb logcat | tee ${CMAKE_CURRENT_BINARY_DIR}/debug.txt)
 
     add_custom_target(${target}_help WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-      COMMAND echo "Symbolicate with: ${ANDROID_NDK_HOME}/toolchains/arm-linux-androideabi-4.9/prebuilt/darwin-x86_64/bin/arm-linux-androideabi-addr2line -C -f -e libapp.so 008bd340")
+      COMMAND echo "Symbolicate with: ${ANDROID_NDK_HOME}/toolchains/arm-linux-androideabi-4.9/prebuilt/darwin-x86_64/bin/arm-linux-androideabi-addr2line -C -f -e libnative-lib.so 008bd340")
   endfunction()
 
   macro(lfl_add_package target)
     lfl_add_target(${target} SHARED_LIBRARY ${ARGN})
-    set_target_properties(${target} PROPERTIES OUTPUT_NAME app)
+    set_target_properties(${target} PROPERTIES OUTPUT_NAME native-lib)
   endmacro()
 
 elseif(LFL_IOS)

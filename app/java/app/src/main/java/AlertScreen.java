@@ -27,15 +27,14 @@ import android.util.Pair;
 import android.util.TypedValue;
 import android.net.Uri;
 import android.graphics.Rect;
-import android.app.ActionBar;
 import android.app.AlertDialog;
 
-public class JAlert extends JWidget {
-    public ArrayList<JModelItem> model;
+public class AlertScreen extends Screen {
+    public ArrayList<ModelItem> model;
     public Pair<AlertDialog, EditText> view;
 
-    public JAlert(final MainActivity activity, ArrayList<JModelItem> m) {
-        super(JWidget.TYPE_ALERT, activity, "", 0);
+    public AlertScreen(final MainActivity activity, ArrayList<ModelItem> m) {
+        super(Screen.TYPE_ALERT, activity, "", 0);
         model = m;
     }
 
@@ -52,7 +51,7 @@ public class JAlert extends JWidget {
         alert.setTitle(model.get(1).key);
         alert.setMessage(model.get(1).val);
 
-        JModelItem style = model.get(0);
+        ModelItem style = model.get(0);
         boolean pw = style.val.equals("pwinput");
         final EditText input = (pw || style.val.equals("textinput")) ? new EditText(activity) : null;
         if (input != null) {
@@ -63,7 +62,7 @@ public class JAlert extends JWidget {
         
         alert.setPositiveButton(model.get(3).key, new DialogInterface.OnClickListener() {
                                 public void onClick(DialogInterface dialog, int which) {
-            JModelItem confirm = model.get(3);
+            ModelItem confirm = model.get(3);
             if (confirm.right_cb != null)
                 confirm.right_cb.run((input == null) ? confirm.val :
                                      (confirm.val + (confirm.val.length() > 0 ? " " : "") + input.getText().toString()));
@@ -71,7 +70,7 @@ public class JAlert extends JWidget {
 
         alert.setNegativeButton(model.get(2).key, new DialogInterface.OnClickListener() {
                                 public void onClick(DialogInterface dialog, int which) {
-            JModelItem cancel = model.get(2);
+            ModelItem cancel = model.get(2);
             if (cancel.right_cb != null)
                 cancel.right_cb.run((input == null) ? cancel.val :
                                     (cancel.val + (cancel.val.length() > 0 ? " " : "") + input.getText().toString()));
@@ -93,9 +92,9 @@ public class JAlert extends JWidget {
     }
 
     public void showTextCB(final MainActivity activity, final String tstr, final String msg,
-                           final String arg, final LStringCB confirm_cb) {
+                           final String arg, final NativeStringCB confirm_cb) {
         activity.runOnUiThread(new Runnable() { public void run() {
-            JModelItem title = model.get(1), confirm = model.get(3);
+            ModelItem title = model.get(1), confirm = model.get(3);
             title.key = tstr;
             title.val = msg;
             confirm.right_cb = confirm_cb;

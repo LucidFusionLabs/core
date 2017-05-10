@@ -29,44 +29,42 @@ import android.util.Pair;
 import android.util.TypedValue;
 import android.net.Uri;
 import android.graphics.Rect;
-import android.app.ActionBar;
-import android.app.AlertDialog;
 
-public class JTable extends JWidget {
-    public JRecyclerViewAdapter model;
-    public JRecyclerViewFragment view;
+public class TableScreen extends Screen {
+    public ModelItemRecyclerViewAdapter model;
+    public RecyclerViewScreenFragment view;
     public native void RunHideCB();
 
-    public JTable(final MainActivity activity, String t, ArrayList<JModelItem> m, long lsp) {
-        super(JWidget.TYPE_TABLE, activity, t, lsp);
-        model = new JRecyclerViewAdapter(activity, m, this);
+    public TableScreen(final MainActivity activity, String t, ArrayList<ModelItem> m, long lsp) {
+        super(Screen.TYPE_TABLE, activity, t, lsp);
+        model = new ModelItemRecyclerViewAdapter(activity, m, this);
     }
 
     public void clear() { view = null; }
 
-    public JRecyclerViewFragment get(final MainActivity activity) {
+    public RecyclerViewScreenFragment get(final MainActivity activity) {
         if (view == null) view = createView(activity);
         return view;
     }
 
-    public JRecyclerViewFragment createView(final MainActivity activity) {
-        return new JRecyclerViewFragment(activity, this, model, null);
+    public RecyclerViewScreenFragment createView(final MainActivity activity) {
+        return new RecyclerViewScreenFragment(activity, this, model, null);
     }
 
     public void show(final MainActivity activity, final boolean show_or_hide) {
         activity.runOnUiThread(new Runnable() { public void run() {
-            JRecyclerViewFragment table = get(activity);
+            RecyclerViewScreenFragment table = get(activity);
             if (show_or_hide) {
                 activity.action_bar.show();
-                activity.getFragmentManager().beginTransaction().replace(R.id.content_frame, table).commit();
+                activity.getSupportFragmentManager().beginTransaction().replace(R.id.content_frame, table).commit();
             } else {
                 if (activity.disable_title) activity.action_bar.hide();
-                activity.getFragmentManager().beginTransaction().remove(table).commit();
+                activity.getSupportFragmentManager().beginTransaction().remove(table).commit();
             }
         }});
     }
 
-    public void addNavButton(final MainActivity activity, final int halign, final JModelItem row) {
+    public void addNavButton(final MainActivity activity, final int halign, final ModelItem row) {
         activity.runOnUiThread
             (new Runnable() { public void run() { get(activity).data.addNavButton(halign, row); }});
     }
@@ -98,7 +96,7 @@ public class JTable extends JWidget {
         FutureTask<Pair<Long, ArrayList<Integer>>> future = new FutureTask<Pair<Long, ArrayList<Integer>>>
             (new Callable<Pair<Long, ArrayList<Integer>>>(){
                 public Pair<Long, ArrayList<Integer>> call() throws Exception {
-                    JRecyclerViewFragment table = get(activity);
+                    RecyclerViewScreenFragment table = get(activity);
                     return table.data.getPicked(section, row);
                 }});
         try { activity.runOnUiThread(future); return future.get(); }
@@ -109,7 +107,7 @@ public class JTable extends JWidget {
         FutureTask<ArrayList<Pair<String, String>>> future = new FutureTask<ArrayList<Pair<String, String>>>
             (new Callable<ArrayList<Pair<String, String>>>(){
                 public ArrayList<Pair<String, String>> call() throws Exception {
-                    JRecyclerViewFragment table = get(activity);
+                    RecyclerViewScreenFragment table = get(activity);
                     return table.data.getSectionText(table.recyclerview, section);
                 }});
         try { activity.runOnUiThread(future); return future.get(); }
@@ -126,7 +124,7 @@ public class JTable extends JWidget {
             (new Runnable() { public void run() { get(activity).data.endUpdates(); }});
     }
 
-    public void addRow(final MainActivity activity, final int section, final JModelItem row) {
+    public void addRow(final MainActivity activity, final int section, final ModelItem row) {
         activity.runOnUiThread
             (new Runnable() { public void run() { get(activity).data.addRow(section, row); }});
     }
@@ -136,20 +134,20 @@ public class JTable extends JWidget {
             (new Runnable() { public void run() { get(activity).data.selectRow(s, r); }});
     }
 
-    public void replaceRow(final MainActivity activity, final int s, final int r, final JModelItem v) {
+    public void replaceRow(final MainActivity activity, final int s, final int r, final ModelItem v) {
         activity.runOnUiThread
             (new Runnable() { public void run() { get(activity).data.replaceRow(s, r, v); }});
     }
 
-    public void replaceSection(final MainActivity activity, final int section, final JModelItem h,
-                               final int flag, final ArrayList<JModelItem> v) {
+    public void replaceSection(final MainActivity activity, final int section, final ModelItem h,
+                               final int flag, final ArrayList<ModelItem> v) {
         activity.runOnUiThread
             (new Runnable() { public void run() { get(activity).data.replaceSection(section, h, flag, v); }});
     }
 
-    public void applyChangeList(final MainActivity activity, final ArrayList<JModelItemChange> changes) {
+    public void applyChangeList(final MainActivity activity, final ArrayList<ModelItemChange> changes) {
         activity.runOnUiThread
-            (new Runnable() { public void run() { JModelItemChange.applyChangeList(changes, get(activity).data); }});
+            (new Runnable() { public void run() { ModelItemChange.applyChangeList(changes, get(activity).data); }});
     }
 
     public void setSectionValues(final MainActivity activity, final int section, final ArrayList<String> v) {
@@ -182,7 +180,7 @@ public class JTable extends JWidget {
             (new Runnable() { public void run() { title = v; }});
     }
 
-    public void setEditable(final MainActivity activity, final int s, final int start_row, final LIntIntCB intint_cb) {
+    public void setEditable(final MainActivity activity, final int s, final int start_row, final NativeIntIntCB intint_cb) {
         activity.runOnUiThread
             (new Runnable() { public void run() { get(activity).data.setEditable(s, start_row, intint_cb); }});
     }

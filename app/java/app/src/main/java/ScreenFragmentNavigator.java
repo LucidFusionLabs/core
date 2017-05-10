@@ -29,40 +29,35 @@ import android.util.Pair;
 import android.util.TypedValue;
 import android.net.Uri;
 import android.graphics.Rect;
-import android.app.ActionBar;
 import android.app.AlertDialog;
-import android.app.Fragment;
-import android.app.FragmentManager;
+import android.support.v4.app.Fragment;
+import android.support.v4.app.FragmentManager;
 
-public class JNavigation extends JWidget {
+public class ScreenFragmentNavigator {
     public int shown_index = -1;
 
-    public JNavigation(final MainActivity activity) {
-        super(JWidget.TYPE_NAVIGATION, activity, "", 0);
-    }
-
-    public void clear() {}
+    public ScreenFragmentNavigator(final MainActivity activity) {}
 
     public void show(final MainActivity activity, final boolean show_or_hide) {
-        final JNavigation self = this;
+        final ScreenFragmentNavigator self = this;
         activity.runOnUiThread(new Runnable() { public void run() {
             if (show_or_hide) {
                 if (shown_index >= 0) Log.i("lfl", "Show already shown navbar");
                 else {
-                    activity.jwidgets.navigations.add(self);
+                    activity.screens.navigations.add(self);
                     activity.action_bar.show();
                     showBackFragment(activity, true, true);
-                    shown_index = activity.jwidgets.navigations.size()-1;
+                    shown_index = activity.screens.navigations.size()-1;
                 }
             } else {
                 if (shown_index < 0) Log.i("lfl", "Hide unshown navbar");
                 else {
-                    int size = activity.jwidgets.navigations.size();
-                    if (shown_index < size) activity.jwidgets.navigations.remove(shown_index);
+                    int size = activity.screens.navigations.size();
+                    if (shown_index < size) activity.screens.navigations.remove(shown_index);
                     if (activity.disable_title) activity.action_bar.hide();
-                    if (activity.getFragmentManager().findFragmentById(R.id.content_frame) != null) {
-                        Fragment frag = activity.getFragmentManager().findFragmentById(R.id.content_frame);
-                        activity.getFragmentManager().beginTransaction().remove(frag).commit();
+                    if (activity.getSupportFragmentManager().findFragmentById(R.id.content_frame) != null) {
+                        Fragment frag = activity.getSupportFragmentManager().findFragmentById(R.id.content_frame);
+                        activity.getSupportFragmentManager().beginTransaction().remove(frag).commit();
                     }
                     shown_index = -1;
                 }
@@ -70,25 +65,25 @@ public class JNavigation extends JWidget {
         }});
     }
 
-    public void pushTable(final MainActivity activity, final JTable x) {
+    public void pushTable(final MainActivity activity, final TableScreen x) {
         activity.runOnUiThread(new Runnable() { public void run() {
             x.changed = false;
-            String tag = Integer.toString(activity.getFragmentManager().getBackStackEntryCount());
-            JRecyclerViewFragment frag = x.get(activity);
-            activity.getFragmentManager().beginTransaction()
+            String tag = Integer.toString(activity.getSupportFragmentManager().getBackStackEntryCount());
+            RecyclerViewScreenFragment frag = x.get(activity);
+            activity.getSupportFragmentManager().beginTransaction()
                 .replace(R.id.content_frame, frag, tag).addToBackStack(tag).commit();
-            activity.setTitle(frag.parent_widget.title);
+            activity.setTitle(frag.parent_screen.title);
         }});
     }
     
-    public void pushTextView(final MainActivity activity, final JTextView x) {
+    public void pushTextView(final MainActivity activity, final TextViewScreen x) {
         activity.runOnUiThread(new Runnable() { public void run() {
             x.changed = false;
-            String tag = Integer.toString(activity.getFragmentManager().getBackStackEntryCount());
-            JTextViewFragment frag = x.get(activity);
-            activity.getFragmentManager().beginTransaction()
+            String tag = Integer.toString(activity.getSupportFragmentManager().getBackStackEntryCount());
+            TextViewScreenFragment frag = x.get(activity);
+            activity.getSupportFragmentManager().beginTransaction()
                 .replace(R.id.content_frame, frag, tag).addToBackStack(tag).commit();
-            activity.setTitle(frag.parent_widget.title);
+            activity.setTitle(frag.parent_screen.title);
         }});
     }
 
@@ -97,7 +92,7 @@ public class JNavigation extends JWidget {
             int stack_size = runBackFragmentHideCB(activity, n);
             if (stack_size <= 0 || n <= 0) return;
             int target = Math.max(0, stack_size - n);
-            activity.getFragmentManager().popBackStackImmediate
+            activity.getSupportFragmentManager().popBackStackImmediate
                 ((target >= 0 ? Integer.toString(target) : null), FragmentManager.POP_BACK_STACK_INCLUSIVE);
             showBackFragment(activity, false, true);
         }});
@@ -105,29 +100,29 @@ public class JNavigation extends JWidget {
 
     public void popToRoot(final MainActivity activity) {
         activity.runOnUiThread(new Runnable() { public void run() {
-            int stack_size = activity.getFragmentManager().getBackStackEntryCount();
+            int stack_size = activity.getSupportFragmentManager().getBackStackEntryCount();
             if (stack_size < 2) return;
             runBackFragmentHideCB(activity, stack_size - 1);
-            activity.getFragmentManager().popBackStackImmediate("1", FragmentManager.POP_BACK_STACK_INCLUSIVE);
+            activity.getSupportFragmentManager().popBackStackImmediate("1", FragmentManager.POP_BACK_STACK_INCLUSIVE);
             showBackFragment(activity, false, true);
         }});
     }
 
     public void popAll(final MainActivity activity) {
         activity.runOnUiThread(new Runnable() { public void run() {
-            int stack_size = activity.getFragmentManager().getBackStackEntryCount();
+            int stack_size = activity.getSupportFragmentManager().getBackStackEntryCount();
             runBackFragmentHideCB(activity, stack_size);
-            activity.getFragmentManager().popBackStackImmediate(null, FragmentManager.POP_BACK_STACK_INCLUSIVE);
+            activity.getSupportFragmentManager().popBackStackImmediate(null, FragmentManager.POP_BACK_STACK_INCLUSIVE);
         }});
     }
 
     public Fragment getBack(final MainActivity activity) {
         FutureTask<Fragment> future = new FutureTask<Fragment>
             (new Callable<Fragment>(){ public Fragment call() throws Exception {
-                int stack_size = activity.getFragmentManager().getBackStackEntryCount();
+                int stack_size = activity.getSupportFragmentManager().getBackStackEntryCount();
                 if (stack_size == 0) return null;
                 String tag = Integer.toString(stack_size-1);
-                return activity.getFragmentManager().findFragmentByTag(tag);
+                return activity.getSupportFragmentManager().findFragmentByTag(tag);
             }});
         try { activity.runOnUiThread(future); return future.get(); }
         catch(Exception e) { return null; }
@@ -135,22 +130,22 @@ public class JNavigation extends JWidget {
 
     public long getBackTableSelf(final MainActivity activity) {
         Fragment frag = getBack(activity);
-        if (frag == null || !(frag instanceof JFragment)) return 0;
-        JFragment jfrag = (JFragment)frag;
-        return (jfrag.parent_widget instanceof JTable) ? jfrag.parent_widget.lfl_self : 0;
+        if (frag == null || !(frag instanceof ScreenFragment)) return 0;
+        ScreenFragment jfrag = (ScreenFragment)frag;
+        return (jfrag.parent_screen instanceof TableScreen) ? jfrag.parent_screen.nativeParent : 0;
     }
 
     public static void onBackPressed(final MainActivity activity) {
-        int back_count = activity.getFragmentManager().getBackStackEntryCount();
+        int back_count = activity.getSupportFragmentManager().getBackStackEntryCount();
         if (back_count > 1) {
             runBackFragmentHideCB(activity, 1);
             activity.superOnBackPressed();
             showBackFragment(activity, false, true);
         } else if (back_count == 1) {
             runBackFragmentHideCB(activity, 1);
-            Fragment frag = activity.getFragmentManager().findFragmentByTag("0");
-            if (frag != null && frag instanceof JRecyclerViewFragment) {
-                JModelItem nav_left = ((JRecyclerViewFragment)frag).data.nav_left;
+            Fragment frag = activity.getSupportFragmentManager().findFragmentByTag("0");
+            if (frag != null && frag instanceof RecyclerViewScreenFragment) {
+                ModelItem nav_left = ((RecyclerViewScreenFragment)frag).data.nav_left;
                 if (nav_left != null && nav_left.cb != null) {
                     nav_left.cb.run();
                     return;
@@ -163,25 +158,25 @@ public class JNavigation extends JWidget {
     } 
 
     public static int runBackFragmentHideCB(final MainActivity activity, int n) {
-        int stack_size = activity.getFragmentManager().getBackStackEntryCount();
+        int stack_size = activity.getSupportFragmentManager().getBackStackEntryCount();
         if (stack_size == 0) return stack_size;
         for (int i = 0, l = Math.min(n, stack_size); i < l; i++) {
             String tag = Integer.toString(stack_size-1-i);
-            Fragment frag = activity.getFragmentManager().findFragmentByTag(tag);
-            if (frag == null || !(frag instanceof JFragment)) continue;
-            JFragment jfrag = (JFragment)frag;
-            if (jfrag.parent_widget.lfl_self == 0) continue;
-            if (jfrag.parent_widget instanceof JTable) ((JTable)jfrag.parent_widget).RunHideCB();
+            Fragment frag = activity.getSupportFragmentManager().findFragmentByTag(tag);
+            if (frag == null || !(frag instanceof ScreenFragment)) continue;
+            ScreenFragment jfrag = (ScreenFragment)frag;
+            if (jfrag.parent_screen.nativeParent == 0) continue;
+            if (jfrag.parent_screen instanceof TableScreen) ((TableScreen)jfrag.parent_screen).RunHideCB();
         }
         return stack_size;
     }
 
     public static void showBackFragment(final MainActivity activity, boolean show_content, boolean show_title) {
-        int stack_size = activity.getFragmentManager().getBackStackEntryCount();
+        int stack_size = activity.getSupportFragmentManager().getBackStackEntryCount();
         if (stack_size == 0) return;
         String tag = Integer.toString(stack_size-1);
-        Fragment frag = activity.getFragmentManager().findFragmentByTag(tag);
-        if (show_content) activity.getFragmentManager().beginTransaction().replace(R.id.content_frame, frag, tag).commit();
-        if (show_title && frag instanceof JFragment) activity.setTitle(((JFragment)frag).parent_widget.title);
+        Fragment frag = activity.getSupportFragmentManager().findFragmentByTag(tag);
+        if (show_content) activity.getSupportFragmentManager().beginTransaction().replace(R.id.content_frame, frag, tag).commit();
+        if (show_title && frag instanceof ScreenFragment) activity.setTitle(((ScreenFragment)frag).parent_screen.title);
     }
 }

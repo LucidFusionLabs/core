@@ -27,15 +27,14 @@ import android.util.Pair;
 import android.util.TypedValue;
 import android.net.Uri;
 import android.graphics.Rect;
-import android.app.ActionBar;
 import android.app.AlertDialog;
 
-public class JMenu extends JWidget {
-    public ArrayList<JModelItem> data;
+public class MenuScreen extends Screen {
+    public ArrayList<ModelItem> data;
     public AlertDialog view;
 
-    public JMenu(final MainActivity activity, String t, ArrayList<JModelItem> m) {
-        super(JWidget.TYPE_MENU, activity, t, 0);
+    public MenuScreen(final MainActivity activity, String t, ArrayList<ModelItem> m) {
+        super(Screen.TYPE_MENU, activity, t, 0);
         data = m;
     }
 
@@ -52,7 +51,7 @@ public class JMenu extends JWidget {
                     @Override
                     public void onClick(DialogInterface dialog, int which) {
                         if (which >= data.size()) throw new java.lang.IllegalArgumentException();
-                        JModelItem item = data.get(which);
+                        ModelItem item = data.get(which);
                         if (item.cb != null) item.cb.run();
                     }});
             }

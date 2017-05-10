@@ -31,32 +31,30 @@ import android.util.TypedValue;
 import android.net.Uri;
 import android.graphics.Rect;
 import android.graphics.Bitmap;
-import android.app.ActionBar;
 import android.app.AlertDialog;
-import android.app.Fragment;
 import android.preference.PreferenceManager;
+import android.support.v4.app.Fragment;
+import android.support.v7.app.AppCompatActivity;
+import android.support.v7.app.ActionBar;
 
-import javax.microedition.khronos.egl.EGLConfig;
-import javax.microedition.khronos.egl.*;
-
-public class MainActivity extends android.app.Activity {
-    static { System.loadLibrary("app"); }
+public class MainActivity extends AppCompatActivity {
+    static { System.loadLibrary("native-lib"); }
     
-    public native void AppCreate();
-    public native void AppMain();
-    public native void AppNewMainLoop(boolean reset);
-    public native void AppMinimize();
-    public native void AppReshaped(int x, int y, int w, int h);
-    public native void AppKeyPress(int keycode, int mod, int down);
-    public native void AppTouch(int action, float x, float y, float p);
-    public native void AppFling(float x, float y, float vx, float vy);
-    public native void AppScroll(float x, float y, float sx, float sy);
-    public native void AppAccel(float x, float y, float z);
-    public native void AppScale(float x, float y, float dx, float dy, boolean begin);
-    public static native void AppFocusedShellRun(String text);
+    public native void nativeCreate();
+    public native void nativeMain();
+    public native void nativeNewMainLoop(boolean reset);
+    public native void nativeMinimize();
+    public native void nativeReshaped(int x, int y, int w, int h);
+    public native void nativeKeyPress(int keycode, int mod, int down);
+    public native void nativeTouch(int action, float x, float y, float p);
+    public native void nativeFling(float x, float y, float vx, float vy);
+    public native void nativeScroll(float x, float y, float sx, float sy);
+    public native void nativeAccel(float x, float y, float z);
+    public native void nativeScale(float x, float y, float dx, float dy, boolean begin);
+    public static native void nativeShellRun(String text);
 
     public static boolean app_created, app_init, disable_title;
-    public static JWidgets jwidgets = new JWidgets();
+    public static Screens screens = new Screens();
     public static ArrayList<Bitmap> bitmaps = new ArrayList<Bitmap>();
 
     public Resources resources;
@@ -98,12 +96,12 @@ public class MainActivity extends android.app.Activity {
         resources = getResources();
         view = new MainView(this, context);
         audio = (AudioManager)getSystemService(Context.AUDIO_SERVICE);
-        action_bar = getActionBar();
+        action_bar = getSupportActionBar();
 
         if (!app_created) {
-            Log.i("lfl", "MainActivity.AppCreate()");
+            Log.i("lfl", "MainActivity.nativeCreate()");
             app_created = true;
-            AppCreate();
+            nativeCreate();
         } else {
             if (disable_title) disableTitle();
         }
@@ -128,7 +126,7 @@ public class MainActivity extends android.app.Activity {
 
                 int actionbar_h = action_bar.isShowing() ? action_bar.getHeight() : 0;
                 int h = r.bottom - r.top - actionbar_h;
-                for (JToolbar toolbar : jwidgets.toolbar_bottom) {
+                for (Toolbar toolbar : screens.toolbar_bottom) {
                     View tb = toolbar.view;
                     if (tb == null) continue;
                     FrameLayout.LayoutParams params = (FrameLayout.LayoutParams)tb.getLayoutParams();
@@ -138,7 +136,7 @@ public class MainActivity extends android.app.Activity {
                 }
 
                 // Log.i("lfl", "onGlobalLayout(" + r.left + ", " + r.top + ", " + r.right + ", " + r.bottom + ", " + actionbar_h + ") = " + h);
-                AppReshaped(r.left, surface_height - h, r.right - r.left, h); 
+                nativeReshaped(r.left, surface_height - h, r.right - r.left, h); 
             }});
     }
 
@@ -154,7 +152,7 @@ public class MainActivity extends android.app.Activity {
         boolean have_surface = view.have_surface, thread_exists = thread != null;
         Log.i("lfl", "MainActivity.onResume() have_surface=" + have_surface + " thread_exists=" + thread_exists);
         super.onResume();
-        jwidgets.onResume(this);
+        screens.onResume(this);
         if (have_surface && !thread_exists) startRenderThread(false);
     }
     
@@ -166,7 +164,7 @@ public class MainActivity extends android.app.Activity {
 
         Thread t = thread;
         thread = null;        
-        AppMinimize();
+        nativeMinimize();
         try { t.join(); }
         catch(Exception e) { Log.e("lfl", e.toString()); }
         Log.i("lfl", "MainActivity.onPause() exit");
@@ -182,7 +180,7 @@ public class MainActivity extends android.app.Activity {
     @Override
     protected void onDestroy() {
         Log.i("lfl", "MainActivity.onDestroy()");
-        jwidgets.onDestroy();
+        screens.onDestroy();
         // if (advertising != null) advertising.onDestroy();
         super.onDestroy();
     }
@@ -202,7 +200,7 @@ public class MainActivity extends android.app.Activity {
     }
 
     @Override
-    public void onBackPressed() { JNavigation.onBackPressed(this); }
+    public void onBackPressed() { ScreenFragmentNavigator.onBackPressed(this); }
 
     public void superOnBackPressed() { super.onBackPressed(); } 
 
@@ -211,16 +209,16 @@ public class MainActivity extends android.app.Activity {
         surface_height = height;
         boolean thread_exists = thread != null;
         Log.i("lfl", "surfaceChanged thread_exists=" + thread_exists);
-        AppReshaped(0, 0, width, height);
+        nativeReshaped(0, 0, width, height);
         if (thread_exists) return;
         startRenderThread(true);
     }
 
     public void startRenderThread(boolean app_reset) {
         Log.i("lfl", "startRenderThread app_init=" + app_init + " app_reset=" + app_reset);
-        if      (!app_init) thread = new Thread(new Runnable() { public void run() { view.initEGL();        AppMain       ();      } }, "JNIMainThread");
-        else if (app_reset) thread = new Thread(new Runnable() { public void run() { view.initEGL();        AppNewMainLoop(true);  } }, "JNIMainThread");
-        else                thread = new Thread(new Runnable() { public void run() { view.makeCurrentEGL(); AppNewMainLoop(false); } }, "JNIMainThread");
+        if      (!app_init) thread = new Thread(new Runnable() { public void run() { view.initEGL();        nativeMain       ();      } }, "JNIMainThread");
+        else if (app_reset) thread = new Thread(new Runnable() { public void run() { view.initEGL();        nativeNewMainLoop(true);  } }, "JNIMainThread");
+        else                thread = new Thread(new Runnable() { public void run() { view.makeCurrentEGL(); nativeNewMainLoop(false); } }, "JNIMainThread");
         thread.start();
         app_init = true;
     }
@@ -277,9 +275,9 @@ public class MainActivity extends android.app.Activity {
                 (self, new ScaleGestureDetector.SimpleOnScaleGestureListener() {
                     @Override
                     public boolean onScale(ScaleGestureDetector g) {
-                        AppScale(g.getFocusX(), g.getFocusY(),
-                                 g.getCurrentSpanX() - g.getPreviousSpanX(),
-                                 g.getCurrentSpanY() - g.getPreviousSpanY(), !g.isInProgress());
+                        nativeScale(g.getFocusX(), g.getFocusY(),
+                                    g.getCurrentSpanX() - g.getPreviousSpanX(),
+                                    g.getCurrentSpanY() - g.getPreviousSpanY(), !g.isInProgress());
                         return true;
                     }});
         }});
@@ -329,7 +327,7 @@ public class MainActivity extends android.app.Activity {
 
     public boolean openPreferences() {
         if (preference_fragment == null) return false;
-        getFragmentManager().beginTransaction()
+        getSupportFragmentManager().beginTransaction()
             .replace(R.id.content_frame, preference_fragment).addToBackStack("Preferences").commit();
         return true;
     }
@@ -395,204 +393,4 @@ public class MainActivity extends android.app.Activity {
 
     public void playMusic(MediaPlayer mp) { mp.start(); }
     public void playBackgroundMusic(MediaPlayer mp) { mp.setLooping(true); mp.start(); }
-}
-
-class MyGestureListener extends android.view.GestureDetector.SimpleOnGestureListener {
-    public MainActivity main_activity;
-
-    @Override
-    public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
-        main_activity.AppFling(e1.getX(), e1.getY(), velocityX, velocityY);
-        return false;
-    }
-}
-
-class MainView extends android.view.SurfaceView implements SurfaceHolder.Callback, View.OnKeyListener, View.OnTouchListener, SensorEventListener {
-    public MainActivity main_activity;
-    public EGLContext egl_context;
-    public EGLSurface egl_surface;
-    public EGLDisplay egl_display;
-    public GestureDetector gesture;
-    public ScaleGestureDetector scale_gesture = null;
-    public SensorManager sensor;
-    public boolean have_surface;
-
-    public MainView(MainActivity activity, Context context) {
-        super(context);
-        main_activity = activity;
-        sensor = (SensorManager)context.getSystemService("sensor");  
-        // gesture = new GestureDetector(new MyGestureListener(this));
-        setFocusable(true);
-        setFocusableInTouchMode(true);
-        setOnKeyListener(this); 
-        setOnTouchListener(this);   
-        getHolder().addCallback(this); 
-        requestFocus();
-    }
-
-    @Override
-    protected void onSizeChanged(int xNew, int yNew, int xOld, int yOld) {
-        Log.i("lfl", "MainView.onSizeChanged(" + xNew + ", " + yNew + ", " + xOld + ", " + yOld + ")");
-    }
-
-    public void surfaceCreated(SurfaceHolder holder) {
-        Log.i("lfl", "MainView.surfaceCreated()");
-        sensor.registerListener(this, sensor.getDefaultSensor(Sensor.TYPE_ACCELEROMETER), SensorManager.SENSOR_DELAY_GAME, null);
-        have_surface = true;
-    }
-
-    public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
-        Log.i("lfl", "MainView.surfaceChanged(" + width + ", " + height + ")");
-        main_activity.surfaceChanged(format, width, height);
-    }
-
-    public void surfaceDestroyed(SurfaceHolder holder) {
-        Log.i("lfl", "surfaceDestroyed()");
-        sensor.unregisterListener(this, sensor.getDefaultSensor(Sensor.TYPE_ACCELEROMETER));
-        have_surface = false;
-    }
-
-    public void onSensorChanged(SensorEvent event) {
-        if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER)
-            main_activity.AppAccel(event.values[0], event.values[1], event.values[2]);
-    }
-
-    public boolean onKey(View v, int key_code, KeyEvent event) {
-        int key_char = event.getUnicodeChar(), mod = 0;
-        if (key_char == 0) {
-            int meta_state = event.getMetaState();
-            if ((meta_state & KeyEvent.META_SHIFT_ON) != 0) mod |= 1;
-            if ((meta_state & KeyEvent.META_CTRL_ON)  != 0) mod |= 2;
-            if ((meta_state & KeyEvent.META_ALT_ON)   != 0) mod |= 4;
-
-            switch(event.getKeyCode()) {
-                case KeyEvent.KEYCODE_DEL:        key_char = '\b';   break;
-                case KeyEvent.KEYCODE_ESCAPE:     key_char = 0xE100; break;
-                case KeyEvent.KEYCODE_DPAD_UP:    key_char = 0xE101; break;
-                case KeyEvent.KEYCODE_DPAD_DOWN:  key_char = 0xE102; break;
-                case KeyEvent.KEYCODE_DPAD_LEFT:  key_char = 0xE103; break;
-                case KeyEvent.KEYCODE_DPAD_RIGHT: key_char = 0xE104; break;
-                case KeyEvent.KEYCODE_CTRL_LEFT:  key_char = 0xE105; break;
-                case KeyEvent.KEYCODE_CTRL_RIGHT: key_char = 0xE106; break;
-                case KeyEvent.KEYCODE_META_LEFT:  key_char = 0xE107; break;
-                case KeyEvent.KEYCODE_META_RIGHT: key_char = 0xE108; break;
-                case KeyEvent.KEYCODE_TAB:        key_char = 0xE109; break;
-                case KeyEvent.KEYCODE_PAGE_UP:    key_char = 0xE10A; break;
-                case KeyEvent.KEYCODE_PAGE_DOWN:  key_char = 0xE10B; break;
-                case KeyEvent.KEYCODE_F1:         key_char = 0xE10C; break;
-                case KeyEvent.KEYCODE_F2:         key_char = 0xE10D; break;
-                case KeyEvent.KEYCODE_F3:         key_char = 0xE10E; break;
-                case KeyEvent.KEYCODE_F4:         key_char = 0xE10F; break;
-                case KeyEvent.KEYCODE_F5:         key_char = 0xE110; break;
-                case KeyEvent.KEYCODE_F6:         key_char = 0xE111; break;
-                case KeyEvent.KEYCODE_F7:         key_char = 0xE112; break;
-                case KeyEvent.KEYCODE_F8:         key_char = 0xE113; break;
-                case KeyEvent.KEYCODE_F9:         key_char = 0xE114; break;
-                case KeyEvent.KEYCODE_A:          key_char = 'a';    break;
-                case KeyEvent.KEYCODE_B:          key_char = 'b';    break;
-                case KeyEvent.KEYCODE_C:          key_char = 'c';    break;
-                case KeyEvent.KEYCODE_D:          key_char = 'd';    break;
-                case KeyEvent.KEYCODE_E:          key_char = 'e';    break;
-                case KeyEvent.KEYCODE_F:          key_char = 'f';    break;
-                case KeyEvent.KEYCODE_G:          key_char = 'g';    break;
-                case KeyEvent.KEYCODE_H:          key_char = 'h';    break;
-                case KeyEvent.KEYCODE_I:          key_char = 'i';    break;
-                case KeyEvent.KEYCODE_J:          key_char = 'j';    break;
-                case KeyEvent.KEYCODE_K:          key_char = 'k';    break;
-                case KeyEvent.KEYCODE_L:          key_char = 'l';    break;
-                case KeyEvent.KEYCODE_M:          key_char = 'm';    break;
-                case KeyEvent.KEYCODE_N:          key_char = 'n';    break;
-                case KeyEvent.KEYCODE_O:          key_char = 'o';    break;
-                case KeyEvent.KEYCODE_P:          key_char = 'p';    break;
-                case KeyEvent.KEYCODE_Q:          key_char = 'q';    break;
-                case KeyEvent.KEYCODE_R:          key_char = 'r';    break;
-                case KeyEvent.KEYCODE_S:          key_char = 's';    break;
-                case KeyEvent.KEYCODE_T:          key_char = 't';    break;
-                case KeyEvent.KEYCODE_U:          key_char = 'u';    break;
-                case KeyEvent.KEYCODE_V:          key_char = 'v';    break;
-                case KeyEvent.KEYCODE_W:          key_char = 'w';    break;
-                case KeyEvent.KEYCODE_X:          key_char = 'x';    break;
-                case KeyEvent.KEYCODE_Y:          key_char = 'y';    break;
-                case KeyEvent.KEYCODE_Z:          key_char = 'z';    break;
-            }
-        }
-        if (key_char == 0) return false;
-        else if (event.getAction() == KeyEvent.ACTION_UP)   { main_activity.AppKeyPress(key_char, mod, 0); return true; }
-        else if (event.getAction() == KeyEvent.ACTION_DOWN) { main_activity.AppKeyPress(key_char, mod, 1); return true; }
-        else return false;
-    }
-
-    public boolean onTouch(View v, MotionEvent event) {
-        // gesture.onTouchEvent(event);
-        if (scale_gesture != null) scale_gesture.onTouchEvent(event);
-        final int action = event.getAction() & MotionEvent.ACTION_MASK;
-        if (action == MotionEvent.ACTION_MOVE) {
-            if (scale_gesture == null || !scale_gesture.isInProgress()) {
-                for (int i = 0; i < event.getPointerCount(); i++) {
-                    main_activity.AppTouch(action, event.getX(i), event.getY(i), event.getPressure(i));
-                }
-            }
-        } else {
-            int action_index = (action == MotionEvent.ACTION_POINTER_DOWN || action == MotionEvent.ACTION_POINTER_UP) ? event.getActionIndex() : 0;
-            main_activity.AppTouch(action, event.getX(action_index), event.getY(action_index), event.getPressure(action_index));
-        }
-        return true; 
-    }
-
-    public void onAccuracyChanged(Sensor sensor, int accuracy) {}
-
-    public void initEGL() {
-        if      (initEGL(2)) main_activity.egl_version = 2;
-        else if (initEGL(1)) main_activity.egl_version = 1;
-        else                 main_activity.egl_version = 0;
-    }
-
-    public boolean initEGL(int requestedVersion) {
-        try {
-            final int EGL_OPENGL_ES2_BIT = 4, EGL_CONTEXT_CLIENT_VERSION = 0x3098;
-            final int[] attrib_list1 = { EGL10.EGL_DEPTH_SIZE, 16, EGL10.EGL_NONE };
-            final int[] attrib_list2 = { EGL10.EGL_DEPTH_SIZE, 16, EGL10.EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT, EGL10.EGL_NONE };
-            final int[] context_attrib2 = { EGL_CONTEXT_CLIENT_VERSION, 2, EGL10.EGL_NONE };
-            int[] attrib_list = requestedVersion >= 2 ? attrib_list2 : attrib_list1;
-            int[] context_attrib = requestedVersion >= 2 ? context_attrib2 : null;
-            int[] version = new int[2], num_config = new int[1];
-
-            EGLConfig[] configs = new EGLConfig[1];
-            EGL10 egl = (EGL10)EGLContext.getEGL();
-            egl_display = egl.eglGetDisplay(EGL10.EGL_DEFAULT_DISPLAY);
-            egl.eglInitialize(egl_display, version);
-
-            if (!egl.eglChooseConfig(egl_display, attrib_list, configs, 1, num_config) || num_config[0] == 0) throw new Exception("eglChooseConfig");
-            if ((egl_context = egl.eglCreateContext(egl_display, configs[0], EGL10.EGL_NO_CONTEXT, context_attrib)) == EGL10.EGL_NO_CONTEXT) throw new Exception("eglCreateContext");
-            if ((egl_surface = egl.eglCreateWindowSurface(egl_display, configs[0], this, null)) == EGL10.EGL_NO_SURFACE) throw new Exception("eglCreateWindowSurface");
-            if (!egl.eglMakeCurrent(egl_display, egl_surface, egl_surface, egl_context)) throw new Exception("eglMakeCurrent");
-            makeCurrentEGL();
-        } catch(Exception e) {
-            Log.e("lfl", e.toString());
-            for (StackTraceElement ste : e.getStackTrace()) Log.e("lfl", ste.toString());
-            egl_context = null;
-            egl_surface = null;
-            egl_display = null;
-            return false;
-        }
-        return true;
-    }
-
-    public void makeCurrentEGL() {
-        EGL10 egl = (EGL10)EGLContext.getEGL();
-        egl.eglMakeCurrent(egl_display, egl_surface, egl_surface, egl_context);
-    }
-
-    public void swapEGL() {
-        try {
-            EGL10 egl = (EGL10)EGLContext.getEGL();
-            // egl.eglWaitNative(EGL10.EGL_NATIVE_RENDERABLE, null);
-            egl.eglWaitNative(EGL10.EGL_CORE_NATIVE_ENGINE, null);
-            egl.eglWaitGL();
-            egl.eglSwapBuffers(egl_display, egl_surface);
-        } catch(Exception e) {
-            Log.e("lfl", e.toString());
-            for (StackTraceElement ste : e.getStackTrace()) Log.e("lfl", ste.toString());
-        }
-    }
 }

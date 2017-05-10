@@ -16,16 +16,16 @@ import android.widget.TextView;
 import android.widget.LinearLayout;
 import android.util.Log;
 
-public class JTextViewFragment extends JFragment implements OnItemClickListener {
+public class TextViewScreenFragment extends ScreenFragment implements OnItemClickListener {
     public String data;
     public TextView textview = null;
 
-    public JTextViewFragment() {
+    public TextViewScreenFragment() {
         super(null, null);
         data = null;
     }
 
-    public JTextViewFragment(final MainActivity activity, final JWidget p, final String d) {
+    public TextViewScreenFragment(final MainActivity activity, final Screen p, final String d) {
         super(activity, p);
         data = d;
     }

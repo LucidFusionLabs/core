@@ -34,13 +34,13 @@ struct JNI {
   jclass activity_class=0, resources_class=0, view_class=0, gplus_class=0, throwable_class=0,
          frame_class=0, assetmgr_class=0, string_class=0, arraylist_class=0, hashmap_class=0,
          pair_class=0, inputstream_class=0, channels_class=0, readbytechan_class=0, r_string_class=0,
-         jmodelitem_class=0, jmodelitemchange_class=0, jpickeritem_class=0, jalert_class=0, jtoolbar_class=0,
-         jmenu_class=0, jtable_class=0, jtextview_class=0, jnavigation_class=0,
-         lcallback_class=0, lstringcb_class=0, lintintcb_class=0, lpickeritemcb_class=0,
-         int_class=0, long_class=0;
+         modelitem_class=0, modelitemchange_class=0, pickeritem_class=0, toolbar_class=0, alertscreen_class=0,
+         menuscreen_class=0, tablescreen_class=0, textviewscreen_class=0, screennavigator_class=0,
+         nativecallback_class=0, nativestringcb_class=0, nativeintintcb_class=0,
+         nativepickeritemcb_class=0, int_class=0, long_class=0;
   jmethodID arraylist_construct=0, arraylist_size=0, arraylist_get=0, arraylist_add=0,
             hashmap_construct=0, hashmap_size=0, hashmap_get=0, hashmap_put=0, pair_construct=0,
-            jmodelitem_construct=0, jmodelitemchange_construct=0, jpickeritem_construct=0,
+            modelitem_construct=0, modelitemchange_construct=0, pickeritem_construct=0,
             int_intval=0, long_longval=0;
   jfieldID activity_resources=0, activity_view=0, activity_gplus=0, pair_first=0, pair_second=0;
   string package_name;
@@ -56,20 +56,20 @@ struct JNI {
   pair<jobjectArray, jobjectArray> ToJStringArrays(const StringPairVec &items);
   jobject ToJStringArrayList(const StringVec &items);
   jobject ToJStringPairArrayList(const StringPairVec &items);
-  jobject ToJModelItemArrayList(AlertItemVec items);
-  jobject ToJModelItemArrayList(MenuItemVec items);
-  jobject ToJModelItemArrayList(TableItemVec items);
-  jobject ToJModelItemChangeList(TableSection::ChangeList items);
-  jobject ToJModelItemChangeSet(TableSection::ChangeSet items);
-  jobject ToJModelItem(AlertItem);
-  jobject ToJModelItem(MenuItem);
-  jobject ToJModelItem(TableItem);
-  jobject ToJModelItemChange(TableSection::Change);
-  jobject ToJPickerItem(PickerItem*);
-  jobject ToLCallback(Callback c); 
-  jobject ToLStringCB(StringCB c); 
-  jobject ToLIntIntCB(IntIntCB c); 
-  jobject ToLPickerItemCB(const PickerItem::CB &c); 
+  jobject ToModelItemArrayList(AlertItemVec items);
+  jobject ToModelItemArrayList(MenuItemVec items);
+  jobject ToModelItemArrayList(TableItemVec items);
+  jobject ToModelItemChangeList(TableSection::ChangeList items);
+  jobject ToModelItemChangeSet(TableSection::ChangeSet items);
+  jobject ToModelItem(AlertItem);
+  jobject ToModelItem(MenuItem);
+  jobject ToModelItem(TableItem);
+  jobject ToModelItemChange(TableSection::Change);
+  jobject ToPickerItem(PickerItem*);
+  jobject ToNativeCallback(Callback c); 
+  jobject ToNativeStringCB(StringCB c); 
+  jobject ToNativeIntIntCB(IntIntCB c); 
+  jobject ToNativePickerItemCB(const PickerItem::CB &c); 
 
   BufferFile *OpenAsset(const string &fn);
   static string GetEnvJString(JNIEnv*, jstring);

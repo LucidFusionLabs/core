@@ -15,18 +15,18 @@ import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.DefaultItemAnimator;
 
-public class JRecyclerViewFragment extends JFragment {
-    public JRecyclerViewAdapter data;
+public class RecyclerViewScreenFragment extends ScreenFragment {
+    public ModelItemRecyclerViewAdapter data;
     public View toolbar;
     public RecyclerView recyclerview = null;
 
-    public JRecyclerViewFragment() {
+    public RecyclerViewScreenFragment() {
        super(null, null);
        data = null;
        toolbar = null;
     }
 
-    public JRecyclerViewFragment(final MainActivity activity, final JWidget p, final JRecyclerViewAdapter d, final View tb) {
+    public RecyclerViewScreenFragment(final MainActivity activity, final Screen p, final ModelItemRecyclerViewAdapter d, final View tb) {
         super(activity, p);
         data = d;
         toolbar = tb;

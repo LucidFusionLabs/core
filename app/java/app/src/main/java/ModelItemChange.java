@@ -4,14 +4,15 @@ import android.util.Log;
 import java.util.ArrayList;
 import java.util.HashMap;
 
-public final class JModelItemChange {
+public final class ModelItemChange {
     public int section, row, type, left_icon, right_icon, flags;
     public String key, val;
     public boolean hidden;
-    public LCallback cb;
+    public NativeCallback cb;
 
-    JModelItemChange(final int s, final int r, final int t, final String k, final String v,
-                     final int li, final int ri, final int f, final boolean h, final LCallback c) {
+    ModelItemChange(final int s, final int r, final int t, final String k,
+                    final String v, final int li, final int ri, final int f,
+                    final boolean h, final NativeCallback c) {
         section = s;
         row = r;
         type = t;
@@ -24,7 +25,7 @@ public final class JModelItemChange {
         cb = c;
     }
 
-    public void apply(JModelItem item) {
+    public void apply(ModelItem item) {
         item.hidden = hidden;
         item.val    = val;
         item.flags  = flags;
@@ -35,8 +36,8 @@ public final class JModelItemChange {
         if (type != 0)                       item.type       = type;
     }
 
-    public static void applyChangeList(ArrayList<JModelItemChange> changes, JRecyclerViewAdapter target) {
-        for (JModelItemChange i : changes) {
+    public static void applyChangeList(ArrayList<ModelItemChange> changes, ModelItemRecyclerViewAdapter target) {
+        for (ModelItemChange i : changes) {
             int row_id = target.getCollapsedRowId(i.section, i.row);
             if (row_id >= target.data.size()) throw new java.lang.IllegalArgumentException();
             i.apply(target.data.get(row_id));

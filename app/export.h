@@ -126,7 +126,6 @@ DECLARE_bool(enable_video);
 DECLARE_bool(enable_input);
 DECLARE_bool(enable_network);
 DECLARE_bool(enable_camera);
-DECLARE_bool(enable_cuda);
 DECLARE_string(logfile);
 DECLARE_int(loglevel);
 DECLARE_int(peak_fps);

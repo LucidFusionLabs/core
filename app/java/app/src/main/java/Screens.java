@@ -28,34 +28,34 @@ import android.util.Pair;
 import android.util.TypedValue;
 import android.net.Uri;
 import android.graphics.Rect;
-import android.app.ActionBar;
 import android.app.AlertDialog;
 
-public class JWidgets {
+public class Screens {
     public boolean                destroyed;
-    public HashSet<JWidget>       widgets        = new HashSet<JWidget>();
-    public ArrayList<JNavigation> navigations    = new ArrayList<JNavigation>();
-    public ArrayList<JToolbar>    toolbar_bottom = new ArrayList<JToolbar>();
+    public HashSet<Screen>       widgets        = new HashSet<Screen>();
+    public ArrayList<ScreenFragmentNavigator> navigations    = new ArrayList<ScreenFragmentNavigator>();
+    public ArrayList<Toolbar>    toolbar_bottom = new ArrayList<Toolbar>();
 
     public void onDestroy() {
-        Log.i("lfl", "JWidgets.onDestroy()");
-				for (JWidget w : widgets) w.clear();
+        Log.i("lfl", "Screens.onDestroy()");
+				for (Screen w : widgets) w.clear();
+        for (Toolbar w : toolbar_bottom) w.clear();
         destroyed = true;
     }
 
     public void onResume(MainActivity activity) {
         if (!destroyed) return;
         destroyed = false;
-        Log.i("lfl", "JWidgets.onResume(Activity)");
+        Log.i("lfl", "Screens.onResume(Activity)");
 
-        ArrayList<JToolbar> tb_bottom = new ArrayList<JToolbar>();
+        ArrayList<Toolbar> tb_bottom = new ArrayList<Toolbar>();
         tb_bottom.addAll(toolbar_bottom);
         toolbar_bottom.clear();
-        for (JToolbar t : tb_bottom) t.show(activity, true);
+        for (Toolbar t : tb_bottom) t.show(activity, true);
 
-        ArrayList<JNavigation> navs = new ArrayList<JNavigation>();
+        ArrayList<ScreenFragmentNavigator> navs = new ArrayList<ScreenFragmentNavigator>();
         navs.addAll(navigations);
         navigations.clear();
-        for (JNavigation n : navs) n.show(activity, true);
+        for (ScreenFragmentNavigator n : navs) n.show(activity, true);
     }
 }

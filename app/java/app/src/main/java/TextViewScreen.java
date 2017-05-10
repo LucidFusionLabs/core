@@ -27,39 +27,38 @@ import android.util.Pair;
 import android.util.TypedValue;
 import android.net.Uri;
 import android.graphics.Rect;
-import android.app.ActionBar;
 import android.app.AlertDialog;
 
-public class JTextView extends JWidget {
+public class TextViewScreen extends Screen {
     public String text;
-    public JTextViewFragment view;
+    public TextViewScreenFragment view;
 
-    public JTextView(final MainActivity activity, String t, String v) {
-        super(JWidget.TYPE_TEXTVIEW, activity, "", 0);
+    public TextViewScreen(final MainActivity activity, String t, String v) {
+        super(Screen.TYPE_TEXTVIEW, activity, "", 0);
         title = t;
         text = v;
     }
 
     public void clear() { view = null; }
 
-    private JTextViewFragment get(final MainActivity activity) {
+    public TextViewScreenFragment get(final MainActivity activity) {
         if (view == null) view = createView(activity);
         return view;
     }
 
-    private JTextViewFragment createView(final MainActivity activity) {
-        return new JTextViewFragment(activity, this, text);
+    private TextViewScreenFragment createView(final MainActivity activity) {
+        return new TextViewScreenFragment(activity, this, text);
     }
 
     public void show(final MainActivity activity, final boolean show_or_hide) {
         activity.runOnUiThread(new Runnable() { public void run() {
-            JTextViewFragment frag = get(activity);
+            TextViewScreenFragment frag = get(activity);
             if (show_or_hide) {
                 activity.action_bar.show();
-                activity.getFragmentManager().beginTransaction().replace(R.id.content_frame, frag).commit();
+                activity.getSupportFragmentManager().beginTransaction().replace(R.id.content_frame, frag).commit();
             } else {
                 if (activity.disable_title) activity.action_bar.hide();
-                activity.getFragmentManager().beginTransaction().remove(frag).commit();
+                activity.getSupportFragmentManager().beginTransaction().remove(frag).commit();
             }
         }});
     }

@@ -1,5 +1,5 @@
 /*
- * $Id: bindings.cpp 1335 2014-12-02 04:13:46Z justin $
+ * $Id: cuda.cpp 1335 2014-12-02 04:13:46Z justin $
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -16,23 +16,12 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifdef LFL_CUDA
 #include <cuda_runtime.h>
 #include "cuda/lfcuda.h"
 #include "speech/hmm.h"
 #include "speech/speech.h"
-#endif
-
-extern "C" {
-#ifdef LFL_LUA
-#include "lua.h"
-#include "lualib.h"
-#include "lauxlib.h"
-#endif
-};
 
 namespace LFL {
-#ifdef LFL_CUDA
 void PrintCUDAProperties(cudaDeviceProp *prop) {
   DEBUGf("Major revision number:         %d", prop->major);
   DEBUGf("Minor revision number:         %d", prop->minor);
@@ -78,30 +67,5 @@ int CUDA::Init() {
   else INFO("no CUDA devices detected ", cuda_devices);
   return 0;
 }
-#else
-int CUDA::Init() { FLAGS_enable_cuda=0; INFO("CUDA not supported enable_cuda(", FLAGS_enable_cuda, ")"); return 0; }
-#endif /* LFL_CUDA */
-
-#ifdef LFL_LUA
-struct MyLuaContext : public LuaContext {
-  lua_State *L;
-  ~MyLuaContext() { lua_close(L); }
-  MyLuaContext() : L(luaL_newstate()) {
-    luaopen_base(L);
-    luaopen_table(L);
-    luaopen_io(L);
-    luaopen_string(L);
-    luaopen_math(L);
-  }
-  string Execute(const string &s) {
-    if (luaL_loadbuffer(L, s.data(), s.size(), "MyLuaExec")) { ERROR("luaL_loadstring ", lua_tostring(L, -1)); return ""; }
-    if (lua_pcall(L, 0, LUA_MULTRET, 0))                     { ERROR("lua_pcall ",       lua_tostring(L, -1)); return ""; }
-    return "";
-  }
-};
-unique_ptr<LuaContext> LuaContext::Create() { return make_unique<MyLuaContext>(); }
-#else /* LFL_LUA */
-unique_ptr<LuaContext> LuaContext::Create() { return 0; }
-#endif /* LFL_LUA */
 
 }; // namespace LFL

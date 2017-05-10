@@ -131,7 +131,6 @@ DEFINE_bool(enable_video, false, "Enable OpenGL");
 DEFINE_bool(enable_input, false, "Enable keyboard/mouse input");
 DEFINE_bool(enable_network, false, "Enable asynchronous network engine");
 DEFINE_bool(enable_camera, false, "Enable camera capture");
-DEFINE_bool(enable_cuda, false, "Enable CUDA acceleration");
 DEFINE_bool(daemonize, false, "Daemonize server");
 DEFINE_bool(max_rlimit_core, true, "Max core dump rlimit");
 DEFINE_bool(max_rlimit_open_files, false, "Max number of open files rlimit");
@@ -601,10 +600,6 @@ int Application::Init() {
 
   if (FLAGS_enable_camera) {
     if (LoadModule((camera = make_unique<Camera>()).get())) return ERRORv(-1, "camera init failed");
-  }
-
-  if (FLAGS_enable_cuda) {
-    (cuda = make_unique<CUDA>())->Init();
   }
 
   scheduler.Init();

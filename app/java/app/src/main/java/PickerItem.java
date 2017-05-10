@@ -3,15 +3,15 @@ package com.lucidfusionlabs.app;
 import android.util.Log;
 import java.util.ArrayList;
 
-public final class JPickerItem {
+public final class PickerItem {
     public ArrayList<ArrayList<String>> data;
     public ArrayList<Integer> picked = new ArrayList<Integer>();
-    public LPickerItemCB cb;
-    public long lfl_self;
+    public NativePickerItemCB cb;
+    public long nativeParent;
 
-    JPickerItem(final ArrayList<ArrayList<String>> d, final LPickerItemCB c, final long lsp) {
+    PickerItem(final ArrayList<ArrayList<String>> d, final NativePickerItemCB c, final long np) {
         data = d;
         cb = c;
-        lfl_self = lsp;
+        nativeParent = np;
     }
 }

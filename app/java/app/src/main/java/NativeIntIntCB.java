@@ -4,10 +4,10 @@ import android.util.Log;
 import java.util.ArrayList;
 import java.util.HashMap;
 
-public final class LIntIntCB {
+public final class NativeIntIntCB {
     public final long cb;
 
-    LIntIntCB(final long c) {
+    NativeIntIntCB(final long c) {
         cb = c;
         if (cb == 0) throw new java.lang.IllegalArgumentException();
     }

@@ -35,13 +35,12 @@ import android.net.Uri;
 import android.graphics.Rect;
 import android.graphics.Paint;
 import android.graphics.Color;
-import android.app.ActionBar;
 import android.app.AlertDialog;
 import android.text.InputType;
 import android.text.TextWatcher;
 import android.support.v7.widget.RecyclerView;
 
-public class JRecyclerViewAdapter extends RecyclerView.Adapter<JRecyclerViewAdapter.ViewHolder> {
+public class ModelItemRecyclerViewAdapter extends RecyclerView.Adapter<ModelItemRecyclerViewAdapter.ViewHolder> {
     public static class ViewHolder extends RecyclerView.ViewHolder {
         public View root;
         public TextView textView, label, subtext;
@@ -70,24 +69,24 @@ public class JRecyclerViewAdapter extends RecyclerView.Adapter<JRecyclerViewAdap
     }
 
     public RecyclerView recyclerview = null;
-    public ArrayList<JModelItem> data = new ArrayList<JModelItem>();
+    public ArrayList<ModelItem> data = new ArrayList<ModelItem>();
     public ArrayList<Section> sections = new ArrayList<Section>();
-    public JModelItem nav_left = null, nav_right = null;
+    public ModelItem nav_left = null, nav_right = null;
     public int selected_section = 0, selected_row = 0;
     public int editable_section = -1, editable_start_row = -1;
-    public LIntIntCB delete_row_cb = null;
-    public final JWidget parent_widget;
+    public NativeIntIntCB delete_row_cb = null;
+    public final Screen parent_screen;
 
     CompoundButton.OnCheckedChangeListener checked_listener = new CompoundButton.OnCheckedChangeListener() {
         public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
-            parent_widget.changed = true;
+            parent_screen.changed = true;
         }
     };
 
     TextWatcher text_listener = new TextWatcher() {
         @Override
         public void onTextChanged(CharSequence s, int start, int before, int count) {
-            parent_widget.changed = true;
+            parent_screen.changed = true;
         }
         @Override
         public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
@@ -100,12 +99,12 @@ public class JRecyclerViewAdapter extends RecyclerView.Adapter<JRecyclerViewAdap
         public void onClick(View v) {
             if (recyclerview == null) return;
             int position = recyclerview.indexOfChild(v);
-            JModelItem i = data.get(position);
-            if (i.type == JModelItem.TYPE_COMMAND || i.type == JModelItem.TYPE_BUTTON) {
+            ModelItem i = data.get(position);
+            if (i.type == ModelItem.TYPE_COMMAND || i.type == ModelItem.TYPE_BUTTON) {
                 if (i.cb != null) i.cb.run();
-            } else if (i.type == JModelItem.TYPE_LABEL && position+1 < data.size()) {
-                JModelItem ni = data.get(position+1);
-                if (ni.type == JModelItem.TYPE_PICKER || ni.type == JModelItem.TYPE_FONTPICKER) {
+            } else if (i.type == ModelItem.TYPE_LABEL && position+1 < data.size()) {
+                ModelItem ni = data.get(position+1);
+                if (ni.type == ModelItem.TYPE_PICKER || ni.type == ModelItem.TYPE_FONTPICKER) {
                     beginUpdates();
                     ni.hidden = !ni.hidden;
                     endUpdates();
@@ -114,15 +113,15 @@ public class JRecyclerViewAdapter extends RecyclerView.Adapter<JRecyclerViewAdap
         }
     };
 
-    public JRecyclerViewAdapter(final MainActivity activity, final ArrayList<JModelItem> v, final JWidget p) {
-        parent_widget = p;
+    public ModelItemRecyclerViewAdapter(final MainActivity activity, final ArrayList<ModelItem> v, final Screen p) {
+        parent_screen = p;
         data = v;
         beginUpdates();
-        data.add(0, new JModelItem("", "", "", "", JModelItem.TYPE_SEPARATOR, 0, 0, 0, 0, 0, 0, null, null, null, false, 0, 0));
-        data.add(new JModelItem("", "", "", "", JModelItem.TYPE_SEPARATOR, 0, 0, 0, 0, 0, 0, null, null, null, false, 0, 0));
+        data.add(0, new ModelItem("", "", "", "", ModelItem.TYPE_SEPARATOR, 0, 0, 0, 0, 0, 0, null, null, null, false, 0, 0));
+        data.add(new ModelItem("", "", "", "", ModelItem.TYPE_SEPARATOR, 0, 0, 0, 0, 0, 0, null, null, null, false, 0, 0));
         for (int i = 0, l = data.size(); i != l; ++i) {
-            JModelItem item = data.get(i);
-            if (item.type == JModelItem.TYPE_SEPARATOR) sections.add(new Section(i));
+            ModelItem item = data.get(i);
+            if (item.type == ModelItem.TYPE_SEPARATOR) sections.add(new Section(i));
         }
         endUpdates();
     }
@@ -132,8 +131,8 @@ public class JRecyclerViewAdapter extends RecyclerView.Adapter<JRecyclerViewAdap
 
     @Override
     public int getItemViewType(int position) {
-        JModelItem item = data.get(position);
-        return item.hidden ? JModelItem.TYPE_HIDDEN : item.type;
+        ModelItem item = data.get(position);
+        return item.hidden ? ModelItem.TYPE_HIDDEN : item.type;
     }
 
     @Override
@@ -146,7 +145,7 @@ public class JRecyclerViewAdapter extends RecyclerView.Adapter<JRecyclerViewAdap
     public ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
         LayoutInflater inflater = LayoutInflater.from(parent.getContext());
         switch (viewType) {
-            case JModelItem.TYPE_HIDDEN: {
+            case ModelItem.TYPE_HIDDEN: {
                 View itemView = inflater.inflate(R.layout.listview_cell_hidden, parent, false);
                 ViewHolder holder = new ViewHolder(itemView);
                 itemView.setOnClickListener(click_listener);
@@ -155,7 +154,7 @@ public class JRecyclerViewAdapter extends RecyclerView.Adapter<JRecyclerViewAdap
                 return holder;
             }
 
-            case JModelItem.TYPE_SEPARATOR: {
+            case ModelItem.TYPE_SEPARATOR: {
                 View itemView = inflater.inflate(R.layout.listview_cell_separator, parent, false);
                 ViewHolder holder = new ViewHolder(itemView);
                 itemView.setOnClickListener(click_listener);
@@ -168,7 +167,7 @@ public class JRecyclerViewAdapter extends RecyclerView.Adapter<JRecyclerViewAdap
                 return holder;
             }
 
-            case JModelItem.TYPE_TOGGLE: {
+            case ModelItem.TYPE_TOGGLE: {
                 View itemView = inflater.inflate(R.layout.listview_cell_toggle, parent, false);
                 ViewHolder holder = new ViewHolder(itemView);
                 itemView.setOnClickListener(click_listener);
@@ -180,7 +179,7 @@ public class JRecyclerViewAdapter extends RecyclerView.Adapter<JRecyclerViewAdap
                 return holder;
             }
 
-            case JModelItem.TYPE_PICKER: {
+            case ModelItem.TYPE_PICKER: {
                 View itemView = inflater.inflate(R.layout.listview_cell_picker, parent, false);
                 ViewHolder holder = new ViewHolder(itemView);
                 itemView.setOnClickListener(click_listener);
@@ -190,9 +189,9 @@ public class JRecyclerViewAdapter extends RecyclerView.Adapter<JRecyclerViewAdap
                 return holder;
             }
 
-            case JModelItem.TYPE_TEXTINPUT:
-            case JModelItem.TYPE_NUMBERINPUT:
-            case JModelItem.TYPE_PASSWORDINPUT: {
+            case ModelItem.TYPE_TEXTINPUT:
+            case ModelItem.TYPE_NUMBERINPUT:
+            case ModelItem.TYPE_PASSWORDINPUT: {
                 View itemView = inflater.inflate(R.layout.listview_cell_textinput, parent, false);
                 ViewHolder holder = new ViewHolder(itemView);
                 itemView.setOnClickListener(click_listener);
@@ -204,7 +203,7 @@ public class JRecyclerViewAdapter extends RecyclerView.Adapter<JRecyclerViewAdap
                 return holder;
             }
 
-            case JModelItem.TYPE_SELECTOR: {
+            case ModelItem.TYPE_SELECTOR: {
                 View itemView = inflater.inflate(R.layout.listview_cell_radio, parent, false);
                 ViewHolder holder = new ViewHolder(itemView);
                 itemView.setOnClickListener(click_listener);
@@ -232,12 +231,12 @@ public class JRecyclerViewAdapter extends RecyclerView.Adapter<JRecyclerViewAdap
 
     @Override
     public void onBindViewHolder(ViewHolder holder, int position) {
-        final JModelItem item = data.get(position);
+        final ModelItem item = data.get(position);
         int type = getItemViewType(position);
 
         if (holder.textView != null) {
             if (item.dropdown_key.length() > 0 && item.key.length() > 0 && item.cb != null &&
-                (item.flags & JModelItem.TABLE_FLAG_FIXDROPDOWN) == 0) {
+                (item.flags & ModelItem.TABLE_FLAG_FIXDROPDOWN) == 0) {
                 holder.textView.setText(item.key + " \u02C5");
                 holder.textView.setTextColor(holder.textViewLinkColors);
                 holder.textView.setPaintFlags(holder.textView.getPaintFlags() | Paint.UNDERLINE_TEXT_FLAG);
@@ -271,7 +270,7 @@ public class JRecyclerViewAdapter extends RecyclerView.Adapter<JRecyclerViewAdap
             }
         }
 
-        boolean subtext = (item.flags & JModelItem.TABLE_FLAG_SUBTEXT) != 0;
+        boolean subtext = (item.flags & ModelItem.TABLE_FLAG_SUBTEXT) != 0;
         if (holder.subtext != null) {
             holder.subtext.setText(subtext ? item.val : "");
         }
@@ -279,8 +278,8 @@ public class JRecyclerViewAdapter extends RecyclerView.Adapter<JRecyclerViewAdap
         if (holder.label != null) {
             holder.label.setText(item.right_text.length() > 0 ? item.right_text : (subtext ? "" : item.val));
             if (holder.textView != null) {
-                if (type == JModelItem.TYPE_BUTTON || type == JModelItem.TYPE_COMMAND ||
-                    type == JModelItem.TYPE_NONE) {
+                if (type == ModelItem.TYPE_BUTTON || type == ModelItem.TYPE_COMMAND ||
+                    type == ModelItem.TYPE_NONE) {
                   holder.label.setTextColor(holder.textViewLinkColors);
                 } else {
                   holder.label.setTextColor(holder.textViewTextColors);
@@ -292,17 +291,17 @@ public class JRecyclerViewAdapter extends RecyclerView.Adapter<JRecyclerViewAdap
             holder.editText.removeTextChangedListener(text_listener);
             if (item.val.length() > 0 && item.val.charAt(0) == 1) { holder.editText.setText(""); holder.editText.setHint(item.val.substring(1)); }
             else                                                  { holder.editText.setText(item.val); holder.editText.setHint(""); }
-            holder.editText.setInputType(InputType.TYPE_CLASS_TEXT | (type == JModelItem.TYPE_PASSWORDINPUT ? InputType.TYPE_TEXT_VARIATION_PASSWORD : 0));
+            holder.editText.setInputType(InputType.TYPE_CLASS_TEXT | (type == ModelItem.TYPE_PASSWORDINPUT ? InputType.TYPE_TEXT_VARIATION_PASSWORD : 0));
             holder.editText.addTextChangedListener(text_listener);
         }
 
         switch (type) {
-            case JModelItem.TYPE_SEPARATOR:
+            case ModelItem.TYPE_SEPARATOR:
                 holder.leftNav .setVisibility(item.val       .length() > 0 ? View.VISIBLE : View.GONE);
                 holder.rightNav.setVisibility(item.right_text.length() > 0 ? View.VISIBLE : View.GONE);
                 break;
 
-            case JModelItem.TYPE_TOGGLE:
+            case ModelItem.TYPE_TOGGLE:
                 holder.toggle.setOnCheckedChangeListener(null);
                 holder.toggle.setChecked(item.val.equals("1"));
                 holder.toggle.setOnCheckedChangeListener(checked_listener);
@@ -318,7 +317,7 @@ public class JRecyclerViewAdapter extends RecyclerView.Adapter<JRecyclerViewAdap
                 String[] arr = new String[picker_items.size()];
                 arr = picker_items.toArray(arr);
                 holder.picker.setDisplayedValues(arr);
-                if (position > 1 && data.get(position-1).type == JModelItem.TYPE_LABEL) {
+                if (position > 1 && data.get(position-1).type == ModelItem.TYPE_LABEL) {
                     String v = data.get(position-1).val;
                     for (int i = 0; i < arr.length; i++)
                         if (v.equals(arr[i])) { holder.picker.setValue(i); break; }
@@ -328,7 +327,7 @@ public class JRecyclerViewAdapter extends RecyclerView.Adapter<JRecyclerViewAdap
                     holder.picker.setOnValueChangedListener(new NumberPicker.OnValueChangeListener() {
                         @Override
                         public void onValueChange(NumberPicker numberPicker, int i, int i2) {
-                            parent_widget.changed = true;
+                            parent_screen.changed = true;
                             String v = numberPicker.getDisplayedValues()[numberPicker.getValue()];
                             ViewHolder h = (ViewHolder)par.findViewHolderForAdapterPosition(pos-1);
                             h.label.setText(v);
@@ -339,7 +338,7 @@ public class JRecyclerViewAdapter extends RecyclerView.Adapter<JRecyclerViewAdap
         }
 
         if (holder.radio != null) {
-            final JRecyclerViewAdapter self = this;
+            final ModelItemRecyclerViewAdapter self = this;
             holder.radio.setOnCheckedChangeListener(null);
             holder.radio.removeAllViews();
 
@@ -360,7 +359,7 @@ public class JRecyclerViewAdapter extends RecyclerView.Adapter<JRecyclerViewAdap
             holder.radio.setOnCheckedChangeListener(new RadioGroup.OnCheckedChangeListener() {
                 @Override
                 public void onCheckedChanged(RadioGroup group, int checkedId) {
-                    parent_widget.changed = true;
+                    parent_screen.changed = true;
                     RadioButton button = (RadioButton)group.findViewById(checkedId);
                     if (button != null && item.right_cb != null)
                         item.right_cb.run(button.getText().toString());
@@ -392,19 +391,19 @@ public class JRecyclerViewAdapter extends RecyclerView.Adapter<JRecyclerViewAdap
         selected_row = r;
     }
 
-    public void setEditable(final int s, final int start_row, final LIntIntCB intint_cb) {
+    public void setEditable(final int s, final int start_row, final NativeIntIntCB intint_cb) {
         editable_section = s;
         editable_start_row = start_row;
         delete_row_cb = intint_cb;
     }
 
-    public void addNavButton(final int halign, final JModelItem row) {
+    public void addNavButton(final int halign, final ModelItem row) {
         switch (halign) {
-            case JModelItem.HALIGN_LEFT:
+            case ModelItem.HALIGN_LEFT:
                 nav_left = row;
                 break;
 
-            case JModelItem.HALIGN_RIGHT:
+            case ModelItem.HALIGN_RIGHT:
                 nav_right = row;
                 break;
         }
@@ -412,11 +411,11 @@ public class JRecyclerViewAdapter extends RecyclerView.Adapter<JRecyclerViewAdap
     
     public void delNavButton(final int halign) {
         switch (halign) {
-            case JModelItem.HALIGN_LEFT:
+            case ModelItem.HALIGN_LEFT:
                 nav_left = null;
                 break;
 
-            case JModelItem.HALIGN_RIGHT:
+            case ModelItem.HALIGN_RIGHT:
                 nav_right = null;
                 break;
         }
@@ -424,21 +423,21 @@ public class JRecyclerViewAdapter extends RecyclerView.Adapter<JRecyclerViewAdap
 
     public void addSection() {
         sections.add(new Section(data.size()));
-        data.add(new JModelItem("", "", "", "", JModelItem.TYPE_SEPARATOR, 0, 0, 0, 0, 0, 0, null, null, null, false, 0, 0));
+        data.add(new ModelItem("", "", "", "", ModelItem.TYPE_SEPARATOR, 0, 0, 0, 0, 0, 0, null, null, null, false, 0, 0));
     }
 
-    public void addRow(final int section, JModelItem row) {
+    public void addRow(final int section, ModelItem row) {
         if (section == sections.size()) addSection();
         if (section >= sections.size()) throw new java.lang.IllegalArgumentException();
         data.add(getSectionEndRowId(section), row);
         moveSectionsAfterBy(section, 1);
     }
     
-    public void replaceRow(final int s, final int r, JModelItem row) {
+    public void replaceRow(final int s, final int r, ModelItem row) {
         data.set(getCollapsedRowId(s, r), row);
     }
 
-    public void replaceSection(final int section, final JModelItem h, final int flag, ArrayList<JModelItem> v) {
+    public void replaceSection(final int section, final ModelItem h, final int flag, ArrayList<ModelItem> v) {
         if (section == sections.size()) addSection();
         if (section >= sections.size()) throw new java.lang.IllegalArgumentException();
         int start_row = getSectionBeginRowId(section), old_section_size = getSectionSize(section);
@@ -472,9 +471,9 @@ public class JRecyclerViewAdapter extends RecyclerView.Adapter<JRecyclerViewAdap
     public void setSelected(final int s, final int r, final int   v) { data.get(getCollapsedRowId(s, r)).selected = v; }
 
     public Pair<Long, ArrayList<Integer>> getPicked(final int s, final int r) {
-        JPickerItem picker = data.get(getCollapsedRowId(s, r)).picker;
+        PickerItem picker = data.get(getCollapsedRowId(s, r)).picker;
         if (picker == null) return null;
-        return new Pair<Long, ArrayList<Integer>>(picker.lfl_self, picker.picked);
+        return new Pair<Long, ArrayList<Integer>>(picker.nativeParent, picker.picked);
     }
 
     public ArrayList<Pair<String, String>> getSectionText(RecyclerView recyclerview, final int section) {
@@ -483,7 +482,7 @@ public class JRecyclerViewAdapter extends RecyclerView.Adapter<JRecyclerViewAdap
         int section_size = getSectionSize(section), section_row = getSectionBeginRowId(section);
         for (int i = 0; i < section_size; ++i) {
             String val = "";
-            JModelItem item = data.get(section_row + 1 + i);
+            ModelItem item = data.get(section_row + 1 + i);
             if (recyclerview != null) {
                 ViewHolder holder = (ViewHolder)recyclerview.findViewHolderForAdapterPosition(section_row + 1 + i);
                 if (holder.toggle != null) val = holder.toggle.isChecked() ? "1" : "0";
