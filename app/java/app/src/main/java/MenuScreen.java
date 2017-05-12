@@ -40,7 +40,7 @@ public class MenuScreen extends Screen {
 
     public void clear() { view = null; }
 
-    public AlertDialog get(final MainActivity activity) {
+    public AlertDialog getView(final MainActivity activity) {
         if (view == null) {
             AlertDialog.Builder builder = new AlertDialog.Builder(activity);
             builder.setTitle(title);
@@ -63,7 +63,7 @@ public class MenuScreen extends Screen {
     public void show(final MainActivity activity, final boolean show_or_hide) {
         if (!show_or_hide) return;
         activity.runOnUiThread(new Runnable() { public void run() {
-            AlertDialog alert = get(activity);
+            AlertDialog alert = getView(activity);
             alert.show();
         }});
     }

@@ -14,6 +14,7 @@ import android.widget.LinearLayout;
 import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.DefaultItemAnimator;
+import android.support.v7.widget.DividerItemDecoration;
 
 public class RecyclerViewScreenFragment extends ScreenFragment {
     public ModelItemRecyclerViewAdapter data;
@@ -42,11 +43,14 @@ public class RecyclerViewScreenFragment extends ScreenFragment {
                                                                   LinearLayout.LayoutParams.WRAP_CONTENT,
                                                                   android.view.Gravity.BOTTOM));
         }
+        LinearLayoutManager layoutmanager = new LinearLayoutManager(main_activity);
         recyclerview = (RecyclerView)layout.findViewById(R.id.list);
         recyclerview.setHasFixedSize(true);
         recyclerview.setAdapter(data);
-        recyclerview.setLayoutManager(new LinearLayoutManager(main_activity));
+        recyclerview.setLayoutManager(layoutmanager);
         recyclerview.setItemAnimator(new DefaultItemAnimator());
+        recyclerview.addItemDecoration
+            (new DividerItemDecoration(recyclerview.getContext(), layoutmanager.getOrientation()));
         return layout;
     }
 }

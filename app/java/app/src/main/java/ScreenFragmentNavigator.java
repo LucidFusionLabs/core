@@ -35,7 +35,7 @@ import android.support.v4.app.FragmentManager;
 
 public class ScreenFragmentNavigator {
     public int shown_index = -1;
-
+    public ArrayList<Screen> stack = new ArrayList<Screen>();
     public ScreenFragmentNavigator(final MainActivity activity) {}
 
     public void show(final MainActivity activity, final boolean show_or_hide) {
@@ -44,43 +44,50 @@ public class ScreenFragmentNavigator {
             if (show_or_hide) {
                 if (shown_index >= 0) Log.i("lfl", "Show already shown navbar");
                 else {
-                    activity.screens.navigations.add(self);
+                    activity.screens.navigators.add(self);
+                    activity.frame_layout.setVisibility(View.GONE);
                     activity.action_bar.show();
-                    showBackFragment(activity, true, true);
-                    shown_index = activity.screens.navigations.size()-1;
+                    shown_index = activity.screens.navigators.size()-1;
+                    int stack_size = activity.getSupportFragmentManager().getBackStackEntryCount();
+                    if (stack_size != 0) Log.e("lfl", "nested show? stack_size=" + stack_size);
+                    for (Screen x : stack) {
+                        x.changed = false;
+                        String tag = Integer.toString(stack_size++);
+                        ScreenFragment frag = x.get(activity);
+                        activity.getSupportFragmentManager().beginTransaction()
+                            .replace(R.id.content_frame, frag, tag).addToBackStack(tag).commit();
+                        activity.setTitle(frag.parent_screen.title);
+                    }
                 }
             } else {
                 if (shown_index < 0) Log.i("lfl", "Hide unshown navbar");
                 else {
-                    int size = activity.screens.navigations.size();
-                    if (shown_index < size) activity.screens.navigations.remove(shown_index);
+                    activity.getSupportFragmentManager().popBackStackImmediate(null, FragmentManager.POP_BACK_STACK_INCLUSIVE);
+                    int size = activity.screens.navigators.size();
+                    if (shown_index != size-1) Log.e("lfl", "hide navigator  shown_index=" + shown_index + " size=" + size);
+                    if (shown_index < size) activity.screens.navigators.remove(shown_index);
                     if (activity.disable_title) activity.action_bar.hide();
                     if (activity.getSupportFragmentManager().findFragmentById(R.id.content_frame) != null) {
                         Fragment frag = activity.getSupportFragmentManager().findFragmentById(R.id.content_frame);
                         activity.getSupportFragmentManager().beginTransaction().remove(frag).commit();
                     }
+                    if (size == 1) activity.frame_layout.setVisibility(View.VISIBLE);
                     shown_index = -1;
                 }
             }
         }});
     }
 
-    public void pushTable(final MainActivity activity, final TableScreen x) {
+    public void pushTable   (final MainActivity activity, final TableScreen    x) { pushView(activity, x); }
+    public void pushTextView(final MainActivity activity, final TextViewScreen x) { pushView(activity, x); }
+
+    public void pushView(final MainActivity activity, final Screen x) {
+        stack.add(x);
         activity.runOnUiThread(new Runnable() { public void run() {
+            if (shown_index < 0) return;
             x.changed = false;
             String tag = Integer.toString(activity.getSupportFragmentManager().getBackStackEntryCount());
-            RecyclerViewScreenFragment frag = x.get(activity);
-            activity.getSupportFragmentManager().beginTransaction()
-                .replace(R.id.content_frame, frag, tag).addToBackStack(tag).commit();
-            activity.setTitle(frag.parent_screen.title);
-        }});
-    }
-    
-    public void pushTextView(final MainActivity activity, final TextViewScreen x) {
-        activity.runOnUiThread(new Runnable() { public void run() {
-            x.changed = false;
-            String tag = Integer.toString(activity.getSupportFragmentManager().getBackStackEntryCount());
-            TextViewScreenFragment frag = x.get(activity);
+            ScreenFragment frag = x.get(activity);
             activity.getSupportFragmentManager().beginTransaction()
                 .replace(R.id.content_frame, frag, tag).addToBackStack(tag).commit();
             activity.setTitle(frag.parent_screen.title);
@@ -88,7 +95,11 @@ public class ScreenFragmentNavigator {
     }
 
     public void popView(final MainActivity activity, final int n) {
+        if (n <= 0) return;
+        if (stack.size() < n) Log.e("lfl", "pop " + n + " views with stack size " + stack.size());
+        if (stack.size() > 0) stack.subList(Math.max(0, stack.size()-n), stack.size()).clear();
         activity.runOnUiThread(new Runnable() { public void run() {
+            if (shown_index < 0) return;
             int stack_size = runBackFragmentHideCB(activity, n);
             if (stack_size <= 0 || n <= 0) return;
             int target = Math.max(0, stack_size - n);
@@ -99,7 +110,9 @@ public class ScreenFragmentNavigator {
     }
 
     public void popToRoot(final MainActivity activity) {
+        if (stack.size() > 1) stack.subList(1, stack.size()).clear();
         activity.runOnUiThread(new Runnable() { public void run() {
+            if (shown_index < 0) return;
             int stack_size = activity.getSupportFragmentManager().getBackStackEntryCount();
             if (stack_size < 2) return;
             runBackFragmentHideCB(activity, stack_size - 1);
@@ -109,7 +122,9 @@ public class ScreenFragmentNavigator {
     }
 
     public void popAll(final MainActivity activity) {
+        stack.clear();
         activity.runOnUiThread(new Runnable() { public void run() {
+            if (shown_index < 0) return;
             int stack_size = activity.getSupportFragmentManager().getBackStackEntryCount();
             runBackFragmentHideCB(activity, stack_size);
             activity.getSupportFragmentManager().popBackStackImmediate(null, FragmentManager.POP_BACK_STACK_INCLUSIVE);
@@ -119,6 +134,7 @@ public class ScreenFragmentNavigator {
     public Fragment getBack(final MainActivity activity) {
         FutureTask<Fragment> future = new FutureTask<Fragment>
             (new Callable<Fragment>(){ public Fragment call() throws Exception {
+                if (shown_index < 0) return null;
                 int stack_size = activity.getSupportFragmentManager().getBackStackEntryCount();
                 if (stack_size == 0) return null;
                 String tag = Integer.toString(stack_size-1);
@@ -138,9 +154,16 @@ public class ScreenFragmentNavigator {
     public static void onBackPressed(final MainActivity activity) {
         int back_count = activity.getSupportFragmentManager().getBackStackEntryCount();
         if (back_count > 1) {
+            if (activity.screens.navigators.size() >= 0) {
+                ScreenFragmentNavigator n = activity.screens.navigators.get(activity.screens.navigators.size()-1);
+                if (back_count != n.stack.size()) Log.e("lfl", "back_count=" + back_count + " but stack_size=" + n.stack.size());
+                if (n.stack.size() > 0) n.stack.remove(n.stack.size()-1);
+            } else Log.e("lfl", "back_count=" + back_count + " but no navigators");
+
             runBackFragmentHideCB(activity, 1);
             activity.superOnBackPressed();
             showBackFragment(activity, false, true);
+
         } else if (back_count == 1) {
             runBackFragmentHideCB(activity, 1);
             Fragment frag = activity.getSupportFragmentManager().findFragmentByTag("0");
@@ -152,6 +175,7 @@ public class ScreenFragmentNavigator {
                 }
             }
             activity.moveTaskToBack(true);
+
         } else {
             activity.superOnBackPressed();
         }

@@ -29,7 +29,8 @@ class MyGestureListener extends android.view.GestureDetector.SimpleOnGestureList
     }
 }
 
-public class MainView extends android.view.SurfaceView implements SurfaceHolder.Callback, View.OnKeyListener, View.OnTouchListener, SensorEventListener {
+public class MainView extends android.view.SurfaceView
+    implements SurfaceHolder.Callback, View.OnKeyListener, View.OnTouchListener, SensorEventListener {
     public MainActivity main_activity;
     public EGLContext egl_context;
     public EGLSurface egl_surface;

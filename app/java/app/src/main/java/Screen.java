@@ -21,7 +21,7 @@ public class Screen {
         screenType = wt;
         title = t;
         nativeParent = np;
-        parent = activity.screens.widgets;
+        parent = activity.screens.screens;
         parent.add(this);
     }
 
@@ -31,5 +31,6 @@ public class Screen {
     }
 
     public void clear() {}
+    public ScreenFragment get(final MainActivity activity) { return null; }
     public void show(final MainActivity activity, final boolean show_or_hide) {}
 }

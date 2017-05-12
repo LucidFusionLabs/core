@@ -58,7 +58,7 @@ public class MainActivity extends AppCompatActivity {
     public static ArrayList<Bitmap> bitmaps = new ArrayList<Bitmap>();
 
     public Resources resources;
-    public FrameLayout frame_layout;
+    public FrameLayout main_layout, frame_layout;
     public ActionBar action_bar;
     public Window root_window;
     public View root_view;
@@ -91,7 +91,7 @@ public class MainActivity extends AppCompatActivity {
 
         Context context = getApplication();
         LayoutInflater inflater = (LayoutInflater)context.getSystemService(LAYOUT_INFLATER_SERVICE);
-        frame_layout = (FrameLayout)inflater.inflate(R.layout.main, null);
+        main_layout = (FrameLayout)inflater.inflate(R.layout.main, null);
         root_window = getWindow();
         resources = getResources();
         view = new MainView(this, context);
@@ -106,7 +106,9 @@ public class MainActivity extends AppCompatActivity {
             if (disable_title) disableTitle();
         }
 
-        setContentView(frame_layout);
+        setContentView(main_layout);
+        frame_layout = new FrameLayout(this);
+        main_layout.addView(frame_layout, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
         frame_layout.addView(view, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
         display_density = resources.getDisplayMetrics().density;
 

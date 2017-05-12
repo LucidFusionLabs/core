@@ -38,9 +38,12 @@ public class Toolbar {
         model = m;
     }
 
-    public void clear() { view = null; }
+    public void clear() {
+        view = null;
+        shown_index = -1;
+    }
 
-    private View get(final MainActivity activity) {
+    private View getView(final MainActivity activity) {
         if (view == null) view = createView(activity);
         return view;
     }
@@ -78,9 +81,9 @@ public class Toolbar {
     public void show(final MainActivity activity, final boolean show_or_hide) {
         final Toolbar self = this;
         activity.runOnUiThread(new Runnable() { public void run() {
-            View toolbar = get(activity);
+            View toolbar = getView(activity);
             if (show_or_hide) {
-                if (shown_index >= 0) Log.i("lfl", "Show already shown toolbar");
+                if (shown_index >= 0) Log.e("lfl", "Show already shown toolbar");
                 else {
                     activity.screens.toolbar_bottom.add(self);
                     activity.frame_layout.addView(toolbar, new LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,
@@ -89,10 +92,11 @@ public class Toolbar {
                     shown_index = activity.screens.toolbar_bottom.size()-1;
                 }
             } else {
-                if (shown_index < 0) Log.i("lfl", "Hide unshown toolbar");
+                if (shown_index < 0) Log.e("lfl", "Hide unshown toolbar");
                 else {
                     int size = activity.screens.toolbar_bottom.size();
-                    if (shown_index < size) activity.screens.toolbar_bottom.remove(shown_index);
+                    if (shown_index != size-1) Log.e("lfl", "Hide shown_index=" + shown_index + " size=" + size);
+                    if (size > 0) activity.screens.toolbar_bottom.remove(size-1);
                     activity.frame_layout.removeView(toolbar);
                     shown_index = -1;
                 }

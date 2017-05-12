@@ -41,8 +41,9 @@ public class TableScreen extends Screen {
     }
 
     public void clear() { view = null; }
+    public ScreenFragment get(final MainActivity activity) { return getView(activity); }
 
-    public RecyclerViewScreenFragment get(final MainActivity activity) {
+    public RecyclerViewScreenFragment getView(final MainActivity activity) {
         if (view == null) view = createView(activity);
         return view;
     }
@@ -53,7 +54,7 @@ public class TableScreen extends Screen {
 
     public void show(final MainActivity activity, final boolean show_or_hide) {
         activity.runOnUiThread(new Runnable() { public void run() {
-            RecyclerViewScreenFragment table = get(activity);
+            ScreenFragment table = get(activity);
             if (show_or_hide) {
                 activity.action_bar.show();
                 activity.getSupportFragmentManager().beginTransaction().replace(R.id.content_frame, table).commit();
@@ -66,18 +67,18 @@ public class TableScreen extends Screen {
 
     public void addNavButton(final MainActivity activity, final int halign, final ModelItem row) {
         activity.runOnUiThread
-            (new Runnable() { public void run() { get(activity).data.addNavButton(halign, row); }});
+            (new Runnable() { public void run() { getView(activity).data.addNavButton(halign, row); }});
     }
     
     public void delNavButton(final MainActivity activity, final int halign) {
         activity.runOnUiThread
-            (new Runnable() { public void run() { get(activity).data.delNavButton(halign); }});
+            (new Runnable() { public void run() { getView(activity).data.delNavButton(halign); }});
     }
 
     public String getKey(final MainActivity activity, final int s, final int r) {
         FutureTask<String> future = new FutureTask<String>
             (new Callable<String>(){ public String call() throws Exception {
-                return get(activity).data.getKey(s, r);
+                return getView(activity).data.getKey(s, r);
             }});
         try { activity.runOnUiThread(future); return future.get(); }
         catch(Exception e) { return new String(); }
@@ -86,7 +87,7 @@ public class TableScreen extends Screen {
     public Integer getTag(final MainActivity activity, final int s, final int r) {
         FutureTask<Integer> future = new FutureTask<Integer>
             (new Callable<Integer>(){ public Integer call() throws Exception {
-                return get(activity).data.getTag(s, r);
+                return getView(activity).data.getTag(s, r);
             }});
         try { activity.runOnUiThread(future); return future.get(); }
         catch(Exception e) { return 0; }
@@ -96,7 +97,7 @@ public class TableScreen extends Screen {
         FutureTask<Pair<Long, ArrayList<Integer>>> future = new FutureTask<Pair<Long, ArrayList<Integer>>>
             (new Callable<Pair<Long, ArrayList<Integer>>>(){
                 public Pair<Long, ArrayList<Integer>> call() throws Exception {
-                    RecyclerViewScreenFragment table = get(activity);
+                    RecyclerViewScreenFragment table = getView(activity);
                     return table.data.getPicked(section, row);
                 }});
         try { activity.runOnUiThread(future); return future.get(); }
@@ -107,7 +108,7 @@ public class TableScreen extends Screen {
         FutureTask<ArrayList<Pair<String, String>>> future = new FutureTask<ArrayList<Pair<String, String>>>
             (new Callable<ArrayList<Pair<String, String>>>(){
                 public ArrayList<Pair<String, String>> call() throws Exception {
-                    RecyclerViewScreenFragment table = get(activity);
+                    RecyclerViewScreenFragment table = getView(activity);
                     return table.data.getSectionText(table.recyclerview, section);
                 }});
         try { activity.runOnUiThread(future); return future.get(); }
@@ -116,63 +117,63 @@ public class TableScreen extends Screen {
 
     public void beginUpdates(final MainActivity activity) {
         activity.runOnUiThread
-            (new Runnable() { public void run() { get(activity).data.beginUpdates(); }});
+            (new Runnable() { public void run() { getView(activity).data.beginUpdates(); }});
     }
 
     public void endUpdates(final MainActivity activity) {
         activity.runOnUiThread
-            (new Runnable() { public void run() { get(activity).data.endUpdates(); }});
+            (new Runnable() { public void run() { getView(activity).data.endUpdates(); }});
     }
 
     public void addRow(final MainActivity activity, final int section, final ModelItem row) {
         activity.runOnUiThread
-            (new Runnable() { public void run() { get(activity).data.addRow(section, row); }});
+            (new Runnable() { public void run() { getView(activity).data.addRow(section, row); }});
     }
 
     public void selectRow(final MainActivity activity, final int s, final int r) {
         activity.runOnUiThread
-            (new Runnable() { public void run() { get(activity).data.selectRow(s, r); }});
+            (new Runnable() { public void run() { getView(activity).data.selectRow(s, r); }});
     }
 
     public void replaceRow(final MainActivity activity, final int s, final int r, final ModelItem v) {
         activity.runOnUiThread
-            (new Runnable() { public void run() { get(activity).data.replaceRow(s, r, v); }});
+            (new Runnable() { public void run() { getView(activity).data.replaceRow(s, r, v); }});
     }
 
     public void replaceSection(final MainActivity activity, final int section, final ModelItem h,
                                final int flag, final ArrayList<ModelItem> v) {
         activity.runOnUiThread
-            (new Runnable() { public void run() { get(activity).data.replaceSection(section, h, flag, v); }});
+            (new Runnable() { public void run() { getView(activity).data.replaceSection(section, h, flag, v); }});
     }
 
     public void applyChangeList(final MainActivity activity, final ArrayList<ModelItemChange> changes) {
         activity.runOnUiThread
-            (new Runnable() { public void run() { ModelItemChange.applyChangeList(changes, get(activity).data); }});
+            (new Runnable() { public void run() { ModelItemChange.applyChangeList(changes, getView(activity).data); }});
     }
 
     public void setSectionValues(final MainActivity activity, final int section, final ArrayList<String> v) {
         activity.runOnUiThread
-            (new Runnable() { public void run() { get(activity).data.setSectionValues(section, v); }});
+            (new Runnable() { public void run() { getView(activity).data.setSectionValues(section, v); }});
     }
 
     public void setTag(final MainActivity activity, final int s, final int r, final int v) {
         activity.runOnUiThread
-            (new Runnable() { public void run() { get(activity).data.setTag(s, r, v); }});
+            (new Runnable() { public void run() { getView(activity).data.setTag(s, r, v); }});
     }
 
     public void setKey(final MainActivity activity, final int s, final int r, final String v) {
         activity.runOnUiThread
-            (new Runnable() { public void run() { get(activity).data.setKey(s, r, v); }});
+            (new Runnable() { public void run() { getView(activity).data.setKey(s, r, v); }});
     }
 
     public void setValue(final MainActivity activity, final int s, final int r, final String v) {
         activity.runOnUiThread
-            (new Runnable() { public void run() { get(activity).data.setValue(s, r, v); }});
+            (new Runnable() { public void run() { getView(activity).data.setValue(s, r, v); }});
     }
 
     public void setHidden(final MainActivity activity, final int s, final int r, final boolean v) {
         activity.runOnUiThread
-            (new Runnable() { public void run() { get(activity).data.setHidden(s, r, v); }});
+            (new Runnable() { public void run() { getView(activity).data.setHidden(s, r, v); }});
     }
 
     public void setTitle(final MainActivity activity, final String v) {
@@ -182,6 +183,6 @@ public class TableScreen extends Screen {
 
     public void setEditable(final MainActivity activity, final int s, final int start_row, final NativeIntIntCB intint_cb) {
         activity.runOnUiThread
-            (new Runnable() { public void run() { get(activity).data.setEditable(s, start_row, intint_cb); }});
+            (new Runnable() { public void run() { getView(activity).data.setEditable(s, start_row, intint_cb); }});
     }
 }

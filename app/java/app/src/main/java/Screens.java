@@ -31,14 +31,14 @@ import android.graphics.Rect;
 import android.app.AlertDialog;
 
 public class Screens {
-    public boolean                destroyed;
-    public HashSet<Screen>       widgets        = new HashSet<Screen>();
-    public ArrayList<ScreenFragmentNavigator> navigations    = new ArrayList<ScreenFragmentNavigator>();
-    public ArrayList<Toolbar>    toolbar_bottom = new ArrayList<Toolbar>();
+    public boolean                            destroyed;
+    public HashSet<Screen>                    screens        = new HashSet<Screen>();
+    public ArrayList<ScreenFragmentNavigator> navigators     = new ArrayList<ScreenFragmentNavigator>();
+    public ArrayList<Toolbar>                 toolbar_bottom = new ArrayList<Toolbar>();
 
     public void onDestroy() {
         Log.i("lfl", "Screens.onDestroy()");
-				for (Screen w : widgets) w.clear();
+        for (Screen w : screens) w.clear();
         for (Toolbar w : toolbar_bottom) w.clear();
         destroyed = true;
     }
@@ -46,7 +46,7 @@ public class Screens {
     public void onResume(MainActivity activity) {
         if (!destroyed) return;
         destroyed = false;
-        Log.i("lfl", "Screens.onResume(Activity)");
+        Log.i("lfl", "Screens.onResume(Activity) toolbars=" + toolbar_bottom.size());
 
         ArrayList<Toolbar> tb_bottom = new ArrayList<Toolbar>();
         tb_bottom.addAll(toolbar_bottom);
@@ -54,8 +54,8 @@ public class Screens {
         for (Toolbar t : tb_bottom) t.show(activity, true);
 
         ArrayList<ScreenFragmentNavigator> navs = new ArrayList<ScreenFragmentNavigator>();
-        navs.addAll(navigations);
-        navigations.clear();
+        navs.addAll(navigators);
+        navigators.clear();
         for (ScreenFragmentNavigator n : navs) n.show(activity, true);
     }
 }

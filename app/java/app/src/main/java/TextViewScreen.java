@@ -40,8 +40,9 @@ public class TextViewScreen extends Screen {
     }
 
     public void clear() { view = null; }
+    public ScreenFragment get(final MainActivity activity) { return getView(activity); }
 
-    public TextViewScreenFragment get(final MainActivity activity) {
+    public TextViewScreenFragment getView(final MainActivity activity) {
         if (view == null) view = createView(activity);
         return view;
     }
@@ -52,7 +53,7 @@ public class TextViewScreen extends Screen {
 
     public void show(final MainActivity activity, final boolean show_or_hide) {
         activity.runOnUiThread(new Runnable() { public void run() {
-            TextViewScreenFragment frag = get(activity);
+            TextViewScreenFragment frag = getView(activity);
             if (show_or_hide) {
                 activity.action_bar.show();
                 activity.getSupportFragmentManager().beginTransaction().replace(R.id.content_frame, frag).commit();

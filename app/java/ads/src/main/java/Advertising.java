@@ -33,9 +33,11 @@ class Advertising {
         adView.setAdUnitId("ca-app-pub-6299262366078490/8570530772");
         frameLayout.addView(adView, new LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT, Gravity.TOP + Gravity.CENTER_HORIZONTAL));
     }
+
     public void onDestroy() {
         if (adView != null) { adView.destroy(); adView=null; } 
     }
+
     public void hideAds() {
         activity.runOnUiThread(new Runnable() {
             public void run() {
@@ -43,6 +45,7 @@ class Advertising {
             }
         });
     }
+
     public void showAds() {
         activity.runOnUiThread(new Runnable() {
             public void run() {

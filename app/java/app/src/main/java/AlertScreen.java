@@ -40,7 +40,7 @@ public class AlertScreen extends Screen {
 
     public void clear() { view = null; }
 
-    private Pair<AlertDialog, EditText> get(final MainActivity activity) {
+    private Pair<AlertDialog, EditText> getView(final MainActivity activity) {
         if (view == null) view = createView(activity);
         return view;
     }
@@ -85,7 +85,7 @@ public class AlertScreen extends Screen {
 
     public void showText(final MainActivity activity, final String arg) {
         activity.runOnUiThread(new Runnable() { public void run() {
-            Pair<AlertDialog, EditText> alert = get(activity);
+            Pair<AlertDialog, EditText> alert = getView(activity);
             if (alert.second != null) { alert.second.setText(arg); }
             alert.first.show();
         }});
@@ -100,7 +100,7 @@ public class AlertScreen extends Screen {
             confirm.right_cb = confirm_cb;
             clear();
 
-            Pair<AlertDialog, EditText> alert = get(activity);
+            Pair<AlertDialog, EditText> alert = getView(activity);
             if (alert.second != null) { alert.second.setText(arg); }
             alert.first.show();
         }});
