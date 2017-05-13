@@ -289,6 +289,7 @@ void Application::SetPinchRecognizer(bool enabled) {}
 void Application::SetVerticalSwipeRecognizer(int touches) {}
 void Application::SetHorizontalSwipeRecognizer(int touches) {}
 void Application::ShowSystemStatusBar(bool v) {}
+void Application::SetTheme(const string &v) {}
 
 string Application::GetClipboardText() { return GetQString(QApplication::clipboard()->text()); }
 void Application::SetClipboardText(const string &s) { QApplication::clipboard()->setText(MakeQString(s)); }

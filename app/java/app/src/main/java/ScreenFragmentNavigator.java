@@ -5,7 +5,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.HashMap;
 import java.util.concurrent.Callable;
-import java.util.concurrent.FutureTask;
 
 import android.os.*;
 import android.view.*;
@@ -38,6 +37,16 @@ public class ScreenFragmentNavigator {
     public ArrayList<Screen> stack = new ArrayList<Screen>();
     public ScreenFragmentNavigator(final MainActivity activity) {}
 
+    public long getBackTableNativeParent() {
+        synchronized(stack) {
+            if (stack.size() == 0) return 0;
+            Screen back = stack.get(stack.size()-1);
+            return (back.screenType == Screen.TYPE_TABLE) ? back.nativeParent : 0;
+        }
+    }
+
+    public void clear() { shown_index = -1; }
+
     public void show(final MainActivity activity, final boolean show_or_hide) {
         final ScreenFragmentNavigator self = this;
         activity.runOnUiThread(new Runnable() { public void run() {
@@ -50,13 +59,15 @@ public class ScreenFragmentNavigator {
                     shown_index = activity.screens.navigators.size()-1;
                     int stack_size = activity.getSupportFragmentManager().getBackStackEntryCount();
                     if (stack_size != 0) Log.e("lfl", "nested show? stack_size=" + stack_size);
-                    for (Screen x : stack) {
-                        x.changed = false;
-                        String tag = Integer.toString(stack_size++);
-                        ScreenFragment frag = x.get(activity);
-                        activity.getSupportFragmentManager().beginTransaction()
-                            .replace(R.id.content_frame, frag, tag).addToBackStack(tag).commit();
-                        activity.setTitle(frag.parent_screen.title);
+                    synchronized(stack) {
+                        for (Screen x : stack) {
+                            x.changed = false;
+                            String tag = Integer.toString(stack_size++);
+                            ScreenFragment frag = x.get(activity);
+                            activity.getSupportFragmentManager().beginTransaction()
+                                .replace(R.id.content_frame, frag, tag).addToBackStack(tag).commit();
+                            activity.setTitle(frag.parent_screen.title);
+                        }
                     }
                 }
             } else {
@@ -82,7 +93,7 @@ public class ScreenFragmentNavigator {
     public void pushTextView(final MainActivity activity, final TextViewScreen x) { pushView(activity, x); }
 
     public void pushView(final MainActivity activity, final Screen x) {
-        stack.add(x);
+        synchronized(stack) { stack.add(x); }
         activity.runOnUiThread(new Runnable() { public void run() {
             if (shown_index < 0) return;
             x.changed = false;
@@ -96,8 +107,10 @@ public class ScreenFragmentNavigator {
 
     public void popView(final MainActivity activity, final int n) {
         if (n <= 0) return;
-        if (stack.size() < n) Log.e("lfl", "pop " + n + " views with stack size " + stack.size());
-        if (stack.size() > 0) stack.subList(Math.max(0, stack.size()-n), stack.size()).clear();
+        synchronized(stack) {
+            if (stack.size() < n) Log.e("lfl", "pop " + n + " views with stack size " + stack.size());
+            if (stack.size() > 0) stack.subList(Math.max(0, stack.size()-n), stack.size()).clear();
+        }
         activity.runOnUiThread(new Runnable() { public void run() {
             if (shown_index < 0) return;
             int stack_size = runBackFragmentHideCB(activity, n);
@@ -110,7 +123,7 @@ public class ScreenFragmentNavigator {
     }
 
     public void popToRoot(final MainActivity activity) {
-        if (stack.size() > 1) stack.subList(1, stack.size()).clear();
+        synchronized(stack) { if (stack.size() > 1) stack.subList(1, stack.size()).clear(); }
         activity.runOnUiThread(new Runnable() { public void run() {
             if (shown_index < 0) return;
             int stack_size = activity.getSupportFragmentManager().getBackStackEntryCount();
@@ -122,7 +135,7 @@ public class ScreenFragmentNavigator {
     }
 
     public void popAll(final MainActivity activity) {
-        stack.clear();
+        synchronized(stack) { stack.clear(); }
         activity.runOnUiThread(new Runnable() { public void run() {
             if (shown_index < 0) return;
             int stack_size = activity.getSupportFragmentManager().getBackStackEntryCount();
@@ -131,33 +144,15 @@ public class ScreenFragmentNavigator {
         }});
     }
 
-    public Fragment getBack(final MainActivity activity) {
-        FutureTask<Fragment> future = new FutureTask<Fragment>
-            (new Callable<Fragment>(){ public Fragment call() throws Exception {
-                if (shown_index < 0) return null;
-                int stack_size = activity.getSupportFragmentManager().getBackStackEntryCount();
-                if (stack_size == 0) return null;
-                String tag = Integer.toString(stack_size-1);
-                return activity.getSupportFragmentManager().findFragmentByTag(tag);
-            }});
-        try { activity.runOnUiThread(future); return future.get(); }
-        catch(Exception e) { return null; }
-    }
-
-    public long getBackTableSelf(final MainActivity activity) {
-        Fragment frag = getBack(activity);
-        if (frag == null || !(frag instanceof ScreenFragment)) return 0;
-        ScreenFragment jfrag = (ScreenFragment)frag;
-        return (jfrag.parent_screen instanceof TableScreen) ? jfrag.parent_screen.nativeParent : 0;
-    }
-
     public static void onBackPressed(final MainActivity activity) {
         int back_count = activity.getSupportFragmentManager().getBackStackEntryCount();
         if (back_count > 1) {
             if (activity.screens.navigators.size() >= 0) {
                 ScreenFragmentNavigator n = activity.screens.navigators.get(activity.screens.navigators.size()-1);
-                if (back_count != n.stack.size()) Log.e("lfl", "back_count=" + back_count + " but stack_size=" + n.stack.size());
-                if (n.stack.size() > 0) n.stack.remove(n.stack.size()-1);
+                synchronized(n.stack) {
+                    if (back_count != n.stack.size()) Log.e("lfl", "back_count=" + back_count + " but stack_size=" + n.stack.size());
+                    if (n.stack.size() > 0) n.stack.remove(n.stack.size()-1);
+                }
             } else Log.e("lfl", "back_count=" + back_count + " but no navigators");
 
             runBackFragmentHideCB(activity, 1);

@@ -542,6 +542,7 @@ void Application::SetHorizontalSwipeRecognizer(int touches) {}
 void Application::SetPanRecognizer(bool enabled) {}
 void Application::SetPinchRecognizer(bool enabled) {}
 void Application::ShowSystemStatusBar(bool v) {}
+void Application::SetTheme(const string &v) {}
 
 bool Video::CreateWindow(Window *W) { 
   [dynamic_cast<OSXWindow*>(app->focused)->view clearKeyModifiers];

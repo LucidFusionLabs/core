@@ -1,13 +1,55 @@
-<?xml version="1.0" encoding="utf-8"?>  
-<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"  
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/listview_cell_root"
-    android:layout_width="match_parent"  
+    android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:padding="10dp">
+    android:orientation="horizontal"
+    android:background="@drawable/listview_cell_selector">
+
+    <ImageView android:id="@+id/listview_cell_left_icon"
+        android:layout_width="wrap_content"
+        android:layout_height="fill_parent"
+        android:gravity="center_vertical"
+        android:layout_alignParentTop="true"
+        android:layout_alignParentBottom="true"
+        android:layout_marginRight="15dp"
+        android:layout_marginTop="5dp"
+        android:layout_marginBottom="5dp" />
+
+    <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+        android:id="@+id/listview_cell_title_root"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/listview_cell_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:textSize="18dp"
+            android:textColor="@color/white"/>
+
+        <TextView
+            android:id="@+id/listview_cell_subtext"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="10dp"
+            android:textColor="@color/white"/>
+    </LinearLayout>
+
+    <View
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_weight="1"/>
+
     <RadioGroup  
         android:id="@+id/listview_cell_radio"  
-        android:layout_width="match_parent"  
+        android:orientation="horizontal"
+        android:layout_width="wrap_content"  
         android:layout_height="wrap_content"  
-        android:orientation="horizontal">  
+        android:layout_gravity="center_vertical">
     </RadioGroup>  
-</RelativeLayout> 
+
+</LinearLayout>

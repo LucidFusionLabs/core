@@ -97,19 +97,7 @@ public class ModelItemRecyclerViewAdapter extends RecyclerView.Adapter<ModelItem
     View.OnClickListener click_listener = new View.OnClickListener() {
         @Override
         public void onClick(View v) {
-            if (recyclerview == null) return;
-            int position = recyclerview.indexOfChild(v);
-            ModelItem i = data.get(position);
-            if (i.type == ModelItem.TYPE_COMMAND || i.type == ModelItem.TYPE_BUTTON) {
-                if (i.cb != null) i.cb.run();
-            } else if (i.type == ModelItem.TYPE_LABEL && position+1 < data.size()) {
-                ModelItem ni = data.get(position+1);
-                if (ni.type == ModelItem.TYPE_PICKER || ni.type == ModelItem.TYPE_FONTPICKER) {
-                    beginUpdates();
-                    ni.hidden = !ni.hidden;
-                    endUpdates();
-                }
-            }
+            if (recyclerview != null) handleClick(recyclerview.indexOfChild(v));
         }
     };
 
@@ -127,12 +115,18 @@ public class ModelItemRecyclerViewAdapter extends RecyclerView.Adapter<ModelItem
     }
 
     @Override
-    public int getItemCount() { return data.size(); }
+    public int getItemCount() { return data.size() - 1; }
 
     @Override
     public int getItemViewType(int position) {
         ModelItem item = data.get(position);
-        return item.hidden ? ModelItem.TYPE_HIDDEN : item.type;
+        if (item.hidden) return ModelItem.TYPE_HIDDEN;
+        else if (item.type == ModelItem.TYPE_SEPARATOR && (position+1) < data.size() &&
+            data.get(position+1).type == ModelItem.TYPE_SEPARATOR) return ModelItem.TYPE_HIDDEN;
+        else if ((item.flags & ModelItem.TABLE_FLAG_HIDEKEY) != 0) {
+            if (item.type == ModelItem.TYPE_SELECTOR) return ModelItem.TYPE_SELECTOR_HIDEKEY;
+        }
+        return item.type;
     }
 
     @Override
@@ -209,6 +203,18 @@ public class ModelItemRecyclerViewAdapter extends RecyclerView.Adapter<ModelItem
                 itemView.setOnClickListener(click_listener);
                 itemView.setTag(holder);
                 holder.root = itemView.findViewById(R.id.listview_cell_root);
+                holder.setTextView((TextView) itemView.findViewById(R.id.listview_cell_title));
+                holder.radio = (RadioGroup) itemView.findViewById(R.id.listview_cell_radio);
+                holder.leftIcon = (ImageView) itemView.findViewById(R.id.listview_cell_left_icon);
+                return holder;
+            }
+
+            case ModelItem.TYPE_SELECTOR_HIDEKEY: {
+                View itemView = inflater.inflate(R.layout.listview_cell_radio_hidekey, parent, false);
+                ViewHolder holder = new ViewHolder(itemView);
+                itemView.setOnClickListener(click_listener);
+                itemView.setTag(holder);
+                holder.root = itemView.findViewById(R.id.listview_cell_root);
                 holder.radio = (RadioGroup) itemView.findViewById(R.id.listview_cell_radio);
                 return holder;
             }
@@ -230,22 +236,23 @@ public class ModelItemRecyclerViewAdapter extends RecyclerView.Adapter<ModelItem
     }
 
     @Override
-    public void onBindViewHolder(ViewHolder holder, int position) {
+    public void onBindViewHolder(ViewHolder holder, final int position) {
         final ModelItem item = data.get(position);
         int type = getItemViewType(position);
 
         if (holder.textView != null) {
+            if (item.cb == null) holder.textView.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { handleClick(position); }});
+            else                 holder.textView.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { item.cb.run(); }});
+
             if (item.dropdown_key.length() > 0 && item.key.length() > 0 && item.cb != null &&
                 (item.flags & ModelItem.TABLE_FLAG_FIXDROPDOWN) == 0) {
                 holder.textView.setText(item.key + " \u02C5");
                 holder.textView.setTextColor(holder.textViewLinkColors);
                 holder.textView.setPaintFlags(holder.textView.getPaintFlags() | Paint.UNDERLINE_TEXT_FLAG);
-                holder.textView.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { item.cb.run(); }});
             } else {
                 holder.textView.setText(item.key);
                 holder.textView.setTextColor(holder.textViewTextColors);
                 holder.textView.setPaintFlags(holder.textView.getPaintFlags() & (~Paint.UNDERLINE_TEXT_FLAG));
-                holder.textView.setOnClickListener(null);
             }
         }
 
@@ -427,8 +434,8 @@ public class ModelItemRecyclerViewAdapter extends RecyclerView.Adapter<ModelItem
     }
 
     public void addRow(final int section, ModelItem row) {
-        if (section == sections.size()) addSection();
-        if (section >= sections.size()) throw new java.lang.IllegalArgumentException();
+        if (section == (sections.size()-1)) addSection();
+        if (section >= (sections.size()-1)) throw new java.lang.IllegalArgumentException();
         data.add(getSectionEndRowId(section), row);
         moveSectionsAfterBy(section, 1);
     }
@@ -438,8 +445,8 @@ public class ModelItemRecyclerViewAdapter extends RecyclerView.Adapter<ModelItem
     }
 
     public void replaceSection(final int section, final ModelItem h, final int flag, ArrayList<ModelItem> v) {
-        if (section == sections.size()) addSection();
-        if (section >= sections.size()) throw new java.lang.IllegalArgumentException();
+        if (section == (sections.size()-1)) addSection();
+        if (section >= (sections.size()-1)) throw new java.lang.IllegalArgumentException();
         int start_row = getSectionBeginRowId(section), old_section_size = getSectionSize(section);
         data.set(start_row, h);
         data.subList(start_row + 1, start_row + 1 + old_section_size).clear();
@@ -497,5 +504,19 @@ public class ModelItemRecyclerViewAdapter extends RecyclerView.Adapter<ModelItem
             ret.add(new Pair<String, String>(item.key, val));
         }
         return ret;
+    }
+
+    public void handleClick(int position) {
+        ModelItem i = data.get(position);
+        if (i.type == ModelItem.TYPE_COMMAND || i.type == ModelItem.TYPE_BUTTON) {
+            if (i.cb != null) i.cb.run();
+        } else if (i.type == ModelItem.TYPE_LABEL && position+1 < data.size()) {
+            ModelItem ni = data.get(position+1);
+            if (ni.type == ModelItem.TYPE_PICKER || ni.type == ModelItem.TYPE_FONTPICKER) {
+                beginUpdates();
+                ni.hidden = !ni.hidden;
+                endUpdates();
+            }
+        }
     }
 }

@@ -176,6 +176,11 @@ public class TableScreen extends Screen {
             (new Runnable() { public void run() { getView(activity).data.setHidden(s, r, v); }});
     }
 
+    public void setSelected(final MainActivity activity, final int s, final int r, final int v) {
+        activity.runOnUiThread
+            (new Runnable() { public void run() { getView(activity).data.setSelected(s, r, v); }});
+    }
+
     public void setTitle(final MainActivity activity, final String v) {
         activity.runOnUiThread
             (new Runnable() { public void run() { title = v; }});

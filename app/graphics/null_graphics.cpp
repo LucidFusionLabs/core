@@ -164,7 +164,7 @@ struct NullGraphicsDevice : public GraphicsDevice {
   void AttachShader(int prog, int shader) {}
   void DelShader(int shader) {}
   void BindAttribLocation(int prog, int loc, const string &name) {}
-  void LinkProgram(int prog) {}
+  bool LinkProgram(int prog) { return false; }
   void GetProgramiv(int p, int t, int *out) {}
   void GetIntegerv(int t, int *out) {}
   int GetAttribLocation (int prog, const string &name) { return 0; }

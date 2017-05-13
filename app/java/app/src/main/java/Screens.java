@@ -40,6 +40,7 @@ public class Screens {
         Log.i("lfl", "Screens.onDestroy()");
         for (Screen w : screens) w.clear();
         for (Toolbar w : toolbar_bottom) w.clear();
+        for (ScreenFragmentNavigator w : navigators) w.clear();
         destroyed = true;
     }
 

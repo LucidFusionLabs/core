@@ -215,6 +215,13 @@ void Application::SetKeepScreenOn(bool v) {
   jni->env->CallVoidMethod(jni->activity, mid, v);
 }
 
+void Application::SetTheme(const string &v) {
+  static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "setTheme", "(Ljava/lang/String;)V"));
+  jstring vstr = jni->ToJString(v);
+  jni->env->CallVoidMethod(jni->activity, mid, vstr);
+  jni->env->DeleteLocalRef(vstr);
+}
+
 bool Video::CreateWindow(Window *W) { return true; }
 void Video::StartWindow(Window *W) {}
 int Video::Swap() {

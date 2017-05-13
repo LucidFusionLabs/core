@@ -297,6 +297,9 @@ struct AndroidTableView : public TableViewInterface {
   }
 
   void SetSelected(int section, int row, int val) {
+    static jmethodID mid = CheckNotNull
+      (jni->env->GetMethodID(jni->tablescreen_class, "setSelected", "(Lcom/lucidfusionlabs/app/MainActivity;III)V"));
+    jni->env->CallVoidMethod(impl, mid, jni->activity, jint(section), jint(row), jint(val));
   }
 
   void SetHidden(int section, int row, bool val) {
@@ -362,22 +365,23 @@ struct AndroidNavigationView : public NavigationViewInterface {
     jni->env->DeleteLocalRef(v);
   }
 
+  void SetTheme(const string &theme) {}
   TableViewInterface *Back() {
     static jmethodID mid = CheckNotNull
-      (jni->env->GetMethodID(jni->screennavigator_class,
-                             "getBackTableSelf", "(Lcom/lucidfusionlabs/app/MainActivity;)J"));
+      (jni->env->GetMethodID(jni->screennavigator_class, "getBackTableNativeParent", "()J"));
     uintptr_t v = jni->env->CallLongMethod(impl, mid, jni->activity);
     return v ? static_cast<TableViewInterface*>(Void(v)) : nullptr;
   }
 
-  void SetTheme(const string &theme) {}
   void Show(bool show_or_hide) {
-    shown == show_or_hide;
     static jmethodID mid = CheckNotNull
       (jni->env->GetMethodID(jni->screennavigator_class, "show", "(Lcom/lucidfusionlabs/app/MainActivity;Z)V"));
     jni->env->CallVoidMethod(impl, mid, jni->activity, show_or_hide);
-    if (show_or_hide) { if (!overlay) app->SetAppFrameEnabled(false); }
-    else              {               app->SetAppFrameEnabled(true);  }
+    if ((shown = show_or_hide)) {
+      auto back = Back();
+      if (back && back->show_cb) back->show_cb();
+      if (!overlay) app->SetAppFrameEnabled(false);
+    } else app->SetAppFrameEnabled(true);  
   }
 
   void PushTableView(TableViewInterface *t) {

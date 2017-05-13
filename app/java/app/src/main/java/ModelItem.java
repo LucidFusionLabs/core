@@ -5,21 +5,22 @@ import java.util.ArrayList;
 import java.util.HashMap;
 
 public final class ModelItem {
-    public static final int TYPE_NONE          = 0;
-    public static final int TYPE_LABEL         = 1;
-    public static final int TYPE_SEPARATOR     = 2;
-    public static final int TYPE_COMMAND       = 3;
-    public static final int TYPE_BUTTON        = 4;
-    public static final int TYPE_TOGGLE        = 5;
-    public static final int TYPE_SELECTOR      = 6;
-    public static final int TYPE_PICKER        = 7;
-    public static final int TYPE_SLIDER        = 8;
-    public static final int TYPE_TEXTINPUT     = 9;
-    public static final int TYPE_NUMBERINPUT   = 10;
-    public static final int TYPE_PASSWORDINPUT = 11;
-    public static final int TYPE_FONTPICKER    = 12;
-    public static final int TYPE_HIDDEN        = 13;
-    public static final int TYPE_COUNT         = 14;
+    public static final int TYPE_NONE             = 0;
+    public static final int TYPE_LABEL            = 1;
+    public static final int TYPE_SEPARATOR        = 2;
+    public static final int TYPE_COMMAND          = 3;
+    public static final int TYPE_BUTTON           = 4;
+    public static final int TYPE_TOGGLE           = 5;
+    public static final int TYPE_SELECTOR         = 6;
+    public static final int TYPE_PICKER           = 7;
+    public static final int TYPE_SLIDER           = 8;
+    public static final int TYPE_TEXTINPUT        = 9;
+    public static final int TYPE_NUMBERINPUT      = 10;
+    public static final int TYPE_PASSWORDINPUT    = 11;
+    public static final int TYPE_FONTPICKER       = 12;
+    public static final int TYPE_HIDDEN           = 13;
+    public static final int TYPE_SELECTOR_HIDEKEY = 14;
+    public static final int TYPE_COUNT            = 15;
 
     public static final int HALIGN_LEFT   = 1;
     public static final int HALIGN_CENTER = 2;

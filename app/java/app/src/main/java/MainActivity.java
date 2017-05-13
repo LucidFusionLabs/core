@@ -78,6 +78,8 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         Log.i("lfl", "MainActivity.onCreate() app_created=" + app_created);
+        preferences = PreferenceManager.getDefaultSharedPreferences(this);
+        if (preferences.getString("theme", "Dark").equals("Light")) setTheme(android.support.v7.appcompat.R.style.Theme_AppCompat_Light);
         super.onCreate(savedInstanceState);
 
         if (!isTaskRoot()) {
@@ -86,9 +88,7 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        preferences = PreferenceManager.getDefaultSharedPreferences(this);
         onCreated();
-
         Context context = getApplication();
         LayoutInflater inflater = (LayoutInflater)context.getSystemService(LAYOUT_INFLATER_SERVICE);
         main_layout = (FrameLayout)inflater.inflate(R.layout.main, null);
@@ -287,6 +287,11 @@ public class MainActivity extends AppCompatActivity {
 
     public void setCaption(final String text) {
         runOnUiThread(new Runnable() { public void run() { setTitle(text); } });
+    }
+
+    public void setTheme(final String text) {
+        Log.i("lfl", "setTheme: " + text);
+        runOnUiThread(new Runnable() { public void run() { recreate(); } });
     }
 
     public String getModelName() {

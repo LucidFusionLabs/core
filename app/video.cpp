@@ -623,8 +623,8 @@ void Shader::SetGlobalUniform2f(const string &name, float v1, float v2){
 }
 
 int Shader::Create(const string &name, const string &vertex_shader, const string &fragment_shader, const ShaderDefines &defines, Shader *out) {
-  INFO("Shader::Create ", name);
-  GraphicsDevice *gd = app->focused->gd;
+  if (out) *out = Shader();
+  auto gd = app->focused->gd;
   int p = gd->CreateProgram();
 
   string hdr =
@@ -656,7 +656,10 @@ int Shader::Create(const string &name, const string &vertex_shader, const string
   if (defines.vertex_color) gd->BindAttribLocation(p, 2, "VertexColor");
   if (defines.tex_2d)       gd->BindAttribLocation(p, 3, "TexCoordIn" );
 
-  gd->LinkProgram(p);
+  if (!gd->LinkProgram(p)) {
+    gd->DelProgram(p);
+    return ERRORv(0, "Shader::Create ", name, ": link failed");
+  } else INFO("Shader::Create ", name);
 
   int active_uniforms=0, max_uniform_components=0, active_attributes=0, max_attributes=0;
   gd->GetProgramiv(p, GraphicsDevice::ActiveUniforms, &active_uniforms);
@@ -669,7 +672,6 @@ int Shader::Create(const string &name, const string &vertex_shader, const string
 
   bool log_missing_attrib = false;
   if (out) {
-    *out = Shader();
     out->ID = p;
     out->name = name;
     if ((out->slot_position             = gd->GetAttribLocation (p, "Position"))            < 0 && log_missing_attrib) INFO("shader ", name, " missing Position");

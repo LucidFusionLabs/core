@@ -778,6 +778,7 @@ struct Application : public ::LFApp {
   void SetTitleBar(bool on);
   void SetKeepScreenOn(bool on);
   void SetExtendedBackgroundTask(Callback);
+  void SetTheme(const string&);
 
   bool LoadKeychain(const string &key, string *val);
   void SaveKeychain(const string &key, const string &val);

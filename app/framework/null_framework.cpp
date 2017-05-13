@@ -101,6 +101,7 @@ void Application::SetTouchKeyboardTiled(bool v) {}
 void Application::SetAutoRotateOrientation(bool v) {}
 void Application::ShowSystemStatusBar(bool v) {}
 void Application::SetKeepScreenOn(bool v) {}
+void Application::SetTheme(const string &v) {}
 
 bool Video::CreateWindow(Window *W) { 
   app->windows[W->id] = W;

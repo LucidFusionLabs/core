@@ -806,6 +806,7 @@ void Application::SetHorizontalSwipeRecognizer(int touches) { [[LFUIApplication 
 void Application::SetPanRecognizer(bool enabled) { [[LFUIApplication sharedAppDelegate].controller initPanGestureRecognizers]; }
 void Application::SetPinchRecognizer(bool enabled) { [[LFUIApplication sharedAppDelegate].controller initPinchGestureRecognizers]; }
 void Application::ShowSystemStatusBar(bool v) { [[LFUIApplication sharedAppDelegate].controller showStatusBar:v]; }
+void Application::SetTheme(const string &v) {}
 
 void iOSWindow::SetResizeIncrements(float x, float y) {}
 void iOSWindow::SetTransparency(float v) {}

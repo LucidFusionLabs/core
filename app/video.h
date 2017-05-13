@@ -467,7 +467,7 @@ struct GraphicsDevice {
   virtual void AttachShader(int prog, int shader) = 0;
   virtual void DelShader(int shader) = 0;
   virtual void BindAttribLocation(int prog, int loc, const string &name) = 0;
-  virtual void LinkProgram(int prog) = 0;
+  virtual bool LinkProgram(int prog) = 0;
   virtual void GetProgramiv(int p, int t, int *out) = 0;
   virtual void GetIntegerv(int t, int *out) = 0;
   virtual int GetAttribLocation(int prog, const string &name) = 0;

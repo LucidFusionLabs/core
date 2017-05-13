@@ -177,14 +177,14 @@ void CompileShader(int shader, vector<const char*> source) {
 void AttachShader(int prog, int shader) { glAttachShader(prog, shader); }
 void DelShader(int shader) { glDeleteShader(shader); }
 void BindAttribLocation(int prog, int loc, const string &name) { glBindAttribLocation(prog, loc, name.c_str()); }
-void LinkProgram(int prog) {
+bool LinkProgram(int prog) {
   char buf[1024] = {0}; int l=0;
   glLinkProgram(prog);
   glGetProgramInfoLog(prog, sizeof(buf), &l, buf);
   if (l) INFO(buf);
   GLint link_status;
   glGetProgramiv(prog, GL_LINK_STATUS, &link_status);
-  if (link_status != GL_TRUE) FATAL("link failed");
+  return link_status == GL_TRUE;
 }
 void GetProgramiv(int p, int t, int *out) { glGetProgramiv(p, t, out); }
 void GetIntegerv(int t, int *out) { glGetIntegerv(t, out); }
