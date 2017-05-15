@@ -256,7 +256,7 @@ struct ViterbiTrain {
         s->val.samples = accum[i]->Count();
       }
     }
-    if (FLAGS_enable_cuda && mode == Mode::UpdateModel) AcousticModel::ToCUDA(model);
+    if (app->cuda && mode == Mode::UpdateModel) AcousticModel::ToCUDA(model);
   }
 };
 

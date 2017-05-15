@@ -7,19 +7,18 @@ the `Audio`, `Video`, `Input`, `SocketServices`, `Camera`, and `CUDA` Modules,
 the `Framework`, `Fonts`, `GUI`, `Loader`, `Scene`, `IPC`, and `Crypto` subsystems,
 and runs on OS X, Windows, Linux, iOS, and Android.
 
-The key implementation files are:
-[app/app.h](app/app.h)
-[app/app.cpp](app/app.cpp)
+The key implementation files are: 
+[app/app.h](app/app.h)            
+[app/app.cpp](app/app.cpp)        
+                                  
+## Projects                       
 
-## Projects
-
-* **[LTerminal](http://lucidfusionlabs.com/terminal)**:      modern terminal
-* **[LEditor](http://lucidfusionlabs.com/editor)**:          text editor and IDE
-* **[LBrowser](http://lucidfusionlabs.com/browser)**:        HTML4/CSS2 web browser with V8 javascript
-* **[LChess](http://lucidfusionlabs.com/chess)**:            magic bitboard chess engine and FICS client
-* **[FusionSensor](http://lucidfusionlabs.com/fs)**:         speech and image recognition client/server
-* **[SpaceballFuture](http://spaceballfuture.com)**:         multiplayer 3d game
-* **[LQuake](http://github.com/LucidFusionLabs/quake)**:     quake clone
+* **[LTerminal](http://lucidfusionlabs.com/LTerminal)**:             modern terminal
+* **[TepidFusion](http://lucidfusionlabs.com/TepidFusion)**:         text editor and IDE
+* **[TinyBrowser](http://lucidfusionlabs.com/TinyBrowser)**:         HTML4/CSS2 web browser with V8 javascript
+* **[AncientChess](http://lucidfusionlabs.com/AncientChess)**:       magic bitboard chess engine and FICS client
+* **[FusionSensor](http://lucidfusionlabs.com/FusionSensor)**:       speech and image recognition client/server
+* **[SpaceballFuture](http://lucidfusionlabs.com/SpaceballFuture)**: multiplayer 3d game
 
 The following build procedures apply to any app cloned from [new_app_template](new_app_template).
 Replace "LTerminal" with "YourApp" to build other apps.

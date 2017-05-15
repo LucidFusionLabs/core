@@ -1,5 +1,5 @@
 /*
- * $Id: lfcuda.cu 501 2012-03-23 07:40:54Z justin $
+ * $Id: speech.cu 501 2012-03-23 07:40:54Z justin $
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -56,12 +56,12 @@ struct LogLevel { enum { Fatal=-1, Error=0, Info=3, Debug=7 }; int l; };
 /* *** LFL LOG IMPORT *** */
 
 #define LFL_FAKE_STL
-#include "lfapp/lftypes.h"
-#include "lfapp/math.h"
-#include "lfapp/hmm.h"
-#include "lfapp/audio.h"
-#include "lfapp/speech.h"
-#include "lfcuda.h"
+#include "app/types.h"
+#include "app/math.h"
+#include "app/hmm.h"
+#include "app/audio.h"
+#include "app/speech.h"
+#include "app/cuda/speech.h"
 
 void cuda_init_hook() { info("%s", "cuda init"); }
 

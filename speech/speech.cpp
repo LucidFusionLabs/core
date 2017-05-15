@@ -25,7 +25,7 @@
 #include "speech.h"
 
 #ifdef LFL_CUDA
-#include "core/app/cuda/lfcuda.h"
+#include "core/app/cuda/speech.h"
 CudaAcousticModel *CAM = 0;
 #endif
 

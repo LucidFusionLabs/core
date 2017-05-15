@@ -16,10 +16,10 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "lfapp/lfapp.h"
-#include "lfapp/math.h"
-#include "lfapp/speech.h"
-#include "lfapp/lfcuda/cuda.h"
+#include "app/app.h"
+#include "app/math.h"
+#include "app/speech.h"
+#include "app/cuda/speech.h"
 
 #define cudaMemcpyDeviceToHost 1
 #define cudaMemcpyHostToDevice 1

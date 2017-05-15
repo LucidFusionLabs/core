@@ -17,7 +17,7 @@
  */
 
 #include <cuda_runtime.h>
-#include "cuda/lfcuda.h"
+#include "cuda/speech.h"
 #include "speech/hmm.h"
 #include "speech/speech.h"
 

@@ -154,7 +154,7 @@ function(lfl_add_target _name)
     set_property(TARGET ${_name}_bitcode PROPERTY NO_SYSTEM_FROM_IMPORTED ON)
     add_dependencies(${_name}_bitcode ${_name})
 
-    add_executable(${_name}_designer ${_WIN32} ${LFL_SOURCE_DIR}/core/app/bindings/llvm_jit.cpp)
+    add_executable(${_name}_designer ${_WIN32} ${LFL_SOURCE_DIR}/core/ide/llvm_jit.cpp)
     target_compile_options(${_name}_designer PUBLIC ${_COMPILE_OPTIONS})
     target_compile_definitions(${_name}_designer PUBLIC ${LFL_APP_DEF} ${_COMPILE_DEFINITIONS})
     target_include_directories(${_name}_designer PUBLIC ${LFL_APP_INCLUDE} ${LIBCLANG_INCLUDE})
