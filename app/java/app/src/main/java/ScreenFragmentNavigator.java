@@ -35,7 +35,6 @@ import android.support.v4.app.FragmentManager;
 public class ScreenFragmentNavigator {
     public int shown_index = -1;
     public ArrayList<Screen> stack = new ArrayList<Screen>();
-    public ScreenFragmentNavigator(final MainActivity activity) {}
 
     public long getBackTableNativeParent() {
         synchronized(stack) {
@@ -63,7 +62,7 @@ public class ScreenFragmentNavigator {
                         for (Screen x : stack) {
                             x.changed = false;
                             String tag = Integer.toString(stack_size++);
-                            ScreenFragment frag = x.get(activity);
+                            ScreenFragment frag = x.createFragment();
                             activity.getSupportFragmentManager().beginTransaction()
                                 .replace(R.id.content_frame, frag, tag).addToBackStack(tag).commit();
                             activity.setTitle(frag.parent_screen.title);
@@ -89,8 +88,8 @@ public class ScreenFragmentNavigator {
         }});
     }
 
-    public void pushTable   (final MainActivity activity, final TableScreen    x) { pushView(activity, x); }
-    public void pushTextView(final MainActivity activity, final TextViewScreen x) { pushView(activity, x); }
+    public void pushTable   (final MainActivity activity, final TableScreen x) { pushView(activity, x); }
+    public void pushTextView(final MainActivity activity, final TextScreen  x) { pushView(activity, x); }
 
     public void pushView(final MainActivity activity, final Screen x) {
         synchronized(stack) { stack.add(x); }
@@ -98,7 +97,7 @@ public class ScreenFragmentNavigator {
             if (shown_index < 0) return;
             x.changed = false;
             String tag = Integer.toString(activity.getSupportFragmentManager().getBackStackEntryCount());
-            ScreenFragment frag = x.get(activity);
+            ScreenFragment frag = x.createFragment();
             activity.getSupportFragmentManager().beginTransaction()
                 .replace(R.id.content_frame, frag, tag).addToBackStack(tag).commit();
             activity.setTitle(frag.parent_screen.title);
@@ -144,6 +143,11 @@ public class ScreenFragmentNavigator {
         }});
     }
 
+    public static void clearFragmentBackstack(final MainActivity activity) {
+        if (activity.getSupportFragmentManager().getBackStackEntryCount() > 0)
+            activity.getSupportFragmentManager().popBackStackImmediate(null, FragmentManager.POP_BACK_STACK_INCLUSIVE);
+    }
+
     public static void onBackPressed(final MainActivity activity) {
         int back_count = activity.getSupportFragmentManager().getBackStackEntryCount();
         if (back_count > 1) {
@@ -163,7 +167,7 @@ public class ScreenFragmentNavigator {
             runBackFragmentHideCB(activity, 1);
             Fragment frag = activity.getSupportFragmentManager().findFragmentByTag("0");
             if (frag != null && frag instanceof RecyclerViewScreenFragment) {
-                ModelItem nav_left = ((RecyclerViewScreenFragment)frag).data.nav_left;
+                ModelItem nav_left = ((RecyclerViewScreenFragment)frag).adapter.nav_left;
                 if (nav_left != null && nav_left.cb != null) {
                     nav_left.cb.run();
                     return;
@@ -195,6 +199,7 @@ public class ScreenFragmentNavigator {
         if (stack_size == 0) return;
         String tag = Integer.toString(stack_size-1);
         Fragment frag = activity.getSupportFragmentManager().findFragmentByTag(tag);
+        if (frag == null) { Log.e("lfl", "showBackFragment tag=" + tag + ": null"); return; }
         if (show_content) activity.getSupportFragmentManager().beginTransaction().replace(R.id.content_frame, frag, tag).commit();
         if (show_title && frag instanceof ScreenFragment) activity.setTitle(((ScreenFragment)frag).parent_screen.title);
     }

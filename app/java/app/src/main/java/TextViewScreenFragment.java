@@ -18,16 +18,29 @@ import android.util.Log;
 
 public class TextViewScreenFragment extends ScreenFragment implements OnItemClickListener {
     public String data;
-    public TextView textview = null;
+    public TextView textview;
+    public static String PARENT_SCREEN_ID = "PARENT_SCREEN_ID";
 
-    public TextViewScreenFragment() {
-        super(null, null);
-        data = null;
+    public static final TextViewScreenFragment newInstance(TextScreen parent) {
+        TextViewScreenFragment ret = new TextViewScreenFragment();
+        Bundle bundle = new Bundle(1);
+        bundle.putInt(PARENT_SCREEN_ID, parent.screenId);
+        ret.setArguments(bundle);
+        ret.data = parent.text;
+        ret.parent_screen = parent;
+        return ret;
     }
 
-    public TextViewScreenFragment(final MainActivity activity, final Screen p, final String d) {
-        super(activity, p);
-        data = d;
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        if (MainActivity.screens.next_screen_id == 1) return;
+        int parent_screen_id = getArguments().getInt(PARENT_SCREEN_ID);
+        if (parent_screen_id < MainActivity.screens.screens.size()) {
+            parent_screen = MainActivity.screens.screens.get(parent_screen_id);
+            if (!(parent_screen instanceof TextScreen)) data = "";
+            else data = ((TextScreen)parent_screen).text;
+        }
     }
 
     @Override

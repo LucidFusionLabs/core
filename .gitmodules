@@ -95,3 +95,6 @@
 [submodule "imports/OpenSSL-for-Android-Prebuilt"]
 	path = imports/OpenSSL-for-Android-Prebuilt
 	url = https://github.com/PurpleI2P/OpenSSL-for-Android-Prebuilt
+[submodule "CMake"]
+	path = CMake
+	url = https://github.com/LucidFusionLabs/LFLCMake

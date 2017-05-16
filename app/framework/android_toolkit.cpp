@@ -26,9 +26,8 @@ struct AndroidAlertView : public AlertViewInterface {
     CHECK_EQ(4, items.size());
     CHECK_EQ("style", items[0].first);
     static jmethodID mid = CheckNotNull
-      (jni->env->GetMethodID(jni->alertscreen_class,
-                             "<init>", "(Lcom/lucidfusionlabs/app/MainActivity;Ljava/util/ArrayList;)V"));
-    jobject v = jni->env->NewObject(jni->alertscreen_class, mid, jni->activity, jni->ToModelItemArrayList(move(items)));
+      (jni->env->GetMethodID(jni->alertscreen_class, "<init>", "(Ljava/util/ArrayList;)V"));
+    jobject v = jni->env->NewObject(jni->alertscreen_class, mid, jni->ToModelItemArrayList(move(items)));
     impl = jni->env->NewGlobalRef(v);
     jni->env->DeleteLocalRef(v);
   }
@@ -62,10 +61,9 @@ struct AndroidToolbarView : public ToolbarViewInterface {
   ~AndroidToolbarView() { jni->env->DeleteGlobalRef(impl); }
   AndroidToolbarView(MenuItemVec items) {
     static jmethodID mid = CheckNotNull
-      (jni->env->GetMethodID(jni->toolbar_class,
-                             "<init>", "(Lcom/lucidfusionlabs/app/MainActivity;Ljava/util/ArrayList;)V"));
+      (jni->env->GetMethodID(jni->toolbar_class, "<init>", "(Ljava/util/ArrayList;)V"));
     jobject l = jni->ToModelItemArrayList(move(items));
-    jobject v = jni->env->NewObject(jni->toolbar_class, mid, jni->activity, l);
+    jobject v = jni->env->NewObject(jni->toolbar_class, mid, l);
     impl = jni->env->NewGlobalRef(v);
     jni->env->DeleteLocalRef(v);
     jni->env->DeleteLocalRef(l);
@@ -89,11 +87,10 @@ struct AndroidMenuView : public MenuViewInterface {
   ~AndroidMenuView() { jni->env->DeleteGlobalRef(impl); }
   AndroidMenuView(const string &title, MenuItemVec items) {
     static jmethodID mid = CheckNotNull
-      (jni->env->GetMethodID(jni->menuscreen_class,
-                             "<init>", "(Lcom/lucidfusionlabs/app/MainActivity;Ljava/lang/String;Ljava/util/ArrayList;)V"));
+      (jni->env->GetMethodID(jni->menuscreen_class, "<init>", "(Ljava/lang/String;Ljava/util/ArrayList;)V"));
     jstring tstr = jni->ToJString(title);
     jobject l = jni->ToModelItemArrayList(move(items));
-    jobject v = jni->env->NewObject(jni->menuscreen_class, mid, jni->activity, tstr, l);
+    jobject v = jni->env->NewObject(jni->menuscreen_class, mid, tstr, l);
     impl = jni->env->NewGlobalRef(v);
     jni->env->DeleteLocalRef(v);
     jni->env->DeleteLocalRef(l);
@@ -112,12 +109,11 @@ struct AndroidTableView : public TableViewInterface {
   ~AndroidTableView() { jni->env->DeleteGlobalRef(impl); }
   AndroidTableView(const string &title, const string &style, TableItemVec items) {
     static jmethodID mid = CheckNotNull
-      (jni->env->GetMethodID(jni->tablescreen_class,
-                             "<init>", "(Lcom/lucidfusionlabs/app/MainActivity;Ljava/lang/String;Ljava/util/ArrayList;J)V"));
+      (jni->env->GetMethodID(jni->tablescreen_class, "<init>", "(Ljava/lang/String;Ljava/util/ArrayList;J)V"));
     jlong lsp = uintptr_t(this);
     jstring tstr = jni->ToJString(title);
     jobject l = jni->ToModelItemArrayList(move(items));
-    jobject v = jni->env->NewObject(jni->tablescreen_class, mid, jni->activity, tstr, l, lsp);
+    jobject v = jni->env->NewObject(jni->tablescreen_class, mid, tstr, l, lsp);
     impl = jni->env->NewGlobalRef(v);
     jni->env->DeleteLocalRef(v);
     jni->env->DeleteLocalRef(l);
@@ -341,10 +337,9 @@ struct AndroidTextView : public TextViewInterface {
   AndroidTextView(const string &title, File *f) : AndroidTextView(title, f ? f->Contents() : "") {}
   AndroidTextView(const string &title, const string &text) {
     static jmethodID mid = CheckNotNull
-      (jni->env->GetMethodID(jni->textviewscreen_class,
-                             "<init>", "(Lcom/lucidfusionlabs/app/MainActivity;Ljava/lang/String;Ljava/lang/String;)V"));
+      (jni->env->GetMethodID(jni->textscreen_class, "<init>", "(Ljava/lang/String;Ljava/lang/String;)V"));
     jstring hstr = jni->ToJString(title), tstr = jni->ToJStringRaw(text);
-    jobject v = jni->env->NewObject(jni->textviewscreen_class, mid, jni->activity, hstr, tstr);
+    jobject v = jni->env->NewObject(jni->textscreen_class, mid, hstr, tstr);
     impl = jni->env->NewGlobalRef(v);
     jni->env->DeleteLocalRef(v);
     jni->env->DeleteLocalRef(tstr);
@@ -358,8 +353,7 @@ struct AndroidNavigationView : public NavigationViewInterface {
   ~AndroidNavigationView() { jni->env->DeleteGlobalRef(impl); }
   AndroidNavigationView(const string &style, const string &t) : overlay(style == "overlay") {
     static jmethodID mid = CheckNotNull
-      (jni->env->GetMethodID(jni->screennavigator_class,
-                             "<init>", "(Lcom/lucidfusionlabs/app/MainActivity;)V"));
+      (jni->env->GetMethodID(jni->screennavigator_class, "<init>", "()V"));
     jobject v = jni->env->NewObject(jni->screennavigator_class, mid, jni->activity);
     impl = jni->env->NewGlobalRef(v);
     jni->env->DeleteLocalRef(v);
@@ -395,7 +389,7 @@ struct AndroidNavigationView : public NavigationViewInterface {
   void PushTextView(TextViewInterface *t) {
     if (t->show_cb) t->show_cb();
     static jmethodID mid = CheckNotNull
-      (jni->env->GetMethodID(jni->screennavigator_class, "pushTextView", "(Lcom/lucidfusionlabs/app/MainActivity;Lcom/lucidfusionlabs/app/TextViewScreen;)V"));
+      (jni->env->GetMethodID(jni->screennavigator_class, "pushTextView", "(Lcom/lucidfusionlabs/app/MainActivity;Lcom/lucidfusionlabs/app/TextScreen;)V"));
     jni->env->CallVoidMethod(impl, mid, jni->activity, dynamic_cast<AndroidTextView*>(t)->impl);
   }
 

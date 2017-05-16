@@ -34,7 +34,7 @@ public class Toolbar {
     public View view;
     public int shown_index = -1;
 
-    public Toolbar(final MainActivity activity, ArrayList<ModelItem> m) {
+    public Toolbar(ArrayList<ModelItem> m) {
         model = m;
     }
 

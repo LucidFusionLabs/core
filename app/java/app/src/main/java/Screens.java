@@ -31,16 +31,16 @@ import android.graphics.Rect;
 import android.app.AlertDialog;
 
 public class Screens {
-    public boolean                            destroyed;
-    public HashSet<Screen>                    screens        = new HashSet<Screen>();
+    public boolean                            destroyed      = false;
+    public int                                next_screen_id = 1;
+    public HashMap<Integer, Screen>           screens        = new HashMap<Integer, Screen>();
     public ArrayList<ScreenFragmentNavigator> navigators     = new ArrayList<ScreenFragmentNavigator>();
     public ArrayList<Toolbar>                 toolbar_bottom = new ArrayList<Toolbar>();
 
     public void onDestroy() {
         Log.i("lfl", "Screens.onDestroy()");
-        for (Screen w : screens) w.clear();
+        for (Screen w : screens.values()) w.clear();
         for (Toolbar w : toolbar_bottom) w.clear();
-        for (ScreenFragmentNavigator w : navigators) w.clear();
         destroyed = true;
     }
 
@@ -53,10 +53,5 @@ public class Screens {
         tb_bottom.addAll(toolbar_bottom);
         toolbar_bottom.clear();
         for (Toolbar t : tb_bottom) t.show(activity, true);
-
-        ArrayList<ScreenFragmentNavigator> navs = new ArrayList<ScreenFragmentNavigator>();
-        navs.addAll(navigators);
-        navigators.clear();
-        for (ScreenFragmentNavigator n : navs) n.show(activity, true);
     }
 }

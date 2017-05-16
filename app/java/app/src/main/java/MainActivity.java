@@ -99,8 +99,9 @@ public class MainActivity extends AppCompatActivity {
         action_bar = getSupportActionBar();
 
         if (!app_created) {
-            Log.i("lfl", "MainActivity.nativeCreate()");
             app_created = true;
+            ScreenFragmentNavigator.clearFragmentBackstack(this);
+            Log.i("lfl", "MainActivity.nativeCreate()");
             nativeCreate();
         } else {
             if (disable_title) disableTitle();

@@ -1,6 +1,7 @@
 package com.lucidfusionlabs.app;
 
-import java.util.HashSet;
+import java.util.HashMap;
+import java.util.ArrayList;
 import android.util.Log;
 
 public class Screen {
@@ -11,26 +12,25 @@ public class Screen {
     public static final int TYPE_TEXTVIEW   = 4;
     public static final int TYPE_COUNT      = 5;
 
-    public int screenType;
+    public int screenId, screenType;
     public long nativeParent;
     public String title = "";
     public boolean changed = false;
-    public HashSet<Screen> parent;
 
-    public Screen(final int wt, final MainActivity activity, final String t, final long np) {
-        screenType = wt;
+    public Screen(final int st, final String t, final long np) {
+        screenId = MainActivity.screens.next_screen_id++;
+        screenType = st;
         title = t;
         nativeParent = np;
-        parent = activity.screens.screens;
-        parent.add(this);
+        MainActivity.screens.screens.put(screenId, this);
     }
 
     protected void finalize() throws Throwable {
-        try { parent.remove(this); }
+        try { MainActivity.screens.screens.remove(screenId); }
         finally { super.finalize(); }
     }
 
     public void clear() {}
-    public ScreenFragment get(final MainActivity activity) { return null; }
+    public ScreenFragment createFragment() { return null; }
     public void show(final MainActivity activity, final boolean show_or_hide) {}
 }

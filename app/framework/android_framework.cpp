@@ -319,7 +319,7 @@ extern "C" void Java_com_lucidfusionlabs_app_MainActivity_nativeCreate(JNIEnv *e
   CHECK(jni->alertscreen_class  = (jclass)e->NewGlobalRef(e->FindClass("com/lucidfusionlabs/app/AlertScreen")));
   CHECK(jni->menuscreen_class   = (jclass)e->NewGlobalRef(e->FindClass("com/lucidfusionlabs/app/MenuScreen")));
   CHECK(jni->tablescreen_class  = (jclass)e->NewGlobalRef(e->FindClass("com/lucidfusionlabs/app/TableScreen")));
-  CHECK(jni->textviewscreen_class=(jclass)e->NewGlobalRef(e->FindClass("com/lucidfusionlabs/app/TextViewScreen")));
+  CHECK(jni->textscreen_class   = (jclass)e->NewGlobalRef(e->FindClass("com/lucidfusionlabs/app/TextScreen")));
   CHECK(jni->screennavigator_class=(jclass)e->NewGlobalRef(e->FindClass("com/lucidfusionlabs/app/ScreenFragmentNavigator")));
   CHECK(jni->nativecallback_class=(jclass)e->NewGlobalRef(e->FindClass("com/lucidfusionlabs/app/NativeCallback")));
   CHECK(jni->nativestringcb_class=(jclass)e->NewGlobalRef(e->FindClass("com/lucidfusionlabs/app/NativeStringCB")));

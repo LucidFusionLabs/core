@@ -29,29 +29,22 @@ import android.net.Uri;
 import android.graphics.Rect;
 import android.app.AlertDialog;
 
-public class TextViewScreen extends Screen {
+public class TextScreen extends Screen {
     public String text;
-    public TextViewScreenFragment view;
 
-    public TextViewScreen(final MainActivity activity, String t, String v) {
-        super(Screen.TYPE_TEXTVIEW, activity, "", 0);
-        title = t;
+    public TextScreen(String t, String v) {
+        super(Screen.TYPE_TEXTVIEW, t, 0);
         text = v;
     }
 
-    public void clear() { view = null; }
-    public ScreenFragment get(final MainActivity activity) { return getView(activity); }
-
-    public TextViewScreenFragment getView(final MainActivity activity) {
-        if (view == null) view = createView(activity);
-        return view;
+    @Override
+    public ScreenFragment createFragment() {
+        return TextViewScreenFragment.newInstance(this);
     }
 
-    private TextViewScreenFragment createView(final MainActivity activity) {
-        return new TextViewScreenFragment(activity, this, text);
-    }
-
+    @Override
     public void show(final MainActivity activity, final boolean show_or_hide) {
+/*
         activity.runOnUiThread(new Runnable() { public void run() {
             TextViewScreenFragment frag = getView(activity);
             if (show_or_hide) {
@@ -62,5 +55,6 @@ public class TextViewScreen extends Screen {
                 activity.getSupportFragmentManager().beginTransaction().remove(frag).commit();
             }
         }});
+        */
     }
 }

@@ -30,28 +30,29 @@ import android.graphics.Rect;
 import android.app.AlertDialog;
 
 public class MenuScreen extends Screen {
-    public ArrayList<ModelItem> data;
+    public ArrayList<ModelItem> model;
     public AlertDialog view;
 
-    public MenuScreen(final MainActivity activity, String t, ArrayList<ModelItem> m) {
-        super(Screen.TYPE_MENU, activity, t, 0);
-        data = m;
+    public MenuScreen(String t, ArrayList<ModelItem> m) {
+        super(Screen.TYPE_MENU, t, 0);
+        model = m;
     }
 
+    @Override
     public void clear() { view = null; }
 
     public AlertDialog getView(final MainActivity activity) {
         if (view == null) {
             AlertDialog.Builder builder = new AlertDialog.Builder(activity);
             builder.setTitle(title);
-            if (data.size() > 0) { 
-                String[] items = new String[data.size()];
-                for (int i = 0; i < items.length; i++) items[i] = data.get(i).val;
+            if (model.size() > 0) { 
+                String[] items = new String[model.size()];
+                for (int i = 0; i < items.length; i++) items[i] = model.get(i).val;
                 builder.setItems(items, new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialog, int which) {
-                        if (which >= data.size()) throw new java.lang.IllegalArgumentException();
-                        ModelItem item = data.get(which);
+                        if (which >= model.size()) throw new java.lang.IllegalArgumentException();
+                        ModelItem item = model.get(which);
                         if (item.cb != null) item.cb.run();
                     }});
             }
@@ -60,6 +61,7 @@ public class MenuScreen extends Screen {
         return view;
     }
 
+    @Override
     public void show(final MainActivity activity, final boolean show_or_hide) {
         if (!show_or_hide) return;
         activity.runOnUiThread(new Runnable() { public void run() {

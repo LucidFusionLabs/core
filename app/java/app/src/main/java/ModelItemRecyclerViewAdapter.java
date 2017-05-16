@@ -75,7 +75,7 @@ public class ModelItemRecyclerViewAdapter extends RecyclerView.Adapter<ModelItem
     public int selected_section = 0, selected_row = 0;
     public int editable_section = -1, editable_start_row = -1;
     public NativeIntIntCB delete_row_cb = null;
-    public final Screen parent_screen;
+    public final TableScreen parent_screen;
 
     CompoundButton.OnCheckedChangeListener checked_listener = new CompoundButton.OnCheckedChangeListener() {
         public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
@@ -101,9 +101,9 @@ public class ModelItemRecyclerViewAdapter extends RecyclerView.Adapter<ModelItem
         }
     };
 
-    public ModelItemRecyclerViewAdapter(final MainActivity activity, final ArrayList<ModelItem> v, final Screen p) {
+    public ModelItemRecyclerViewAdapter(final TableScreen p, final ArrayList<ModelItem> d) {
         parent_screen = p;
-        data = v;
+        data = d;
         beginUpdates();
         data.add(0, new ModelItem("", "", "", "", ModelItem.TYPE_SEPARATOR, 0, 0, 0, 0, 0, 0, null, null, null, false, 0, 0));
         data.add(new ModelItem("", "", "", "", ModelItem.TYPE_SEPARATOR, 0, 0, 0, 0, 0, 0, null, null, null, false, 0, 0));

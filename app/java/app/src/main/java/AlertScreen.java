@@ -33,11 +33,12 @@ public class AlertScreen extends Screen {
     public ArrayList<ModelItem> model;
     public Pair<AlertDialog, EditText> view;
 
-    public AlertScreen(final MainActivity activity, ArrayList<ModelItem> m) {
-        super(Screen.TYPE_ALERT, activity, "", 0);
+    public AlertScreen(ArrayList<ModelItem> m) {
+        super(Screen.TYPE_ALERT, "", 0);
         model = m;
     }
 
+    @Override
     public void clear() { view = null; }
 
     private Pair<AlertDialog, EditText> getView(final MainActivity activity) {
@@ -79,6 +80,7 @@ public class AlertScreen extends Screen {
         return new Pair<AlertDialog, EditText>(alert.create(), input);
     }
     
+    @Override
     public void show(final MainActivity activity, final boolean show_or_hide) {
         if (show_or_hide) { showText(activity, ""); }
     } 
