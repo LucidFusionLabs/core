@@ -1,4 +1,4 @@
-package com.lucidfusionlabs.app;
+package com.lucidfusionlabs.ads;
 
 import java.net.*;
 import java.nio.ByteBuffer;
@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import android.app.Activity;
 import android.os.*;
 import android.view.*;
 import android.widget.FrameLayout;
@@ -27,16 +28,17 @@ class Advertising extends com.lucidfusionlabs.core.ActivityLifecycleListener {
     public LifecycleActivity activity;
     public AdView adView;
     public AdRequest adRequest;
+
     public Advertising(LifecycleActivity act, FrameLayout frameLayout) {
         activity = act;
-        activity.registerLifecycleListener(this);
+        activity.activityLifecycle.registerLifecycleListener(this);
         adView = new AdView(activity);
         adView.setAdSize(AdSize.BANNER);
         adView.setAdUnitId("ca-app-pub-6299262366078490/8570530772");
         frameLayout.addView(adView, new LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT, Gravity.TOP + Gravity.CENTER_HORIZONTAL));
     }
 
-    @Override public void onActivityDestroyed() {
+    @Override public void onActivityDestroyed(Activity activity) {
         if (adView != null) { adView.destroy(); adView=null; } 
     }
 

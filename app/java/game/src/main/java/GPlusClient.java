@@ -1,4 +1,4 @@
-package com.lucidfusionlabs.app;
+package com.lucidfusionlabs.game;
 
 import java.net.*;
 import java.nio.ByteBuffer;
