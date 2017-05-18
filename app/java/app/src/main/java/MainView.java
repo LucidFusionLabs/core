@@ -58,28 +58,33 @@ public class MainView extends android.view.SurfaceView
         Log.i("lfl", "MainView.onSizeChanged(" + xNew + ", " + yNew + ", " + xOld + ", " + yOld + ")");
     }
 
+    @Override
     public void surfaceCreated(SurfaceHolder holder) {
         Log.i("lfl", "MainView.surfaceCreated()");
         sensor.registerListener(this, sensor.getDefaultSensor(Sensor.TYPE_ACCELEROMETER), SensorManager.SENSOR_DELAY_GAME, null);
         have_surface = true;
     }
 
+    @Override
     public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
         Log.i("lfl", "MainView.surfaceChanged(" + width + ", " + height + ")");
         main_activity.surfaceChanged(format, width, height);
     }
 
+    @Override
     public void surfaceDestroyed(SurfaceHolder holder) {
         Log.i("lfl", "surfaceDestroyed()");
         sensor.unregisterListener(this, sensor.getDefaultSensor(Sensor.TYPE_ACCELEROMETER));
         have_surface = false;
     }
 
+    @Override
     public void onSensorChanged(SensorEvent event) {
         if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER)
             main_activity.nativeAccel(event.values[0], event.values[1], event.values[2]);
     }
 
+    @Override
     public boolean onKey(View v, int key_code, KeyEvent event) {
         int key_char = event.getUnicodeChar(), mod = 0;
         if (key_char == 0) {
@@ -145,6 +150,7 @@ public class MainView extends android.view.SurfaceView
         else return false;
     }
 
+    @Override
     public boolean onTouch(View v, MotionEvent event) {
         // gesture.onTouchEvent(event);
         if (scale_gesture != null) scale_gesture.onTouchEvent(event);
@@ -162,6 +168,7 @@ public class MainView extends android.view.SurfaceView
         return true; 
     }
 
+    @Override
     public void onAccuracyChanged(Sensor sensor, int accuracy) {}
 
     public void initEGL() {

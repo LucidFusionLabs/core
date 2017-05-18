@@ -21,20 +21,22 @@ import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.egl.*;
 
 import com.google.android.gms.ads.*;
+import com.lucidfusionlabs.core.LifecycleActivity;
 
-class Advertising {
-    public MainActivity activity;
+class Advertising extends com.lucidfusionlabs.core.ActivityLifecycleListener {
+    public LifecycleActivity activity;
     public AdView adView;
     public AdRequest adRequest;
-    public Advertising(MainActivity act, FrameLayout frameLayout) {
+    public Advertising(LifecycleActivity act, FrameLayout frameLayout) {
         activity = act;
+        activity.registerLifecycleListener(this);
         adView = new AdView(activity);
         adView.setAdSize(AdSize.BANNER);
         adView.setAdUnitId("ca-app-pub-6299262366078490/8570530772");
         frameLayout.addView(adView, new LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT, Gravity.TOP + Gravity.CENTER_HORIZONTAL));
     }
 
-    public void onDestroy() {
+    @Override public void onActivityDestroyed() {
         if (adView != null) { adView.destroy(); adView=null; } 
     }
 

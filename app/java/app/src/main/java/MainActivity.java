@@ -34,10 +34,9 @@ import android.graphics.Bitmap;
 import android.app.AlertDialog;
 import android.preference.PreferenceManager;
 import android.support.v4.app.Fragment;
-import android.support.v7.app.AppCompatActivity;
 import android.support.v7.app.ActionBar;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity {
     static { System.loadLibrary("native-lib"); }
     
     public native void nativeCreate();
@@ -74,12 +73,15 @@ public class MainActivity extends AppCompatActivity {
     public SharedPreferences preferences;
 
     protected void onCreated() {}
+    protected void onDestroyed() {}
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         Log.i("lfl", "MainActivity.onCreate() app_created=" + app_created);
         preferences = PreferenceManager.getDefaultSharedPreferences(this);
-        if (preferences.getString("theme", "Dark").equals("Light")) setTheme(android.support.v7.appcompat.R.style.Theme_AppCompat_Light);
+        setTheme(preferences.getString("theme", "Dark").equals("Light") ?
+                 android.support.v7.appcompat.R.style.Theme_AppCompat_Light :
+                 android.support.v7.appcompat.R.style.Theme_AppCompat);
         super.onCreate(savedInstanceState);
 
         if (!isTaskRoot()) {
@@ -147,7 +149,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onStart() {
         Log.i("lfl", "MainActivity.onStart()");
         super.onStart();
-        // if (gplus != null) gplus.onStart(this);
+        activityLifecycle.onActivityStarted(this);
     }
 
     @Override
@@ -156,6 +158,7 @@ public class MainActivity extends AppCompatActivity {
         Log.i("lfl", "MainActivity.onResume() have_surface=" + have_surface + " thread_exists=" + thread_exists);
         super.onResume();
         screens.onResume(this);
+        activityLifecycle.onActivityResumed(this);
         if (have_surface && !thread_exists) startRenderThread(false);
     }
     
@@ -163,6 +166,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onPause() {
         Log.i("lfl", "MainActivity.onPause() enter");
         super.onPause();
+        activityLifecycle.onActivityPaused(this);
         if (waiting_activity_result || thread == null) return;
 
         Thread t = thread;
@@ -177,14 +181,15 @@ public class MainActivity extends AppCompatActivity {
     protected void onStop() {
         Log.i("lfl", "MainActivity.onStop()");
         super.onStop();
-        // if (gplus != null) gplus.onStop();
+        activityLifecycle.onActivityStopped(this);
     }
 
     @Override
     protected void onDestroy() {
         Log.i("lfl", "MainActivity.onDestroy()");
+        onDestroyed();
+        activityLifecycle.onActivityDestroyed(this);
         screens.onDestroy();
-        // if (advertising != null) advertising.onDestroy();
         super.onDestroy();
     }
 
@@ -199,7 +204,7 @@ public class MainActivity extends AppCompatActivity {
         Log.i("lfl", "MainActivity.onActivityResult(" + request + ", " + response + ")");
         waiting_activity_result = false;
         super.onActivityResult(request, response, data);
-        // if (gplus != null) gplus.onActivityResult(request, response, data);
+        activityLifecycle.onActivityResult(this, request, response, data);
     }
 
     @Override
@@ -219,6 +224,7 @@ public class MainActivity extends AppCompatActivity {
 
     public void startRenderThread(boolean app_reset) {
         Log.i("lfl", "startRenderThread app_init=" + app_init + " app_reset=" + app_reset);
+        screens.onStartRenderThread(this, frame_layout);
         if      (!app_init) thread = new Thread(new Runnable() { public void run() { view.initEGL();        nativeMain       ();      } }, "JNIMainThread");
         else if (app_reset) thread = new Thread(new Runnable() { public void run() { view.initEGL();        nativeNewMainLoop(true);  } }, "JNIMainThread");
         else                thread = new Thread(new Runnable() { public void run() { view.makeCurrentEGL(); nativeNewMainLoop(false); } }, "JNIMainThread");

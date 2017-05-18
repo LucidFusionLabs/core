@@ -27,6 +27,7 @@ import android.util.Pair;
 import android.util.TypedValue;
 import android.net.Uri;
 import android.graphics.Rect;
+import android.app.Activity;
 import android.app.AlertDialog;
 
 public class AlertScreen extends Screen {
@@ -41,12 +42,12 @@ public class AlertScreen extends Screen {
     @Override
     public void clear() { view = null; }
 
-    private Pair<AlertDialog, EditText> getView(final MainActivity activity) {
+    private Pair<AlertDialog, EditText> getView(final Activity activity) {
         if (view == null) view = createView(activity);
         return view;
     }
 
-    private Pair<AlertDialog, EditText> createView(final MainActivity activity) {
+    private Pair<AlertDialog, EditText> createView(final Activity activity) {
         if (model.size() < 3) return null;
         AlertDialog.Builder alert = new AlertDialog.Builder(activity);
         alert.setTitle(model.get(1).key);
@@ -85,7 +86,7 @@ public class AlertScreen extends Screen {
         if (show_or_hide) { showText(activity, ""); }
     } 
 
-    public void showText(final MainActivity activity, final String arg) {
+    public void showText(final Activity activity, final String arg) {
         activity.runOnUiThread(new Runnable() { public void run() {
             Pair<AlertDialog, EditText> alert = getView(activity);
             if (alert.second != null) { alert.second.setText(arg); }
@@ -93,7 +94,7 @@ public class AlertScreen extends Screen {
         }});
     }
 
-    public void showTextCB(final MainActivity activity, final String tstr, final String msg,
+    public void showTextCB(final Activity activity, final String tstr, final String msg,
                            final String arg, final NativeStringCB confirm_cb) {
         activity.runOnUiThread(new Runnable() { public void run() {
             ModelItem title = model.get(1), confirm = model.get(3);

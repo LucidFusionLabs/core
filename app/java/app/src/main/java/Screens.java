@@ -29,6 +29,7 @@ import android.util.TypedValue;
 import android.net.Uri;
 import android.graphics.Rect;
 import android.app.AlertDialog;
+import android.app.Activity;
 
 public class Screens {
     public boolean                            destroyed      = false;
@@ -53,5 +54,15 @@ public class Screens {
         tb_bottom.addAll(toolbar_bottom);
         toolbar_bottom.clear();
         for (Toolbar t : tb_bottom) t.show(activity, true);
+
+        if (navigators.size() > 0) {
+            activity.getSupportActionBar().show();
+        }
+    }
+
+    public void onStartRenderThread(Activity activity, FrameLayout frame_layout) {
+        if (navigators.size() > 0) {
+            frame_layout.setVisibility(View.GONE);
+        }
     }
 }

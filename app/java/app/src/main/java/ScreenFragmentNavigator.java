@@ -31,6 +31,7 @@ import android.graphics.Rect;
 import android.app.AlertDialog;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentManager;
+import android.support.v7.app.AppCompatActivity;
 
 public class ScreenFragmentNavigator {
     public int shown_index = -1;
@@ -88,10 +89,10 @@ public class ScreenFragmentNavigator {
         }});
     }
 
-    public void pushTable   (final MainActivity activity, final TableScreen x) { pushView(activity, x); }
-    public void pushTextView(final MainActivity activity, final TextScreen  x) { pushView(activity, x); }
+    public void pushTable   (final AppCompatActivity activity, final TableScreen x) { pushView(activity, x); }
+    public void pushTextView(final AppCompatActivity activity, final TextScreen  x) { pushView(activity, x); }
 
-    public void pushView(final MainActivity activity, final Screen x) {
+    public void pushView(final AppCompatActivity activity, final Screen x) {
         synchronized(stack) { stack.add(x); }
         activity.runOnUiThread(new Runnable() { public void run() {
             if (shown_index < 0) return;
@@ -104,7 +105,7 @@ public class ScreenFragmentNavigator {
         }});
     }
 
-    public void popView(final MainActivity activity, final int n) {
+    public void popView(final AppCompatActivity activity, final int n) {
         if (n <= 0) return;
         synchronized(stack) {
             if (stack.size() < n) Log.e("lfl", "pop " + n + " views with stack size " + stack.size());
@@ -121,7 +122,7 @@ public class ScreenFragmentNavigator {
         }});
     }
 
-    public void popToRoot(final MainActivity activity) {
+    public void popToRoot(final AppCompatActivity activity) {
         synchronized(stack) { if (stack.size() > 1) stack.subList(1, stack.size()).clear(); }
         activity.runOnUiThread(new Runnable() { public void run() {
             if (shown_index < 0) return;
@@ -133,7 +134,7 @@ public class ScreenFragmentNavigator {
         }});
     }
 
-    public void popAll(final MainActivity activity) {
+    public void popAll(final AppCompatActivity activity) {
         synchronized(stack) { stack.clear(); }
         activity.runOnUiThread(new Runnable() { public void run() {
             if (shown_index < 0) return;
@@ -143,7 +144,7 @@ public class ScreenFragmentNavigator {
         }});
     }
 
-    public static void clearFragmentBackstack(final MainActivity activity) {
+    public static void clearFragmentBackstack(final AppCompatActivity activity) {
         if (activity.getSupportFragmentManager().getBackStackEntryCount() > 0)
             activity.getSupportFragmentManager().popBackStackImmediate(null, FragmentManager.POP_BACK_STACK_INCLUSIVE);
     }
@@ -180,7 +181,7 @@ public class ScreenFragmentNavigator {
         }
     } 
 
-    public static int runBackFragmentHideCB(final MainActivity activity, int n) {
+    public static int runBackFragmentHideCB(final AppCompatActivity activity, int n) {
         int stack_size = activity.getSupportFragmentManager().getBackStackEntryCount();
         if (stack_size == 0) return stack_size;
         for (int i = 0, l = Math.min(n, stack_size); i < l; i++) {
@@ -194,7 +195,7 @@ public class ScreenFragmentNavigator {
         return stack_size;
     }
 
-    public static void showBackFragment(final MainActivity activity, boolean show_content, boolean show_title) {
+    public static void showBackFragment(final AppCompatActivity activity, boolean show_content, boolean show_title) {
         int stack_size = activity.getSupportFragmentManager().getBackStackEntryCount();
         if (stack_size == 0) return;
         String tag = Integer.toString(stack_size-1);

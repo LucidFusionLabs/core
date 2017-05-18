@@ -27,6 +27,7 @@ import android.util.Pair;
 import android.util.TypedValue;
 import android.net.Uri;
 import android.graphics.Rect;
+import android.app.Activity;
 import android.app.AlertDialog;
 
 public class Toolbar {
@@ -43,12 +44,12 @@ public class Toolbar {
         shown_index = -1;
     }
 
-    private View getView(final MainActivity activity) {
+    private View getView(final Activity activity) {
         if (view == null) view = createView(activity);
         return view;
     }
 
-    private View createView(final MainActivity activity) {
+    private View createView(final Activity activity) {
         LinearLayout toolbar = new LinearLayout(activity);
         View.OnClickListener listener = new View.OnClickListener() { public void onClick(View bt) {
             ModelItem r = model.get(bt.getId());

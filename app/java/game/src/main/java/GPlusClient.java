@@ -26,8 +26,12 @@ import com.google.android.gms.games.multiplayer.*;
 import com.google.android.gms.games.multiplayer.realtime.*;
 
 import com.google.example.games.basegameutils.*;
+import com.lucidfusionlabs.core.LifecycleActivity;
 
-class GPlusClient implements GameHelper.GameHelperListener, OnInvitationReceivedListener, RoomStatusUpdateListener, RoomUpdateListener, RealTimeMessageReceivedListener {
+class GPlusClient extends com.lucidfusionlabs.core.ActivityLifecycleListener implements
+    GameHelper.GameHelperListener, OnInvitationReceivedListener, RoomStatusUpdateListener,
+    RoomUpdateListener, RealTimeMessageReceivedListener {
+
     public static native void startGame(boolean server, String participant_id);
     public static native void read(String participant_id, java.nio.ByteBuffer buf, int len);
  
@@ -35,36 +39,29 @@ class GPlusClient implements GameHelper.GameHelperListener, OnInvitationReceived
     public static final int RC_INVITATION_INBOX = 10001;
     public static final int RC_WAITING_ROOM = 10002;
 
-    public MainActivity activity;
+    public LifecycleActivity activity;
     public GameHelper google;
     public boolean google_signed_in, server_role, server_started, auto_match;
     public String room_id, server_pid;
     public List<String> room_pids;
     public ByteBuffer read_buffer;
 
-    public GPlusClient(MainActivity act) {
+    public GPlusClient(LifecycleActivity act) {
         activity = act;
+        activity.registerLifecycleListener(this);
         google = new GameHelper(activity, GameHelper.CLIENT_GAMES);
         google.setup(this);
         read_buffer = ByteBuffer.allocateDirect(4096);
     }
     
-    public void onStart(MainActivity act) { google.onStart(act); }
-    public void onStop() { leaveRoom(); google.onStop(); }
-    
-    @Override
-    public void onSignInFailed() { google_signed_in = false; }
-    
-    @Override
-    public void onSignInSucceeded() {
-        google_signed_in = true;
-        Games.Invitations.registerInvitationListener(google.getApiClient(), this);
-        if (google.getInvitationId() != null) {
-            acceptInvitation(google.getInvitationId());
-        }
-    }
+    @Overrride
+    public void onActivityStarted(Activity act) { google.onStart(act); }
 
-    public void onActivityResult(int request, int response, Intent data) {
+    @Overrride
+    public void onActivityStopped(Activity act) { leaveRoom(); google.onStop(); }
+
+    @Override 
+    public void onActivityResult(Activity act, int request, int response, Intent data) {
         if (google != null) { google.onActivityResult(request, response, data); }
         
         if (request == RC_INVITATION_INBOX) {
@@ -91,6 +88,18 @@ class GPlusClient implements GameHelper.GameHelperListener, OnInvitationReceived
             if (response != MainActivity.RESULT_OK) { leaveRoom(); return; }
             Log.i("lfl", "startGame(" + server_role + ", " + server_pid + ")");
             startGame(server_role, server_pid);
+        }
+    }
+    
+    @Override
+    public void onSignInFailed() { google_signed_in = false; }
+    
+    @Override
+    public void onSignInSucceeded() {
+        google_signed_in = true;
+        Games.Invitations.registerInvitationListener(google.getApiClient(), this);
+        if (google.getInvitationId() != null) {
+            acceptInvitation(google.getInvitationId());
         }
     }
 
@@ -276,6 +285,7 @@ class GPlusClient implements GameHelper.GameHelperListener, OnInvitationReceived
             }
         });
     }
+
     public void inviteGUI() {
         activity.runOnUiThread(new Runnable() {
             public void run() {
@@ -285,6 +295,7 @@ class GPlusClient implements GameHelper.GameHelperListener, OnInvitationReceived
             }
         });
     }
+
     public void acceptGUI() {
         activity.runOnUiThread(new Runnable() {
             public void run() {
@@ -307,16 +318,19 @@ class GPlusClient implements GameHelper.GameHelperListener, OnInvitationReceived
             messageData.flip();
             reliable = retry;
         }
+
         public void run() {
             if (reliable) RunReliable();
             else          RunUnreliable();
         }
+
         public void RunReliable() {
             if (room_id == null) return;
             // Log.i("lfl", "sendReliable " + room_id + " " + recipientParticipantId);
             if (Games.RealTimeMultiplayer.sendReliableMessage(google.getApiClient(), null, messageData.array(), room_id, recipientParticipantId) < 0)
                 Log.e("lfl", "GPlusClient.sendReliable(" + room_id + ", " + recipientParticipantId + ")");
         }
+
         public void RunUnreliable() {
             if (room_id == null) return;
             // Log.i("lfl", "sendUnreliable " + room_id + " " + recipientParticipantId);

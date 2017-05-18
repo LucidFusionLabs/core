@@ -12,7 +12,11 @@ buildscript {
 android {
     compileSdkVersion 25
     buildToolsVersion "25.0.3"
+    compileOptions {
+        incremental = false
+    } 
 }
 
 dependencies {
+    compile project(':LFLCore')
 }
