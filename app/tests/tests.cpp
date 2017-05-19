@@ -21,7 +21,7 @@
 extern "C" void MyAppCreate(int argc, const char* const* argv) {
   LFL::FLAGS_enable_video = true;
   LFL::FLAGS_font = LFL::FakeFontEngine::Filename();
-  LFL::app = new LFL::Application(1, argv);
+  LFL::app = new LFL::Application(argc, argv);
   LFL::app->focused = LFL::Window::Create();
   testing::InitGoogleTest(&argc, const_cast<char**>(argv));
 }

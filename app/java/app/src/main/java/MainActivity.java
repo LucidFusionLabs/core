@@ -52,7 +52,7 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity {
     public native void nativeScale(float x, float y, float dx, float dy, boolean begin);
     public static native void nativeShellRun(String text);
 
-    public static boolean app_created, app_init, disable_title;
+    public static boolean native_created, native_init, disable_title;
     public static Screens screens = new Screens();
     public static ArrayList<Bitmap> bitmaps = new ArrayList<Bitmap>();
 
@@ -73,11 +73,10 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity {
     public SharedPreferences preferences;
 
     protected void onCreated() {}
-    protected void onDestroyed() {}
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        Log.i("lfl", "MainActivity.onCreate() app_created=" + app_created);
+        Log.i("lfl", "MainActivity.onCreate() native_created=" + native_created);
         preferences = PreferenceManager.getDefaultSharedPreferences(this);
         setTheme(preferences.getString("theme", "Dark").equals("Light") ?
                  android.support.v7.appcompat.R.style.Theme_AppCompat_Light :
@@ -100,8 +99,8 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity {
         audio = (AudioManager)getSystemService(Context.AUDIO_SERVICE);
         action_bar = getSupportActionBar();
 
-        if (!app_created) {
-            app_created = true;
+        if (!native_created) {
+            native_created = true;
             ScreenFragmentNavigator.clearFragmentBackstack(this);
             Log.i("lfl", "MainActivity.nativeCreate()");
             nativeCreate();
@@ -124,7 +123,7 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity {
         root_view.getViewTreeObserver().addOnGlobalLayoutListener(
             new ViewTreeObserver.OnGlobalLayoutListener() {
             public void onGlobalLayout(){
-                if (!app_init) return;
+                if (!native_init) return;
                 Rect r = new Rect();
                 View view = root_window.getDecorView();
                 view.getWindowVisibleDisplayFrame(r);
@@ -143,12 +142,15 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity {
                 // Log.i("lfl", "onGlobalLayout(" + r.left + ", " + r.top + ", " + r.right + ", " + r.bottom + ", " + actionbar_h + ") = " + h);
                 nativeReshaped(r.left, surface_height - h, r.right - r.left, h); 
             }});
+
+        staticLifecycle.onActivityCreated(this, savedInstanceState);
     }
 
     @Override
     protected void onStart() {
         Log.i("lfl", "MainActivity.onStart()");
         super.onStart();
+        staticLifecycle.onActivityStarted(this);
         activityLifecycle.onActivityStarted(this);
     }
 
@@ -158,6 +160,7 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity {
         Log.i("lfl", "MainActivity.onResume() have_surface=" + have_surface + " thread_exists=" + thread_exists);
         super.onResume();
         screens.onResume(this);
+        staticLifecycle.onActivityResumed(this);
         activityLifecycle.onActivityResumed(this);
         if (have_surface && !thread_exists) startRenderThread(false);
     }
@@ -166,6 +169,7 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity {
     protected void onPause() {
         Log.i("lfl", "MainActivity.onPause() enter");
         super.onPause();
+        staticLifecycle.onActivityPaused(this);
         activityLifecycle.onActivityPaused(this);
         if (waiting_activity_result || thread == null) return;
 
@@ -181,13 +185,14 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity {
     protected void onStop() {
         Log.i("lfl", "MainActivity.onStop()");
         super.onStop();
+        staticLifecycle.onActivityStopped(this);
         activityLifecycle.onActivityStopped(this);
     }
 
     @Override
     protected void onDestroy() {
         Log.i("lfl", "MainActivity.onDestroy()");
-        onDestroyed();
+        staticLifecycle.onActivityDestroyed(this);
         activityLifecycle.onActivityDestroyed(this);
         screens.onDestroy();
         super.onDestroy();
@@ -204,6 +209,7 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity {
         Log.i("lfl", "MainActivity.onActivityResult(" + request + ", " + response + ")");
         waiting_activity_result = false;
         super.onActivityResult(request, response, data);
+        staticLifecycle.onActivityResult(this, request, response, data);
         activityLifecycle.onActivityResult(this, request, response, data);
     }
 
@@ -222,14 +228,14 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity {
         startRenderThread(true);
     }
 
-    public void startRenderThread(boolean app_reset) {
-        Log.i("lfl", "startRenderThread app_init=" + app_init + " app_reset=" + app_reset);
+    public void startRenderThread(boolean native_reset) {
+        Log.i("lfl", "startRenderThread native_init=" + native_init + " native_reset=" + native_reset);
         screens.onStartRenderThread(this, frame_layout);
-        if      (!app_init) thread = new Thread(new Runnable() { public void run() { view.initEGL();        nativeMain       ();      } }, "JNIMainThread");
-        else if (app_reset) thread = new Thread(new Runnable() { public void run() { view.initEGL();        nativeNewMainLoop(true);  } }, "JNIMainThread");
-        else                thread = new Thread(new Runnable() { public void run() { view.makeCurrentEGL(); nativeNewMainLoop(false); } }, "JNIMainThread");
+        if      (!native_init) thread = new Thread(new Runnable() { public void run() { view.initEGL();        nativeMain       ();      } }, "JNIMainThread");
+        else if (native_reset) thread = new Thread(new Runnable() { public void run() { view.initEGL();        nativeNewMainLoop(true);  } }, "JNIMainThread");
+        else                   thread = new Thread(new Runnable() { public void run() { view.makeCurrentEGL(); nativeNewMainLoop(false); } }, "JNIMainThread");
         thread.start();
-        app_init = true;
+        native_init = true;
     }
 
     public void forceExit() {

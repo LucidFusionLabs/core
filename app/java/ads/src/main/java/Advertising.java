@@ -23,26 +23,42 @@ import javax.microedition.khronos.egl.*;
 
 import com.google.android.gms.ads.*;
 import com.lucidfusionlabs.core.LifecycleActivity;
+import com.lucidfusionlabs.core.ActivityLifecycleListenerList;
 
 class Advertising extends com.lucidfusionlabs.core.ActivityLifecycleListener {
-    public LifecycleActivity activity;
+    public List<String> testDevices;
+    public String adUnitId;
     public AdView adView;
     public AdRequest adRequest;
 
-    public Advertising(LifecycleActivity act, FrameLayout frameLayout) {
-        activity = act;
-        activity.activityLifecycle.registerLifecycleListener(this);
+    protected Advertising(Activity act, String unitId, List<String> td, ActivityLifecycleListenerList p) {
+        testDevices = td;
+        adUnitId = unitId;
+        onActivityCreated(act, null);
+        p.registerLifecycleListener(this);
+    }
+
+    public static Advertising createInstance(LifecycleActivity act, String unitId, List<String> td) {
+        return new Advertising(act, unitId, td, act.activityLifecycle);
+    }
+
+    public static Advertising createStaticInstance(LifecycleActivity act, String unitId, List<String> td) {
+        return new Advertising(act, unitId, td, act.staticLifecycle);
+    }
+    
+    @Override public void onActivityCreated(Activity activity, Bundle savedInstanceState) {
         adView = new AdView(activity);
         adView.setAdSize(AdSize.BANNER);
-        adView.setAdUnitId("ca-app-pub-6299262366078490/8570530772");
-        frameLayout.addView(adView, new LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT, Gravity.TOP + Gravity.CENTER_HORIZONTAL));
+        adView.setAdUnitId(adUnitId);
     }
 
-    @Override public void onActivityDestroyed(Activity activity) {
-        if (adView != null) { adView.destroy(); adView=null; } 
+    @Override public void onActivityDestroyed(Activity act) {
+        if (adView == null) return;
+        adView.destroy();
+        adView = null;
     }
 
-    public void hideAds() {
+    public void hide(Activity activity) {
         activity.runOnUiThread(new Runnable() {
             public void run() {
                 adView.setVisibility(AdView.INVISIBLE);
@@ -50,15 +66,17 @@ class Advertising extends com.lucidfusionlabs.core.ActivityLifecycleListener {
         });
     }
 
-    public void showAds() {
+    public void show(final Activity activity, final FrameLayout frameLayout, final LayoutParams layoutParams) {
         activity.runOnUiThread(new Runnable() {
             public void run() {
+                if (LifecycleActivity.replaceViewParent(adView, frameLayout))
+                    frameLayout.addView(adView, layoutParams);
+
                 if (adRequest == null) { 
                     Log.i("lfl", "creating adRequest");
-                    adRequest = new AdRequest.Builder()
-                        .addTestDevice("0DBA42FB5610516D099B960C0424B343")
-                        .addTestDevice("52615418751B72981EF42A9681544EDB")
-                        .build();
+                    AdRequest.Builder builder = new AdRequest.Builder();
+                    for (String td : testDevices) builder.addTestDevice(td);
+                    adRequest = builder.build();
                     adView.loadAd(adRequest);
                 } else {
                     adView.setVisibility(AdView.VISIBLE);
@@ -66,5 +84,10 @@ class Advertising extends com.lucidfusionlabs.core.ActivityLifecycleListener {
                 }
             }
         });
+    }
+
+    public void showTop(final Activity activity, final FrameLayout frameLayout) {
+        show(activity, frameLayout, new LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT,
+                                                     Gravity.TOP + Gravity.CENTER_HORIZONTAL));
     }
 }
