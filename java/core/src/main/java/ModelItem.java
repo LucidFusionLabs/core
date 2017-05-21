@@ -1,8 +1,9 @@
-package com.lucidfusionlabs.app;
+package com.lucidfusionlabs.core;
 
-import android.util.Log;
 import java.util.ArrayList;
 import java.util.HashMap;
+import android.util.Log;
+import android.view.Gravity;
 
 public final class ModelItem {
     public static final int TYPE_NONE             = 0;
@@ -26,6 +27,10 @@ public final class ModelItem {
     public static final int HALIGN_CENTER = 2;
     public static final int HALIGN_RIGHT  = 3;
 
+    public static final int VALIGN_BOTTOM = 1;
+    public static final int VALIGN_CENTER = 2;
+    public static final int VALIGN_TOP    = 3;
+
     public static final int TABLE_FLAG_LEFTTEXT       = 1;
     public static final int TABLE_FLAG_SUBTEXT        = 2;
     public static final int TABLE_FLAG_FIXDROPDOWN    = 4;
@@ -42,6 +47,8 @@ public final class ModelItem {
     public static final int TABLE_SECTION_FLAG_DELETE_ROWS_WHEN_ALL_HIDDEN = 32;
     public static final int TABLE_SECTION_FLAG_CLEAR_LEFT_NAV_WHEN_EMPTY   = 64;
 
+    public static final int AD_TYPE_BANNER = 1;
+
     public String key, val, right_text, dropdown_key;
     public int type, tag, flags, left_icon, right_icon, selected, height;
     public NativeCallback cb;
@@ -49,10 +56,10 @@ public final class ModelItem {
     public PickerItem picker;
     public boolean hidden;
 
-    ModelItem(final String k, final String v, final String rt, final String ddk,
-              final int t, final int ta, final int f, final int li, final int ri,
-              final int s, final int hi, final NativeCallback lcb, final NativeStringCB rcb,
-              final PickerItem p, final boolean h, final int fg, final int bg) {
+    public ModelItem(final String k, final String v, final String rt, final String ddk,
+                     final int t, final int ta, final int f, final int li, final int ri,
+                     final int s, final int hi, final NativeCallback lcb, final NativeStringCB rcb,
+                     final PickerItem p, final boolean h, final int fg, final int bg) {
         key = k;
         val = v;
         right_text = rt;
@@ -68,5 +75,19 @@ public final class ModelItem {
         right_cb = rcb;
         picker = p;
         hidden = h;
+    }
+
+    public static int HAlignToGravity(int halign) {
+        if      (halign == HALIGN_LEFT)   return Gravity.TOP;
+        else if (halign == HALIGN_RIGHT)  return Gravity.BOTTOM;
+        else if (halign == HALIGN_CENTER) return Gravity.CENTER_HORIZONTAL;
+        else { Log.e("lfl", "unknown halign=" + halign); return 0; }
+    }
+
+    public static int VAlignToGravity(int valign) {
+        if      (valign == VALIGN_TOP)    return Gravity.TOP;
+        else if (valign == VALIGN_BOTTOM) return Gravity.BOTTOM;
+        else if (valign == VALIGN_CENTER) return Gravity.CENTER_VERTICAL;
+        else { Log.e("lfl", "unknown valign=" + valign); return 0; }
     }
 }

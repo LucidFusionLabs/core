@@ -29,6 +29,8 @@ import android.net.Uri;
 import android.graphics.Rect;
 import android.app.Activity;
 import android.app.AlertDialog;
+import com.lucidfusionlabs.core.ModelItem;
+import com.lucidfusionlabs.core.NativeStringCB;
 
 public class AlertScreen extends Screen {
     public ArrayList<ModelItem> model;

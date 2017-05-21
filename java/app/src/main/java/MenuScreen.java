@@ -28,6 +28,7 @@ import android.util.TypedValue;
 import android.net.Uri;
 import android.graphics.Rect;
 import android.app.AlertDialog;
+import com.lucidfusionlabs.core.ModelItem;
 
 public class MenuScreen extends Screen {
     public ArrayList<ModelItem> model;

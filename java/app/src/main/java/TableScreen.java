@@ -31,6 +31,9 @@ import android.net.Uri;
 import android.graphics.Rect;
 import android.support.v4.app.Fragment;
 import android.support.v7.app.AppCompatActivity;
+import com.lucidfusionlabs.core.ModelItem;
+import com.lucidfusionlabs.core.ModelItemChange;
+import com.lucidfusionlabs.core.NativeIntIntCB;
 
 public class TableScreen extends Screen {
     public ModelItemRecyclerViewAdapter model;
@@ -41,13 +44,16 @@ public class TableScreen extends Screen {
         model = new ModelItemRecyclerViewAdapter(this, m);
     }
 
-    @Override
-    public ScreenFragment createFragment() {
+    @Override public void clear() {
+        if (model.toolbar     != null) model.toolbar    .clearView();
+        if (model.advertising != null) model.advertising.clearView();
+    }
+
+    @Override public ScreenFragment createFragment() {
         return RecyclerViewScreenFragment.newInstance(this);
     }
 
-    @Override
-    public void show(final MainActivity activity, final boolean show_or_hide) {
+    @Override public void show(final MainActivity activity, final boolean show_or_hide) {
         activity.runOnUiThread(new Runnable() { public void run() {
             if (show_or_hide) {
                 activity.action_bar.show();
@@ -74,6 +80,15 @@ public class TableScreen extends Screen {
         FutureTask<String> future = new FutureTask<String>
             (new Callable<String>(){ public String call() throws Exception {
                 return model.getKey(s, r);
+            }});
+        try { activity.runOnUiThread(future); return future.get(); }
+        catch(Exception e) { return new String(); }
+    }
+
+    public String getVal(final AppCompatActivity activity, final int s, final int r) {
+        FutureTask<String> future = new FutureTask<String>
+            (new Callable<String>(){ public String call() throws Exception {
+                return model.getVal(s, r);
             }});
         try { activity.runOnUiThread(future); return future.get(); }
         catch(Exception e) { return new String(); }
@@ -116,6 +131,11 @@ public class TableScreen extends Screen {
     public void endUpdates(final AppCompatActivity activity) {
         activity.runOnUiThread
             (new Runnable() { public void run() { model.endUpdates(); }});
+    }
+
+    public void setHeader(final AppCompatActivity activity, final int section, final ModelItem header) {
+        activity.runOnUiThread
+            (new Runnable() { public void run() { model.setHeader(section, header); }});
     }
 
     public void addRow(final AppCompatActivity activity, final int section, final ModelItem row) {
@@ -182,5 +202,15 @@ public class TableScreen extends Screen {
     public void setEditable(final AppCompatActivity activity, final int s, final int start_row, final NativeIntIntCB intint_cb) {
         activity.runOnUiThread
             (new Runnable() { public void run() { model.setEditable(s, start_row, intint_cb); }});
+    }
+
+    public void setToolbar(final AppCompatActivity activity, final com.lucidfusionlabs.core.ViewOwner x) {
+        activity.runOnUiThread
+            (new Runnable() { public void run() { model.toolbar = x; }});
+    }
+
+    public void setAdvertising(final AppCompatActivity activity, final com.lucidfusionlabs.core.ViewOwner x) {
+        activity.runOnUiThread
+            (new Runnable() { public void run() { model.advertising = x; }});
     }
 }

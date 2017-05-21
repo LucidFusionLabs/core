@@ -1,4 +1,4 @@
-package com.lucidfusionlabs.app;
+package com.lucidfusionlabs.core;
 
 import android.util.Log;
 import java.util.ArrayList;
@@ -10,9 +10,9 @@ public final class ModelItemChange {
     public boolean hidden;
     public NativeCallback cb;
 
-    ModelItemChange(final int s, final int r, final int t, final String k,
-                    final String v, final int li, final int ri, final int f,
-                    final boolean h, final NativeCallback c) {
+    public ModelItemChange(final int s, final int r, final int t, final String k,
+                           final String v, final int li, final int ri, final int f,
+                           final boolean h, final NativeCallback c) {
         section = s;
         row = r;
         type = t;
@@ -36,11 +36,11 @@ public final class ModelItemChange {
         if (type != 0)                       item.type       = type;
     }
 
-    public static void applyChangeList(ArrayList<ModelItemChange> changes, ModelItemRecyclerViewAdapter target) {
+    public static void applyChangeList(ArrayList<ModelItemChange> changes, ModelItemList target) {
         for (ModelItemChange i : changes) {
             int row_id = target.getCollapsedRowId(i.section, i.row);
-            if (row_id >= target.data.size()) throw new java.lang.IllegalArgumentException();
-            i.apply(target.data.get(row_id));
+            if (row_id >= target.getData().size()) throw new java.lang.IllegalArgumentException();
+            i.apply(target.getData().get(row_id));
         }
     }
 }

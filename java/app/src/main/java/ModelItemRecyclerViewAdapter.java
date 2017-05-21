@@ -39,8 +39,14 @@ import android.app.AlertDialog;
 import android.text.InputType;
 import android.text.TextWatcher;
 import android.support.v7.widget.RecyclerView;
+import com.lucidfusionlabs.core.ModelItem;
+import com.lucidfusionlabs.core.PickerItem;
+import com.lucidfusionlabs.core.NativeIntIntCB;
 
-public class ModelItemRecyclerViewAdapter extends RecyclerView.Adapter<ModelItemRecyclerViewAdapter.ViewHolder> {
+public class ModelItemRecyclerViewAdapter
+    extends RecyclerView.Adapter<ModelItemRecyclerViewAdapter.ViewHolder>
+    implements com.lucidfusionlabs.core.ModelItemList {
+
     public static class ViewHolder extends RecyclerView.ViewHolder {
         public View root;
         public TextView textView, label, subtext;
@@ -68,14 +74,15 @@ public class ModelItemRecyclerViewAdapter extends RecyclerView.Adapter<ModelItem
         public Section(Integer v) { start_row = v; }
     }
 
-    public RecyclerView recyclerview = null;
+    public final TableScreen parent_screen;
     public ArrayList<ModelItem> data = new ArrayList<ModelItem>();
     public ArrayList<Section> sections = new ArrayList<Section>();
-    public ModelItem nav_left = null, nav_right = null;
+    public ModelItem nav_left, nav_right;
     public int selected_section = 0, selected_row = 0;
     public int editable_section = -1, editable_start_row = -1;
-    public NativeIntIntCB delete_row_cb = null;
-    public final TableScreen parent_screen;
+    public NativeIntIntCB delete_row_cb;
+    public RecyclerView recyclerview;
+    public com.lucidfusionlabs.core.ViewOwner toolbar, advertising;
 
     CompoundButton.OnCheckedChangeListener checked_listener = new CompoundButton.OnCheckedChangeListener() {
         public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
@@ -374,19 +381,21 @@ public class ModelItemRecyclerViewAdapter extends RecyclerView.Adapter<ModelItem
         }
     }
 
-    public int getSectionBeginRowId(final int section) { 
+    @Override public ArrayList<ModelItem> getData() { return data; }
+
+    @Override public int getSectionBeginRowId(final int section) { 
       return sections.get(section).start_row;
     }
 
-    public int getSectionEndRowId(final int section) {
+    @Override public int getSectionEndRowId(final int section) {
         return ((section+1) == sections.size() ? data.size() : getSectionBeginRowId(section+1)) - 1;
     }
 
-    public int getSectionSize(final int section) {
+    @Override public int getSectionSize(final int section) {
         return getSectionEndRowId(section) - getSectionBeginRowId(section);
     }
 
-    public int getCollapsedRowId(final int section, final int row) {
+    @Override public int getCollapsedRowId(final int section, final int row) {
         return getSectionBeginRowId(section) + 1 + row;
     }
 
@@ -433,6 +442,10 @@ public class ModelItemRecyclerViewAdapter extends RecyclerView.Adapter<ModelItem
         data.add(new ModelItem("", "", "", "", ModelItem.TYPE_SEPARATOR, 0, 0, 0, 0, 0, 0, null, null, null, false, 0, 0));
     }
 
+    public void setHeader(final int section, ModelItem row) {
+        data.set(getSectionBeginRowId(section), row);
+    }
+
     public void addRow(final int section, ModelItem row) {
         if (section == (sections.size()-1)) addSection();
         if (section >= (sections.size()-1)) throw new java.lang.IllegalArgumentException();
@@ -469,6 +482,7 @@ public class ModelItemRecyclerViewAdapter extends RecyclerView.Adapter<ModelItem
     }
 
     public String getKey(final int s, final int r) { return data.get(getCollapsedRowId(s, r)).key; }
+    public String getVal(final int s, final int r) { return data.get(getCollapsedRowId(s, r)).val; }
     public int    getTag(final int s, final int r) { return data.get(getCollapsedRowId(s, r)).tag; }
 
     public void setKey   (final int s, final int r, final String  v) { data.get(getCollapsedRowId(s, r)).key = v; }

@@ -32,6 +32,7 @@ import android.app.AlertDialog;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentManager;
 import android.support.v7.app.AppCompatActivity;
+import com.lucidfusionlabs.core.ModelItem;
 
 public class ScreenFragmentNavigator {
     public int shown_index = -1;

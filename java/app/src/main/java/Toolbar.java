@@ -29,8 +29,9 @@ import android.net.Uri;
 import android.graphics.Rect;
 import android.app.Activity;
 import android.app.AlertDialog;
+import com.lucidfusionlabs.core.ModelItem;
 
-public class Toolbar {
+public class Toolbar implements com.lucidfusionlabs.core.ViewOwner {
     public ArrayList<ModelItem> model;
     public View view;
     public int shown_index = -1;
@@ -39,18 +40,20 @@ public class Toolbar {
         model = m;
     }
 
-    public void clear() {
+    @Override public void clearView() {
         view = null;
         shown_index = -1;
     }
 
-    private View getView(final Activity activity) {
-        if (view == null) view = createView(activity);
+    @Override public View getView(final Context context) {
+        if (view == null) view = createView(context);
         return view;
     }
 
-    private View createView(final Activity activity) {
-        LinearLayout toolbar = new LinearLayout(activity);
+    @Override public void onViewAttached() {}
+
+    private View createView(final Context context) {
+        LinearLayout toolbar = new LinearLayout(context);
         View.OnClickListener listener = new View.OnClickListener() { public void onClick(View bt) {
             ModelItem r = model.get(bt.getId());
             if (r != null && r.cb != null) r.cb.run();
@@ -60,11 +63,11 @@ public class Toolbar {
             ModelItem r = model.get(i);
             View bt = null;
             if (r.key.equals("\u2699")) {
-                ImageButton b = new ImageButton(activity);
+                ImageButton b = new ImageButton(context);
                 b.setImageResource(android.R.drawable.ic_menu_preferences);
                 bt = b;
             } else {
-                Button b = new Button(activity);
+                Button b = new Button(context);
                 b.setSingleLine(true);
                 b.setText(r.key);
                 bt = b;

@@ -15,19 +15,17 @@ import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.DefaultItemAnimator;
 import android.support.v7.widget.DividerItemDecoration;
+import com.lucidfusionlabs.core.LifecycleActivity;
 
 public class RecyclerViewScreenFragment extends ScreenFragment {
-    public View toolbar;
     public RecyclerView recyclerview;
     public ModelItemRecyclerViewAdapter adapter;
     public static String PARENT_SCREEN_ID = "PARENT_SCREEN_ID";
-    public static String TOOLBAR_SCREEN_ID = "TOOLBAR_SCREEN_ID";
 
     public static final RecyclerViewScreenFragment newInstance(TableScreen parent) {
         RecyclerViewScreenFragment ret = new RecyclerViewScreenFragment();
-        Bundle bundle = new Bundle(2);
+        Bundle bundle = new Bundle(1);
         bundle.putInt(PARENT_SCREEN_ID, parent.screenId);
-        bundle.putInt(TOOLBAR_SCREEN_ID, 0);
         ret.setArguments(bundle);
         ret.adapter = parent.model;
         ret.parent_screen = parent;
@@ -48,12 +46,21 @@ public class RecyclerViewScreenFragment extends ScreenFragment {
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         LinearLayout layout = (LinearLayout)inflater.inflate(R.layout.listview_main, container, false);
-        if (toolbar != null) {
-            ViewGroup parent = (ViewGroup)toolbar.getParent();
-            if (parent != null) parent.removeView(toolbar);
-            layout.addView(toolbar, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
-                                                                  LinearLayout.LayoutParams.WRAP_CONTENT,
-                                                                  android.view.Gravity.BOTTOM));
+        if (adapter.toolbar != null) {
+            View toolbar = adapter.toolbar.getView(getContext());
+            LifecycleActivity.replaceViewParent(toolbar, null);
+            layout.addView(toolbar,
+                           new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
+                                                         LinearLayout.LayoutParams.WRAP_CONTENT,
+                                                         android.view.Gravity.BOTTOM));
+        }
+        if (adapter.advertising != null) {
+            View ads = adapter.advertising.getView(getContext());
+            LifecycleActivity.replaceViewParent(ads, null);
+            layout.addView(ads,
+                           new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
+                                                         LinearLayout.LayoutParams.WRAP_CONTENT,
+                                                         android.view.Gravity.BOTTOM));
         }
         LinearLayoutManager layoutmanager = new LinearLayoutManager(getContext());
         recyclerview = (RecyclerView)layout.findViewById(R.id.list);

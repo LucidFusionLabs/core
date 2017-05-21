@@ -1,4 +1,4 @@
-package com.lucidfusionlabs.app;
+package com.lucidfusionlabs.core;
 
 import android.util.Log;
 import java.util.ArrayList;

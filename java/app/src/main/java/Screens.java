@@ -41,7 +41,7 @@ public class Screens {
     public void onDestroy() {
         Log.i("lfl", "Screens.onDestroy()");
         for (Screen w : screens.values()) w.clear();
-        for (Toolbar w : toolbar_bottom) w.clear();
+        for (Toolbar w : toolbar_bottom) w.clearView();
         destroyed = true;
     }
 

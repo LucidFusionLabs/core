@@ -1,5 +1,5 @@
 /*
- * $Id: video.cpp 1336 2014-12-08 09:29:59Z justin $
+ * $Id: android_admob.cpp 1336 2014-12-08 09:29:59Z justin $
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -16,14 +16,43 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "core/app/app.h"
+#include "core/app/framework/android_toolkit.h"
 
 namespace LFL {
+static JNI *jni = Singleton<JNI>::Get();
+
 struct AndroidAdvertisingView : public AdvertisingViewInterface {
-  virtual ~AndroidAdvertisingView() {}
-  AndroidAdvertisingView(int type, int placement, const string &adid, const StringVec &test_devices) {}
-  void Show(bool show_or_hide) {}
-  void Show(TableViewInterface *t, bool show_or_hide) {}
+  GlobalJNIObject impl;
+  AndroidAdvertisingView(int t, int p, const string &did, const StringVec &test_devices)
+    : impl(NewAdvertisingObject(t, p, did, test_devices)) {}
+
+  static jobject NewAdvertisingObject(int t, int p, const string &did, const StringVec &td) {
+    if (!jni->advertising_class) jni->advertising_class = CheckNotNull
+      (jclass(jni->env->NewGlobalRef(jni->env->FindClass("com/lucidfusionlabs/ads/Advertising"))));
+    static jmethodID mid = CheckNotNull
+      (jni->env->GetStaticMethodID(jni->advertising_class, "createStaticInstance",
+                                   "(Lcom/lucidfusionlabs/core/LifecycleActivity;IILjava/lang/String;Ljava/util/List;)Lcom/lucidfusionlabs/ads/Advertising;"));
+    LocalJNIString di(jni->env, jni->ToJString(did));
+    LocalJNIObject l(jni->env, jni->ToJStringArrayList(td));
+    return jni->env->CallStaticObjectMethod(jni->advertising_class, mid, jni->activity, jint(t), jint(p), di.v, l.v);
+  }
+
+  void Show(bool show_or_hide) {
+    if (show_or_hide) {
+    } else Hide();
+  }
+
+  void Show(TableViewInterface *t, bool show_or_hide) {
+    if (show_or_hide) {
+      static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->tablescreen_class, "setAdvertising", "(Landroid/support/v7/app/AppCompatActivity;Lcom/lucidfusionlabs/core/ViewOwner;)V"));
+      jni->env->CallVoidMethod(dynamic_cast<AndroidTableView*>(t)->impl.v, mid, jni->activity, impl.v);
+    } else Hide();
+  }
+
+  void Hide() {
+    static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->advertising_class, "hide", "(Landroid/app/Activity;)V"));
+    jni->env->CallVoidMethod(impl.v, mid, jni->activity);
+  }
 };
 
 void SystemToolkit::DisableAdvertisingCrashReporting() {}

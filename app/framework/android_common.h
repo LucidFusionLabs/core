@@ -31,10 +31,11 @@ struct JNI {
   JNIEnv *env=0;
   Box activity_box;
   jobject activity=0, resources=0, view=0, gplus=0;
-  jclass activity_class=0, resources_class=0, view_class=0, gplus_class=0, throwable_class=0,
-         frame_class=0, assetmgr_class=0, string_class=0, arraylist_class=0, hashmap_class=0,
-         pair_class=0, inputstream_class=0, channels_class=0, readbytechan_class=0, r_string_class=0,
-         modelitem_class=0, modelitemchange_class=0, pickeritem_class=0, toolbar_class=0, alertscreen_class=0,
+  jclass activity_class=0, resources_class=0, throwable_class=0, string_class=0, arraylist_class=0,
+         pair_class=0, hashmap_class=0, view_class=0, frame_class=0, assetmgr_class=0, 
+         inputstream_class=0, channels_class=0, readbytechan_class=0, r_string_class=0,
+         toolbar_class=0, advertising_class=0, gplus_class=0, purchases_class=0, 
+         modelitem_class=0, modelitemchange_class=0, pickeritem_class=0, alertscreen_class=0,
          menuscreen_class=0, tablescreen_class=0, textscreen_class=0, screennavigator_class=0,
          nativecallback_class=0, nativestringcb_class=0, nativeintintcb_class=0,
          nativepickeritemcb_class=0, int_class=0, long_class=0;
@@ -74,6 +75,24 @@ struct JNI {
   BufferFile *OpenAsset(const string &fn);
   static string GetEnvJString(JNIEnv*, jstring);
 };
+
+template <class X> struct LocalJNIType {
+  X v;
+  JNIEnv *env;
+  LocalJNIType(JNIEnv *E, X V) : v(V), env(E) {}
+  virtual ~LocalJNIType() { if (v) env->DeleteLocalRef(v); }
+};
+
+template <class X> struct GlobalJNIType {
+  X v;
+  GlobalJNIType(X V) { auto e = Singleton<JNI>::Get()->env; v = e->NewGlobalRef(V); e->DeleteLocalRef(V); }
+  virtual ~GlobalJNIType() { if (v) Singleton<JNI>::Get()->env->DeleteLocalRef(v); }
+};
+
+typedef LocalJNIType<jobject> LocalJNIObject;
+typedef LocalJNIType<jstring> LocalJNIString;
+typedef GlobalJNIType<jobject> GlobalJNIObject;
+typedef GlobalJNIType<jstring> GlobalJNIString;
 
 struct GPlus {
   GPlusServer *server=0;
