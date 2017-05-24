@@ -42,13 +42,14 @@ import android.support.v7.widget.RecyclerView;
 import com.lucidfusionlabs.core.ModelItem;
 import com.lucidfusionlabs.core.PickerItem;
 import com.lucidfusionlabs.core.NativeIntIntCB;
+import com.lucidfusionlabs.core.ModelItemLinearLayout;
 
 public class ModelItemRecyclerViewAdapter
     extends RecyclerView.Adapter<ModelItemRecyclerViewAdapter.ViewHolder>
     implements com.lucidfusionlabs.core.ModelItemList {
 
     public static class ViewHolder extends RecyclerView.ViewHolder {
-        public View root;
+        public ModelItemLinearLayout root;
         public TextView textView, label, subtext;
         public ColorStateList textViewTextColors, textViewLinkColors;
         public EditText editText;
@@ -69,9 +70,10 @@ public class ModelItemRecyclerViewAdapter
         }
     }
 
-    public static class Section {
-        public int start_row;
+    public static class Section implements Comparable<Integer> {
+        public Integer start_row;
         public Section(Integer v) { start_row = v; }
+        @Override public int compareTo(Integer x) { return start_row.compareTo(x); }
     }
 
     public final TableScreen parent_screen;
@@ -151,7 +153,7 @@ public class ModelItemRecyclerViewAdapter
                 ViewHolder holder = new ViewHolder(itemView);
                 itemView.setOnClickListener(click_listener);
                 itemView.setTag(holder);
-                holder.root = itemView.findViewById(R.id.listview_cell_root);
+                holder.root = (ModelItemLinearLayout)itemView.findViewById(R.id.listview_cell_root);
                 return holder;
             }
 
@@ -160,7 +162,7 @@ public class ModelItemRecyclerViewAdapter
                 ViewHolder holder = new ViewHolder(itemView);
                 itemView.setOnClickListener(click_listener);
                 itemView.setTag(holder);
-                holder.root = itemView.findViewById(R.id.listview_cell_root);
+                holder.root = (ModelItemLinearLayout)itemView.findViewById(R.id.listview_cell_root);
                 holder.setTextView((TextView) itemView.findViewById(R.id.listview_cell_title));
                 holder.leftIcon = (ImageView) itemView.findViewById(R.id.listview_cell_left_icon);
                 holder.leftNav = (Button) itemView.findViewById(R.id.listview_cell_nav_left);
@@ -173,7 +175,7 @@ public class ModelItemRecyclerViewAdapter
                 ViewHolder holder = new ViewHolder(itemView);
                 itemView.setOnClickListener(click_listener);
                 itemView.setTag(holder);
-                holder.root = itemView.findViewById(R.id.listview_cell_root);
+                holder.root = (ModelItemLinearLayout)itemView.findViewById(R.id.listview_cell_root);
                 holder.setTextView((TextView) itemView.findViewById(R.id.listview_cell_title));
                 holder.leftIcon = (ImageView) itemView.findViewById(R.id.listview_cell_left_icon);
                 holder.toggle = (Switch) itemView.findViewById(R.id.listview_cell_toggle);
@@ -185,7 +187,7 @@ public class ModelItemRecyclerViewAdapter
                 ViewHolder holder = new ViewHolder(itemView);
                 itemView.setOnClickListener(click_listener);
                 itemView.setTag(holder);
-                holder.root = itemView.findViewById(R.id.listview_cell_root);
+                holder.root = (ModelItemLinearLayout)itemView.findViewById(R.id.listview_cell_root);
                 holder.picker = (NumberPicker) itemView.findViewById(R.id.listview_cell_picker);
                 return holder;
             }
@@ -197,7 +199,8 @@ public class ModelItemRecyclerViewAdapter
                 ViewHolder holder = new ViewHolder(itemView);
                 itemView.setOnClickListener(click_listener);
                 itemView.setTag(holder);
-                holder.root = itemView.findViewById(R.id.listview_cell_root);
+                itemView.setMinimumHeight(parent.getMeasuredHeight() * 2);
+                holder.root = (ModelItemLinearLayout)itemView.findViewById(R.id.listview_cell_root);
                 holder.setTextView((TextView) itemView.findViewById(R.id.listview_cell_title));
                 holder.editText = (EditText) itemView.findViewById(R.id.listview_cell_textinput);
                 holder.leftIcon = (ImageView) itemView.findViewById(R.id.listview_cell_left_icon);
@@ -209,7 +212,7 @@ public class ModelItemRecyclerViewAdapter
                 ViewHolder holder = new ViewHolder(itemView);
                 itemView.setOnClickListener(click_listener);
                 itemView.setTag(holder);
-                holder.root = itemView.findViewById(R.id.listview_cell_root);
+                holder.root = (ModelItemLinearLayout)itemView.findViewById(R.id.listview_cell_root);
                 holder.setTextView((TextView) itemView.findViewById(R.id.listview_cell_title));
                 holder.radio = (RadioGroup) itemView.findViewById(R.id.listview_cell_radio);
                 holder.leftIcon = (ImageView) itemView.findViewById(R.id.listview_cell_left_icon);
@@ -221,7 +224,7 @@ public class ModelItemRecyclerViewAdapter
                 ViewHolder holder = new ViewHolder(itemView);
                 itemView.setOnClickListener(click_listener);
                 itemView.setTag(holder);
-                holder.root = itemView.findViewById(R.id.listview_cell_root);
+                holder.root = (ModelItemLinearLayout)itemView.findViewById(R.id.listview_cell_root);
                 holder.radio = (RadioGroup) itemView.findViewById(R.id.listview_cell_radio);
                 return holder;
             }
@@ -231,7 +234,7 @@ public class ModelItemRecyclerViewAdapter
                 ViewHolder holder = new ViewHolder(itemView);
                 itemView.setOnClickListener(click_listener);
                 itemView.setTag(holder);
-                holder.root = itemView.findViewById(R.id.listview_cell_root);
+                holder.root = (ModelItemLinearLayout)itemView.findViewById(R.id.listview_cell_root);
                 holder.setTextView((TextView) itemView.findViewById(R.id.listview_cell_title));
                 holder.label = (TextView) itemView.findViewById(R.id.listview_cell_value);
                 holder.subtext = (TextView) itemView.findViewById(R.id.listview_cell_subtext);
@@ -246,6 +249,10 @@ public class ModelItemRecyclerViewAdapter
     public void onBindViewHolder(ViewHolder holder, final int position) {
         final ModelItem item = data.get(position);
         int type = getItemViewType(position);
+        if (holder.root != null) {
+            holder.root.item = item;
+            holder.root.section = data.get(getSectionBeginRowIdFromPosition(position));
+        }
 
         if (holder.textView != null) {
             if (item.cb == null) holder.textView.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { handleClick(position); }});
@@ -266,8 +273,6 @@ public class ModelItemRecyclerViewAdapter
         if (holder.leftIcon != null) {
             if (item.left_icon < 0) {
                 holder.leftIcon.setImageBitmap(MainActivity.bitmaps.get(-item.left_icon-1));
-                holder.leftIcon.setLayoutParams(new LinearLayout.LayoutParams
-                    (LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
                 if (getCollapsedRowId(selected_section, selected_row) == position) holder.root.setBackgroundColor(Color.GRAY);
                 else                                                               holder.root.setBackgroundColor(Color.TRANSPARENT);
             } else {
@@ -399,6 +404,11 @@ public class ModelItemRecyclerViewAdapter
         return getSectionBeginRowId(section) + 1 + row;
     }
 
+    public int getSectionBeginRowIdFromPosition(final int position) {
+       return (sections.size() == 0) ? 0 : 
+           sections.get(com.lucidfusionlabs.core.Util.lesserBound(sections, position)).start_row;
+    }
+
     public void beginUpdates() {}
     public void endUpdates() { notifyDataSetChanged(); }
 
@@ -457,10 +467,11 @@ public class ModelItemRecyclerViewAdapter
         data.set(getCollapsedRowId(s, r), row);
     }
 
-    public void replaceSection(final int section, final ModelItem h, final int flag, ArrayList<ModelItem> v) {
+    public void replaceSection(final int section, final ModelItem h, final int flags, ArrayList<ModelItem> v) {
         if (section == (sections.size()-1)) addSection();
         if (section >= (sections.size()-1)) throw new java.lang.IllegalArgumentException();
         int start_row = getSectionBeginRowId(section), old_section_size = getSectionSize(section);
+        h.flags = flags;
         data.set(start_row, h);
         data.subList(start_row + 1, start_row + 1 + old_section_size).clear();
         data.addAll(start_row + 1, v);

@@ -145,6 +145,14 @@ public class ScreenFragmentNavigator {
         }});
     }
 
+    public static boolean haveFragmentNavLeft(final AppCompatActivity activity, String tag) {
+        Fragment frag = activity.getSupportFragmentManager().findFragmentByTag(tag);
+        if (frag != null && frag instanceof RecyclerViewScreenFragment) {
+            ModelItem nav_left = ((RecyclerViewScreenFragment)frag).adapter.nav_left;
+            return nav_left != null && nav_left.cb != null;
+        } else return false;
+    }
+
     public static void clearFragmentBackstack(final AppCompatActivity activity) {
         if (activity.getSupportFragmentManager().getBackStackEntryCount() > 0)
             activity.getSupportFragmentManager().popBackStackImmediate(null, FragmentManager.POP_BACK_STACK_INCLUSIVE);
@@ -180,7 +188,7 @@ public class ScreenFragmentNavigator {
         } else {
             activity.superOnBackPressed();
         }
-    } 
+    }
 
     public static int runBackFragmentHideCB(final AppCompatActivity activity, int n) {
         int stack_size = activity.getSupportFragmentManager().getBackStackEntryCount();

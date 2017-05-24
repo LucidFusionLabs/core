@@ -51,16 +51,16 @@ public class RecyclerViewScreenFragment extends ScreenFragment {
             LifecycleActivity.replaceViewParent(toolbar, null);
             layout.addView(toolbar,
                            new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
-                                                         LinearLayout.LayoutParams.WRAP_CONTENT,
-                                                         android.view.Gravity.BOTTOM));
+                                                         LinearLayout.LayoutParams.WRAP_CONTENT));
+            adapter.toolbar.onViewAttached();
         }
         if (adapter.advertising != null) {
             View ads = adapter.advertising.getView(getContext());
             LifecycleActivity.replaceViewParent(ads, null);
             layout.addView(ads,
                            new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
-                                                         LinearLayout.LayoutParams.WRAP_CONTENT,
-                                                         android.view.Gravity.BOTTOM));
+                                                         LinearLayout.LayoutParams.WRAP_CONTENT));
+            adapter.advertising.onViewAttached();
         }
         LinearLayoutManager layoutmanager = new LinearLayoutManager(getContext());
         recyclerview = (RecyclerView)layout.findViewById(R.id.list);

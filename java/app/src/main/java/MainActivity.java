@@ -34,6 +34,7 @@ import android.graphics.Bitmap;
 import android.app.AlertDialog;
 import android.preference.PreferenceManager;
 import android.support.v4.app.Fragment;
+import android.support.v4.app.FragmentManager;
 import android.support.v7.app.ActionBar;
 
 public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity {
@@ -143,6 +144,19 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity {
                 nativeReshaped(r.left, surface_height - h, r.right - r.left, h); 
             }});
 
+        final MainActivity self = this;
+        getSupportFragmentManager().addOnBackStackChangedListener(new FragmentManager.OnBackStackChangedListener() {
+            @Override public void onBackStackChanged() {
+                int stack_size = getSupportFragmentManager().getBackStackEntryCount() ;
+                if (stack_size > 1 || (stack_size == 1 && ScreenFragmentNavigator.haveFragmentNavLeft(self, "0"))) {
+                    action_bar.setHomeButtonEnabled(true);
+                    action_bar.setDisplayHomeAsUpEnabled(true);
+                } else {
+                    action_bar.setDisplayHomeAsUpEnabled(false);
+                    action_bar.setHomeButtonEnabled(false);
+                }
+            }});
+
         staticLifecycle.onActivityCreated(this, savedInstanceState);
     }
 
@@ -211,6 +225,16 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity {
         super.onActivityResult(request, response, data);
         staticLifecycle.onActivityResult(this, request, response, data);
         activityLifecycle.onActivityResult(this, request, response, data);
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        switch (item.getItemId()) {
+            case android.R.id.home:
+                onBackPressed();
+                return true;
+        }
+        return super.onOptionsItemSelected(item);
     }
 
     @Override

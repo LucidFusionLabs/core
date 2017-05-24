@@ -58,7 +58,7 @@ class Advertising extends com.lucidfusionlabs.core.ActivityLifecycleListener
     }
 
     @Override public void onActivityCreated(Activity activity, Bundle savedInstanceState) {
-        createView(activity);
+        adView = createView(activity);
     }
 
     @Override public void onActivityDestroyed(Activity act) {
