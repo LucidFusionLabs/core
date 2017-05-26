@@ -30,16 +30,7 @@ class Advertising extends com.lucidfusionlabs.core.ActivityLifecycleListener
     public String adUnitId;
     public List<String> testDevices;
     public AdView adView;
-    public AdRequest adRequest;
-
-    protected Advertising(Activity act, int t, int v, String unitId, List<String> td, ActivityLifecycleListenerList p) {
-        type = t;
-        valign = v;
-        testDevices = td;
-        adUnitId = unitId;
-        onActivityCreated(act, null);
-        p.registerLifecycleListener(this);
-    }
+    public boolean started, shown;
 
     public static Advertising createInstance(LifecycleActivity act, int t, int v, String unitId, List<String> td) {
         return new Advertising(act, t, v, unitId, td, act.activityLifecycle);
@@ -47,6 +38,15 @@ class Advertising extends com.lucidfusionlabs.core.ActivityLifecycleListener
 
     public static Advertising createStaticInstance(LifecycleActivity act, int t, int v, String unitId, List<String> td) {
         return new Advertising(act, t, v, unitId, td, act.staticLifecycle);
+    }
+
+    protected Advertising(Activity act, int t, int v, String unitId, List<String> td, ActivityLifecycleListenerList p) {
+        type = t;
+        valign = v;
+        testDevices = td;
+        adUnitId = unitId;
+        adView = createView(act);
+        p.registerLifecycleListener(this);
     }
 
     private AdView createView(final Context context) {
@@ -61,10 +61,20 @@ class Advertising extends com.lucidfusionlabs.core.ActivityLifecycleListener
         adView = createView(activity);
     }
 
-    @Override public void onActivityDestroyed(Activity act) {
+    @Override public void onActivityResumed(Activity activity) {
         if (adView == null) return;
-        adView.destroy();
+        adView.resume();
+    }
+
+    @Override public void onActivityPaused(Activity activity) {
+        if (adView == null) return;
+        adView.pause();
+    }
+
+    @Override public void onActivityDestroyed(Activity act) {
+        if (adView != null) adView.destroy();
         adView = null;
+        started = false;
     }
 
     @Override public void clearView() {}
@@ -75,12 +85,12 @@ class Advertising extends com.lucidfusionlabs.core.ActivityLifecycleListener
     }
 
     @Override public void onViewAttached() {
-        if (adRequest == null) { 
+        shown = true;
+        if (!started && (started = true)) { 
             Log.i("lfl", "creating adRequest");
             AdRequest.Builder builder = new AdRequest.Builder();
             for (String td : testDevices) builder.addTestDevice(td);
-            adRequest = builder.build();
-            adView.loadAd(adRequest);
+            adView.loadAd(builder.build());
         } else {
             adView.setVisibility(AdView.VISIBLE);
             adView.bringToFront();

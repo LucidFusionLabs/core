@@ -42,6 +42,7 @@ import android.support.v7.widget.RecyclerView;
 import com.lucidfusionlabs.core.ModelItem;
 import com.lucidfusionlabs.core.PickerItem;
 import com.lucidfusionlabs.core.NativeIntIntCB;
+import com.lucidfusionlabs.core.ModelItemChange;
 import com.lucidfusionlabs.core.ModelItemLinearLayout;
 
 public class ModelItemRecyclerViewAdapter
@@ -278,6 +279,7 @@ public class ModelItemRecyclerViewAdapter
             } else {
                 holder.leftIcon.setImageResource(item.left_icon);
             }
+            holder.leftIcon.setVisibility(item.left_icon == 0 ? View.GONE : View.VISIBLE);
         }
 
         if (holder.rightIcon != null) {
@@ -304,6 +306,7 @@ public class ModelItemRecyclerViewAdapter
                   holder.label.setTextColor(holder.textViewTextColors);
                 }
             }
+            holder.label.setVisibility(item.right_icon != 0 ? View.GONE : View.VISIBLE);
         }
 
         if (holder.editText != null) {
@@ -371,7 +374,8 @@ public class ModelItemRecyclerViewAdapter
                 button.setId(i);
                 button.setText(v[i]);  
                 button.setChecked(item.selected == i);
-                button.setBackgroundResource(R.drawable.listview_radio_selector);
+                if (type == ModelItem.TYPE_SELECTOR_HIDEKEY)
+                    button.setBackgroundResource(R.drawable.listview_radio_selector);
                 holder.radio.addView(button);
             }
 
@@ -486,6 +490,12 @@ public class ModelItemRecyclerViewAdapter
         for (int i = 0; i < section_size; ++i) {
             data.get(section_row + 1 + i).val = v.get(i);
         }
+    }
+
+    public void applyChangeList(final ArrayList<ModelItemChange> changes) {
+        beginUpdates();
+        ModelItemChange.applyChangeList(changes, this);
+        endUpdates();
     }
 
     public void moveSectionsAfterBy(final int section, final int delta) {

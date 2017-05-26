@@ -60,17 +60,16 @@ struct JNI {
   jobject ToModelItemArrayList(AlertItemVec items);
   jobject ToModelItemArrayList(MenuItemVec items);
   jobject ToModelItemArrayList(TableItemVec items);
-  jobject ToModelItemChangeList(TableSection::ChangeList items);
-  jobject ToModelItemChangeSet(TableSection::ChangeSet items);
+  jobject ToModelItemChangeList(const TableSection::ChangeList&);
   jobject ToModelItem(AlertItem);
   jobject ToModelItem(MenuItem);
   jobject ToModelItem(TableItem);
-  jobject ToModelItemChange(TableSection::Change);
+  jobject ToModelItemChange(const TableSection::Change&);
   jobject ToPickerItem(PickerItem*);
-  jobject ToNativeCallback(Callback c); 
-  jobject ToNativeStringCB(StringCB c); 
-  jobject ToNativeIntIntCB(IntIntCB c); 
-  jobject ToNativePickerItemCB(const PickerItem::CB &c); 
+  jobject ToNativeCallback(Callback c);
+  jobject ToNativeStringCB(StringCB c);
+  jobject ToNativeIntIntCB(IntIntCB c);
+  jobject ToNativePickerItemCB(const PickerItem::CB &c);
 
   BufferFile *OpenAsset(const string &fn);
   static string GetEnvJString(JNIEnv*, jstring);

@@ -19,6 +19,8 @@
 #include "core/app/app.h"
 
 namespace LFL {
+static JNI *jni = Singleton<JNI>::Get();
+
 struct AndroidProduct : public ProductInterface {
   ~AndroidProduct() {}
   AndroidProduct(const string &i) : ProductInterface(i) {}
@@ -30,8 +32,18 @@ struct AndroidProduct : public ProductInterface {
 };
 
 struct AndroidPurchases : public PurchasesInterface {
-  ~AndroidPurchases() {}
-  AndroidPurchases() {}
+  GlobalJNIObject impl;
+  AndroidPurchases() : impl(NewPurchaseManagerObject()) {}
+
+  static jobject NewPurchaseManagerObject() {
+    if (!jni->purchases_class) jni->purchases_class = CheckNotNull
+      (jclass(jni->env->NewGlobalRef(jni->env->FindClass("com/lucidfusionlabs/billing/PurchaseManager"))));
+    static jmethodID mid = CheckNotNull
+      (jni->env->GetStaticMethodID(jni->purchases_class, "createStaticInstance",
+                                   "(Lcom/lucidfusionlabs/core/LifecycleActivity;)Lcom/lucidfusionlabs/billing/PurchaseManager;"));
+    return jni->env->CallStaticObjectMethod(jni->purchases_class, mid, jni->activity);
+  }
+
   bool CanPurchase() { return 0; }
   bool HavePurchase(const string &product_id) { return 0; }
   void PreparePurchase(const StringVec &products, Callback done_cb, ProductCB product_cb) {}

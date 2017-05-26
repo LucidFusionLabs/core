@@ -1,19 +1,30 @@
 package com.lucidfusionlabs.billing;
 
-import com.android.vending.billing.IInAppBillingService;
+import android.app.Activity;
 import android.content.Intent;
 import android.content.Context;
 import android.content.ComponentName;
 import android.content.ServiceConnection;
 import android.os.IBinder;
 import android.os.Bundle;
+import com.android.vending.billing.IInAppBillingService;
+import com.lucidfusionlabs.core.LifecycleActivity;
+import com.lucidfusionlabs.core.ActivityLifecycleListenerList;
 
 public class PurchaseManager extends com.lucidfusionlabs.core.ActivityLifecycleListener {
     Context mContext;
     IInAppBillingService mService;
     ServiceConnection mServiceConn;
 
-    public PurchaseManager(com.lucidfusionlabs.core.LifecycleActivity activity) {
+    public static PurchaseManager createInstance(LifecycleActivity act) {
+        return new PurchaseManager(act, act.activityLifecycle);
+    }
+
+    public static PurchaseManager createStaticInstance(LifecycleActivity act) {
+        return new PurchaseManager(act, act.staticLifecycle);
+    }
+
+    protected PurchaseManager(com.lucidfusionlabs.core.LifecycleActivity activity, ActivityLifecycleListenerList p) {
         final String packageName = activity.getPackageName();
         mContext = activity;
         mServiceConn = new ServiceConnection() {
@@ -32,9 +43,11 @@ public class PurchaseManager extends com.lucidfusionlabs.core.ActivityLifecycleL
             new Intent("com.android.vending.billing.InAppBillingService.BIND");
         serviceIntent.setPackage("com.android.vending");
         mContext.bindService(serviceIntent, mServiceConn, Context.BIND_AUTO_CREATE);
+
+        p.registerLifecycleListener(this);
     }
 
-    public void onDestroy() {
+    @Override public void onActivityDestroyed(Activity act) {
         if (mServiceConn != null) mContext.unbindService(mServiceConn);
     }
 }

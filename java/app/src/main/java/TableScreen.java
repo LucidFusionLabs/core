@@ -161,7 +161,7 @@ public class TableScreen extends Screen {
 
     public void applyChangeList(final AppCompatActivity activity, final ArrayList<ModelItemChange> changes) {
         activity.runOnUiThread
-            (new Runnable() { public void run() { ModelItemChange.applyChangeList(changes, model); }});
+            (new Runnable() { public void run() { model.applyChangeList(changes); }});
     }
 
     public void setSectionValues(final AppCompatActivity activity, final int section, final ArrayList<String> v) {

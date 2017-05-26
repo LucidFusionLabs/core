@@ -154,21 +154,11 @@ jobject JNI::ToModelItemArrayList(TableItemVec items) {
   return ret;
 }
 
-jobject JNI::ToModelItemChangeList(TableSection::ChangeList items) {
+jobject JNI::ToModelItemChangeList(const TableSection::ChangeList &items) {
   jobject ret = env->NewObject(arraylist_class, arraylist_construct);
   for (auto &i : items) {
-    LocalJNIObject v(env, ToModelItemChange(move(i)));
+    LocalJNIObject v(env, ToModelItemChange(i));
     CHECK(env->CallBooleanMethod(ret, arraylist_add, v.v));
-  }
-  return ret;
-}
-
-jobject JNI::ToModelItemChangeSet(TableSection::ChangeSet items) {
-  jobject ret = env->NewObject(hashmap_class, hashmap_construct);
-  for (auto &i : items) {
-    LocalJNIString k(env, ToJString(i.first));
-    LocalJNIObject l(env, ToModelItemChangeList(move(i.second)));
-    env->CallObjectMethod(ret, hashmap_put, k.v, l.v);
   }
   return ret;
 }
@@ -205,9 +195,9 @@ jobject JNI::ToModelItem(TableItem item) {
                         fg, bg);
 }
 
-jobject JNI::ToModelItemChange(TableSection::Change item) {
+jobject JNI::ToModelItemChange(const TableSection::Change &item) {
   LocalJNIObject k(env, ToJString(item.key)), v(env, ToJString(item.val));
-  LocalJNIObject cb(env, item.cb ? ToNativeCallback(move(item.cb)) : nullptr);
+  LocalJNIObject cb(env, item.cb ? ToNativeCallback(item.cb) : nullptr);
   return env->NewObject(modelitemchange_class, modelitemchange_construct, jint(item.section), jint(item.row),
                         jint(item.type), k.v, v.v, jint(item.left_icon), jint(item.right_icon),
                         jint(item.flags), jboolean(item.hidden), cb.v);

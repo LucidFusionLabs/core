@@ -11,18 +11,33 @@
         android:adjustViewBounds="true"
         android:layout_width="wrap_content"
         android:layout_height="fill_parent"
-        android:layout_marginLeft="15dp"
-        android:layout_marginRight="15dp"
+        android:layout_marginLeft="10dp"
         android:layout_marginTop="5dp"
+        android:layout_marginRight="5dp"
         android:layout_marginBottom="5dp" />
 
-    <TextView
-        android:id="@+id/listview_cell_title"
+    <LinearLayout
+        android:id="@+id/listview_cell_title_root"
+        android:orientation="vertical"
+        android:layout_marginLeft="10dp"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="center_vertical"
-        android:layout_margin="10dp"
-        android:textSize="18dp"/>
+        android:layout_gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/listview_cell_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:textSize="18dp"
+            android:textColor="?android:textColorPrimary"/>
+
+        <TextView
+            android:id="@+id/listview_cell_subtext"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="10dp"/>
+    </LinearLayout>
 
     <View
         android:layout_width="0dp"
@@ -33,5 +48,6 @@
         android:id="@+id/listview_cell_toggle"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="center_vertical"/>
+        android:layout_gravity="center_vertical"
+        android:layout_marginRight="5dp"/>
 </com.lucidfusionlabs.core.ModelItemLinearLayout>
