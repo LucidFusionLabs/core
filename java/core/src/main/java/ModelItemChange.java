@@ -5,6 +5,10 @@ import java.util.ArrayList;
 import java.util.HashMap;
 
 public final class ModelItemChange {
+    public interface ChangeWatcher {
+        void onChanged(int row);
+    }
+
     public int section, row, type, left_icon, right_icon, flags;
     public String key, val;
     public boolean hidden;
@@ -26,9 +30,9 @@ public final class ModelItemChange {
     }
 
     public void apply(ModelItem item) {
-        item.hidden = hidden;
         item.val    = val;
         item.flags  = flags;
+        item.hidden = hidden;
         if (left_icon  != 0)                 item.left_icon  = left_icon  == -1 ? 0 : left_icon;
         if (right_icon != 0)                 item.right_icon = right_icon == -1 ? 0 : right_icon;
         if (key != null && key.length() > 1) item.key        = key;
@@ -36,11 +40,12 @@ public final class ModelItemChange {
         if (type != 0)                       item.type       = type;
     }
 
-    public static void applyChangeList(ArrayList<ModelItemChange> changes, ModelItemList target) {
+    public static void applyChangeList(ArrayList<ModelItemChange> changes, ModelItemList target, ChangeWatcher watcher) {
         for (ModelItemChange i : changes) {
             int row_id = target.getCollapsedRowId(i.section, i.row);
             if (row_id >= target.getData().size()) throw new java.lang.IllegalArgumentException();
             i.apply(target.getData().get(row_id));
+            watcher.onChanged(row_id);
         }
     }
 }

@@ -726,7 +726,7 @@ struct OSXTableView : public TableViewInterface {
   void SetTag(int section, int row, int val) { [table setTag:section row:row val:val]; }
   void SetValue(int section, int row, const string &val) { [table setValue:section row:row val:val]; }
   void SetSelected(int section, int row, int selected) {}
-  void SetHidden(int section, int row, bool val) { [table setHidden:section row:row val:val]; }
+  void SetHidden(int section, int row, int val) { [table setHidden:section row:row val:val]; }
   void SetColor(int section, int row, const Color &val) { [table setColor:section row:row val:val]; }
   void SetTitle(const string &title) { table.title = LFL::MakeNSString(title); }
   void SetTheme(const string &theme) {}

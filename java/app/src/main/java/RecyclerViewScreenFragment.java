@@ -63,11 +63,13 @@ public class RecyclerViewScreenFragment extends ScreenFragment {
             adapter.advertising.onViewAttached();
         }
         LinearLayoutManager layoutmanager = new LinearLayoutManager(getContext());
+        DefaultItemAnimator animator = new DefaultItemAnimator();
+        animator.setSupportsChangeAnimations(false);
         recyclerview = (RecyclerView)layout.findViewById(R.id.list);
         recyclerview.setHasFixedSize(true);
         recyclerview.setAdapter(adapter);
         recyclerview.setLayoutManager(layoutmanager);
-        recyclerview.setItemAnimator(new DefaultItemAnimator());
+        recyclerview.setItemAnimator(animator);
         recyclerview.addItemDecoration
             (new DividerItemDecoration(recyclerview.getContext(), layoutmanager.getOrientation()));
         return layout;

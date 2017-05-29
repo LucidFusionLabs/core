@@ -48,7 +48,7 @@ struct AndroidTableView : public TableViewInterface {
   void SetKey(int seciton, int row, const string &key);
   void SetValue(int section, int row, const string &val);
   void SetSelected(int section, int row, int val);
-  void SetHidden(int section, int row, bool val);
+  void SetHidden(int section, int row, int val);
   void SetColor(int section, int row, const Color &val);
   void SetTitle(const string &title);
   void SetSectionEditable(int section, int start_row, int skip_last_rows, IntIntCB iicb);

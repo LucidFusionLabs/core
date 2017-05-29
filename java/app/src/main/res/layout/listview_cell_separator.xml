@@ -5,38 +5,38 @@
     android:layout_height="wrap_content"
     android:orientation="vertical" >
 
-<RelativeLayout
-    android:id="@+id/listview_image_root"
-    android:orientation="horizontal" 
-    android:layout_width="fill_parent"
-    android:layout_height="wrap_content">
-
-    <ImageView android:id="@+id/listview_cell_left_icon"
-       android:layout_width="wrap_content"
-       android:layout_height="wrap_content"
-       android:layout_centerInParent="true"/>
-</RelativeLayout>
-
-<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:orientation="horizontal" 
-    android:layout_width="fill_parent"
-    android:layout_height="wrap_content"
-    android:layout_marginTop="15dip">
-    <Button 
-        android:id="@+id/listview_cell_nav_left"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content" 
-        android:layout_alignParentLeft="true"/>
-    <TextView
-        android:id="@+id/listview_cell_title"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content" 
-        android:layout_centerInParent="true"/>
-    <Button 
-        android:id="@+id/listview_cell_nav_right"
-        android:layout_width="wrap_content"
+    <RelativeLayout
+        android:id="@+id/listview_image_root"
+        android:orientation="horizontal" 
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content">
+    
+        <ImageView android:id="@+id/listview_cell_left_icon"
+           android:layout_width="wrap_content"
+           android:layout_height="wrap_content"
+           android:layout_centerInParent="true"/>
+    </RelativeLayout>
+   
+    <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+        android:orientation="horizontal" 
+        android:layout_width="fill_parent"
         android:layout_height="wrap_content"
-        android:layout_alignParentRight="true"/>
-</RelativeLayout>
+        android:layout_marginTop="15dip">
+        <Button 
+            android:id="@+id/listview_cell_nav_left"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" 
+            android:layout_alignParentLeft="true"/>
+        <TextView
+            android:id="@+id/listview_cell_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" 
+            android:layout_centerInParent="true"/>
+        <Button 
+            android:id="@+id/listview_cell_nav_right"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentRight="true"/>
+    </RelativeLayout>
 
 </com.lucidfusionlabs.core.ModelItemLinearLayout>

@@ -507,7 +507,7 @@ struct QtTableView : public QtTableInterface, public TableViewInterface {
     model->blockSignals(false);
   }
 
-  void SetHidden(int section, int row, bool v) {
+  void SetHidden(int section, int row, int v) {
     CheckExists(section, row);
     data[section].item[row].hidden = v;
     table->setRowHidden(GetCollapsedRowId(section, row), v);

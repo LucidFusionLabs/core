@@ -184,7 +184,7 @@ public class TableScreen extends Screen {
             (new Runnable() { public void run() { model.setValue(s, r, v); }});
     }
 
-    public void setHidden(final AppCompatActivity activity, final int s, final int r, final boolean v) {
+    public void setHidden(final AppCompatActivity activity, final int s, final int r, final int v) {
         activity.runOnUiThread
             (new Runnable() { public void run() { model.setHidden(s, r, v); }});
     }

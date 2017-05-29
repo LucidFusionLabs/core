@@ -104,13 +104,6 @@ public class ModelItemRecyclerViewAdapter
         public void afterTextChanged(android.text.Editable s) {}
     };
 
-    View.OnClickListener click_listener = new View.OnClickListener() {
-        @Override
-        public void onClick(View v) {
-            if (recyclerview != null) handleClick(recyclerview.indexOfChild(v));
-        }
-    };
-
     public ModelItemRecyclerViewAdapter(final TableScreen p, final ArrayList<ModelItem> d) {
         parent_screen = p;
         data = d;
@@ -121,7 +114,7 @@ public class ModelItemRecyclerViewAdapter
             ModelItem item = data.get(i);
             if (item.type == ModelItem.TYPE_SEPARATOR) sections.add(new Section(i));
         }
-        endUpdates();
+        notifyDataSetChanged(); 
     }
 
     @Override
@@ -152,7 +145,6 @@ public class ModelItemRecyclerViewAdapter
             case ModelItem.TYPE_HIDDEN: {
                 View itemView = inflater.inflate(R.layout.listview_cell_hidden, parent, false);
                 ViewHolder holder = new ViewHolder(itemView);
-                itemView.setOnClickListener(click_listener);
                 itemView.setTag(holder);
                 holder.root = (ModelItemLinearLayout)itemView.findViewById(R.id.listview_cell_root);
                 return holder;
@@ -161,7 +153,6 @@ public class ModelItemRecyclerViewAdapter
             case ModelItem.TYPE_SEPARATOR: {
                 View itemView = inflater.inflate(R.layout.listview_cell_separator, parent, false);
                 ViewHolder holder = new ViewHolder(itemView);
-                itemView.setOnClickListener(click_listener);
                 itemView.setTag(holder);
                 holder.root = (ModelItemLinearLayout)itemView.findViewById(R.id.listview_cell_root);
                 holder.setTextView((TextView) itemView.findViewById(R.id.listview_cell_title));
@@ -174,7 +165,6 @@ public class ModelItemRecyclerViewAdapter
             case ModelItem.TYPE_TOGGLE: {
                 View itemView = inflater.inflate(R.layout.listview_cell_toggle, parent, false);
                 ViewHolder holder = new ViewHolder(itemView);
-                itemView.setOnClickListener(click_listener);
                 itemView.setTag(holder);
                 holder.root = (ModelItemLinearLayout)itemView.findViewById(R.id.listview_cell_root);
                 holder.setTextView((TextView) itemView.findViewById(R.id.listview_cell_title));
@@ -186,7 +176,6 @@ public class ModelItemRecyclerViewAdapter
             case ModelItem.TYPE_PICKER: {
                 View itemView = inflater.inflate(R.layout.listview_cell_picker, parent, false);
                 ViewHolder holder = new ViewHolder(itemView);
-                itemView.setOnClickListener(click_listener);
                 itemView.setTag(holder);
                 holder.root = (ModelItemLinearLayout)itemView.findViewById(R.id.listview_cell_root);
                 holder.picker = (NumberPicker) itemView.findViewById(R.id.listview_cell_picker);
@@ -198,7 +187,6 @@ public class ModelItemRecyclerViewAdapter
             case ModelItem.TYPE_PASSWORDINPUT: {
                 View itemView = inflater.inflate(R.layout.listview_cell_textinput, parent, false);
                 ViewHolder holder = new ViewHolder(itemView);
-                itemView.setOnClickListener(click_listener);
                 itemView.setTag(holder);
                 itemView.setMinimumHeight(parent.getMeasuredHeight() * 2);
                 holder.root = (ModelItemLinearLayout)itemView.findViewById(R.id.listview_cell_root);
@@ -211,7 +199,6 @@ public class ModelItemRecyclerViewAdapter
             case ModelItem.TYPE_SELECTOR: {
                 View itemView = inflater.inflate(R.layout.listview_cell_radio, parent, false);
                 ViewHolder holder = new ViewHolder(itemView);
-                itemView.setOnClickListener(click_listener);
                 itemView.setTag(holder);
                 holder.root = (ModelItemLinearLayout)itemView.findViewById(R.id.listview_cell_root);
                 holder.setTextView((TextView) itemView.findViewById(R.id.listview_cell_title));
@@ -223,7 +210,6 @@ public class ModelItemRecyclerViewAdapter
             case ModelItem.TYPE_SELECTOR_HIDEKEY: {
                 View itemView = inflater.inflate(R.layout.listview_cell_radio_hidekey, parent, false);
                 ViewHolder holder = new ViewHolder(itemView);
-                itemView.setOnClickListener(click_listener);
                 itemView.setTag(holder);
                 holder.root = (ModelItemLinearLayout)itemView.findViewById(R.id.listview_cell_root);
                 holder.radio = (RadioGroup) itemView.findViewById(R.id.listview_cell_radio);
@@ -233,7 +219,6 @@ public class ModelItemRecyclerViewAdapter
             default: {
                 View itemView = inflater.inflate(R.layout.listview_cell, parent, false);
                 ViewHolder holder = new ViewHolder(itemView);
-                itemView.setOnClickListener(click_listener);
                 itemView.setTag(holder);
                 holder.root = (ModelItemLinearLayout)itemView.findViewById(R.id.listview_cell_root);
                 holder.setTextView((TextView) itemView.findViewById(R.id.listview_cell_title));
@@ -247,18 +232,21 @@ public class ModelItemRecyclerViewAdapter
     }
 
     @Override
-    public void onBindViewHolder(ViewHolder holder, final int position) {
+    public void onBindViewHolder(final ViewHolder holder, final int position) {
         final ModelItem item = data.get(position);
         int type = getItemViewType(position);
+
+        if (holder.itemView != null) {
+            if (item.cb != null) holder.itemView.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { item.cb.run(); }});
+            else                 holder.itemView.setOnClickListener(null);
+        }
+
         if (holder.root != null) {
             holder.root.item = item;
             holder.root.section = data.get(getSectionBeginRowIdFromPosition(position));
         }
 
         if (holder.textView != null) {
-            if (item.cb == null) holder.textView.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { handleClick(position); }});
-            else                 holder.textView.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { item.cb.run(); }});
-
             if (item.dropdown_key.length() > 0 && item.key.length() > 0 && item.cb != null &&
                 (item.flags & ModelItem.TABLE_FLAG_FIXDROPDOWN) == 0) {
                 holder.textView.setText(item.key + " \u02C5");
@@ -372,7 +360,7 @@ public class ModelItemRecyclerViewAdapter
                 RadioButton button = new RadioButton(holder.radio.getContext());
                 button.setLayoutParams(layout);
                 button.setId(i);
-                button.setText(v[i]);  
+                button.setText(v[i]);
                 button.setChecked(item.selected == i);
                 if (type == ModelItem.TYPE_SELECTOR_HIDEKEY)
                     button.setBackgroundResource(R.drawable.listview_radio_selector);
@@ -414,7 +402,7 @@ public class ModelItemRecyclerViewAdapter
     }
 
     public void beginUpdates() {}
-    public void endUpdates() { notifyDataSetChanged(); }
+    public void endUpdates() {}
 
     public void selectRow(final int s, final int r) {
         selected_section = s;
@@ -454,21 +442,28 @@ public class ModelItemRecyclerViewAdapter
     public void addSection() {
         sections.add(new Section(data.size()));
         data.add(new ModelItem("", "", "", "", ModelItem.TYPE_SEPARATOR, 0, 0, 0, 0, 0, 0, null, null, null, false, 0, 0));
+        notifyItemInserted(data.size()-1);
     }
 
     public void setHeader(final int section, ModelItem row) {
-        data.set(getSectionBeginRowId(section), row);
+        int row_id = getSectionBeginRowId(section);
+        data.set(row_id, row);
+        notifyItemChanged(row_id);
     }
 
     public void addRow(final int section, ModelItem row) {
         if (section == (sections.size()-1)) addSection();
         if (section >= (sections.size()-1)) throw new java.lang.IllegalArgumentException();
-        data.add(getSectionEndRowId(section), row);
+        int insert_at = getSectionEndRowId(section);
+        data.add(insert_at, row);
         moveSectionsAfterBy(section, 1);
+        notifyItemInserted(insert_at);
     }
     
     public void replaceRow(final int s, final int r, ModelItem row) {
-        data.set(getCollapsedRowId(s, r), row);
+        int row_id = getCollapsedRowId(s, r); 
+        data.set(row_id, row);
+        notifyItemChanged(row_id);
     }
 
     public void replaceSection(final int section, final ModelItem h, final int flags, ArrayList<ModelItem> v) {
@@ -477,9 +472,15 @@ public class ModelItemRecyclerViewAdapter
         int start_row = getSectionBeginRowId(section), old_section_size = getSectionSize(section);
         h.flags = flags;
         data.set(start_row, h);
+        notifyItemChanged(start_row);
+
         data.subList(start_row + 1, start_row + 1 + old_section_size).clear();
+        moveSectionsAfterBy(section, -old_section_size);
+        notifyItemRangeRemoved(start_row + 1, old_section_size);
+
         data.addAll(start_row + 1, v);
-        moveSectionsAfterBy(section, v.size() - getSectionSize(section));
+        moveSectionsAfterBy(section, v.size());
+        notifyItemRangeInserted(start_row + 1, v.size());
     }
 
     public void setSectionValues(final int section, ArrayList<String> v) {
@@ -490,12 +491,13 @@ public class ModelItemRecyclerViewAdapter
         for (int i = 0; i < section_size; ++i) {
             data.get(section_row + 1 + i).val = v.get(i);
         }
+        notifyItemRangeChanged(section_row + 1, section_size);
     }
 
     public void applyChangeList(final ArrayList<ModelItemChange> changes) {
-        beginUpdates();
-        ModelItemChange.applyChangeList(changes, this);
-        endUpdates();
+        ModelItemChange.applyChangeList(changes, this, new ModelItemChange.ChangeWatcher() { @Override public void onChanged(int row) {
+            notifyItemChanged(row);
+        }});
     }
 
     public void moveSectionsAfterBy(final int section, final int delta) {
@@ -509,8 +511,16 @@ public class ModelItemRecyclerViewAdapter
     public void setKey   (final int s, final int r, final String  v) { data.get(getCollapsedRowId(s, r)).key = v; }
     public void setTag   (final int s, final int r, final int     v) { data.get(getCollapsedRowId(s, r)).tag = v; } 
     public void setValue (final int s, final int r, final String  v) { data.get(getCollapsedRowId(s, r)).val = v; }
-    public void setHidden(final int s, final int r, final boolean v) { data.get(getCollapsedRowId(s, r)).hidden = v; }
     public void setSelected(final int s, final int r, final int   v) { data.get(getCollapsedRowId(s, r)).selected = v; }
+    
+    public void setHidden(final int s, final int r, final int v) {
+        int row_id = getCollapsedRowId(s, r);
+        if (v < 0) {
+            ModelItem item = data.get(row_id);
+            item.hidden = !item.hidden;
+        } else data.get(row_id).hidden = v > 0;
+        notifyItemChanged(row_id);
+    }
 
     public Pair<Long, ArrayList<Integer>> getPicked(final int s, final int r) {
         PickerItem picker = data.get(getCollapsedRowId(s, r)).picker;
@@ -539,19 +549,5 @@ public class ModelItemRecyclerViewAdapter
             ret.add(new Pair<String, String>(item.key, val));
         }
         return ret;
-    }
-
-    public void handleClick(int position) {
-        ModelItem i = data.get(position);
-        if (i.type == ModelItem.TYPE_COMMAND || i.type == ModelItem.TYPE_BUTTON) {
-            if (i.cb != null) i.cb.run();
-        } else if (i.type == ModelItem.TYPE_LABEL && position+1 < data.size()) {
-            ModelItem ni = data.get(position+1);
-            if (ni.type == ModelItem.TYPE_PICKER || ni.type == ModelItem.TYPE_FONTPICKER) {
-                beginUpdates();
-                ni.hidden = !ni.hidden;
-                endUpdates();
-            }
-        }
     }
 }

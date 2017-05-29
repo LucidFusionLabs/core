@@ -2417,7 +2417,7 @@ void TableView::SetKey(int secton, int row, const string &key) {}
 void TableView::SetTag(int section, int row, int val) {}
 void TableView::SetValue(int section, int row, const string &val) {}
 void TableView::SetSelected(int section, int row, int selected) {}
-void TableView::SetHidden(int section, int row, bool val) {}
+void TableView::SetHidden(int section, int row, int val) {}
 void TableView::SetColor(int section, int row, const Color &val) {}
 void TableView::SetTitle(const string &title) {}
 void TableView::SetTheme(const string &theme) {}

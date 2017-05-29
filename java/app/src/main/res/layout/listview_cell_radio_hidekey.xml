@@ -6,17 +6,17 @@
     android:orientation="horizontal"
     android:background="@drawable/listview_cell_selector">
 
-<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"  
-    android:id="@+id/listview_cell_root"
-    android:layout_width="match_parent"  
-    android:layout_height="wrap_content"
-    android:padding="10dp">
-    <RadioGroup  
-        android:id="@+id/listview_cell_radio"  
-        android:layout_width="match_parent"  
-        android:layout_height="wrap_content"  
-        android:orientation="horizontal">  
-    </RadioGroup>  
-</RelativeLayout> 
+  <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"  
+      android:id="@+id/listview_cell_root"
+      android:layout_width="match_parent"  
+      android:layout_height="wrap_content"
+      android:padding="10dp">
+      <RadioGroup  
+          android:id="@+id/listview_cell_radio"  
+          android:layout_width="match_parent"  
+          android:layout_height="wrap_content"  
+          android:orientation="horizontal">  
+      </RadioGroup>  
+  </RelativeLayout> 
 
 </com.lucidfusionlabs.core.ModelItemLinearLayout>

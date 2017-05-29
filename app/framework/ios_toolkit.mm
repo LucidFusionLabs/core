@@ -534,10 +534,15 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
     data[section].item[r].tag = v;
   }
 
-  - (void)setHidden:(int)section row:(int)r val:(bool)v {
+  - (void)setHidden:(int)section row:(int)r val:(int)v {
     [self checkExists:section row:r];
     auto &hi = data[section];
-    hi.item[r].hidden = v;
+    if (v < 0) {
+      hi.item[r].hidden = !hi.item[r].hidden;
+      NSIndexPath *p = [NSIndexPath indexPathForRow:r inSection:section];
+      [self.tableView reloadRowsAtIndexPaths:@[p] withRowAnimation:UITableViewRowAnimationNone];
+    } else hi.item[r].hidden = v;
+
     if (hi.flag & LFL::TableSection::Flag::DeleteRowsWhenAllHidden) {
       for (auto &i : hi.item) if (!i.hidden) return;
       hi.item.clear();
@@ -1047,16 +1052,7 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
     _selected_row = path.row;
     _selected_section = path.section;
     auto &ci = data[path.section].item[path.row];
-    if (ci.type == LFL::TableItem::Command || ci.type == LFL::TableItem::Button) {
-      if (ci.cb) ci.cb();
-    } else if (ci.type == LFL::TableItem::Label && path.row + 1 < data[path.section].item.size()) {
-      auto &next_ci = data[path.section].item[path.row+1];
-      if (next_ci.type == LFL::TableItem::Picker ||
-          next_ci.type == LFL::TableItem::FontPicker) {
-        next_ci.hidden = !next_ci.hidden;
-        [self reloadRowAtIndexPath:path withRowAnimation:UITableViewRowAnimationNone];
-      }
-    }
+    if (ci.cb) ci.cb();
   }
 
   - (void)show:(bool)show_or_hide {
@@ -1445,7 +1441,7 @@ void iOSTableView::SetKey(int section, int row, const string &val) { [table setK
 void iOSTableView::SetTag(int section, int row, int val) { [table setTag:section row:row val:val]; }
 void iOSTableView::SetValue(int section, int row, const string &val) { [table setValue:section row:row val:val]; }
 void iOSTableView::SetSelected(int section, int row, int val) { [table setSelected:section row:row val:val]; }
-void iOSTableView::SetHidden(int section, int row, bool val) { [table setHidden:section row:row val:val]; }
+void iOSTableView::SetHidden(int section, int row, int val) { [table setHidden:section row:row val:val]; }
 void iOSTableView::SetColor(int section, int row, const Color &val) { [table setColor:section row:row val:val]; }
 void iOSTableView::SetTitle(const string &title) { table.title = LFL::MakeNSString(title); }
 void iOSTableView::SetTheme(const string &theme) { [table setTheme:theme]; }

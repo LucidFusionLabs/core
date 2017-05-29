@@ -14,7 +14,9 @@
         android:layout_marginLeft="10dp"
         android:layout_marginTop="5dp"
         android:layout_marginRight="5dp"
-        android:layout_marginBottom="5dp" />
+        android:layout_marginBottom="5dp"
+        android:clickable="false"
+        android:focusable="false"/>
 
     <LinearLayout
         android:id="@+id/listview_cell_title_root"
@@ -22,7 +24,9 @@
         android:layout_marginLeft="10dp"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="center_vertical">
+        android:layout_gravity="center_vertical"
+        android:clickable="false"
+        android:focusable="false">
 
         <TextView
             android:id="@+id/listview_cell_title"
@@ -30,13 +34,17 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="10dp"
             android:textSize="18dp"
-            android:textColor="?android:textColorPrimary"/>
+            android:textColor="?android:textColorPrimary"
+            android:clickable="false"
+            android:focusable="false"/>
 
         <TextView
             android:id="@+id/listview_cell_subtext"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textSize="10dp"/>
+            android:textSize="10dp"
+            android:clickable="false"
+            android:focusable="false"/>
     </LinearLayout>
 
     <View

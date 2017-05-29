@@ -198,12 +198,12 @@ void TableSection::ApplyChangeList(const TableSection::ChangeList &changes, vect
 void TableSection::ApplyChange(TableItem *out, const TableSection::Change &d) {
   if (1)            out->val        = d.val;
   if (1)            out->hidden     = d.hidden;
+  if (1)            out->flags      = d.flags;
   if (d.left_icon)  out->left_icon  = d.left_icon  == -1 ? 0 : d.left_icon;
   if (d.right_icon) out->right_icon = d.right_icon == -1 ? 0 : d.right_icon;
   if (d.key.size()) out->key        = d.key;
   if (d.cb)         out->cb         = d.cb;
   if (d.type)       out->type       = d.type;
-  if (d.flags)      out->flags      = d.flags;
 }
 
 }; // namespace LFL

@@ -938,7 +938,7 @@ struct TableView : public View, public TableViewInterface {
   void SetTag(int section, int row, int val);
   void SetValue(int section, int row, const string &val);
   void SetSelected(int section, int row, int selected);
-  void SetHidden(int section, int row, bool val);
+  void SetHidden(int section, int row, int val);
   void SetColor(int section, int row, const Color &val);
   void SetTitle(const string &title);
   void SetTheme(const string &theme);

@@ -881,7 +881,7 @@ struct TableViewInterface {
   virtual void SetTag(int section, int row, int val) = 0;
   virtual void SetValue(int section, int row, const string &val) = 0;
   virtual void SetSelected(int section, int row, int selected) = 0;
-  virtual void SetHidden(int section, int row, bool val) = 0;
+  virtual void SetHidden(int section, int row, int val) = 0;
   virtual void SetColor(int section, int row, const Color &val) = 0;
   virtual void SetTitle(const string &title) = 0;
   virtual void SetTheme(const string &theme) = 0;

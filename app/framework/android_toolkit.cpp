@@ -362,10 +362,10 @@ void AndroidTableView::SetSelected(int section, int row, int val) {
   jni->env->CallVoidMethod(impl.v, mid, jni->activity, jint(section), jint(row), jint(val));
 }
 
-void AndroidTableView::SetHidden(int section, int row, bool val) {
+void AndroidTableView::SetHidden(int section, int row, int val) {
   static jmethodID mid = CheckNotNull
-    (jni->env->GetMethodID(jni->tablescreen_class, "setHidden", "(Landroid/support/v7/app/AppCompatActivity;IIZ)V"));
-  jni->env->CallVoidMethod(impl.v, mid, jni->activity, jint(section), jint(row), jboolean(val));
+    (jni->env->GetMethodID(jni->tablescreen_class, "setHidden", "(Landroid/support/v7/app/AppCompatActivity;III)V"));
+  jni->env->CallVoidMethod(impl.v, mid, jni->activity, jint(section), jint(row), jint(val));
 }
 
 void AndroidTableView::SetColor(int section, int row, const Color &val) {

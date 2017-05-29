@@ -85,7 +85,7 @@ template <class X> struct LocalJNIType {
 template <class X> struct GlobalJNIType {
   X v;
   GlobalJNIType(X V) { auto e = Singleton<JNI>::Get()->env; v = e->NewGlobalRef(V); e->DeleteLocalRef(V); }
-  virtual ~GlobalJNIType() { if (v) Singleton<JNI>::Get()->env->DeleteLocalRef(v); }
+  virtual ~GlobalJNIType() { if (v) Singleton<JNI>::Get()->env->DeleteGlobalRef(v); }
 };
 
 typedef LocalJNIType<jobject> LocalJNIObject;
