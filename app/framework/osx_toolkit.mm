@@ -847,7 +847,7 @@ int Application::LoadSystemImage(const string &n) {
 
 unique_ptr<AlertViewInterface> SystemToolkit::CreateAlert(AlertItemVec items) { return make_unique<OSXAlertView>(move(items)); }
 unique_ptr<PanelViewInterface> SystemToolkit::CreatePanel(const Box &b, const string &title, PanelItemVec items) { return make_unique<OSXPanelView>(b, title, move(items)); }
-unique_ptr<ToolbarViewInterface> SystemToolkit::CreateToolbar(const string &theme, MenuItemVec items) { return make_unique<OSXToolbarView>(move(items)); }
+unique_ptr<ToolbarViewInterface> SystemToolkit::CreateToolbar(const string &theme, MenuItemVec items, int flag) { return make_unique<OSXToolbarView>(move(items)); }
 
 unique_ptr<MenuViewInterface> SystemToolkit::CreateMenu(const string &title, MenuItemVec items) { return make_unique<OSXMenuView>(title, move(items)); }
 unique_ptr<MenuViewInterface> SystemToolkit::CreateEditMenu(MenuItemVec items) {

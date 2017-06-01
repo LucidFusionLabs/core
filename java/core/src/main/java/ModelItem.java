@@ -43,9 +43,11 @@ public final class ModelItem {
     public static final int TABLE_SECTION_FLAG_EDITABLE_IF_HAS_TAG         = 2;
     public static final int TABLE_SECTION_FLAG_MOVABLE_ROWS                = 4;
     public static final int TABLE_SECTION_FLAG_DOUBLE_ROW_HEIGHT           = 8;
-    public static final int TABLE_SECTION_FLAG_HIGHlIGHT_SELECTED_ROW      = 16;
+    public static final int TABLE_SECTION_FLAG_HIGHLIGHT_SELECTED_ROW      = 16;
     public static final int TABLE_SECTION_FLAG_DELETE_ROWS_WHEN_ALL_HIDDEN = 32;
     public static final int TABLE_SECTION_FLAG_CLEAR_LEFT_NAV_WHEN_EMPTY   = 64;
+
+    public static final int TOOLBAR_FLAG_BORDERLESS_BUTTONS = 1;
 
     public static final int AD_TYPE_BANNER = 1;
 

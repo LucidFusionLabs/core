@@ -54,13 +54,14 @@ struct AndroidAlertView : public AlertViewInterface {
 struct AndroidToolbarView : public ToolbarViewInterface {
   GlobalJNIObject impl;
   string theme;
-  AndroidToolbarView(MenuItemVec items) : impl(NewToolbarObject(move(items))) {}
+  AndroidToolbarView(const string &t, MenuItemVec items, int f) :
+    theme(t), impl(NewToolbarObject(t, move(items), f)) {}
 
-  static jobject NewToolbarObject(MenuItemVec items) {
+  static jobject NewToolbarObject(const string &t, MenuItemVec items, int flag) {
     static jmethodID mid = CheckNotNull
-      (jni->env->GetMethodID(jni->toolbar_class, "<init>", "(Ljava/util/ArrayList;)V"));
-    LocalJNIObject l(jni->env, jni->ToModelItemArrayList(move(items)));
-    return jni->env->NewObject(jni->toolbar_class, mid, l.v);
+      (jni->env->GetMethodID(jni->toolbar_class, "<init>", "(Ljava/lang/String;Ljava/util/ArrayList;I)V"));
+    LocalJNIObject theme(jni->env, jni->ToJString(t)), l(jni->env, jni->ToModelItemArrayList(move(items)));
+    return jni->env->NewObject(jni->toolbar_class, mid, theme.v, l.v, jint(flag));
   }
 
   void SetTheme(const string &x) { theme=x; }
@@ -419,7 +420,7 @@ int Application::LoadSystemImage(const string &n) {
 
 unique_ptr<AlertViewInterface> SystemToolkit::CreateAlert(AlertItemVec items) { return make_unique<AndroidAlertView>(move(items)); }
 unique_ptr<PanelViewInterface> SystemToolkit::CreatePanel(const Box &b, const string &title, PanelItemVec items) { return nullptr; }
-unique_ptr<ToolbarViewInterface> SystemToolkit::CreateToolbar(const string &theme, MenuItemVec items) { return make_unique<AndroidToolbarView>(move(items)); }
+unique_ptr<ToolbarViewInterface> SystemToolkit::CreateToolbar(const string &theme, MenuItemVec items, int flag) { return make_unique<AndroidToolbarView>(theme, move(items), flag); }
 unique_ptr<MenuViewInterface> SystemToolkit::CreateMenu(const string &title, MenuItemVec items) { return make_unique<AndroidMenuView>(title, move(items)); }
 unique_ptr<MenuViewInterface> SystemToolkit::CreateEditMenu(MenuItemVec items) { return nullptr; }
 unique_ptr<TableViewInterface> SystemToolkit::CreateTableView(const string &title, const string &style, const string &theme, TableItemVec items) { return make_unique<AndroidTableView>(title, style, move(items)); }

@@ -962,7 +962,7 @@ struct NavigationView : public View, public NavigationViewInterface {
 struct Toolkit {
   unique_ptr<AlertViewInterface> CreateAlert(AlertItemVec items);
   unique_ptr<PanelViewInterface> CreatePanel(const Box&, const string &title, PanelItemVec);
-  unique_ptr<ToolbarViewInterface> CreateToolbar(const string &theme, MenuItemVec items);
+  unique_ptr<ToolbarViewInterface> CreateToolbar(const string &theme, MenuItemVec items, int flag);
   unique_ptr<MenuViewInterface> CreateMenu(const string &title, MenuItemVec items);
   unique_ptr<MenuViewInterface> CreateEditMenu(MenuItemVec items);
   unique_ptr<TableViewInterface> CreateTableView

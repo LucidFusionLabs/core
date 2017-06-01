@@ -838,6 +838,7 @@ struct PanelViewInterface {
 };
 
 struct ToolbarViewInterface {
+  enum { BORDERLESS_BUTTONS=1 };
   virtual ~ToolbarViewInterface() {}
   virtual void Show(bool show_or_hide) = 0;
   virtual void ToggleButton(const string &n) = 0;
@@ -946,7 +947,7 @@ struct PurchasesInterface {
 struct ToolkitInterface {
   virtual unique_ptr<AlertViewInterface> CreateAlert(AlertItemVec items) = 0;
   virtual unique_ptr<PanelViewInterface> CreatePanel(const Box&, const string &title, PanelItemVec) = 0;
-  virtual unique_ptr<ToolbarViewInterface> CreateToolbar(const string &theme, MenuItemVec items) = 0;
+  virtual unique_ptr<ToolbarViewInterface> CreateToolbar(const string &theme, MenuItemVec items, int flag) = 0;
   virtual unique_ptr<MenuViewInterface> CreateMenu(const string &title, MenuItemVec items) = 0;
   virtual unique_ptr<MenuViewInterface> CreateEditMenu(MenuItemVec items) = 0;
   virtual unique_ptr<TableViewInterface> CreateTableView
@@ -959,7 +960,7 @@ struct ToolkitInterface {
 struct SystemToolkit : public ToolkitInterface {
   unique_ptr<AlertViewInterface> CreateAlert(AlertItemVec items);
   unique_ptr<PanelViewInterface> CreatePanel(const Box&, const string &title, PanelItemVec);
-  unique_ptr<ToolbarViewInterface> CreateToolbar(const string &theme, MenuItemVec items);
+  unique_ptr<ToolbarViewInterface> CreateToolbar(const string &theme, MenuItemVec items, int flag);
   unique_ptr<MenuViewInterface> CreateMenu(const string &title, MenuItemVec items);
   unique_ptr<MenuViewInterface> CreateEditMenu(MenuItemVec items);
   unique_ptr<TableViewInterface> CreateTableView

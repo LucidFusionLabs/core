@@ -7,6 +7,20 @@
     android:background="@drawable/listview_cell_selector">
 
     <ImageView
+        android:id="@+id/listview_cell_remove_icon"
+        android:src="@drawable/ex"
+        android:scaleType="fitCenter"
+        android:adjustViewBounds="true"
+        android:layout_width="wrap_content"
+        android:layout_height="fill_parent"
+        android:layout_marginLeft="10dp"
+        android:layout_marginRight="5dp"
+        android:layout_marginTop="5dp"
+        android:layout_marginBottom="5dp"
+        android:clickable="false"
+        android:focusable="false"/>
+
+    <ImageView
         android:id="@+id/listview_cell_left_icon"
         android:scaleType="fitCenter"
         android:adjustViewBounds="true"
@@ -19,34 +33,7 @@
         android:clickable="false"
         android:focusable="false"/>
 
-    <LinearLayout
-        android:id="@+id/listview_cell_title_root"
-        android:orientation="vertical"
-        android:layout_marginLeft="10dp"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="center_vertical"
-        android:clickable="false"
-        android:focusable="false">
-
-        <TextView
-            android:id="@+id/listview_cell_title"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
-            android:textSize="18dp"
-            android:textColor="?android:textColorPrimary"
-            android:clickable="false"
-            android:focusable="false"/>
-
-        <TextView
-            android:id="@+id/listview_cell_subtext"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textSize="10dp"
-            android:clickable="false"
-            android:focusable="false"/>
-    </LinearLayout>
+    <include layout="@layout/listview_cell_title"/>
 
     <View
         android:layout_width="0dp"

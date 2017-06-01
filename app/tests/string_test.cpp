@@ -311,6 +311,13 @@ TEST(StringTest, StringMatch) {
   EXPECT_TRUE (ReplaceString(&a1, "bar baz", "raz"));
   EXPECT_FALSE(ReplaceString(&a1, "bar baz", "raz"));
   EXPECT_EQ(a1, "foo raz bat");
+
+  string b1 = "bbbbb  ", b2 = "        ";
+  EXPECT_EQ(false, RemoveTrailing(&a1, isspace));
+  EXPECT_EQ(true, RemoveTrailing(&b1, isspace));
+  EXPECT_EQ(true, RemoveTrailing(&b2, isspace));
+  EXPECT_EQ("bbbbb", b1);
+  EXPECT_EQ("", b2);
 }
 
 TEST(StringTest, Split) {

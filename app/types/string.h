@@ -587,6 +587,7 @@ String16 ReplaceEmpty (const String16 &in, const string   &replace_with);
 String16 ReplaceEmpty (const String16 &in, const String16 &replace_with);
 string ReplaceNewlines(const string   &in, const string   &replace_with);
 bool ReplaceString(string *text, const string &needle, const string &replace);
+bool RemoveTrailing(string *text, int (*ischar)(int));
 
 template <class X> string HexEscape         (const StringPieceT<X> &text, const string &delim);
 template <class X> string HexEscapeNonAscii (const StringPieceT<X> &text, const string &delim);

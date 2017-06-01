@@ -540,6 +540,12 @@ bool ReplaceString(string *text, const string &needle, const string &replace) {
   return true;
 }
 
+bool RemoveTrailing(string *text, int (*ischar)(int)) {
+  int l = RLengthChar(text->data() + text->size() - 1, ischar, text->size());
+  if (l) text->erase(text->size() - l, l);
+  return l;
+}
+
 template <class X> string HexEscape(const StringPieceT<X> &text, const string &delim) {
   string ret;
   ret.reserve(text.size()*4);

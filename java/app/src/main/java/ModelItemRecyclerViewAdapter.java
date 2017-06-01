@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.HashMap;
 
 import android.os.*;
+import android.support.v4.view.MotionEventCompat;
 import android.view.*;
 import android.widget.FrameLayout;
 import android.widget.FrameLayout.LayoutParams;
@@ -39,23 +40,25 @@ import android.app.AlertDialog;
 import android.text.InputType;
 import android.text.TextWatcher;
 import android.support.v7.widget.RecyclerView;
+import android.support.v7.widget.helper.ItemTouchHelper;
+import android.support.v4.view.MotionEventCompat;
 import com.lucidfusionlabs.core.ModelItem;
 import com.lucidfusionlabs.core.PickerItem;
 import com.lucidfusionlabs.core.NativeIntIntCB;
 import com.lucidfusionlabs.core.ModelItemChange;
 import com.lucidfusionlabs.core.ModelItemLinearLayout;
+import com.lucidfusionlabs.core.ItemTouchHelperCallback;
 
 public class ModelItemRecyclerViewAdapter
     extends RecyclerView.Adapter<ModelItemRecyclerViewAdapter.ViewHolder>
-    implements com.lucidfusionlabs.core.ModelItemList {
+    implements com.lucidfusionlabs.core.ItemTouchHelperCallback.Listener, com.lucidfusionlabs.core.ModelItemList {
 
     public static class ViewHolder extends RecyclerView.ViewHolder {
         public ModelItemLinearLayout root;
-        public TextView textView, label, subtext;
+        public TextView textView, label, subtext, leftNav, rightNav;
         public ColorStateList textViewTextColors, textViewLinkColors;
         public EditText editText;
-        public ImageView leftIcon, rightIcon;
-        public Button leftNav, rightNav;
+        public ImageView leftIcon, rightIcon, removeIcon;
         public Switch toggle;
         public NumberPicker picker;
         public RadioGroup radio;
@@ -72,8 +75,9 @@ public class ModelItemRecyclerViewAdapter
     }
 
     public static class Section implements Comparable<Integer> {
-        public Integer start_row;
-        public Section(Integer v) { start_row = v; }
+        public boolean editing;
+        public Integer index, start_row;
+        public Section(Integer ind, Integer v) { index = ind; start_row = v; }
         @Override public int compareTo(Integer x) { return start_row.compareTo(x); }
     }
 
@@ -81,11 +85,13 @@ public class ModelItemRecyclerViewAdapter
     public ArrayList<ModelItem> data = new ArrayList<ModelItem>();
     public ArrayList<Section> sections = new ArrayList<Section>();
     public ModelItem nav_left, nav_right;
-    public int selected_section = 0, selected_row = 0;
+    public int selected_section = -1, selected_row = -1;
     public int editable_section = -1, editable_start_row = -1;
     public NativeIntIntCB delete_row_cb;
     public RecyclerView recyclerview;
     public com.lucidfusionlabs.core.ViewOwner toolbar, advertising;
+
+    ItemTouchHelper itemtouchhelper = new ItemTouchHelper(new ItemTouchHelperCallback(this));
 
     CompoundButton.OnCheckedChangeListener checked_listener = new CompoundButton.OnCheckedChangeListener() {
         public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
@@ -112,7 +118,7 @@ public class ModelItemRecyclerViewAdapter
         data.add(new ModelItem("", "", "", "", ModelItem.TYPE_SEPARATOR, 0, 0, 0, 0, 0, 0, null, null, null, false, 0, 0));
         for (int i = 0, l = data.size(); i != l; ++i) {
             ModelItem item = data.get(i);
-            if (item.type == ModelItem.TYPE_SEPARATOR) sections.add(new Section(i));
+            if (item.type == ModelItem.TYPE_SEPARATOR) sections.add(new Section(sections.size(), i));
         }
         notifyDataSetChanged(); 
     }
@@ -136,6 +142,7 @@ public class ModelItemRecyclerViewAdapter
     public void onAttachedToRecyclerView(RecyclerView recyclerView) {
         super.onAttachedToRecyclerView(recyclerView);
         recyclerview = recyclerView;
+        itemtouchhelper.attachToRecyclerView(recyclerview);
     }
 
     @Override
@@ -155,10 +162,14 @@ public class ModelItemRecyclerViewAdapter
                 ViewHolder holder = new ViewHolder(itemView);
                 itemView.setTag(holder);
                 holder.root = (ModelItemLinearLayout)itemView.findViewById(R.id.listview_cell_root);
-                holder.setTextView((TextView) itemView.findViewById(R.id.listview_cell_title));
-                holder.leftIcon = (ImageView) itemView.findViewById(R.id.listview_cell_left_icon);
-                holder.leftNav = (Button) itemView.findViewById(R.id.listview_cell_nav_left);
-                holder.rightNav = (Button) itemView.findViewById(R.id.listview_cell_nav_right);
+                holder.setTextView((TextView)itemView.findViewById(R.id.listview_cell_title));
+                holder.leftIcon = (ImageView)itemView.findViewById(R.id.listview_cell_left_icon);
+                holder.leftNav = (TextView)itemView.findViewById(R.id.listview_cell_nav_left);
+                holder.rightNav = (TextView)itemView.findViewById(R.id.listview_cell_nav_right);
+                holder.leftNav.setTextColor(holder.textViewLinkColors);
+                holder.rightNav.setTextColor(holder.textViewLinkColors);
+                holder.leftNav.setPaintFlags(holder.leftNav.getPaintFlags() | Paint.UNDERLINE_TEXT_FLAG);
+                holder.rightNav.setPaintFlags(holder.rightNav.getPaintFlags() | Paint.UNDERLINE_TEXT_FLAG);
                 return holder;
             }
 
@@ -224,6 +235,7 @@ public class ModelItemRecyclerViewAdapter
                 holder.setTextView((TextView) itemView.findViewById(R.id.listview_cell_title));
                 holder.label = (TextView) itemView.findViewById(R.id.listview_cell_value);
                 holder.subtext = (TextView) itemView.findViewById(R.id.listview_cell_subtext);
+                holder.removeIcon = (ImageView) itemView.findViewById(R.id.listview_cell_remove_icon);
                 holder.leftIcon = (ImageView) itemView.findViewById(R.id.listview_cell_left_icon);
                 holder.rightIcon = (ImageView) itemView.findViewById(R.id.listview_cell_right_icon);
                 return holder;
@@ -233,8 +245,12 @@ public class ModelItemRecyclerViewAdapter
 
     @Override
     public void onBindViewHolder(final ViewHolder holder, final int position) {
-        final ModelItem item = data.get(position);
-        int type = getItemViewType(position);
+        final int section_id = getSectionIdFromPosition(position);
+        final Section section = sections.get(section_id);
+        final ModelItem item = data.get(position), section_item = data.get(section.start_row);
+        final int row_id = position - section.start_row - 1, type = getItemViewType(position);
+        final boolean selected = section_id == selected_section && row_id == selected_row;
+        final boolean editing = section.editing && row_id >= editable_start_row;
 
         if (holder.itemView != null) {
             if (item.cb != null) holder.itemView.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { item.cb.run(); }});
@@ -243,7 +259,10 @@ public class ModelItemRecyclerViewAdapter
 
         if (holder.root != null) {
             holder.root.item = item;
-            holder.root.section = data.get(getSectionBeginRowIdFromPosition(position));
+            holder.root.section = section_item;
+            holder.root.setBackgroundColor
+                ((selected && ((section_item.flags & ModelItem.TABLE_SECTION_FLAG_HIGHLIGHT_SELECTED_ROW) != 0)) ?
+                 Color.GRAY : Color.TRANSPARENT);
         }
 
         if (holder.textView != null) {
@@ -259,24 +278,48 @@ public class ModelItemRecyclerViewAdapter
             }
         }
 
+        if (holder.removeIcon != null) {
+            holder.removeIcon.setVisibility(editing ? View.VISIBLE : View.GONE);
+            holder.removeIcon.setOnClickListener(new View.OnClickListener() { public void onClick(View v) {
+                final int pos = holder.getAdapterPosition();
+                if (delete_row_cb != null) delete_row_cb.run(row_id, item.tag);
+                data.subList(pos, pos + 1).clear();
+                moveSectionsAfterBy(section_id, -1);
+                notifyItemRemoved(pos);
+            }});
+        }
+
         if (holder.leftIcon != null) {
             if (item.left_icon < 0) {
                 holder.leftIcon.setImageBitmap(MainActivity.bitmaps.get(-item.left_icon-1));
-                if (getCollapsedRowId(selected_section, selected_row) == position) holder.root.setBackgroundColor(Color.GRAY);
-                else                                                               holder.root.setBackgroundColor(Color.TRANSPARENT);
             } else {
                 holder.leftIcon.setImageResource(item.left_icon);
             }
             holder.leftIcon.setVisibility(item.left_icon == 0 ? View.GONE : View.VISIBLE);
         }
 
-        if (holder.rightIcon != null) {
+        boolean label_gone = item.right_icon != 0;
+        if (editing && (section_item.flags & ModelItem.TABLE_SECTION_FLAG_MOVABLE_ROWS) != 0) {
+            label_gone = true;
+            holder.rightIcon.setImageResource(R.drawable.ic_reorder_grey_500_24dp);
+            holder.rightIcon.setOnClickListener(null);
+            holder.rightIcon.setOnTouchListener(new View.OnTouchListener() { @Override public boolean onTouch(View v, MotionEvent event) {
+                if (MotionEventCompat.getActionMasked(event) == MotionEvent.ACTION_DOWN)
+                    itemtouchhelper.startDrag(holder);
+                return false;
+            }});
+            holder.rightIcon.setVisibility(View.VISIBLE);
+
+        } else if (holder.rightIcon != null) {
             holder.rightIcon.setImageResource(item.right_icon);
-            if (item.right_cb == null) holder.rightIcon.setClickable(false);
+            holder.rightIcon.setOnTouchListener(null);
+            if (item.right_cb == null) holder.rightIcon.setOnClickListener(null);
             else {
-                holder.rightIcon.setClickable(true);
-                holder.rightIcon.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { item.right_cb.run(""); }});
+                holder.rightIcon.setOnClickListener(new View.OnClickListener() { public void onClick(View v) {
+                    item.right_cb.run("");
+                }});
             }
+            holder.rightIcon.setVisibility(item.right_icon == 0 ? View.GONE : View.VISIBLE);
         }
 
         boolean subtext = (item.flags & ModelItem.TABLE_FLAG_SUBTEXT) != 0;
@@ -294,7 +337,7 @@ public class ModelItemRecyclerViewAdapter
                   holder.label.setTextColor(holder.textViewTextColors);
                 }
             }
-            holder.label.setVisibility(item.right_icon != 0 ? View.GONE : View.VISIBLE);
+            holder.label.setVisibility(label_gone ? View.GONE : View.VISIBLE);
         }
 
         if (holder.editText != null) {
@@ -306,16 +349,27 @@ public class ModelItemRecyclerViewAdapter
         }
 
         switch (type) {
-            case ModelItem.TYPE_SEPARATOR:
-                holder.leftNav .setVisibility(item.val       .length() > 0 ? View.VISIBLE : View.GONE);
-                holder.rightNav.setVisibility(item.right_text.length() > 0 ? View.VISIBLE : View.GONE);
-                break;
+            case ModelItem.TYPE_SEPARATOR: {
+                holder.leftNav.setText(item.val);
+                holder.leftNav.setVisibility(item.val.length() > 0 ? View.VISIBLE : View.GONE);
+                if (item.right_text.length() > 0) {
+                    holder.rightNav.setText(item.right_text);
+                    holder.rightNav.setVisibility(View.VISIBLE);
+                } else if (section_id == editable_section) {
+                    holder.rightNav.setVisibility(View.VISIBLE);
+                    holder.rightNav.setText(section.editing ? "Done" : "Edit");
+                    holder.rightNav.setOnClickListener(new View.OnClickListener() { public void onClick(View v) {
+                       section.editing = !section.editing;
+                       notifyItemRangeChanged(section.start_row, 1 + getSectionSize(section.index));
+                    }});
+                } else holder.rightNav.setVisibility(View.GONE);
+            } break;
 
-            case ModelItem.TYPE_TOGGLE:
+            case ModelItem.TYPE_TOGGLE: {
                 holder.toggle.setOnCheckedChangeListener(null);
                 holder.toggle.setChecked(item.val.equals("1"));
                 holder.toggle.setOnCheckedChangeListener(checked_listener);
-                break;
+            } break;
         }
 
         if (holder.picker != null && item.picker != null && item.picker.data.size() > 0) {
@@ -332,16 +386,16 @@ public class ModelItemRecyclerViewAdapter
                     for (int i = 0; i < arr.length; i++)
                         if (v.equals(arr[i])) { holder.picker.setValue(i); break; }
 
-                    final RecyclerView par = recyclerview;
-                    final int pos = position;
                     holder.picker.setOnValueChangedListener(new NumberPicker.OnValueChangeListener() {
                         @Override
                         public void onValueChange(NumberPicker numberPicker, int i, int i2) {
                             parent_screen.changed = true;
+                            final int pos = holder.getAdapterPosition();
                             String v = numberPicker.getDisplayedValues()[numberPicker.getValue()];
-                            ViewHolder h = (ViewHolder)par.findViewHolderForAdapterPosition(pos-1);
+                            ViewHolder h = (ViewHolder)recyclerview.findViewHolderForAdapterPosition(pos-1);
                             h.label.setText(v);
                             data.get(pos-1).val = v;
+                            notifyItemChanged(pos-1);
                         }});
                 } else holder.picker.setValue(0);
             }
@@ -378,6 +432,14 @@ public class ModelItemRecyclerViewAdapter
         }
     }
 
+    @Override public int getSectionSize(final int section) {
+        return getSectionEndRowId(section) - getSectionBeginRowId(section);
+    }
+
+    @Override public int getCollapsedRowId(final int section, final int row) {
+        return getSectionBeginRowId(section) + 1 + row;
+    }
+
     @Override public ArrayList<ModelItem> getData() { return data; }
 
     @Override public int getSectionBeginRowId(final int section) { 
@@ -388,17 +450,32 @@ public class ModelItemRecyclerViewAdapter
         return ((section+1) == sections.size() ? data.size() : getSectionBeginRowId(section+1)) - 1;
     }
 
-    @Override public int getSectionSize(final int section) {
-        return getSectionEndRowId(section) - getSectionBeginRowId(section);
+    public int getSectionIdFromPosition(final int position) {
+        return (sections.size() == 0) ? 0 : com.lucidfusionlabs.core.Util.lesserBound(sections, position);
     }
 
-    @Override public int getCollapsedRowId(final int section, final int row) {
-        return getSectionBeginRowId(section) + 1 + row;
+    public Section getSectionFromPosition(final int position) {
+        return (sections.size() == 0) ? null : sections.get(getSectionIdFromPosition(position));
     }
 
     public int getSectionBeginRowIdFromPosition(final int position) {
-       return (sections.size() == 0) ? 0 : 
-           sections.get(com.lucidfusionlabs.core.Util.lesserBound(sections, position)).start_row;
+        Section section = getSectionFromPosition(position);
+        return (section == null) ? 0 : section.start_row;
+    }
+
+    @Override public void onItemTouchHelperDismiss(int position) {
+        data.subList(position, position + 1).clear();
+        moveSectionsAfterBy(getSectionIdFromPosition(position), -1);
+        notifyItemRemoved(position);
+    }
+
+    @Override public boolean onItemTouchHelperMove(int fromPosition, int toPosition) {
+        int section_id = getSectionIdFromPosition(fromPosition);
+        if (section_id != getSectionIdFromPosition(toPosition)) return false;
+        if (fromPosition < toPosition) for (int i = fromPosition; i < toPosition; i++) Collections.swap(data, i, i + 1);
+        else                           for (int i = fromPosition; i > toPosition; i--) Collections.swap(data, i, i - 1);
+        notifyItemMoved(fromPosition, toPosition);
+        return true;
     }
 
     public void beginUpdates() {}
@@ -440,7 +517,7 @@ public class ModelItemRecyclerViewAdapter
     }
 
     public void addSection() {
-        sections.add(new Section(data.size()));
+        sections.add(new Section(sections.size(), data.size()));
         data.add(new ModelItem("", "", "", "", ModelItem.TYPE_SEPARATOR, 0, 0, 0, 0, 0, 0, null, null, null, false, 0, 0));
         notifyItemInserted(data.size()-1);
     }
@@ -454,7 +531,7 @@ public class ModelItemRecyclerViewAdapter
     public void addRow(final int section, ModelItem row) {
         if (section == (sections.size()-1)) addSection();
         if (section >= (sections.size()-1)) throw new java.lang.IllegalArgumentException();
-        int insert_at = getSectionEndRowId(section);
+        int insert_at = getSectionEndRowId(section) + 1;
         data.add(insert_at, row);
         moveSectionsAfterBy(section, 1);
         notifyItemInserted(insert_at);
@@ -514,11 +591,25 @@ public class ModelItemRecyclerViewAdapter
     public void setSelected(final int s, final int r, final int   v) { data.get(getCollapsedRowId(s, r)).selected = v; }
     
     public void setHidden(final int s, final int r, final int v) {
-        int row_id = getCollapsedRowId(s, r);
+        int row_id = getCollapsedRowId(s, r), section_row = getSectionBeginRowId(s);
         if (v < 0) {
             ModelItem item = data.get(row_id);
             item.hidden = !item.hidden;
         } else data.get(row_id).hidden = v > 0;
+
+        ModelItem section = data.get(section_row);
+        if ((section.flags & ModelItem.TABLE_SECTION_FLAG_DELETE_ROWS_WHEN_ALL_HIDDEN) != 0) {
+            boolean all_hidden = true;
+            int section_size = getSectionSize(s);
+            for (int i = 0; i < section_size; ++i)
+                if (!data.get(section_row + 1 + i).hidden) { all_hidden = false; break; }
+            if (all_hidden) {
+                data.subList(section_row + 1, section_row + 1 + section_size).clear();
+                moveSectionsAfterBy(s, -section_size);
+                notifyItemRangeRemoved(section_row + 1, section_size);
+                return;
+            }
+        }
         notifyItemChanged(row_id);
     }
 

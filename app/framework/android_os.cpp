@@ -168,9 +168,9 @@ jobject JNI::ToModelItem(AlertItem item) {
   LocalJNIString k(env, ToJString(item.first)), v(env, ToJString(item.second)), rt(env, ToJString("")), ddk(env, ToJString(""));
   LocalJNIObject rcb(env, item.cb ? ToNativeStringCB(move(item.cb)) : nullptr);
   jobject lcb = nullptr, picker = nullptr;
-  jint type=0, tag=0, flags=0, left_icon=0, right_icon=0, selected=0, height=0, fg=0, bg=0;
+  jint type=0, tag=0, flags=0, right_icon=0, selected=0, height=0, fg=0, bg=0;
   return env->NewObject(modelitem_class, modelitem_construct, k.v, v.v, rt.v, ddk.v, type,
-                        tag, flags, left_icon, right_icon, selected, height, lcb, rcb.v, picker,
+                        tag, flags, jint(item.image), right_icon, selected, height, lcb, rcb.v, picker,
                         hidden, fg, bg);
 }
 
@@ -178,7 +178,7 @@ jobject JNI::ToModelItem(MenuItem item) {
   LocalJNIString k(env, ToJString(item.shortcut)), v(env, ToJString(item.name)), rt(env, ToJString("")), ddk(env, ToJString(""));
   LocalJNIObject cb(env, item.cb ? ToNativeCallback(move(item.cb)) : nullptr);
   return env->NewObject(modelitem_class, modelitem_construct, k.v, v.v, rt.v, ddk.v, jint(0),
-                        jint(0), jint(0), jint(0), jint(0), jint(0), jint(0), cb.v, nullptr, nullptr,
+                        jint(0), jint(0), jint(item.image), jint(0), jint(0), jint(0), cb.v, nullptr, nullptr,
                         false, jint(0), jint(0));
 }
 

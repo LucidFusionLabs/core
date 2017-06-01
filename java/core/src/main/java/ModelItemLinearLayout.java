@@ -8,6 +8,7 @@ import android.widget.LinearLayout;
 import android.util.AttributeSet;
 
 public class ModelItemLinearLayout extends LinearLayout {
+    public boolean patched;
     public ModelItem item, section;
     public ModelItemLinearLayout(Context context) { super(context); }
     public ModelItemLinearLayout(Context context, AttributeSet attrs) { super(context, attrs); }
@@ -16,8 +17,9 @@ public class ModelItemLinearLayout extends LinearLayout {
 
     @Override protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         super.onMeasure(widthMeasureSpec, heightMeasureSpec);
-        if (section != null && !item.equals(section) &&
+        if (!patched && section != null && !item.equals(section) &&
             (section.flags & ModelItem.TABLE_SECTION_FLAG_DOUBLE_ROW_HEIGHT) != 0) {
+            patched = true;
             ViewGroup.LayoutParams lp = getLayoutParams();
             lp.height = getMeasuredHeight()*2;
             setLayoutParams(lp);

@@ -17,6 +17,8 @@ public final class NativeIntIntCB {
         finally { super.finalize(); }
     }
 
+    public void run(int x, int y) { RunIntIntCBInMainThread(cb, x, y); }
+
     public static native void RunIntIntCBInMainThread(long cb, int x, int y);
     public static native void FreeIntIntCB(long cb);
 }

@@ -35,9 +35,11 @@ public class Toolbar implements com.lucidfusionlabs.core.ViewOwner {
     public ArrayList<ModelItem> model;
     public View view;
     public int shown_index = -1;
+    public boolean borderless_buttons;
 
-    public Toolbar(ArrayList<ModelItem> m) {
+    public Toolbar(String theme, ArrayList<ModelItem> m, int flag) {
         model = m;
+        borderless_buttons = (flag & ModelItem.TOOLBAR_FLAG_BORDERLESS_BUTTONS) != 0;
     }
 
     @Override public void clearView() {
@@ -53,7 +55,8 @@ public class Toolbar implements com.lucidfusionlabs.core.ViewOwner {
     @Override public void onViewAttached() {}
 
     private View createView(final Context context) {
-        LinearLayout toolbar = new LinearLayout(context);
+        LayoutInflater inflater = LayoutInflater.from(context);
+        LinearLayout toolbar = (LinearLayout)inflater.inflate(R.layout.toolbar, null, false);
         View.OnClickListener listener = new View.OnClickListener() { public void onClick(View bt) {
             ModelItem r = model.get(bt.getId());
             if (r != null && r.cb != null) r.cb.run();
@@ -62,12 +65,19 @@ public class Toolbar implements com.lucidfusionlabs.core.ViewOwner {
         for (int i = 0, l = model.size(); i != l; ++i) {
             ModelItem r = model.get(i);
             View bt = null;
-            if (r.key.equals("\u2699")) {
-                ImageButton b = new ImageButton(context);
+            if (r.left_icon != 0) {
+                ImageButton b = !borderless_buttons ? new ImageButton(context) :
+                    (ImageButton)inflater.inflate(R.layout.borderless_imagebutton, toolbar, false);
+                b.setImageResource(r.left_icon);
+                bt = b;
+            } else if (r.key.equals("\u2699")) {
+                ImageButton b = !borderless_buttons ? new ImageButton(context) :
+                    (ImageButton)inflater.inflate(R.layout.borderless_imagebutton, toolbar, false);
                 b.setImageResource(android.R.drawable.ic_menu_preferences);
                 bt = b;
             } else {
-                Button b = new Button(context);
+                Button b = !borderless_buttons ? new Button(context) :
+                    (Button)inflater.inflate(R.layout.borderless_button, toolbar, false);
                 b.setSingleLine(true);
                 b.setText(r.key);
                 bt = b;
@@ -75,7 +85,7 @@ public class Toolbar implements com.lucidfusionlabs.core.ViewOwner {
             bt.setId(i);
             bt.setTag(r.val);
             bt.setOnClickListener(listener);
-            bt.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f)); 
+            bt.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
             toolbar.addView(bt);
         }
 
