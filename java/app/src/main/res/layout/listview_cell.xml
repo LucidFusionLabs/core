@@ -1,64 +1,75 @@
 <?xml version="1.0" encoding="utf-8"?>
-<com.lucidfusionlabs.core.ModelItemLinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/listview_cell_root"
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/listview_cell_root_wrapper"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="horizontal"
     android:background="@drawable/listview_cell_selector">
 
-    <ImageView
-        android:id="@+id/listview_cell_remove_icon"
-        android:src="@drawable/ex"
-        android:scaleType="fitCenter"
-        android:adjustViewBounds="true"
-        android:layout_width="wrap_content"
-        android:layout_height="fill_parent"
-        android:layout_marginLeft="10dp"
-        android:layout_marginRight="5dp"
-        android:layout_marginTop="5dp"
-        android:layout_marginBottom="5dp"
-        android:clickable="false"
-        android:focusable="false"/>
-
-    <ImageView
-        android:id="@+id/listview_cell_left_icon"
-        android:scaleType="fitCenter"
-        android:adjustViewBounds="true"
-        android:layout_width="wrap_content"
-        android:layout_height="fill_parent"
-        android:layout_marginLeft="10dp"
-        android:layout_marginRight="5dp"
-        android:layout_marginTop="5dp"
-        android:layout_marginBottom="5dp"
-        android:clickable="false"
-        android:focusable="false"/>
-
-    <include layout="@layout/listview_cell_title"/>
-
-    <View
-        android:layout_width="0dp"
-        android:layout_height="0dp"
-        android:layout_weight="1"/>
+    <com.lucidfusionlabs.core.ModelItemLinearLayout
+        android:id="@+id/listview_cell_root"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_alignParentLeft="true"
+        android:layout_toLeftOf="@+id/listview_cell_right_icon">
+    
+        <ImageView
+            android:id="@+id/listview_cell_remove_icon"
+            android:src="@drawable/ex"
+            android:scaleType="fitCenter"
+            android:adjustViewBounds="true"
+            android:layout_width="wrap_content"
+            android:layout_height="fill_parent"
+            android:layout_marginLeft="10dp"
+            android:layout_marginRight="5dp"
+            android:layout_marginTop="5dp"
+            android:layout_marginBottom="5dp"
+            android:clickable="false"
+            android:focusable="false"/>
+    
+        <ImageView
+            android:id="@+id/listview_cell_left_icon"
+            android:scaleType="fitCenter"
+            android:adjustViewBounds="true"
+            android:layout_width="wrap_content"
+            android:layout_height="fill_parent"
+            android:layout_marginLeft="10dp"
+            android:layout_marginRight="5dp"
+            android:layout_marginTop="5dp"
+            android:layout_marginBottom="5dp"
+            android:clickable="false"
+            android:focusable="false"/>
+    
+        <include layout="@layout/listview_cell_title"/>
+    
+        <View
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_weight="1"/>
+    
+        <TextView
+            android:id="@+id/listview_cell_value"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="10dp"
+            android:layout_marginRight="15dp"
+            android:layout_marginTop="10dp"
+            android:layout_marginBottom="10dp"
+            android:layout_gravity="center_vertical"
+            android:textSize="18dp"
+            android:clickable="false"
+            android:focusable="false"/>
+    
+    </com.lucidfusionlabs.core.ModelItemLinearLayout>
 
     <ImageView android:id="@+id/listview_cell_right_icon"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="center_vertical"
+        android:layout_centerVertical="true"
+        android:layout_alignParentRight="true"
         android:layout_marginRight="10dp"
         android:layout_marginTop="5dp"
         android:layout_marginBottom="5dp" />
 
-    <TextView
-        android:id="@+id/listview_cell_value"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginLeft="10dp"
-        android:layout_marginRight="15dp"
-        android:layout_marginTop="10dp"
-        android:layout_marginBottom="10dp"
-        android:layout_gravity="center_vertical"
-        android:textSize="18dp"
-        android:clickable="false"
-        android:focusable="false"/>
-
-</com.lucidfusionlabs.core.ModelItemLinearLayout>
+</RelativeLayout>

@@ -18,6 +18,8 @@
         android:textColor="?android:textColorPrimary"
         android:clickable="false"
         android:focusable="false"
+        android:scrollHorizontally="true"
+        android:singleLine="true"
         android:ellipsize="end" 
         android:maxLines="1"/>
 

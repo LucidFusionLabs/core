@@ -7,6 +7,7 @@ import android.content.ComponentName;
 import android.content.ServiceConnection;
 import android.os.IBinder;
 import android.os.Bundle;
+import android.util.Log;
 import com.android.vending.billing.IInAppBillingService;
 import com.lucidfusionlabs.core.LifecycleActivity;
 import com.lucidfusionlabs.core.ActivityLifecycleListenerList;
@@ -26,7 +27,6 @@ public class PurchaseManager extends com.lucidfusionlabs.core.ActivityLifecycleL
 
     protected PurchaseManager(com.lucidfusionlabs.core.LifecycleActivity activity, ActivityLifecycleListenerList p) {
         final String packageName = activity.getPackageName();
-        mContext = activity;
         mServiceConn = new ServiceConnection() {
              @Override
              public void onServiceDisconnected(ComponentName name) { mService = null; }
@@ -39,15 +39,21 @@ public class PurchaseManager extends com.lucidfusionlabs.core.ActivityLifecycleL
              }
         };
 
+        onActivityCreated(activity, null);
+        p.registerLifecycleListener(this);
+    }
+
+    @Override public void onActivityCreated(Activity activity, Bundle savedInstanceState) {
+        mContext = activity;
+        if (mServiceConn == null) return;
         Intent serviceIntent =
             new Intent("com.android.vending.billing.InAppBillingService.BIND");
         serviceIntent.setPackage("com.android.vending");
         mContext.bindService(serviceIntent, mServiceConn, Context.BIND_AUTO_CREATE);
-
-        p.registerLifecycleListener(this);
     }
 
     @Override public void onActivityDestroyed(Activity act) {
-        if (mServiceConn != null) mContext.unbindService(mServiceConn);
+        if (mServiceConn == null) return;
+        mContext.unbindService(mServiceConn);
     }
 }

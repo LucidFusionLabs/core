@@ -6,7 +6,6 @@ import java.util.List;
 import java.util.HashMap;
 
 import android.os.*;
-import android.support.v4.view.MotionEventCompat;
 import android.view.*;
 import android.widget.FrameLayout;
 import android.widget.FrameLayout.LayoutParams;
@@ -17,10 +16,8 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.ImageView;
-import android.widget.Switch;
 import android.widget.NumberPicker;
 import android.widget.RadioGroup;
-import android.widget.RadioButton;
 import android.widget.CompoundButton;
 import android.media.*;
 import android.content.*;
@@ -39,9 +36,11 @@ import android.graphics.Color;
 import android.app.AlertDialog;
 import android.text.InputType;
 import android.text.TextWatcher;
+import android.support.v4.view.MotionEventCompat;
+import android.support.v7.widget.SwitchCompat;
 import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.helper.ItemTouchHelper;
-import android.support.v4.view.MotionEventCompat;
+import android.support.v7.widget.AppCompatRadioButton;
 import com.lucidfusionlabs.core.ModelItem;
 import com.lucidfusionlabs.core.PickerItem;
 import com.lucidfusionlabs.core.NativeIntIntCB;
@@ -54,12 +53,13 @@ public class ModelItemRecyclerViewAdapter
     implements com.lucidfusionlabs.core.ItemTouchHelperCallback.Listener, com.lucidfusionlabs.core.ModelItemList {
 
     public static class ViewHolder extends RecyclerView.ViewHolder {
+        public View root_wrapper;
         public ModelItemLinearLayout root;
         public TextView textView, label, subtext, leftNav, rightNav;
         public ColorStateList textViewTextColors, textViewLinkColors;
         public EditText editText;
         public ImageView leftIcon, rightIcon, removeIcon;
-        public Switch toggle;
+        public SwitchCompat toggle;
         public NumberPicker picker;
         public RadioGroup radio;
 
@@ -154,6 +154,7 @@ public class ModelItemRecyclerViewAdapter
                 ViewHolder holder = new ViewHolder(itemView);
                 itemView.setTag(holder);
                 holder.root = (ModelItemLinearLayout)itemView.findViewById(R.id.listview_cell_root);
+                holder.root_wrapper = holder.root;
                 return holder;
             }
 
@@ -170,6 +171,7 @@ public class ModelItemRecyclerViewAdapter
                 holder.rightNav.setTextColor(holder.textViewLinkColors);
                 holder.leftNav.setPaintFlags(holder.leftNav.getPaintFlags() | Paint.UNDERLINE_TEXT_FLAG);
                 holder.rightNav.setPaintFlags(holder.rightNav.getPaintFlags() | Paint.UNDERLINE_TEXT_FLAG);
+                holder.root_wrapper = holder.root;
                 return holder;
             }
 
@@ -178,9 +180,10 @@ public class ModelItemRecyclerViewAdapter
                 ViewHolder holder = new ViewHolder(itemView);
                 itemView.setTag(holder);
                 holder.root = (ModelItemLinearLayout)itemView.findViewById(R.id.listview_cell_root);
-                holder.setTextView((TextView) itemView.findViewById(R.id.listview_cell_title));
-                holder.leftIcon = (ImageView) itemView.findViewById(R.id.listview_cell_left_icon);
-                holder.toggle = (Switch) itemView.findViewById(R.id.listview_cell_toggle);
+                holder.setTextView((TextView)itemView.findViewById(R.id.listview_cell_title));
+                holder.leftIcon = (ImageView)itemView.findViewById(R.id.listview_cell_left_icon);
+                holder.toggle = (SwitchCompat)itemView.findViewById(R.id.listview_cell_toggle);
+                holder.root_wrapper = holder.root;
                 return holder;
             }
 
@@ -189,7 +192,8 @@ public class ModelItemRecyclerViewAdapter
                 ViewHolder holder = new ViewHolder(itemView);
                 itemView.setTag(holder);
                 holder.root = (ModelItemLinearLayout)itemView.findViewById(R.id.listview_cell_root);
-                holder.picker = (NumberPicker) itemView.findViewById(R.id.listview_cell_picker);
+                holder.picker = (NumberPicker)itemView.findViewById(R.id.listview_cell_picker);
+                holder.root_wrapper = holder.root;
                 return holder;
             }
 
@@ -201,9 +205,10 @@ public class ModelItemRecyclerViewAdapter
                 itemView.setTag(holder);
                 itemView.setMinimumHeight(parent.getMeasuredHeight() * 2);
                 holder.root = (ModelItemLinearLayout)itemView.findViewById(R.id.listview_cell_root);
-                holder.setTextView((TextView) itemView.findViewById(R.id.listview_cell_title));
-                holder.editText = (EditText) itemView.findViewById(R.id.listview_cell_textinput);
-                holder.leftIcon = (ImageView) itemView.findViewById(R.id.listview_cell_left_icon);
+                holder.setTextView((TextView)itemView.findViewById(R.id.listview_cell_title));
+                holder.editText = (EditText)itemView.findViewById(R.id.listview_cell_textinput);
+                holder.leftIcon = (ImageView)itemView.findViewById(R.id.listview_cell_left_icon);
+                holder.root_wrapper = holder.root;
                 return holder;
             }
 
@@ -212,9 +217,10 @@ public class ModelItemRecyclerViewAdapter
                 ViewHolder holder = new ViewHolder(itemView);
                 itemView.setTag(holder);
                 holder.root = (ModelItemLinearLayout)itemView.findViewById(R.id.listview_cell_root);
-                holder.setTextView((TextView) itemView.findViewById(R.id.listview_cell_title));
-                holder.radio = (RadioGroup) itemView.findViewById(R.id.listview_cell_radio);
-                holder.leftIcon = (ImageView) itemView.findViewById(R.id.listview_cell_left_icon);
+                holder.setTextView((TextView)itemView.findViewById(R.id.listview_cell_title));
+                holder.radio = (RadioGroup)itemView.findViewById(R.id.listview_cell_radio);
+                holder.leftIcon = (ImageView)itemView.findViewById(R.id.listview_cell_left_icon);
+                holder.root_wrapper = holder.root;
                 return holder;
             }
 
@@ -223,7 +229,8 @@ public class ModelItemRecyclerViewAdapter
                 ViewHolder holder = new ViewHolder(itemView);
                 itemView.setTag(holder);
                 holder.root = (ModelItemLinearLayout)itemView.findViewById(R.id.listview_cell_root);
-                holder.radio = (RadioGroup) itemView.findViewById(R.id.listview_cell_radio);
+                holder.radio = (RadioGroup)itemView.findViewById(R.id.listview_cell_radio);
+                holder.root_wrapper = holder.root;
                 return holder;
             }
 
@@ -232,12 +239,13 @@ public class ModelItemRecyclerViewAdapter
                 ViewHolder holder = new ViewHolder(itemView);
                 itemView.setTag(holder);
                 holder.root = (ModelItemLinearLayout)itemView.findViewById(R.id.listview_cell_root);
-                holder.setTextView((TextView) itemView.findViewById(R.id.listview_cell_title));
-                holder.label = (TextView) itemView.findViewById(R.id.listview_cell_value);
-                holder.subtext = (TextView) itemView.findViewById(R.id.listview_cell_subtext);
-                holder.removeIcon = (ImageView) itemView.findViewById(R.id.listview_cell_remove_icon);
-                holder.leftIcon = (ImageView) itemView.findViewById(R.id.listview_cell_left_icon);
-                holder.rightIcon = (ImageView) itemView.findViewById(R.id.listview_cell_right_icon);
+                holder.setTextView((TextView)itemView.findViewById(R.id.listview_cell_title));
+                holder.label = (TextView)itemView.findViewById(R.id.listview_cell_value);
+                holder.subtext = (TextView)itemView.findViewById(R.id.listview_cell_subtext);
+                holder.removeIcon = (ImageView)itemView.findViewById(R.id.listview_cell_remove_icon);
+                holder.leftIcon = (ImageView)itemView.findViewById(R.id.listview_cell_left_icon);
+                holder.rightIcon = (ImageView)itemView.findViewById(R.id.listview_cell_right_icon);
+                holder.root_wrapper = itemView.findViewById(R.id.listview_cell_root_wrapper);
                 return holder;
             }
         }
@@ -260,7 +268,7 @@ public class ModelItemRecyclerViewAdapter
         if (holder.root != null) {
             holder.root.item = item;
             holder.root.section = section_item;
-            holder.root.setBackgroundColor
+            holder.root_wrapper.setBackgroundColor
                 ((selected && ((section_item.flags & ModelItem.TABLE_SECTION_FLAG_HIGHLIGHT_SELECTED_ROW) != 0)) ?
                  Color.GRAY : Color.TRANSPARENT);
         }
@@ -411,7 +419,7 @@ public class ModelItemRecyclerViewAdapter
                 RadioGroup.LayoutParams layout = new RadioGroup.LayoutParams
                     (RadioGroup.LayoutParams.MATCH_PARENT, RadioGroup.LayoutParams.WRAP_CONTENT);
                 layout.weight = 1;
-                RadioButton button = new RadioButton(holder.radio.getContext());
+                AppCompatRadioButton button = new AppCompatRadioButton(holder.radio.getContext());
                 button.setLayoutParams(layout);
                 button.setId(i);
                 button.setText(v[i]);
@@ -425,7 +433,7 @@ public class ModelItemRecyclerViewAdapter
                 @Override
                 public void onCheckedChanged(RadioGroup group, int checkedId) {
                     parent_screen.changed = true;
-                    RadioButton button = (RadioButton)group.findViewById(checkedId);
+                    AppCompatRadioButton button = (AppCompatRadioButton)group.findViewById(checkedId);
                     if (button != null && item.right_cb != null)
                         item.right_cb.run(button.getText().toString());
                 }});
@@ -631,7 +639,7 @@ public class ModelItemRecyclerViewAdapter
                 if (holder.toggle != null) val = holder.toggle.isChecked() ? "1" : "0";
                 else if (holder.radio != null) {
                     int checked = holder.radio.getCheckedRadioButtonId();
-                    RadioButton button = (RadioButton)holder.radio.findViewById(checked);
+                    AppCompatRadioButton button = (AppCompatRadioButton)holder.radio.findViewById(checked);
                     val = button.getText().toString();
                 } else if (holder.editText != null) val = holder.editText.getText().toString();
             }
