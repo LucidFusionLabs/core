@@ -1,21 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
-<com.lucidfusionlabs.core.ModelItemLinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/listview_cell_root"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/listview_cell_root_wrapper"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="vertical" >
+    android:orientation="vertical">
 
-    <RelativeLayout
-        android:id="@+id/listview_image_root"
+    <com.lucidfusionlabs.core.ModelItemLinearLayout
+        android:id="@+id/listview_cell_root"
         android:orientation="horizontal" 
-        android:layout_width="fill_parent"
-        android:layout_height="wrap_content">
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center">
     
         <ImageView android:id="@+id/listview_cell_left_icon"
-           android:layout_width="wrap_content"
-           android:layout_height="wrap_content"
-           android:layout_centerInParent="true"/>
-    </RelativeLayout>
+            android:scaleType="fitCenter"
+            android:adjustViewBounds="true"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"/>
+    </com.lucidfusionlabs.core.ModelItemLinearLayout>
    
     <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
         android:orientation="horizontal" 
@@ -44,4 +46,4 @@
             android:layout_alignParentRight="true"/>
     </RelativeLayout>
 
-</com.lucidfusionlabs.core.ModelItemLinearLayout>
+</LinearLayout>

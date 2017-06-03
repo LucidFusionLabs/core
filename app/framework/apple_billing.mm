@@ -288,5 +288,5 @@ struct ApplePurchases : public PurchasesInterface {
   }
 };
 
-unique_ptr<PurchasesInterface> SystemToolkit::CreatePurchases() { return make_unique<ApplePurchases>(); }
+unique_ptr<PurchasesInterface> SystemToolkit::CreatePurchases(string) { return make_unique<ApplePurchases>(); }
 }; // namespace LFL

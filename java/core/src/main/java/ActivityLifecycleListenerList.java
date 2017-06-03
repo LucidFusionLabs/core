@@ -5,7 +5,6 @@ import java.util.ArrayList;
 import android.util.Log;
 import android.os.Bundle;
 import android.content.Intent;
-import android.app.Activity;
 
 public class ActivityLifecycleListenerList extends ActivityLifecycleListener {
     private ArrayList<ActivityLifecycleListener> registeredListeners = new ArrayList<>();
@@ -19,49 +18,49 @@ public class ActivityLifecycleListenerList extends ActivityLifecycleListener {
     }
 
     @Override
-    public void onActivityCreated(Activity activity, Bundle savedInstanceState) {
+    public void onActivityCreated(LifecycleActivity activity, Bundle savedInstanceState) {
         ActivityLifecycleListener[] lifecycleListeners = copyRegisteredListeners();
         for (ActivityLifecycleListener c : lifecycleListeners) c.onActivityCreated(activity, savedInstanceState);
     }
     
     @Override
-    public void onActivityStarted(Activity activity) {
+    public void onActivityStarted(LifecycleActivity activity) {
         ActivityLifecycleListener[] lifecycleListeners = copyRegisteredListeners();
         for (ActivityLifecycleListener c : lifecycleListeners) c.onActivityStarted(activity);
     }
     
     @Override
-    public void onActivityResumed(Activity activity) {
+    public void onActivityResumed(LifecycleActivity activity) {
         ActivityLifecycleListener[] lifecycleListeners = copyRegisteredListeners();
         for (ActivityLifecycleListener c : lifecycleListeners) c.onActivityResumed(activity);
     }
     
     @Override
-    public void onActivityPaused(Activity activity) {
+    public void onActivityPaused(LifecycleActivity activity) {
         ActivityLifecycleListener[] lifecycleListeners = copyRegisteredListeners();
         for (ActivityLifecycleListener c : lifecycleListeners) c.onActivityPaused(activity);
     }
     
     @Override
-    public void onActivityStopped(Activity activity) {
+    public void onActivityStopped(LifecycleActivity activity) {
         ActivityLifecycleListener[] lifecycleListeners = copyRegisteredListeners();
         for (ActivityLifecycleListener c : lifecycleListeners) c.onActivityStopped(activity);
     }
     
     @Override
-    public void onActivitySaveInstanceState(Activity activity, Bundle outState) {
+    public void onActivitySaveInstanceState(LifecycleActivity activity, Bundle outState) {
         ActivityLifecycleListener[] lifecycleListeners = copyRegisteredListeners();
         for (ActivityLifecycleListener c : lifecycleListeners) c.onActivitySaveInstanceState(activity, outState);
     }
 
     @Override
-    public void onActivityResult(Activity activity, int request, int response, Intent data) {
+    public void onActivityResult(LifecycleActivity activity, int request, int response, Intent data) {
         ActivityLifecycleListener[] lifecycleListeners = copyRegisteredListeners();
         for (ActivityLifecycleListener c : lifecycleListeners) c.onActivityResult(activity, request, response, data);
     }
 
     @Override
-    public void onActivityDestroyed(Activity activity) {
+    public void onActivityDestroyed(LifecycleActivity activity) {
         ActivityLifecycleListener[] lifecycleListeners = copyRegisteredListeners();
         for (ActivityLifecycleListener c : lifecycleListeners) c.onActivityDestroyed(activity);
     }

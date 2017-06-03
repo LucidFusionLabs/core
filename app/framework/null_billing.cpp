@@ -28,5 +28,5 @@ struct NullPurchases : public PurchasesInterface {
   bool MakePurchase(ProductInterface*, IntCB result_cb) { return false; };
 };
 
-unique_ptr<PurchasesInterface> SystemToolkit::CreatePurchases() { return make_unique<NullPurchases>(); }
+unique_ptr<PurchasesInterface> SystemToolkit::CreatePurchases(string) { return make_unique<NullPurchases>(); }
 }; // namespace LFL

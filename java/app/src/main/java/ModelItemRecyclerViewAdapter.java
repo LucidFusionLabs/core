@@ -171,7 +171,7 @@ public class ModelItemRecyclerViewAdapter
                 holder.rightNav.setTextColor(holder.textViewLinkColors);
                 holder.leftNav.setPaintFlags(holder.leftNav.getPaintFlags() | Paint.UNDERLINE_TEXT_FLAG);
                 holder.rightNav.setPaintFlags(holder.rightNav.getPaintFlags() | Paint.UNDERLINE_TEXT_FLAG);
-                holder.root_wrapper = holder.root;
+                holder.root_wrapper = itemView.findViewById(R.id.listview_cell_root_wrapper);
                 return holder;
             }
 

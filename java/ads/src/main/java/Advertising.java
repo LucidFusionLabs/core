@@ -57,21 +57,21 @@ class Advertising extends com.lucidfusionlabs.core.ActivityLifecycleListener
         return ret;
     }
 
-    @Override public void onActivityCreated(Activity activity, Bundle savedInstanceState) {
+    @Override public void onActivityCreated(LifecycleActivity activity, Bundle savedInstanceState) {
         adView = createView(activity);
     }
 
-    @Override public void onActivityResumed(Activity activity) {
+    @Override public void onActivityResumed(LifecycleActivity activity) {
         if (adView == null) return;
         adView.resume();
     }
 
-    @Override public void onActivityPaused(Activity activity) {
+    @Override public void onActivityPaused(LifecycleActivity activity) {
         if (adView == null) return;
         adView.pause();
     }
 
-    @Override public void onActivityDestroyed(Activity act) {
+    @Override public void onActivityDestroyed(LifecycleActivity act) {
         if (adView != null) adView.destroy();
         adView = null;
         started = false;

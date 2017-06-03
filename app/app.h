@@ -973,7 +973,7 @@ struct SystemToolkit : public ToolkitInterface {
   static unique_ptr<TimerInterface> CreateTimer(Callback cb);
   static unique_ptr<AdvertisingViewInterface> CreateAdvertisingView
     (int type, int placement, const string &id, const StringVec &test_devices);
-  static unique_ptr<PurchasesInterface> CreatePurchases();
+  static unique_ptr<PurchasesInterface> CreatePurchases(string);
 };
 
 unique_ptr<Module> CreateFrameworkModule();

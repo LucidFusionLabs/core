@@ -33,15 +33,16 @@ struct AndroidProduct : public ProductInterface {
 
 struct AndroidPurchases : public PurchasesInterface {
   GlobalJNIObject impl;
-  AndroidPurchases() : impl(NewPurchaseManagerObject()) {}
+  AndroidPurchases(string pubkey) : impl(NewPurchaseManagerObject(move(pubkey))) {}
 
-  static jobject NewPurchaseManagerObject() {
+  static jobject NewPurchaseManagerObject(string pubkey) {
     if (!jni->purchases_class) jni->purchases_class = CheckNotNull
       (jclass(jni->env->NewGlobalRef(jni->env->FindClass("com/lucidfusionlabs/billing/PurchaseManager"))));
     static jmethodID mid = CheckNotNull
       (jni->env->GetStaticMethodID(jni->purchases_class, "createStaticInstance",
-                                   "(Lcom/lucidfusionlabs/core/LifecycleActivity;)Lcom/lucidfusionlabs/billing/PurchaseManager;"));
-    return jni->env->CallStaticObjectMethod(jni->purchases_class, mid, jni->activity);
+                                   "(Lcom/lucidfusionlabs/core/LifecycleActivity;Ljava/lang/String;)Lcom/lucidfusionlabs/billing/PurchaseManager;"));
+    LocalJNIString pk(jni->env, jni->ToJString(pubkey));
+    return jni->env->CallStaticObjectMethod(jni->purchases_class, mid, jni->activity, pk.v);
   }
 
   bool CanPurchase() { return 0; }
@@ -52,5 +53,5 @@ struct AndroidPurchases : public PurchasesInterface {
   void LoadPurchases() {}
 };
 
-unique_ptr<PurchasesInterface> SystemToolkit::CreatePurchases() { return make_unique<AndroidPurchases>(); }
+unique_ptr<PurchasesInterface> SystemToolkit::CreatePurchases(string pubkey) { return make_unique<AndroidPurchases>(move(pubkey)); }
 }; // namespace LFL
