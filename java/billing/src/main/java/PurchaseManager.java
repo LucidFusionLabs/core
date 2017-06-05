@@ -19,6 +19,8 @@ import android.os.Bundle;
 import android.util.Log;
 import android.util.Base64;
 import com.android.vending.billing.IInAppBillingService;
+import com.lucidfusionlabs.core.NativeCallback;
+import com.lucidfusionlabs.core.NativeIntCB;
 import com.lucidfusionlabs.core.LifecycleActivity;
 import com.lucidfusionlabs.core.ActivityLifecycleListenerList;
 
@@ -74,6 +76,101 @@ public class PurchaseManager extends com.lucidfusionlabs.core.ActivityLifecycleL
         mContext.unbindService(mServiceConn);
     }
 
+    public boolean canPurchase() { return mService != null; }
+
+    public boolean queryPurchase(final ArrayList<String> products,
+                                 final NativeCallback done_cb, final NativeProductCB product_cb) {
+        if (mService == null) return false;
+        final Bundle querySkus = new Bundle();
+        querySkus.putStringArrayList("ITEM_ID_LIST", products);
+        android.os.AsyncTask.execute(new Runnable() { @Override public void run() {
+            try {
+                Bundle skuDetails = mService.getSkuDetails(3, packageName, "inapp", querySkus);
+                int response = skuDetails.getInt("RESPONSE_CODE");
+                if (response == 0) {
+                     ArrayList<String> responseList = skuDetails.getStringArrayList("DETAILS_LIST");
+                     for (String thisResponse : responseList) {
+                         org.json.JSONObject object = new org.json.JSONObject(thisResponse);
+                         product_cb.run(object.getString("productId"), "", "", object.getString("price"));
+                     }
+                 }
+            } catch (Exception e) { Log.e("lfl", "queryPurchase: " + e.toString()); }
+            done_cb.run();
+        }});
+        return true;
+    }
+
+    public boolean makePurchase(final String product, final String price, final NativeIntCB result_cb) {
+        return true;
+    }
+
+    public boolean havePurchase(final String product) {
+        return mProducts.get(product) != null;
+    }
+
+    public boolean restorePurchases() {
+        if (mService == null) return false;
+        try {
+            Bundle ownedItems = mService.getPurchases(3, packageName, "inapp", null);
+            int response = ownedItems.getInt("RESPONSE_CODE");
+            Log.i("lfl", "restorePurchases: response=" + response);
+            if (response != 0) return false;
+
+            ArrayList<String> products = ownedItems.getStringArrayList("INAPP_PURCHASE_ITEM_LIST");
+            ArrayList<String> data     = ownedItems.getStringArrayList("INAPP_PURCHASE_DATA_LIST");
+            ArrayList<String> sig      = ownedItems.getStringArrayList("INAPP_DATA_SIGNATURE");
+            return savePurchasesToInternalStorage(products, data, sig);
+        }
+        catch(Exception e) {
+            return false;
+        }
+    }
+
+    public boolean loadPurchasesFromInternalStorage() {
+        try {
+            FileInputStream fis = mContext.openFileInput(FILENAME);
+            ObjectInputStream ois = new ObjectInputStream(fis);
+            if (!((String)ois.readObject()).equals(mContext.getAndroidId())) return false;
+
+            ArrayList<?> products = (ArrayList<?>)ois.readObject();
+            ArrayList<?> data     = (ArrayList<?>)ois.readObject();
+            ArrayList<?> sig      = (ArrayList<?>)ois.readObject();
+            if (products.size() != data.size() || data.size() != sig.size()) return false;
+
+            mProducts.clear();
+            for (int i = 0, l = sig.size(); i < l; i++)
+                if (verifyPurchase(mPubKey, (String)data.get(i), (String)sig.get(i)))
+                    mProducts.put((String)products.get(i), "");
+            return true;
+
+         } catch(java.io.IOException ioe) {
+            Log.e("lfl", "loadPurchasesToInternalStorage: " + ioe.toString());
+            return false;
+         } catch(ClassNotFoundException e) {
+            Log.e("lfl", "loadPurchasesToInternalStorage: " + e.toString());
+            return false;
+        }
+    }
+
+    public boolean savePurchasesToInternalStorage(ArrayList<String> products, ArrayList<String> data, ArrayList<String> sig) {
+        if (products.size() != data.size() || data.size() != sig.size()) return false;
+        try {
+            FileOutputStream fos = mContext.openFileOutput(FILENAME, Context.MODE_PRIVATE);
+            ObjectOutputStream oos = new ObjectOutputStream(fos);
+            // XXX We need Play Store to sign the getPurchases() data with a device identifier appended
+            oos.writeObject(mContext.getAndroidId());
+            oos.writeObject(products);
+            oos.writeObject(data);
+            oos.writeObject(sig);
+            oos.close();
+            fos.close();
+            return true;
+         } catch(java.io.IOException ioe) {
+             Log.e("lfl", "savePurchasesToInternalStorage: " + ioe.toString());
+             return false;
+         }
+    }
+
     public static PublicKey generatePublicKey(String encodedPublicKey) {
         try {
             byte[] decodedKey = Base64.decode(encodedPublicKey, Base64.DEFAULT);
@@ -104,69 +201,5 @@ public class PurchaseManager extends com.lucidfusionlabs.core.ActivityLifecycleL
         catch (java.security.InvalidKeyException e) { Log.e("lfl", "Invalid key specification."); }
         catch (java.security.SignatureException e) { Log.e("lfl", "Signature exception."); }
         return false;
-    }
-
-    public boolean restorePurchases() {
-        if (mService == null) return false;
-        try {
-            Bundle ownedItems = mService.getPurchases(3, packageName, "inapp", null);
-            int response = ownedItems.getInt("RESPONSE_CODE");
-            Log.i("lfl", "restorePurchases: response=" + response);
-            if (response != 0) return false;
-
-            ArrayList<String> products = ownedItems.getStringArrayList("INAPP_PURCHASE_ITEM_LIST");
-            ArrayList<String> data     = ownedItems.getStringArrayList("INAPP_PURCHASE_DATA_LIST");
-            ArrayList<String> sig      = ownedItems.getStringArrayList("INAPP_DATA_SIGNATURE");
-            if (!savePurchasesToInternalStorage(products, data, sig)) return false;
-            return loadPurchasesFromInternalStorage();
-        }
-        catch(Exception e) {
-            return false;
-        }
-    }
-
-    public boolean loadPurchasesFromInternalStorage() {
-        try {
-            FileInputStream fis = mContext.openFileInput(FILENAME);
-            ObjectInputStream ois = new ObjectInputStream(fis);
-            if (!((String)ois.readObject()).equals(mContext.getAndroidId())) return false;
-
-            ArrayList<?> products = (ArrayList<?>)ois.readObject();
-            ArrayList<?> data     = (ArrayList<?>)ois.readObject();
-            ArrayList<?> sig      = (ArrayList<?>)ois.readObject();
-            if (products.size() != data.size() || data.size() != sig.size()) return false;
-
-            mProducts.clear();
-            for (int i = 0, l = sig.size(); i < l; i++)
-                if (verifyPurchase(mPubKey, (String)data.get(i), (String)sig.get(i)))
-                    mProducts.put((String)products.get(i), "");
-            return true;
-
-         } catch(java.io.IOException ioe) {
-            Log.e("lfl", "savePurchasesToInternalStorage: " + ioe.toString());
-            return false;
-         } catch(ClassNotFoundException e) {
-            Log.e("lfl", "savePurchasesToInternalStorage: " + e.toString());
-            return false;
-        }
-    }
-
-    public boolean savePurchasesToInternalStorage(ArrayList<String> products, ArrayList<String> data, ArrayList<String> sig) {
-        if (products.size() != data.size() || data.size() != sig.size()) return false;
-        try {
-            FileOutputStream fos = mContext.openFileOutput(FILENAME, Context.MODE_PRIVATE);
-            ObjectOutputStream oos = new ObjectOutputStream(fos);
-            // XXX We need Play Store to sign the getPurchases() data with a device identifier appended
-            oos.writeObject(mContext.getAndroidId());
-            oos.writeObject(products);
-            oos.writeObject(data);
-            oos.writeObject(sig);
-            oos.close();
-            fos.close();
-            return true;
-         } catch(java.io.IOException ioe) {
-             Log.e("lfl", "savePurchasesToInternalStorage: " + ioe.toString());
-             return false;
-         }
     }
 }

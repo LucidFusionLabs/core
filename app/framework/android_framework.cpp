@@ -320,6 +320,7 @@ extern "C" void Java_com_lucidfusionlabs_app_MainActivity_nativeCreate(JNIEnv *e
   CHECK(jni->screennavigator_class=(jclass)e->NewGlobalRef(e->FindClass("com/lucidfusionlabs/app/ScreenFragmentNavigator")));
   CHECK(jni->nativecallback_class=(jclass)e->NewGlobalRef(e->FindClass("com/lucidfusionlabs/core/NativeCallback")));
   CHECK(jni->nativestringcb_class=(jclass)e->NewGlobalRef(e->FindClass("com/lucidfusionlabs/core/NativeStringCB")));
+  CHECK(jni->nativeintcb_class   =(jclass)e->NewGlobalRef(e->FindClass("com/lucidfusionlabs/core/NativeIntCB")));
   CHECK(jni->nativeintintcb_class=(jclass)e->NewGlobalRef(e->FindClass("com/lucidfusionlabs/core/NativeIntIntCB")));
   CHECK(jni->nativepickeritemcb_class=(jclass)e->NewGlobalRef(e->FindClass("com/lucidfusionlabs/core/NativePickerItemCB")));
   CHECK(jni->int_class          = (jclass)e->NewGlobalRef(e->FindClass("java/lang/Integer")));
@@ -455,6 +456,10 @@ extern "C" void Java_com_lucidfusionlabs_core_NativeStringCB_RunStringCBInMainTh
   app->RunCallbackInMainThread(bind(*static_cast<StringCB*>(Void(cb)), JNI::GetEnvJString(e, text)));
 }
 
+extern "C" void Java_com_lucidfusionlabs_core_NativeIntCB_RunIntCBInMainThread(JNIEnv *e, jclass c, jlong cb, jint x) {
+  app->RunCallbackInMainThread(bind(*static_cast<IntCB*>(Void(cb)), x));
+}
+
 extern "C" void Java_com_lucidfusionlabs_core_NativeIntIntCB_RunIntIntCBInMainThread(JNIEnv *e, jclass c, jlong cb, jint x, jint y) {
   app->RunCallbackInMainThread(bind(*static_cast<IntIntCB*>(Void(cb)), x, y));
 }
@@ -465,6 +470,10 @@ extern "C" void Java_com_lucidfusionlabs_core_NativeCallback_FreeCallback(JNIEnv
 
 extern "C" void Java_com_lucidfusionlabs_core_NativeStringCB_FreeStringCB(JNIEnv *e, jclass c, jlong cb) {
   delete static_cast<StringCB*>(Void(cb));
+}
+
+extern "C" void Java_com_lucidfusionlabs_core_NativeIntCB_FreeIntCB(JNIEnv *e, jclass c, jlong cb) {
+  delete static_cast<IntCB*>(Void(cb));
 }
 
 extern "C" void Java_com_lucidfusionlabs_core_NativeIntIntCB_FreeIntIntCB(JNIEnv *e, jclass c, jlong cb) {

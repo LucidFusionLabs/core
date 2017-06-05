@@ -229,6 +229,12 @@ jobject JNI::ToNativeStringCB(StringCB c) {
   return env->NewObject(nativestringcb_class, mid, cb);
 }
 
+jobject JNI::ToNativeIntCB(IntCB c) {
+  static jmethodID mid = CheckNotNull(env->GetMethodID(nativeintcb_class, "<init>", "(J)V"));
+  jlong cb = uintptr_t(new IntCB(move(c)));
+  return env->NewObject(nativeintcb_class, mid, cb);
+}
+
 jobject JNI::ToNativeIntIntCB(IntIntCB c) {
   static jmethodID mid = CheckNotNull(env->GetMethodID(nativeintintcb_class, "<init>", "(J)V"));
   jlong cb = uintptr_t(new IntIntCB(move(c)));

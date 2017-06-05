@@ -37,7 +37,7 @@ struct JNI {
          toolbar_class=0, advertising_class=0, gplus_class=0, purchases_class=0, 
          modelitem_class=0, modelitemchange_class=0, pickeritem_class=0, alertscreen_class=0,
          menuscreen_class=0, tablescreen_class=0, textscreen_class=0, screennavigator_class=0,
-         nativecallback_class=0, nativestringcb_class=0, nativeintintcb_class=0,
+         nativecallback_class=0, nativestringcb_class=0, nativeintcb_class=0, nativeintintcb_class=0,
          nativepickeritemcb_class=0, int_class=0, long_class=0;
   jmethodID arraylist_construct=0, arraylist_size=0, arraylist_get=0, arraylist_add=0,
             hashmap_construct=0, hashmap_size=0, hashmap_get=0, hashmap_put=0, pair_construct=0,
@@ -68,6 +68,7 @@ struct JNI {
   jobject ToPickerItem(PickerItem*);
   jobject ToNativeCallback(Callback c);
   jobject ToNativeStringCB(StringCB c);
+  jobject ToNativeIntCB(IntCB c);
   jobject ToNativeIntIntCB(IntIntCB c);
   jobject ToNativePickerItemCB(const PickerItem::CB &c);
 

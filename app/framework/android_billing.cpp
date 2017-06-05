@@ -21,14 +21,21 @@
 namespace LFL {
 static JNI *jni = Singleton<JNI>::Get();
 
+static jobject ToNativeProductCB(PurchasesInterface::ProductCB c) {
+  static jclass nativeproductcb_class = CheckNotNull(jclass(jni->env->NewGlobalRef(jni->env->FindClass("com/lucidfusionlabs/billing/NativeProductCB"))));
+  static jmethodID mid = CheckNotNull(jni->env->GetMethodID(nativeproductcb_class, "<init>", "(J)V"));
+  jlong cb = uintptr_t(new PurchasesInterface::ProductCB(move(c)));
+  return jni->env->NewObject(nativeproductcb_class, mid, cb);
+}
+
 struct AndroidProduct : public ProductInterface {
+  string name, desc, price;
   ~AndroidProduct() {}
-  AndroidProduct(const string &i) : ProductInterface(i) {}
-  string Name() { return ""; }
-  string Description() { return ""; }
-  string Price() {
-    return "";
-  }
+  AndroidProduct(const string &i, const string &n, const string &d, const string &p) :
+    ProductInterface(i), name(n), desc(d), price(p) {}
+  string Name()        { return name; }
+  string Description() { return desc; }
+  string Price()       { return price; }
 };
 
 struct AndroidPurchases : public PurchasesInterface {
@@ -45,13 +52,56 @@ struct AndroidPurchases : public PurchasesInterface {
     return jni->env->CallStaticObjectMethod(jni->purchases_class, mid, jni->activity, pk.v);
   }
 
-  bool CanPurchase() { return 0; }
-  bool HavePurchase(const string &product_id) { return 0; }
-  void PreparePurchase(const StringVec &products, Callback done_cb, ProductCB product_cb) {}
-  bool MakePurchase(ProductInterface *product, IntCB result_cb) { return false; }
-  void RestorePurchases(Callback done_cb) {}
-  void LoadPurchases() {}
+  bool CanPurchase() {
+    static jmethodID mid = CheckNotNull
+      (jni->env->GetMethodID(jni->purchases_class, "canPurchase", "()Z"));
+    return jni->env->CallBooleanMethod(impl.v, mid);
+  }
+
+  bool HavePurchase(const string &product_id) {
+    static jmethodID mid = CheckNotNull
+      (jni->env->GetMethodID(jni->purchases_class, "havePurchase", "(Ljava/lang/String;)Z"));
+    LocalJNIString p(jni->env, jni->ToJString(product_id));
+    return jni->env->CallBooleanMethod(impl.v, mid, p.v);
+  }
+
+  void LoadPurchases() {
+    static jmethodID mid = CheckNotNull
+      (jni->env->GetMethodID(jni->purchases_class, "loadPurchasesFromInternalStorage", "()Z"));
+    jni->env->CallBooleanMethod(impl.v, mid);
+  }
+
+  void RestorePurchases(Callback done_cb) {
+    static jmethodID mid = CheckNotNull
+      (jni->env->GetMethodID(jni->purchases_class, "restorePurchases", "()Z"));
+    if (jni->env->CallBooleanMethod(impl.v, mid) && done_cb) done_cb();
+  }
+
+  void PreparePurchase(const StringVec &products, Callback done_cb, PurchasesInterface::ProductCB product_cb) {
+    static jmethodID mid = CheckNotNull
+      (jni->env->GetMethodID(jni->purchases_class, "queryPurchase", "(Ljava/util/ArrayList;Lcom/lucidfusionlabs/core/NativeCallback;Lcom/lucidfusionlabs/billing/NativeProductCB;)Z"));
+    LocalJNIObject p(jni->env, jni->ToJStringArrayList(products));
+    LocalJNIObject dcb(jni->env, done_cb ? jni->ToNativeCallback(move(done_cb)) : nullptr);
+    LocalJNIObject pcb(jni->env, product_cb ? ToNativeProductCB(move(product_cb)) : nullptr);
+    jni->env->CallBooleanMethod(impl.v, mid, p.v, dcb.v, pcb.v);
+  }
+
+  bool MakePurchase(ProductInterface *product, IntCB result_cb) {
+    return false; 
+  }
 };
+
+extern "C" void Java_com_lucidfusionlabs_billing_NativeProductCB_RunProductCBInMainThread(JNIEnv *e, jclass c, jlong cb, jstring id, jstring name, jstring desc, jstring price) {
+  auto product = new AndroidProduct
+    (jni->GetJString(id), jni->GetJString(name), jni->GetJString(desc), jni->GetJString(price));
+  app->RunCallbackInMainThread([=](){
+    (*static_cast<PurchasesInterface::ProductCB*>(Void(cb)))(unique_ptr<ProductInterface>(product));
+  });
+}
+
+extern "C" void Java_com_lucidfusionlabs_billing_NativeProductCB_FreeProductCB(JNIEnv *e, jclass c, jlong cb) {
+  delete static_cast<PurchasesInterface::ProductCB*>(Void(cb));
+}
 
 unique_ptr<PurchasesInterface> SystemToolkit::CreatePurchases(string pubkey) { return make_unique<AndroidPurchases>(move(pubkey)); }
 }; // namespace LFL

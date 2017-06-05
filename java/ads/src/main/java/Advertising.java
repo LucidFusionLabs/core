@@ -23,7 +23,7 @@ import com.lucidfusionlabs.core.ModelItem;
 import com.lucidfusionlabs.core.LifecycleActivity;
 import com.lucidfusionlabs.core.ActivityLifecycleListenerList;
 
-class Advertising extends com.lucidfusionlabs.core.ActivityLifecycleListener
+public class Advertising extends com.lucidfusionlabs.core.ActivityLifecycleListener
     implements com.lucidfusionlabs.core.ViewOwner {
 
     public int type, valign;
