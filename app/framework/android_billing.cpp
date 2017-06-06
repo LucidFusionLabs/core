@@ -87,13 +87,19 @@ struct AndroidPurchases : public PurchasesInterface {
   }
 
   bool MakePurchase(ProductInterface *product, IntCB result_cb) {
-    return false; 
+    static jmethodID mid = CheckNotNull
+      (jni->env->GetMethodID(jni->purchases_class, "makePurchase", "(Ljava/lang/String;Lcom/lucidfusionlabs/core/NativeIntCB;)Z"));
+    if (!product) return false;
+
+    LocalJNIObject rcb(jni->env, result_cb ? jni->ToNativeIntCB(move(result_cb)) : nullptr);
+    LocalJNIString pid(jni->env, jni->ToJString(product->id));
+    return jni->env->CallBooleanMethod(impl.v, mid, pid.v, rcb.v);
   }
 };
 
 extern "C" void Java_com_lucidfusionlabs_billing_NativeProductCB_RunProductCBInMainThread(JNIEnv *e, jclass c, jlong cb, jstring id, jstring name, jstring desc, jstring price) {
-  auto product = new AndroidProduct
-    (jni->GetJString(id), jni->GetJString(name), jni->GetJString(desc), jni->GetJString(price));
+  auto product = new AndroidProduct(JNI::GetEnvJString(e, id), JNI::GetEnvJString(e, name),
+                                    JNI::GetEnvJString(e, desc), JNI::GetEnvJString(e, price));
   app->RunCallbackInMainThread([=](){
     (*static_cast<PurchasesInterface::ProductCB*>(Void(cb)))(unique_ptr<ProductInterface>(product));
   });

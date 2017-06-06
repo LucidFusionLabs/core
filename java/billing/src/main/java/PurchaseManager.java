@@ -18,6 +18,8 @@ import android.os.IBinder;
 import android.os.Bundle;
 import android.util.Log;
 import android.util.Base64;
+import org.json.JSONObject;
+import org.json.JSONException;
 import com.android.vending.billing.IInAppBillingService;
 import com.lucidfusionlabs.core.NativeCallback;
 import com.lucidfusionlabs.core.NativeIntCB;
@@ -25,6 +27,7 @@ import com.lucidfusionlabs.core.LifecycleActivity;
 import com.lucidfusionlabs.core.ActivityLifecycleListenerList;
 
 public class PurchaseManager extends com.lucidfusionlabs.core.ActivityLifecycleListener {
+    public final int PURCHASE_REQUEST_CODE = 1078;
     public static final String FILENAME = "purchase.ser";
     public static final String KEY_FACTORY_ALGORITHM = "RSA";
     public static final String SIGNATURE_ALGORITHM = "SHA1withRSA";
@@ -35,6 +38,7 @@ public class PurchaseManager extends com.lucidfusionlabs.core.ActivityLifecycleL
     IInAppBillingService mService;
     ServiceConnection mServiceConn;
     HashMap<String, String> mProducts = new HashMap<String, String>();
+    HashMap<String, NativeIntCB> mOutstandingPurchase = new HashMap<String, NativeIntCB>();
 
     public static PurchaseManager createInstance(LifecycleActivity act, String pubkey) {
         return new PurchaseManager(act, pubkey, act.activityLifecycle);
@@ -76,6 +80,23 @@ public class PurchaseManager extends com.lucidfusionlabs.core.ActivityLifecycleL
         mContext.unbindService(mServiceConn);
     }
 
+    @Override public void onActivityResult(LifecycleActivity activity, int requestCode, int resultCode, Intent data) {
+        if (requestCode != PURCHASE_REQUEST_CODE || data == null) return;
+        int responseCode = data.getIntExtra("RESPONSE_CODE", 0);
+        String purchaseData = data.getStringExtra("INAPP_PURCHASE_DATA");
+        String dataSignature = data.getStringExtra("INAPP_DATA_SIGNATURE"), product;
+        try {
+            JSONObject jo = new JSONObject(purchaseData);
+            product = jo.getString("productId");
+        } catch (Exception e) { Log.e("lfl", "onPurchaseResult: " + e.toString()); return; }
+        NativeIntCB result_cb = mOutstandingPurchase.get(product);
+        mOutstandingPurchase.remove(product);
+        if (result_cb == null) { Log.e("lfl", "onPurchaseResult missing product=" + product); return; }
+        int success = resultCode == android.app.Activity.RESULT_OK ? 1 : 0;
+        if (success != 0) restorePurchases();
+        result_cb.run(success);
+    }
+
     public boolean canPurchase() { return mService != null; }
 
     public boolean queryPurchase(final ArrayList<String> products,
@@ -100,8 +121,21 @@ public class PurchaseManager extends com.lucidfusionlabs.core.ActivityLifecycleL
         return true;
     }
 
-    public boolean makePurchase(final String product, final String price, final NativeIntCB result_cb) {
-        return true;
+    public boolean makePurchase(final String product, final NativeIntCB result_cb) {
+        if (result_cb == null || mOutstandingPurchase.get(product) != null) return false;
+        mOutstandingPurchase.put(product, result_cb);
+        try {
+            Bundle buyIntentBundle = mService.getBuyIntent(3, packageName, product, "inapp", "");
+            android.app.PendingIntent pendingIntent = buyIntentBundle.getParcelable("BUY_INTENT");
+            mContext.startIntentSenderForResult(pendingIntent.getIntentSender(),
+                                                PURCHASE_REQUEST_CODE, new Intent(),
+                                                Integer.valueOf(0), Integer.valueOf(0), Integer.valueOf(0));
+            return true;
+        }
+        catch(Exception e) {
+            mOutstandingPurchase.remove(product);
+            return false;
+        }
     }
 
     public boolean havePurchase(final String product) {
@@ -143,10 +177,7 @@ public class PurchaseManager extends com.lucidfusionlabs.core.ActivityLifecycleL
                     mProducts.put((String)products.get(i), "");
             return true;
 
-         } catch(java.io.IOException ioe) {
-            Log.e("lfl", "loadPurchasesToInternalStorage: " + ioe.toString());
-            return false;
-         } catch(ClassNotFoundException e) {
+         } catch(Exception e) {
             Log.e("lfl", "loadPurchasesToInternalStorage: " + e.toString());
             return false;
         }
@@ -165,8 +196,8 @@ public class PurchaseManager extends com.lucidfusionlabs.core.ActivityLifecycleL
             oos.close();
             fos.close();
             return true;
-         } catch(java.io.IOException ioe) {
-             Log.e("lfl", "savePurchasesToInternalStorage: " + ioe.toString());
+         } catch(Exception e) {
+             Log.e("lfl", "savePurchasesToInternalStorage: " + e.toString());
              return false;
          }
     }

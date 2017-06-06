@@ -23,12 +23,14 @@ void JNI::Init(jobject a, bool first) {
   if      (1)           CHECK(activity  = env->NewGlobalRef(a));
   if      (1)           CHECK(resources = env->NewGlobalRef(env->GetObjectField(activity, activity_resources)));
   if      (1)           CHECK(view      = env->NewGlobalRef(env->GetObjectField(activity, activity_view)));
+  if      (1)           CHECK(handler   = env->NewGlobalRef(env->GetObjectField(activity, activity_handler)));
   // if      (first)             gplus     = env->NewGlobalRef(env->GetObjectField(activity, activity_gplus));
   // else if (gplus_class) CHECK(gplus     = env->NewGlobalRef(env->GetObjectField(activity, activity_gplus)));
 }
 
 void JNI::Free() {
   if (gplus_class) env->DeleteGlobalRef(gplus);    gplus    = 0;
+  if (1)           env->DeleteGlobalRef(handler);  handler  = 0;
   if (1)           env->DeleteGlobalRef(view);     view     = 0;
   if (1)           env->DeleteGlobalRef(activity); activity = 0;
   activity_box = Box(-1, -1);

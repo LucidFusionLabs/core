@@ -4,7 +4,7 @@ import android.util.Log;
 import java.util.ArrayList;
 import java.util.HashMap;
 
-public final class NativeCallback {
+public final class NativeCallback implements Runnable {
     public final long cb;
 
     NativeCallback(final long c) {
@@ -17,7 +17,7 @@ public final class NativeCallback {
         finally { super.finalize(); }
     }
 
-    public void run() { RunCallbackInMainThread(cb); }
+    @Override public void run() { RunCallbackInMainThread(cb); }
 
     public static native void RunCallbackInMainThread(long cb);
     public static native void FreeCallback(long cb);

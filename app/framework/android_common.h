@@ -30,11 +30,11 @@ struct AndroidEvent {
 struct JNI {
   JNIEnv *env=0;
   Box activity_box;
-  jobject activity=0, resources=0, view=0, gplus=0;
+  jobject activity=0, resources=0, view=0, gplus=0, handler=0;
   jclass activity_class=0, resources_class=0, throwable_class=0, string_class=0, arraylist_class=0,
          pair_class=0, hashmap_class=0, view_class=0, frame_class=0, assetmgr_class=0, 
          inputstream_class=0, channels_class=0, readbytechan_class=0, r_string_class=0,
-         toolbar_class=0, advertising_class=0, gplus_class=0, purchases_class=0, 
+         toolbar_class=0, advertising_class=0, gplus_class=0, purchases_class=0, handler_class=0,
          modelitem_class=0, modelitemchange_class=0, pickeritem_class=0, alertscreen_class=0,
          menuscreen_class=0, tablescreen_class=0, textscreen_class=0, screennavigator_class=0,
          nativecallback_class=0, nativestringcb_class=0, nativeintcb_class=0, nativeintintcb_class=0,
@@ -43,14 +43,15 @@ struct JNI {
             hashmap_construct=0, hashmap_size=0, hashmap_get=0, hashmap_put=0, pair_construct=0,
             modelitem_construct=0, modelitemchange_construct=0, pickeritem_construct=0,
             int_intval=0, long_longval=0;
-  jfieldID activity_resources=0, activity_view=0, activity_gplus=0, pair_first=0, pair_second=0;
+  jfieldID activity_resources=0, activity_view=0, activity_handler=0, activity_gplus=0,
+           pair_first=0, pair_second=0;
   string package_name;
 
   void Init(jobject a, bool first);
   void Free();
   int CheckForException();
   void LogException(jthrowable &exception);
-  string GetJString(jstring x) { return GetEnvJString(env, x); }
+  string GetJString(jstring x) { return x ? GetEnvJString(env, x) : ""; }
   jstring ToJString(const string &x) { return env->NewStringUTF(x.c_str()); }
   jstring ToJStringRaw(const string &x);
   jobjectArray ToJStringArray(const StringVec &items);

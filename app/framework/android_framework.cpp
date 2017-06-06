@@ -122,16 +122,37 @@ struct AndroidAssetLoader : public SimpleAssetLoader {
 };
 
 struct AndroidTimer : public TimerInterface {
-  AndroidTimer(Callback cb) {}
-  bool Clear() { return false; }
-  void Run(Time interval, bool force=false) {}
+  Callback cb;
+  GlobalJNIObject fired_cb;
+  Time next = Time::zero();
+  AndroidTimer(Callback c) :
+    cb(move(c)), fired_cb(jni->ToNativeCallback(bind(&AndroidTimer::FiredCB, this))) {}
+
+  void FiredCB() {
+    next = Time::zero();
+    cb();
+  }
+
+  bool Clear() {
+    if (next == Time::zero()) return false;
+    next = Time::zero();
+    static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->handler_class, "removeCallbacks", "(Ljava/lang/Runnable;)V"));
+    jni->env->CallVoidMethod(jni->handler, mid, fired_cb.v);
+    return true;
+  }
+
+  void Run(Time interval, bool force=false) {
+    Time target = Now() + interval;
+    if (next != Time::zero()) {
+      if (force || target.count() < next.count()) { Clear(); next=target; }
+    } else next = target;
+    static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->handler_class, "postDelayed", "(Ljava/lang/Runnable;J)Z"));
+    jni->env->CallBooleanMethod(jni->handler, mid, fired_cb.v, jlong(interval.count()));
+  }
 };
 
 int Application::Suspended() {
   INFO("Application::Suspended");
-  if (focused->unfocused_cb) focused->unfocused_cb();
-  while (message_queue.HandleMessages()) {}
-  focused->gd->Finish();
   return 0;
 }
 
@@ -281,6 +302,14 @@ unique_ptr<Module> CreateFrameworkModule() { return make_unique<AndroidFramework
 unique_ptr<AssetLoaderInterface> CreateAssetLoader() { return make_unique<AndroidAssetLoader>(); }
 unique_ptr<TimerInterface> SystemToolkit::CreateTimer(Callback cb) { return make_unique<AndroidTimer>(move(cb)); };
 
+static void MainActivity_ShutdownMainLoop() {
+  app->suspended = true;
+  if (app->focused->unfocused_cb) app->focused->unfocused_cb();
+  while (app->messag
+      e_queue.HandleMessages()) {}
+  app->focused->gd->Finish();
+}
+
 extern "C" jint JNI_OnLoad(JavaVM* vm, void* reserved) { return JNI_VERSION_1_4; }
 
 extern "C" void Java_com_lucidfusionlabs_app_MainActivity_nativeCreate(JNIEnv *e, jobject a) {
@@ -288,6 +317,7 @@ extern "C" void Java_com_lucidfusionlabs_app_MainActivity_nativeCreate(JNIEnv *e
   CHECK(jni->activity_class = (jclass)e->NewGlobalRef(e->GetObjectClass(a)));
   CHECK(jni->activity_resources = e->GetFieldID(jni->activity_class, "resources", "Landroid/content/res/Resources;"));
   CHECK(jni->activity_view      = e->GetFieldID(jni->activity_class, "view",      "Lcom/lucidfusionlabs/app/MainView;"));
+  CHECK(jni->activity_handler   = e->GetFieldID(jni->activity_class, "handler",   "Landroid/os/Handler;"));
   // CHECK(jni->activity_gplus     = e->GetFieldID(jni->activity_class, "gplus",     "Lcom/lucidfusionlabs/app/GPlusClient;"));
   static jmethodID activity_getpkgname_mid =
     CheckNotNull(jni->env->GetMethodID(jni->activity_class, "getPackageName", "()Ljava/lang/String;"));
@@ -309,6 +339,7 @@ extern "C" void Java_com_lucidfusionlabs_app_MainActivity_nativeCreate(JNIEnv *e
   CHECK(jni->inputstream_class  = (jclass)e->NewGlobalRef(e->FindClass("java/io/InputStream")));
   CHECK(jni->channels_class     = (jclass)e->NewGlobalRef(e->FindClass("java/nio/channels/Channels")));
   CHECK(jni->readbytechan_class = (jclass)e->NewGlobalRef(e->FindClass("java/nio/channels/ReadableByteChannel")));
+  CHECK(jni->handler_class      = (jclass)e->NewGlobalRef(e->FindClass("android/os/Handler")));
   CHECK(jni->modelitem_class    = (jclass)e->NewGlobalRef(e->FindClass("com/lucidfusionlabs/core/ModelItem")));
   CHECK(jni->modelitemchange_class=(jclass)e->NewGlobalRef(e->FindClass("com/lucidfusionlabs/core/ModelItemChange")));
   CHECK(jni->pickeritem_class   = (jclass)e->NewGlobalRef(e->FindClass("com/lucidfusionlabs/core/PickerItem")));
@@ -351,6 +382,8 @@ extern "C" void Java_com_lucidfusionlabs_app_MainActivity_nativeMain(JNIEnv *e, 
   CHECK(jni->env = e);
   INFOf("Main: env=%p", jni->env);
   int ret = MyAppMain();
+
+  MainActivity_ShutdownMainLoop();
   INFOf("Main: env=%p ret=%d", jni->env, ret);
   jni->Free();
 }
@@ -361,8 +394,11 @@ extern "C" void Java_com_lucidfusionlabs_app_MainActivity_nativeNewMainLoop(JNIE
   jni->Init(a, false);
   app->suspended = false;
   SetLFAppMainThread();
-  if (reset) LFAppResetGL();
-  int ret = LFAppMainLoop();
+  if (reset) app->ResetGL(ResetGLFlag::Reload);
+  if (app->focused->focused_cb) app->focused->focused_cb();
+  int ret = app->MainLoop();
+
+  MainActivity_ShutdownMainLoop();
   INFOf("NewMainLoop: env=%p ret=%d", jni->env, ret);
   jni->Free();
 }

@@ -72,6 +72,7 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity {
     public PreferenceFragment preference_fragment;
     public HashMap<String, String> preference_default = new HashMap<String, String>();
     public SharedPreferences preferences;
+    public Handler handler = new Handler();
 
     protected void onCreated() {}
 
