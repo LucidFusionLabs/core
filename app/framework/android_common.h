@@ -51,30 +51,30 @@ struct JNI {
   void Free();
   int CheckForException();
   void LogException(jthrowable &exception);
-  string GetJString(jstring x) { return x ? GetEnvJString(env, x) : ""; }
-  jstring ToJString(const string &x) { return env->NewStringUTF(x.c_str()); }
-  jstring ToJStringRaw(const string &x);
-  jobjectArray ToJStringArray(const StringVec &items);
-  pair<jobjectArray, jobjectArray> ToJStringArrays(const StringPairVec &items);
-  jobject ToJStringArrayList(const StringVec &items);
-  jobject ToJStringPairArrayList(const StringPairVec &items);
-  jobject ToModelItemArrayList(AlertItemVec items);
-  jobject ToModelItemArrayList(MenuItemVec items);
-  jobject ToModelItemArrayList(TableItemVec items);
-  jobject ToModelItemChangeList(const TableSection::ChangeList&);
-  jobject ToModelItem(AlertItem);
-  jobject ToModelItem(MenuItem);
-  jobject ToModelItem(TableItem);
-  jobject ToModelItemChange(const TableSection::Change&);
-  jobject ToPickerItem(PickerItem*);
-  jobject ToNativeCallback(Callback c);
-  jobject ToNativeStringCB(StringCB c);
-  jobject ToNativeIntCB(IntCB c);
-  jobject ToNativeIntIntCB(IntIntCB c);
-  jobject ToNativePickerItemCB(const PickerItem::CB &c);
+
+  static string GetJString(JNIEnv*, jstring);
+  static jstring ToJString(JNIEnv *env , const string &x) { return env->NewStringUTF(x.c_str()); }
+  static jstring ToJStringRaw(JNIEnv*, const string &x);
+  static jobjectArray ToJStringArray(JNIEnv*, const StringVec &items);
+  static pair<jobjectArray, jobjectArray> ToJStringArrays(JNIEnv*, const StringPairVec &items);
+  static jobject ToJStringArrayList(JNIEnv*, const StringVec &items);
+  static jobject ToJStringPairArrayList(JNIEnv*, const StringPairVec &items);
+  static jobject ToModelItemArrayList(JNIEnv*, AlertItemVec items);
+  static jobject ToModelItemArrayList(JNIEnv*, MenuItemVec items);
+  static jobject ToModelItemArrayList(JNIEnv*, TableItemVec items);
+  static jobject ToModelItemChangeList(JNIEnv*, const TableSection::ChangeList&);
+  static jobject ToModelItem(JNIEnv*, AlertItem);
+  static jobject ToModelItem(JNIEnv*, MenuItem);
+  static jobject ToModelItem(JNIEnv*, TableItem);
+  static jobject ToModelItemChange(JNIEnv*, const TableSection::Change&);
+  static jobject ToPickerItem(JNIEnv*, PickerItem*);
+  static jobject ToNativeCallback(JNIEnv*, Callback c);
+  static jobject ToNativeStringCB(JNIEnv*, StringCB c);
+  static jobject ToNativeIntCB(JNIEnv*, IntCB c);
+  static jobject ToNativeIntIntCB(JNIEnv*, IntIntCB c);
+  static jobject ToNativePickerItemCB(JNIEnv*, const PickerItem::CB &c);
 
   BufferFile *OpenAsset(const string &fn);
-  static string GetEnvJString(JNIEnv*, jstring);
 };
 
 template <class X> struct LocalJNIType {
@@ -86,7 +86,8 @@ template <class X> struct LocalJNIType {
 
 template <class X> struct GlobalJNIType {
   X v;
-  GlobalJNIType(X V) { auto e = Singleton<JNI>::Get()->env; v = e->NewGlobalRef(V); e->DeleteLocalRef(V); }
+  GlobalJNIType(X V) : GlobalJNIType(Singleton<JNI>::Get()->env, V) {}
+  GlobalJNIType(JNIEnv *e, X V) : v(e->NewGlobalRef(V)) { e->DeleteLocalRef(V); }
   virtual ~GlobalJNIType() { if (v) Singleton<JNI>::Get()->env->DeleteGlobalRef(v); }
 };
 

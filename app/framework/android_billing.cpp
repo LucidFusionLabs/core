@@ -21,11 +21,11 @@
 namespace LFL {
 static JNI *jni = Singleton<JNI>::Get();
 
-static jobject ToNativeProductCB(PurchasesInterface::ProductCB c) {
-  static jclass nativeproductcb_class = CheckNotNull(jclass(jni->env->NewGlobalRef(jni->env->FindClass("com/lucidfusionlabs/billing/NativeProductCB"))));
-  static jmethodID mid = CheckNotNull(jni->env->GetMethodID(nativeproductcb_class, "<init>", "(J)V"));
+static jobject ToNativeProductCB(JNIEnv *env, PurchasesInterface::ProductCB c) {
+  static jclass nativeproductcb_class = CheckNotNull(jclass(env->NewGlobalRef(env->FindClass("com/lucidfusionlabs/billing/NativeProductCB"))));
+  static jmethodID mid = CheckNotNull(env->GetMethodID(nativeproductcb_class, "<init>", "(J)V"));
   jlong cb = uintptr_t(new PurchasesInterface::ProductCB(move(c)));
-  return jni->env->NewObject(nativeproductcb_class, mid, cb);
+  return env->NewObject(nativeproductcb_class, mid, cb);
 }
 
 struct AndroidProduct : public ProductInterface {
@@ -48,7 +48,7 @@ struct AndroidPurchases : public PurchasesInterface {
     static jmethodID mid = CheckNotNull
       (jni->env->GetStaticMethodID(jni->purchases_class, "createStaticInstance",
                                    "(Lcom/lucidfusionlabs/core/LifecycleActivity;Ljava/lang/String;)Lcom/lucidfusionlabs/billing/PurchaseManager;"));
-    LocalJNIString pk(jni->env, jni->ToJString(pubkey));
+    LocalJNIString pk(jni->env, JNI::ToJString(jni->env, pubkey));
     return jni->env->CallStaticObjectMethod(jni->purchases_class, mid, jni->activity, pk.v);
   }
 
@@ -61,7 +61,7 @@ struct AndroidPurchases : public PurchasesInterface {
   bool HavePurchase(const string &product_id) {
     static jmethodID mid = CheckNotNull
       (jni->env->GetMethodID(jni->purchases_class, "havePurchase", "(Ljava/lang/String;)Z"));
-    LocalJNIString p(jni->env, jni->ToJString(product_id));
+    LocalJNIString p(jni->env, JNI::ToJString(jni->env, product_id));
     return jni->env->CallBooleanMethod(impl.v, mid, p.v);
   }
 
@@ -80,9 +80,9 @@ struct AndroidPurchases : public PurchasesInterface {
   void PreparePurchase(const StringVec &products, Callback done_cb, PurchasesInterface::ProductCB product_cb) {
     static jmethodID mid = CheckNotNull
       (jni->env->GetMethodID(jni->purchases_class, "queryPurchase", "(Ljava/util/ArrayList;Lcom/lucidfusionlabs/core/NativeCallback;Lcom/lucidfusionlabs/billing/NativeProductCB;)Z"));
-    LocalJNIObject p(jni->env, jni->ToJStringArrayList(products));
-    LocalJNIObject dcb(jni->env, done_cb ? jni->ToNativeCallback(move(done_cb)) : nullptr);
-    LocalJNIObject pcb(jni->env, product_cb ? ToNativeProductCB(move(product_cb)) : nullptr);
+    LocalJNIObject p(jni->env, JNI::ToJStringArrayList(jni->env, products));
+    LocalJNIObject dcb(jni->env, done_cb ? JNI::ToNativeCallback(jni->env, move(done_cb)) : nullptr);
+    LocalJNIObject pcb(jni->env, product_cb ? ToNativeProductCB(jni->env, move(product_cb)) : nullptr);
     jni->env->CallBooleanMethod(impl.v, mid, p.v, dcb.v, pcb.v);
   }
 
@@ -91,15 +91,15 @@ struct AndroidPurchases : public PurchasesInterface {
       (jni->env->GetMethodID(jni->purchases_class, "makePurchase", "(Ljava/lang/String;Lcom/lucidfusionlabs/core/NativeIntCB;)Z"));
     if (!product) return false;
 
-    LocalJNIObject rcb(jni->env, result_cb ? jni->ToNativeIntCB(move(result_cb)) : nullptr);
-    LocalJNIString pid(jni->env, jni->ToJString(product->id));
+    LocalJNIObject rcb(jni->env, result_cb ? JNI::ToNativeIntCB(jni->env, move(result_cb)) : nullptr);
+    LocalJNIString pid(jni->env, JNI::ToJString(jni->env, product->id));
     return jni->env->CallBooleanMethod(impl.v, mid, pid.v, rcb.v);
   }
 };
 
 extern "C" void Java_com_lucidfusionlabs_billing_NativeProductCB_RunProductCBInMainThread(JNIEnv *e, jclass c, jlong cb, jstring id, jstring name, jstring desc, jstring price) {
-  auto product = new AndroidProduct(JNI::GetEnvJString(e, id), JNI::GetEnvJString(e, name),
-                                    JNI::GetEnvJString(e, desc), JNI::GetEnvJString(e, price));
+  auto product = new AndroidProduct(JNI::GetJString(e, id), JNI::GetJString(e, name),
+                                    JNI::GetJString(e, desc), JNI::GetJString(e, price));
   app->RunCallbackInMainThread([=](){
     (*static_cast<PurchasesInterface::ProductCB*>(Void(cb)))(unique_ptr<ProductInterface>(product));
   });

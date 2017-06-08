@@ -32,6 +32,7 @@ import android.app.AlertDialog;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentManager;
 import android.support.v7.app.AppCompatActivity;
+import android.support.v7.app.ActionBar;
 import com.lucidfusionlabs.core.ModelItem;
 
 public class ScreenFragmentNavigator {
@@ -212,5 +213,17 @@ public class ScreenFragmentNavigator {
         if (frag == null) { Log.e("lfl", "showBackFragment tag=" + tag + ": null"); return; }
         if (show_content) activity.getSupportFragmentManager().beginTransaction().replace(R.id.content_frame, frag, tag).commit();
         if (show_title && frag instanceof ScreenFragment) activity.setTitle(((ScreenFragment)frag).parent_screen.title);
+    }
+
+    public static void updateHomeButton(final AppCompatActivity activity) {
+        ActionBar action_bar = activity.getSupportActionBar();
+        int stack_size = activity.getSupportFragmentManager().getBackStackEntryCount() ;
+        if (stack_size > 1 || (stack_size == 1 && ScreenFragmentNavigator.haveFragmentNavLeft(activity, "0"))) {
+            action_bar.setHomeButtonEnabled(true);
+            action_bar.setDisplayHomeAsUpEnabled(true);
+        } else {
+            action_bar.setDisplayHomeAsUpEnabled(false);
+            action_bar.setHomeButtonEnabled(false);
+        }
     }
 }

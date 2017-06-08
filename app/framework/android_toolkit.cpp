@@ -30,14 +30,18 @@ struct AndroidAlertView : public AlertViewInterface {
     CHECK_EQ("style", items[0].first);
     static jmethodID mid = CheckNotNull
       (jni->env->GetMethodID(jni->alertscreen_class, "<init>", "(Ljava/util/ArrayList;)V"));
-    return jni->env->NewObject(jni->alertscreen_class, mid, jni->ToModelItemArrayList(move(items)));
+    return jni->env->NewObject(jni->alertscreen_class, mid, JNI::ToModelItemArrayList(jni->env, move(items)));
   }
 
-  void Hide() {}
+  void Hide() {
+    static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->alertscreen_class, "show", "(Lcom/lucidfusionlabs/app/MainActivity;Z)V"));
+    jni->env->CallVoidMethod(impl.v, mid, jni->activity, jboolean(false));
+  }
+
   void Show(const string &arg) {
     static jmethodID mid = CheckNotNull
       (jni->env->GetMethodID(jni->alertscreen_class, "showText", "(Landroid/app/Activity;Ljava/lang/String;)V"));
-    LocalJNIString astr(jni->env, jni->ToJString(arg));
+    LocalJNIString astr(jni->env, JNI::ToJString(jni->env, arg));
     jni->env->CallVoidMethod(impl.v, mid, jni->activity, astr.v);
   }
 
@@ -45,8 +49,8 @@ struct AndroidAlertView : public AlertViewInterface {
   void ShowCB(const string &title, const string &msg, const string &arg, StringCB confirm_cb) {
     static jmethodID mid = CheckNotNull
       (jni->env->GetMethodID(jni->alertscreen_class, "showTextCB", "(Landroid/app/Activity;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lcom/lucidfusionlabs/core/NativeStringCB;)V"));
-    LocalJNIString tstr(jni->env, jni->ToJString(title)), mstr(jni->env, jni->ToJString(msg)), astr(jni->env, jni->ToJString(arg));
-    LocalJNIObject cb(jni->env, confirm_cb ? jni->ToNativeStringCB(move(confirm_cb)) : nullptr);
+    LocalJNIString tstr(jni->env, JNI::ToJString(jni->env, title)), mstr(jni->env, JNI::ToJString(jni->env, msg)), astr(jni->env, JNI::ToJString(jni->env, arg));
+    LocalJNIObject cb(jni->env, confirm_cb ? JNI::ToNativeStringCB(jni->env, move(confirm_cb)) : nullptr);
     jni->env->CallVoidMethod(impl.v, mid, jni->activity, tstr.v, mstr.v, astr.v, cb.v);
   }
 };
@@ -60,7 +64,7 @@ struct AndroidToolbarView : public ToolbarViewInterface {
   static jobject NewToolbarObject(const string &t, MenuItemVec items, int flag) {
     static jmethodID mid = CheckNotNull
       (jni->env->GetMethodID(jni->toolbar_class, "<init>", "(Ljava/lang/String;Ljava/util/ArrayList;I)V"));
-    LocalJNIObject theme(jni->env, jni->ToJString(t)), l(jni->env, jni->ToModelItemArrayList(move(items)));
+    LocalJNIObject theme(jni->env, JNI::ToJString(jni->env, t)), l(jni->env, JNI::ToModelItemArrayList(jni->env, move(items)));
     return jni->env->NewObject(jni->toolbar_class, mid, theme.v, l.v, jint(flag));
   }
 
@@ -84,8 +88,8 @@ struct AndroidMenuView : public MenuViewInterface {
   static jobject NewMenuScreenObject(const string &title, MenuItemVec items) {
     static jmethodID mid = CheckNotNull
       (jni->env->GetMethodID(jni->menuscreen_class, "<init>", "(Ljava/lang/String;Ljava/util/ArrayList;)V"));
-    LocalJNIString tstr(jni->env, jni->ToJString(title));
-    LocalJNIObject l(jni->env, jni->ToModelItemArrayList(move(items)));
+    LocalJNIString tstr(jni->env, JNI::ToJString(jni->env, title));
+    LocalJNIObject l(jni->env, JNI::ToModelItemArrayList(jni->env, move(items)));
     return jni->env->NewObject(jni->menuscreen_class, mid, tstr.v, l.v);
   }
 
@@ -104,7 +108,7 @@ struct AndroidTextView : public TextViewInterface {
   static jobject NewTextScreenObject(const string &title, const string &text) {
     static jmethodID mid = CheckNotNull
       (jni->env->GetMethodID(jni->textscreen_class, "<init>", "(Ljava/lang/String;Ljava/lang/String;)V"));
-    LocalJNIString hstr(jni->env, jni->ToJString(title)), tstr(jni->env, jni->ToJStringRaw(text));
+    LocalJNIString hstr(jni->env, JNI::ToJString(jni->env, title)), tstr(jni->env, JNI::ToJStringRaw(jni->env, text));
     return jni->env->NewObject(jni->textscreen_class, mid, hstr.v, tstr.v);
   }
 };
@@ -181,8 +185,8 @@ jobject AndroidTableView::NewTableScreenObject(AndroidTableView *parent, const s
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->tablescreen_class, "<init>", "(Ljava/lang/String;Ljava/util/ArrayList;J)V"));
   jlong np = uintptr_t(parent);
-  LocalJNIString tstr(jni->env, jni->ToJString(title));
-  LocalJNIObject l(jni->env, jni->ToModelItemArrayList(move(items)));
+  LocalJNIString tstr(jni->env, JNI::ToJString(jni->env, title));
+  LocalJNIObject l(jni->env, JNI::ToModelItemArrayList(jni->env, move(items)));
   return jni->env->NewObject(jni->tablescreen_class, mid, tstr.v, l.v, np);
 }
 
@@ -191,7 +195,7 @@ void AndroidTableView::AddNavigationButton(int halign_type, const TableItem &ite
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->tablescreen_class,
                            "addNavButton", "(Landroid/support/v7/app/AppCompatActivity;ILcom/lucidfusionlabs/core/ModelItem;)V"));
-  LocalJNIObject v(jni->env, jni->ToModelItem(item));
+  LocalJNIObject v(jni->env, JNI::ToModelItem(jni->env, item));
   jni->env->CallVoidMethod(impl.v, mid, jni->activity, jint(halign_type), v.v);
 }
 
@@ -222,7 +226,7 @@ string AndroidTableView::GetKey(int section, int row) {
     (jni->env->GetMethodID(jni->tablescreen_class,
                            "getKey", "(Landroid/support/v7/app/AppCompatActivity;II)Ljava/lang/String;"));
   LocalJNIString v(jni->env, jstring(jni->env->CallObjectMethod(impl.v, mid, jni->activity, jint(section), jint(row))));
-  return jni->GetJString(v.v);
+  return JNI::GetJString(jni->env, v.v);
 }
 
 string AndroidTableView::GetValue(int section, int row) {
@@ -230,7 +234,7 @@ string AndroidTableView::GetValue(int section, int row) {
     (jni->env->GetMethodID(jni->tablescreen_class,
                            "getVal", "(Landroid/support/v7/app/AppCompatActivity;II)Ljava/lang/String;"));
   LocalJNIString v(jni->env, jstring(jni->env->CallObjectMethod(impl.v, mid, jni->activity, jint(section), jint(row))));
-  return jni->GetJString(v.v);
+  return JNI::GetJString(jni->env, v.v);
 }
 
 int AndroidTableView::GetTag(int section, int row) {
@@ -251,8 +255,10 @@ PickerItem *AndroidTableView::GetPicker(int section, int row) {
   uintptr_t pp = CheckNotNull(jni->env->CallLongMethod(pl.v, jni->long_longval));
   auto picker = static_cast<PickerItem*>(Void(pp));
   if (picker->picked.size() != picker->data.size()) picker->picked.resize(picker->data.size());
-  for (int i = 0, l = jni->env->CallIntMethod(al.v, jni->arraylist_size), l2 = picker->picked.size();
-       i < l && i < l2; i++) picker->picked[i] = jni->env->CallIntMethod(al.v, jni->arraylist_get, i);
+  for (int i = 0, l = jni->env->CallIntMethod(al.v, jni->arraylist_size), l2 = picker->picked.size(); i < l && i < l2; i++) {
+    LocalJNIObject ival(jni->env, jni->env->CallObjectMethod(al.v, jni->arraylist_get, i));
+    picker->picked[i] = jni->env->CallIntMethod(ival.v, jni->int_intval);
+  }
   return picker; 
 }
 
@@ -266,7 +272,7 @@ StringPairVec AndroidTableView::GetSectionText(int section) {
     jobject pair = jni->env->CallObjectMethod(arraylist, jni->arraylist_get, i);
     LocalJNIString ki(jni->env, jstring(jni->env->GetObjectField(pair, jni->pair_first)));
     LocalJNIString vi(jni->env, jstring(jni->env->GetObjectField(pair, jni->pair_second)));
-    ret.emplace_back(jni->GetJString(ki.v), jni->GetJString(vi.v));
+    ret.emplace_back(JNI::GetJString(jni->env, ki.v), JNI::GetJString(jni->env, vi.v));
   }
   return ret;
 }
@@ -289,7 +295,7 @@ void AndroidTableView::AddRow(int section, TableItem item) {
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->tablescreen_class,
                            "addRow", "(Landroid/support/v7/app/AppCompatActivity;ILcom/lucidfusionlabs/core/ModelItem;)V"));
-  LocalJNIObject v(jni->env, jni->ToModelItem(move(item)));
+  LocalJNIObject v(jni->env, JNI::ToModelItem(jni->env, move(item)));
   jni->env->CallVoidMethod(impl.v, mid, jni->activity, jint(section), v.v);
 }
 
@@ -303,21 +309,21 @@ void AndroidTableView::ReplaceRow(int section, int row, TableItem item) {
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->tablescreen_class,
                            "replaceRow", "(Landroid/support/v7/app/AppCompatActivity;IILcom/lucidfusionlabs/core/ModelItem;)V"));
-  LocalJNIObject v(jni->env, jni->ToModelItem(move(item)));
+  LocalJNIObject v(jni->env, JNI::ToModelItem(jni->env, move(item)));
   jni->env->CallVoidMethod(impl.v, mid, jni->activity, jint(section), jint(row), v.v);
 }
 
 void AndroidTableView::ReplaceSection(int section, TableItem header, int flag, TableItemVec item) {
   header.type = TableItem::Separator;
-  LocalJNIObject h(jni->env, jni->ToModelItem(move(header)));
-  LocalJNIObject l(jni->env, jni->ToModelItemArrayList(move(item)));
+  LocalJNIObject h(jni->env, JNI::ToModelItem(jni->env, move(header)));
+  LocalJNIObject l(jni->env, JNI::ToModelItemArrayList(jni->env, move(item)));
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->tablescreen_class, "replaceSection", "(Landroid/support/v7/app/AppCompatActivity;ILcom/lucidfusionlabs/core/ModelItem;ILjava/util/ArrayList;)V"));
   jni->env->CallVoidMethod(impl.v, mid, jni->activity, jint(section), h.v, jint(flag), l.v);
 }
 
 void AndroidTableView::ApplyChangeList(const TableSection::ChangeList &changes) {
-  LocalJNIObject l(jni->env, jni->ToModelItemChangeList(changes));
+  LocalJNIObject l(jni->env, JNI::ToModelItemChangeList(jni->env, changes));
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->tablescreen_class, "applyChangeList", "(Landroid/support/v7/app/AppCompatActivity;Ljava/util/ArrayList;)V"));
   jni->env->CallVoidMethod(impl.v, mid, jni->activity, l.v);
@@ -327,7 +333,7 @@ void AndroidTableView::SetSectionValues(int section, const StringVec &in) {
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->tablescreen_class,
                            "setSectionValues", "(Landroid/support/v7/app/AppCompatActivity;ILjava/util/ArrayList;)V"));
-  LocalJNIObject v(jni->env, jni->ToJStringArrayList(in));
+  LocalJNIObject v(jni->env, JNI::ToJStringArrayList(jni->env, in));
   jni->env->CallVoidMethod(impl.v, mid, jni->activity, jint(section), v.v);
 }
 
@@ -345,7 +351,7 @@ void AndroidTableView::SetKey(int seciton, int row, const string &key) {
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->tablescreen_class,
                            "setKey", "(Landroid/support/v7/app/AppCompatActivity;IILjava/lang/String;)V"));
-  LocalJNIString kstr(jni->env, jni->ToJString(key));
+  LocalJNIString kstr(jni->env, JNI::ToJString(jni->env, key));
   jni->env->CallVoidMethod(impl.v, mid, jni->activity, jint(seciton), jint(row), kstr.v);
 }
 
@@ -353,7 +359,7 @@ void AndroidTableView::SetValue(int section, int row, const string &val) {
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->tablescreen_class,
                            "setValue", "(Landroid/support/v7/app/AppCompatActivity;IILjava/lang/String;)V"));
-  LocalJNIString vstr(jni->env, jni->ToJString(val));
+  LocalJNIString vstr(jni->env, JNI::ToJString(jni->env, val));
   jni->env->CallVoidMethod(impl.v, mid, jni->activity, jint(section), jint(row), vstr.v);
 }
 
@@ -376,14 +382,14 @@ void AndroidTableView::SetTitle(const string &title) {
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->tablescreen_class,
                            "setTitle", "(Landroid/support/v7/app/AppCompatActivity;Ljava/lang/String;)V"));
-  LocalJNIString tstr(jni->env, jni->ToJString(title));
+  LocalJNIString tstr(jni->env, JNI::ToJString(jni->env, title));
   jni->env->CallVoidMethod(impl.v, mid, jni->activity, tstr.v);
 }
 
 void AndroidTableView::SetSectionEditable(int section, int start_row, int skip_last_rows, IntIntCB iicb) {
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->tablescreen_class, "setEditable", "(Landroid/support/v7/app/AppCompatActivity;IILcom/lucidfusionlabs/core/NativeIntIntCB;)V"));
-  LocalJNIObject cb(jni->env, iicb ? jni->ToNativeIntIntCB(move(iicb)) : nullptr);
+  LocalJNIObject cb(jni->env, iicb ? JNI::ToNativeIntIntCB(jni->env, move(iicb)) : nullptr);
   jni->env->CallVoidMethod(impl.v, mid, jni->activity, jint(section), jint(start_row), cb.v);
 }
 
@@ -391,7 +397,7 @@ void AndroidTableView::SetHeader(int section, TableItem header) {
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->tablescreen_class,
                            "setHeader", "(Landroid/support/v7/app/AppCompatActivity;ILcom/lucidfusionlabs/core/ModelItem;)V"));
-  LocalJNIObject v(jni->env, jni->ToModelItem(move(header)));
+  LocalJNIObject v(jni->env, JNI::ToModelItem(jni->env, move(header)));
   jni->env->CallVoidMethod(impl.v, mid, jni->activity, jint(section), v.v);
 }
 
@@ -413,9 +419,22 @@ void Application::UpdateSystemImage(int n, Texture &t) {
 int Application::LoadSystemImage(const string &n) {
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->activity_class, "getDrawableResId", "(Ljava/lang/String;)I"));
-  LocalJNIString nstr(jni->env, jni->ToJString(n));
+  LocalJNIString nstr(jni->env, JNI::ToJString(jni->env, n));
   jint ret = jni->env->CallIntMethod(jni->activity, mid, nstr.v);
   return ret;
+}
+
+extern "C" jobject Java_com_lucidfusionlabs_core_PickerItem_getFontPickerItem(JNIEnv *e, jclass c) {
+  static GlobalJNIObject *picker_item = nullptr;
+  if (picker_item == nullptr) {
+    auto font_picker = new PickerItem();
+    font_picker->picked.resize(2);
+    font_picker->data.resize(2);
+    font_picker->data[0].emplace_back("default");
+    for (int i=0; i<64; i++) font_picker->data[1].emplace_back(StrCat(i+1));
+    picker_item = new GlobalJNIObject(e, JNI::ToPickerItem(e, font_picker));
+  }
+  return picker_item->v;
 }
 
 unique_ptr<AlertViewInterface> SystemToolkit::CreateAlert(AlertItemVec items) { return make_unique<AndroidAlertView>(move(items)); }

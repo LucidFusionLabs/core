@@ -3,9 +3,4 @@
     android:id="@+id/listview_cell_root"
     android:layout_width="fill_parent"
     android:layout_height="wrap_content">
-    <NumberPicker
-        android:id="@+id/listview_cell_picker"
-        android:layout_width="fill_parent"
-        android:layout_height="wrap_content">
-    </NumberPicker>
 </com.lucidfusionlabs.core.ModelItemLinearLayout>

@@ -60,7 +60,6 @@ public class ModelItemRecyclerViewAdapter
         public EditText editText;
         public ImageView leftIcon, rightIcon, removeIcon;
         public SwitchCompat toggle;
-        public NumberPicker picker;
         public RadioGroup radio;
 
         public ViewHolder(View itemView) {
@@ -187,12 +186,12 @@ public class ModelItemRecyclerViewAdapter
                 return holder;
             }
 
+            case ModelItem.TYPE_FONTPICKER:
             case ModelItem.TYPE_PICKER: {
-                View itemView = inflater.inflate(R.layout.listview_cell_picker, parent, false);
+                View itemView = inflater.inflate(R.layout.listview_cell_blank, parent, false);
                 ViewHolder holder = new ViewHolder(itemView);
                 itemView.setTag(holder);
                 holder.root = (ModelItemLinearLayout)itemView.findViewById(R.id.listview_cell_root);
-                holder.picker = (NumberPicker)itemView.findViewById(R.id.listview_cell_picker);
                 holder.root_wrapper = holder.root;
                 return holder;
             }
@@ -378,35 +377,71 @@ public class ModelItemRecyclerViewAdapter
                 holder.toggle.setChecked(item.val.equals("1"));
                 holder.toggle.setOnCheckedChangeListener(checked_listener);
             } break;
-        }
 
-        if (holder.picker != null && item.picker != null && item.picker.data.size() > 0) {
-            ArrayList<String> picker_items = item.picker.data.get(0);
-            if (picker_items.size() > 0) {
-                holder.picker.setOnValueChangedListener(null);
-                holder.picker.setMinValue(0);
-                holder.picker.setMaxValue(picker_items.size() - 1);
-                String[] arr = new String[picker_items.size()];
-                arr = picker_items.toArray(arr);
-                holder.picker.setDisplayedValues(arr);
-                if (position > 1 && data.get(position-1).type == ModelItem.TYPE_LABEL) {
-                    String v = data.get(position-1).val;
-                    for (int i = 0; i < arr.length; i++)
-                        if (v.equals(arr[i])) { holder.picker.setValue(i); break; }
+            case ModelItem.TYPE_FONTPICKER: {
+                item.picker = PickerItem.getFontPickerItem();
+            } // fall thru
 
-                    holder.picker.setOnValueChangedListener(new NumberPicker.OnValueChangeListener() {
-                        @Override
-                        public void onValueChange(NumberPicker numberPicker, int i, int i2) {
-                            parent_screen.changed = true;
-                            final int pos = holder.getAdapterPosition();
-                            String v = numberPicker.getDisplayedValues()[numberPicker.getValue()];
-                            ViewHolder h = (ViewHolder)recyclerview.findViewHolderForAdapterPosition(pos-1);
-                            h.label.setText(v);
-                            data.get(pos-1).val = v;
-                            notifyItemChanged(pos-1);
-                        }});
-                } else holder.picker.setValue(0);
-            }
+            case ModelItem.TYPE_PICKER: {
+                holder.root.removeAllViews();
+                if (item.picker == null) break;
+                int num_pickers = item.picker.data.size();
+                ArrayList<String> picker_val = new ArrayList<String>();
+                if (position > 0 && num_pickers > 1) picker_val.addAll
+                    (java.util.Arrays.asList(data.get(position-1).val.trim().split("\\s+")));
+
+                for (int i = 0; i < num_pickers; i++) {
+                    ArrayList<String> picker_items = item.picker.data.get(i);
+                    if (picker_items.size() <= 0) continue;
+                    NumberPicker picker = new NumberPicker(holder.root.getContext()); 
+
+                    picker.setMinValue(0);
+                    picker.setMaxValue(picker_items.size() - 1);
+                    String[] arr = new String[picker_items.size()];
+                    arr = picker_items.toArray(arr);
+                    picker.setDisplayedValues(arr);
+
+                    if (position > 0 && data.get(position-1).type == ModelItem.TYPE_LABEL) {
+                        String v = num_pickers == 1 ? data.get(position-1).val :
+                            (i < picker_val.size() ? picker_val.get(i) : "");
+                        for (int j = 0; j < arr.length; j++)
+                            if (v.equals(arr[j])) {
+                                item.picker.picked.set(i, j);
+                                picker.setValue(j);
+                                break;
+                            }
+                    
+                        final int picker_ind = i;
+                        picker.setOnValueChangedListener(new NumberPicker.OnValueChangeListener() {
+                            @Override public void onValueChange(NumberPicker numberPicker, int i1, int i2) {
+                                parent_screen.changed = true;
+                                int pos = holder.getAdapterPosition();
+                                item.picker.picked.set(picker_ind, numberPicker.getValue());
+                                if (pos > 0) {
+                                    String v = item.picker.getPickedString();
+                                    ViewHolder h = (ViewHolder)recyclerview.findViewHolderForAdapterPosition(pos-1);
+                                    h.label.setText(v);
+                                    data.get(pos-1).val = v;
+                                    notifyItemChanged(pos-1);
+                                }
+                            }});
+                    
+                        picker.setOnScrollListener(new NumberPicker.OnScrollListener() {
+                            @Override public void onScrollStateChange(NumberPicker view, int scrollState) {
+                                if (NumberPicker.OnScrollListener.SCROLL_STATE_IDLE == scrollState) {
+                                    final int pos = holder.getAdapterPosition();
+                                    data.get(pos).hidden = true;
+                                    notifyItemChanged(pos);
+                                }
+                            }});
+                    
+                    } else picker.setValue(0);
+
+                    picker.setLayoutParams(new LinearLayout.LayoutParams
+                                           (0, RadioGroup.LayoutParams.WRAP_CONTENT, 1.0f));
+                    holder.root.addView(picker);
+                }
+            } break;
         }
 
         if (holder.radio != null) {
@@ -598,7 +633,7 @@ public class ModelItemRecyclerViewAdapter
     public void setValue (final int s, final int r, final String  v) { data.get(getCollapsedRowId(s, r)).val = v; }
     public void setSelected(final int s, final int r, final int   v) { data.get(getCollapsedRowId(s, r)).selected = v; }
     
-    public void setHidden(final int s, final int r, final int v) {
+    public boolean setHidden(final int s, final int r, final int v) {
         int row_id = getCollapsedRowId(s, r), section_row = getSectionBeginRowId(s);
         if (v < 0) {
             ModelItem item = data.get(row_id);
@@ -615,10 +650,12 @@ public class ModelItemRecyclerViewAdapter
                 data.subList(section_row + 1, section_row + 1 + section_size).clear();
                 moveSectionsAfterBy(s, -section_size);
                 notifyItemRangeRemoved(section_row + 1, section_size);
-                return;
+                if ((section.flags & ModelItem.TABLE_SECTION_FLAG_CLEAR_LEFT_NAV_WHEN_EMPTY) != 0) nav_left = null;
+                return true;
             }
         }
         notifyItemChanged(row_id);
+        return false;
     }
 
     public Pair<Long, ArrayList<Integer>> getPicked(final int s, final int r) {

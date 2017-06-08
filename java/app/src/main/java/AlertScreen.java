@@ -85,7 +85,11 @@ public class AlertScreen extends Screen {
     
     @Override
     public void show(final MainActivity activity, final boolean show_or_hide) {
-        if (show_or_hide) { showText(activity, ""); }
+        if (show_or_hide) showText(activity, "");
+        else activity.runOnUiThread(new Runnable() { public void run() {
+            Pair<AlertDialog, EditText> alert = getView(activity);
+            alert.first.hide();
+        }});
     } 
 
     public void showText(final Activity activity, final String arg) {

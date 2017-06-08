@@ -37,7 +37,9 @@ import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentManager;
 import android.support.v7.app.ActionBar;
 
-public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity {
+public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity
+    implements FragmentManager.OnBackStackChangedListener {
+
     static { System.loadLibrary("native-lib"); }
     
     public native void nativeCreate();
@@ -76,8 +78,7 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity {
 
     protected void onCreated() {}
 
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
+    @Override protected void onCreate(Bundle savedInstanceState) {
         Log.i("lfl", "MainActivity.onCreate() native_created=" + native_created);
         preferences = PreferenceManager.getDefaultSharedPreferences(this);
         setTheme(preferences.getString("theme", "Dark").equals("Light") ?
@@ -145,32 +146,18 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity {
                 nativeReshaped(r.left, surface_height - h, r.right - r.left, h); 
             }});
 
-        final MainActivity self = this;
-        getSupportFragmentManager().addOnBackStackChangedListener(new FragmentManager.OnBackStackChangedListener() {
-            @Override public void onBackStackChanged() {
-                int stack_size = getSupportFragmentManager().getBackStackEntryCount() ;
-                if (stack_size > 1 || (stack_size == 1 && ScreenFragmentNavigator.haveFragmentNavLeft(self, "0"))) {
-                    action_bar.setHomeButtonEnabled(true);
-                    action_bar.setDisplayHomeAsUpEnabled(true);
-                } else {
-                    action_bar.setDisplayHomeAsUpEnabled(false);
-                    action_bar.setHomeButtonEnabled(false);
-                }
-            }});
-
+        getSupportFragmentManager().addOnBackStackChangedListener(this);
         staticLifecycle.onActivityCreated(this, savedInstanceState);
     }
 
-    @Override
-    protected void onStart() {
+    @Override protected void onStart() {
         Log.i("lfl", "MainActivity.onStart()");
         super.onStart();
         staticLifecycle.onActivityStarted(this);
         activityLifecycle.onActivityStarted(this);
     }
 
-    @Override
-    public void onResume() {
+    @Override public void onResume() {
         boolean have_surface = view.have_surface, thread_exists = thread != null;
         Log.i("lfl", "MainActivity.onResume() have_surface=" + have_surface + " thread_exists=" + thread_exists);
         super.onResume();
@@ -180,8 +167,7 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity {
         if (have_surface && !thread_exists) startRenderThread(false);
     }
     
-    @Override
-    protected void onPause() {
+    @Override protected void onPause() {
         Log.i("lfl", "MainActivity.onPause() enter");
         super.onPause();
         staticLifecycle.onActivityPaused(this);
@@ -196,16 +182,14 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity {
         Log.i("lfl", "MainActivity.onPause() exit");
     }
     
-    @Override
-    protected void onStop() {
+    @Override protected void onStop() {
         Log.i("lfl", "MainActivity.onStop()");
         super.onStop();
         staticLifecycle.onActivityStopped(this);
         activityLifecycle.onActivityStopped(this);
     }
 
-    @Override
-    protected void onDestroy() {
+    @Override protected void onDestroy() {
         Log.i("lfl", "MainActivity.onDestroy()");
         staticLifecycle.onActivityDestroyed(this);
         activityLifecycle.onActivityDestroyed(this);
@@ -213,14 +197,12 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity {
         super.onDestroy();
     }
 
-    @Override
-    public void onConfigurationChanged(Configuration newConfig) {
+    @Override public void onConfigurationChanged(Configuration newConfig) {
         Log.i("lfl", "onConfigurationChanged");
         super.onConfigurationChanged(newConfig);
     }
 
-    @Override
-    protected void onActivityResult(int request, int response, Intent data) {
+    @Override protected void onActivityResult(int request, int response, Intent data) {
         Log.i("lfl", "MainActivity.onActivityResult(" + request + ", " + response + ")");
         waiting_activity_result = false;
         super.onActivityResult(request, response, data);
@@ -228,8 +210,11 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity {
         activityLifecycle.onActivityResult(this, request, response, data);
     }
 
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
+    @Override public void onBackStackChanged() {
+        ScreenFragmentNavigator.updateHomeButton(this);
+    }
+
+    @Override public boolean onOptionsItemSelected(MenuItem item) {
         switch (item.getItemId()) {
             case android.R.id.home:
                 onBackPressed();
@@ -238,8 +223,7 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity {
         return super.onOptionsItemSelected(item);
     }
 
-    @Override
-    public void onBackPressed() { ScreenFragmentNavigator.onBackPressed(this); }
+    @Override public void onBackPressed() { ScreenFragmentNavigator.onBackPressed(this); }
 
     public void superOnBackPressed() { super.onBackPressed(); } 
 
@@ -315,9 +299,10 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity {
                 (self, new ScaleGestureDetector.SimpleOnScaleGestureListener() {
                     @Override
                     public boolean onScale(ScaleGestureDetector g) {
-                        nativeScale(g.getFocusX(), g.getFocusY(),
-                                    g.getCurrentSpanX() - g.getPreviousSpanX(),
-                                    g.getCurrentSpanY() - g.getPreviousSpanY(), !g.isInProgress());
+                        float dx = g.getCurrentSpanX() - g.getPreviousSpanX();
+                        float dy = g.getCurrentSpanY() - g.getPreviousSpanY();
+                        Log.i("lfl", "scale " +  g.getFocusX() + " " + g.getFocusY() + " " + dx + " " + dy + " " + g.isInProgress());
+                        nativeScale(g.getFocusX(), g.getFocusY(), dx, dy, !g.isInProgress());
                         return true;
                     }});
         }});

@@ -27,7 +27,7 @@ import com.lucidfusionlabs.core.LifecycleActivity;
 import com.lucidfusionlabs.core.ActivityLifecycleListenerList;
 
 public class PurchaseManager extends com.lucidfusionlabs.core.ActivityLifecycleListener {
-    public final int PURCHASE_REQUEST_CODE = 1078;
+    public static final int PURCHASE_REQUEST_CODE = 1078;
     public static final String FILENAME = "purchase.ser";
     public static final String KEY_FACTORY_ALGORITHM = "RSA";
     public static final String SIGNATURE_ALGORITHM = "SHA1withRSA";

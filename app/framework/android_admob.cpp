@@ -32,8 +32,8 @@ struct AndroidAdvertisingView : public AdvertisingViewInterface {
     static jmethodID mid = CheckNotNull
       (jni->env->GetStaticMethodID(jni->advertising_class, "createStaticInstance",
                                    "(Lcom/lucidfusionlabs/core/LifecycleActivity;IILjava/lang/String;Ljava/util/List;)Lcom/lucidfusionlabs/ads/Advertising;"));
-    LocalJNIString di(jni->env, jni->ToJString(did));
-    LocalJNIObject l(jni->env, jni->ToJStringArrayList(td));
+    LocalJNIString di(jni->env, JNI::ToJString(jni->env, did));
+    LocalJNIObject l(jni->env, JNI::ToJStringArrayList(jni->env, td));
     return jni->env->CallStaticObjectMethod(jni->advertising_class, mid, jni->activity, jint(t), jint(p), di.v, l.v);
   }
 

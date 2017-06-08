@@ -185,8 +185,9 @@ public class TableScreen extends Screen {
     }
 
     public void setHidden(final AppCompatActivity activity, final int s, final int r, final int v) {
-        activity.runOnUiThread
-            (new Runnable() { public void run() { model.setHidden(s, r, v); }});
+        activity.runOnUiThread(new Runnable() { public void run() {
+            if (model.setHidden(s, r, v)) ScreenFragmentNavigator.updateHomeButton(activity);
+        }});
     }
 
     public void setSelected(final AppCompatActivity activity, final int s, final int r, final int v) {

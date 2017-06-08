@@ -497,7 +497,7 @@ int Application::Create(const char *source_filename) {
     JNI *jni = LFL::Singleton<LFL::JNI>::Get();
     jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "getFilesDirCanonicalPath", "()Ljava/lang/String;"));
     jstring path = jstring(jni->env->CallObjectMethod(jni->activity, mid));
-    savedir = StrCat(jni->GetJString(path), "/");
+    savedir = StrCat(JNI::GetJString(jni->env, path), "/");
     jni->env->DeleteLocalRef(path);
 #elif defined(LFL_APPLE) && !defined(LFL_IOS_SIM)
     savedir = StrCat(GetNSDocumentDirectory(), "/");

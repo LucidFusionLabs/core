@@ -57,6 +57,8 @@ public class Screens {
 
         if (navigators.size() > 0) {
             activity.getSupportActionBar().show();
+            navigators.get(navigators.size()-1).showBackFragment(activity, false, true);
+            activity.onBackStackChanged();
         }
     }
 

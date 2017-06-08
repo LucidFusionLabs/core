@@ -60,12 +60,12 @@ void JNI::LogException(jthrowable &exception) {
 
   if (frames > 0) {
     LocalJNIString msg(env, (jstring)env->CallObjectMethod(exception, jni_throwable_method_tostring));
-    out += GetJString(msg.v);
+    out += GetJString(env, msg.v);
   }
   for (jsize i = 0; i < frames_length; i++) { 
     LocalJNIObject frame(env, env->GetObjectArrayElement(frames, i));
     LocalJNIString msg(env, (jstring)env->CallObjectMethod(frame.v, jni_frame_method_tostring));
-    out += "\n    " + GetJString(msg.v);
+    out += "\n    " + GetJString(env, msg.v);
   }
   if (frames > 0) {
     jthrowable cause = (jthrowable)env->CallObjectMethod(exception, jni_throwable_method_get_cause);
@@ -75,178 +75,180 @@ void JNI::LogException(jthrowable &exception) {
   INFOf("JNI::LogException: %s", out.c_str());
 }
 
-string JNI::GetEnvJString(JNIEnv *e, jstring x) {
-  const char *buf = e->GetStringUTFChars(x, 0);
+string JNI::GetJString(JNIEnv *env, jstring x) {
+  if (!x) return "";
+  const char *buf = env->GetStringUTFChars(x, 0);
   string ret = buf;
-  e->ReleaseStringUTFChars(x, buf);
+  env->ReleaseStringUTFChars(x, buf);
   return ret;
 }
 
-jstring JNI::ToJStringRaw(const string &x) {
-  static jmethodID mid = CheckNotNull(env->GetMethodID(string_class, "<init>", "([BLjava/lang/String;)V"));
+jstring JNI::ToJStringRaw(JNIEnv *env, const string &x) {
+  static jmethodID mid = CheckNotNull(env->GetMethodID(jni->string_class, "<init>", "([BLjava/lang/String;)V"));
   LocalJNIType<jbyteArray> array(env, env->NewByteArray(x.size()));
   env->SetByteArrayRegion(array.v, 0, x.size(), reinterpret_cast<const jbyte*>(x.data()));
   LocalJNIString encoding(env, env->NewStringUTF("UTF-8"));
-  return jstring(env->NewObject(string_class, mid, array.v, encoding.v));
+  return jstring(env->NewObject(jni->string_class, mid, array.v, encoding.v));
 }
 
-jobjectArray JNI::ToJStringArray(const StringVec &items) {
-  jobjectArray v = env->NewObjectArray(items.size(), string_class, NULL);
+jobjectArray JNI::ToJStringArray(JNIEnv *env, const StringVec &items) {
+  jobjectArray v = env->NewObjectArray(items.size(), jni->string_class, NULL);
   for (int i=0, l=items.size(); i != l; ++i) {
-    LocalJNIString vi(env, ToJString(items[i]));
+    LocalJNIString vi(env, ToJString(env, items[i]));
     env->SetObjectArrayElement(v, i, vi.v);
   }
   return v;
 }
 
-pair<jobjectArray, jobjectArray> JNI::ToJStringArrays(const StringPairVec &items) {
-  jobjectArray k = env->NewObjectArray(items.size(), string_class, NULL);
-  jobjectArray v = env->NewObjectArray(items.size(), string_class, NULL);
+pair<jobjectArray, jobjectArray> JNI::ToJStringArrays(JNIEnv *env, const StringPairVec &items) {
+  jobjectArray k = env->NewObjectArray(items.size(), jni->string_class, NULL);
+  jobjectArray v = env->NewObjectArray(items.size(), jni->string_class, NULL);
   for (int i=0, l=items.size(); i != l; ++i) {
-    LocalJNIString ki(env, ToJString(items[i].first)), vi(env, ToJString(items[i].second));
+    LocalJNIString ki(env, ToJString(env, items[i].first)), vi(env, ToJString(env, items[i].second));
     env->SetObjectArrayElement(k, i, ki.v);
     env->SetObjectArrayElement(v, i, vi.v);
   }
   return make_pair(k, v);
 }
 
-jobject JNI::ToJStringArrayList(const StringVec &items) {
-  jobject ret = env->NewObject(arraylist_class, arraylist_construct);
+jobject JNI::ToJStringArrayList(JNIEnv *env, const StringVec &items) {
+  jobject ret = env->NewObject(jni->arraylist_class, jni->arraylist_construct);
   for (auto &i : items) {
-    LocalJNIObject v(env, ToJString(i));
-    CHECK(env->CallBooleanMethod(ret, arraylist_add, v.v));
+    LocalJNIObject v(env, ToJString(env, i));
+    CHECK(env->CallBooleanMethod(ret, jni->arraylist_add, v.v));
   }
   return ret;
 }
 
-jobject JNI::ToJStringPairArrayList(const StringPairVec &items) {
-  jobject ret = env->NewObject(arraylist_class, arraylist_construct);
+jobject JNI::ToJStringPairArrayList(JNIEnv *env, const StringPairVec &items) {
+  jobject ret = env->NewObject(jni->arraylist_class, jni->arraylist_construct);
   for (auto &i : items) {
-    LocalJNIString ki(env, ToJString(i.first)), vi(env, ToJString(i.second));
-    LocalJNIObject v(env, env->NewObject(pair_class, jni->pair_construct, ki.v, vi.v));
-    CHECK(env->CallBooleanMethod(ret, arraylist_add, v.v));
+    LocalJNIString ki(env, ToJString(env, i.first)), vi(env, ToJString(env, i.second));
+    LocalJNIObject v(env, env->NewObject(jni->pair_class, jni->pair_construct, ki.v, vi.v));
+    CHECK(env->CallBooleanMethod(ret, jni->arraylist_add, v.v));
   }
   return ret;
 }
 
-jobject JNI::ToModelItemArrayList(AlertItemVec items) {
-  jobject ret = env->NewObject(arraylist_class, arraylist_construct);
+jobject JNI::ToModelItemArrayList(JNIEnv *env, AlertItemVec items) {
+  jobject ret = env->NewObject(jni->arraylist_class, jni->arraylist_construct);
   for (int i=0, l=items.size(); i != l; ++i) {
-    LocalJNIObject v(env, ToModelItem(items[i]));
-    CHECK(env->CallBooleanMethod(ret, arraylist_add, v.v));
+    LocalJNIObject v(env, ToModelItem(env, items[i]));
+    CHECK(env->CallBooleanMethod(ret, jni->arraylist_add, v.v));
   }
   return ret;
 }
 
-jobject JNI::ToModelItemArrayList(MenuItemVec items) {
-  jobject ret = env->NewObject(arraylist_class, arraylist_construct);
+jobject JNI::ToModelItemArrayList(JNIEnv *env, MenuItemVec items) {
+  jobject ret = env->NewObject(jni->arraylist_class, jni->arraylist_construct);
   for (int i=0, l=items.size(); i != l; ++i) {
-    LocalJNIObject v(env, ToModelItem(items[i]));
-    CHECK(env->CallBooleanMethod(ret, arraylist_add, v.v));
+    LocalJNIObject v(env, ToModelItem(env, items[i]));
+    CHECK(env->CallBooleanMethod(ret, jni->arraylist_add, v.v));
   }
   return ret;
 }
 
-jobject JNI::ToModelItemArrayList(TableItemVec items) {
-  jobject ret = env->NewObject(arraylist_class, arraylist_construct);
+jobject JNI::ToModelItemArrayList(JNIEnv *env, TableItemVec items) {
+  jobject ret = env->NewObject(jni->arraylist_class, jni->arraylist_construct);
   for (int i=0, l=items.size(); i != l; ++i) {
-    LocalJNIObject v(env, ToModelItem(items[i]));
-    CHECK(env->CallBooleanMethod(ret, arraylist_add, v.v));
+    LocalJNIObject v(env, ToModelItem(env, items[i]));
+    CHECK(env->CallBooleanMethod(ret, jni->arraylist_add, v.v));
   }
   return ret;
 }
 
-jobject JNI::ToModelItemChangeList(const TableSection::ChangeList &items) {
-  jobject ret = env->NewObject(arraylist_class, arraylist_construct);
+jobject JNI::ToModelItemChangeList(JNIEnv *env, const TableSection::ChangeList &items) {
+  jobject ret = env->NewObject(jni->arraylist_class, jni->arraylist_construct);
   for (auto &i : items) {
-    LocalJNIObject v(env, ToModelItemChange(i));
-    CHECK(env->CallBooleanMethod(ret, arraylist_add, v.v));
+    LocalJNIObject v(env, ToModelItemChange(env, i));
+    CHECK(env->CallBooleanMethod(ret, jni->arraylist_add, v.v));
   }
   return ret;
 }
 
-jobject JNI::ToModelItem(AlertItem item) {
+jobject JNI::ToModelItem(JNIEnv *env, AlertItem item) {
   jboolean hidden=0;
-  LocalJNIString k(env, ToJString(item.first)), v(env, ToJString(item.second)), rt(env, ToJString("")), ddk(env, ToJString(""));
-  LocalJNIObject rcb(env, item.cb ? ToNativeStringCB(move(item.cb)) : nullptr);
+  LocalJNIString k(env, ToJString(env, item.first)), v(env, ToJString(env, item.second)),
+                 rt(env, ToJString(env, "")), ddk(env, ToJString(env, ""));
+  LocalJNIObject rcb(env, item.cb ? ToNativeStringCB(env, move(item.cb)) : nullptr);
   jobject lcb = nullptr, picker = nullptr;
   jint type=0, tag=0, flags=0, right_icon=0, selected=0, height=0, fg=0, bg=0;
-  return env->NewObject(modelitem_class, modelitem_construct, k.v, v.v, rt.v, ddk.v, type,
+  return env->NewObject(jni->modelitem_class, jni->modelitem_construct, k.v, v.v, rt.v, ddk.v, type,
                         tag, flags, jint(item.image), right_icon, selected, height, lcb, rcb.v, picker,
                         hidden, fg, bg);
 }
 
-jobject JNI::ToModelItem(MenuItem item) {
-  LocalJNIString k(env, ToJString(item.shortcut)), v(env, ToJString(item.name)), rt(env, ToJString("")), ddk(env, ToJString(""));
-  LocalJNIObject cb(env, item.cb ? ToNativeCallback(move(item.cb)) : nullptr);
-  return env->NewObject(modelitem_class, modelitem_construct, k.v, v.v, rt.v, ddk.v, jint(0),
+jobject JNI::ToModelItem(JNIEnv *env, MenuItem item) {
+  LocalJNIString k(env, ToJString(env, item.shortcut)), v(env, ToJString(env, item.name)), rt(env, ToJString(env, "")), ddk(env, ToJString(env, ""));
+  LocalJNIObject cb(env, item.cb ? ToNativeCallback(env, move(item.cb)) : nullptr);
+  return env->NewObject(jni->modelitem_class, jni->modelitem_construct, k.v, v.v, rt.v, ddk.v, jint(0),
                         jint(0), jint(0), jint(item.image), jint(0), jint(0), jint(0), cb.v, nullptr, nullptr,
                         false, jint(0), jint(0));
 }
 
-jobject JNI::ToModelItem(TableItem item) {
+jobject JNI::ToModelItem(JNIEnv *env, TableItem item) {
   jint fg = (item.fg_a << 24) | (item.fg_r << 16) | (item.fg_g << 8) | item.fg_b;
   jint bg = (item.bg_a << 24) | (item.bg_r << 16) | (item.bg_g << 8) | item.bg_b;
-  LocalJNIObject k(env, ToJString(item.key)), v(env, ToJString(item.val)), rt(env, ToJString(item.right_text)),
-          ddk(env, ToJString(item.dropdown_key)), picker(env, ToPickerItem(item.picker));
-  LocalJNIObject cb(env, item.cb ? ToNativeCallback(move(item.cb)) : nullptr);
-  LocalJNIObject rcb(env, item.right_cb ? ToNativeStringCB(move(item.right_cb)) : nullptr);
-  return env->NewObject(modelitem_class, modelitem_construct, k.v, v.v, rt.v, ddk.v, jint(item.type),
+  LocalJNIObject k(env, ToJString(env, item.key)), v(env, ToJString(env, item.val)), rt(env, ToJString(env, item.right_text)),
+          ddk(env, ToJString(env, item.dropdown_key)), picker(env, ToPickerItem(env, item.picker));
+  LocalJNIObject cb(env, item.cb ? ToNativeCallback(env, move(item.cb)) : nullptr);
+  LocalJNIObject rcb(env, item.right_cb ? ToNativeStringCB(env, move(item.right_cb)) : nullptr);
+  return env->NewObject(jni->modelitem_class, jni->modelitem_construct, k.v, v.v, rt.v, ddk.v, jint(item.type),
                         jint(item.tag), jint(item.flags), jint(item.left_icon), jint(item.right_icon),
                         jint(item.selected), jint(item.height), cb.v, rcb.v, picker.v, jboolean(item.hidden),
                         fg, bg);
 }
 
-jobject JNI::ToModelItemChange(const TableSection::Change &item) {
-  LocalJNIObject k(env, ToJString(item.key)), v(env, ToJString(item.val));
-  LocalJNIObject cb(env, item.cb ? ToNativeCallback(item.cb) : nullptr);
-  return env->NewObject(modelitemchange_class, modelitemchange_construct, jint(item.section), jint(item.row),
+jobject JNI::ToModelItemChange(JNIEnv *env, const TableSection::Change &item) {
+  LocalJNIObject k(env, ToJString(env, item.key)), v(env, ToJString(env, item.val));
+  LocalJNIObject cb(env, item.cb ? ToNativeCallback(env, item.cb) : nullptr);
+  return env->NewObject(jni->modelitemchange_class, jni->modelitemchange_construct, jint(item.section), jint(item.row),
                         jint(item.type), k.v, v.v, jint(item.left_icon), jint(item.right_icon),
                         jint(item.flags), jboolean(item.hidden), cb.v);
 }
 
-jobject JNI::ToPickerItem(PickerItem *picker_in) {
+jobject JNI::ToPickerItem(JNIEnv *env, PickerItem *picker_in) {
   if (!picker_in) return nullptr;
   const PickerItem *picker = picker_in;
   jlong self = uintptr_t(picker_in);
-  LocalJNIObject cb(env, picker->cb ? ToNativePickerItemCB(picker->cb) : nullptr);
-  LocalJNIObject l(env, env->NewObject(arraylist_class, arraylist_construct));
+  LocalJNIObject cb(env, picker->cb ? ToNativePickerItemCB(env, picker->cb) : nullptr);
+  LocalJNIObject l(env, env->NewObject(jni->arraylist_class, jni->arraylist_construct));
   for (auto &i : picker->data) {
-    LocalJNIObject v(env, ToJStringArrayList(i));
-    CHECK(env->CallBooleanMethod(l.v, arraylist_add, v.v));
+    LocalJNIObject v(env, ToJStringArrayList(env, i));
+    CHECK(env->CallBooleanMethod(l.v, jni->arraylist_add, v.v));
   }
-  jobject ret = env->NewObject(pickeritem_class, pickeritem_construct, l.v, cb.v, self);
+  jobject ret = env->NewObject(jni->pickeritem_class, jni->pickeritem_construct, l.v, cb.v, self);
   return ret;
 }
 
-jobject JNI::ToNativeCallback(Callback c) {
-  static jmethodID mid = CheckNotNull(env->GetMethodID(nativecallback_class, "<init>", "(J)V"));
+jobject JNI::ToNativeCallback(JNIEnv *env, Callback c) {
+  static jmethodID mid = CheckNotNull(env->GetMethodID(jni->nativecallback_class, "<init>", "(J)V"));
   jlong cbp = uintptr_t(new Callback(move(c)));
-  return env->NewObject(nativecallback_class, mid, cbp);
+  return env->NewObject(jni->nativecallback_class, mid, cbp);
 }
 
-jobject JNI::ToNativeStringCB(StringCB c) {
-  static jmethodID mid = CheckNotNull(env->GetMethodID(nativestringcb_class, "<init>", "(J)V"));
+jobject JNI::ToNativeStringCB(JNIEnv *env, StringCB c) {
+  static jmethodID mid = CheckNotNull(env->GetMethodID(jni->nativestringcb_class, "<init>", "(J)V"));
   jlong cb = uintptr_t(new StringCB(move(c)));
-  return env->NewObject(nativestringcb_class, mid, cb);
+  return env->NewObject(jni->nativestringcb_class, mid, cb);
 }
 
-jobject JNI::ToNativeIntCB(IntCB c) {
-  static jmethodID mid = CheckNotNull(env->GetMethodID(nativeintcb_class, "<init>", "(J)V"));
+jobject JNI::ToNativeIntCB(JNIEnv *env, IntCB c) {
+  static jmethodID mid = CheckNotNull(env->GetMethodID(jni->nativeintcb_class, "<init>", "(J)V"));
   jlong cb = uintptr_t(new IntCB(move(c)));
-  return env->NewObject(nativeintcb_class, mid, cb);
+  return env->NewObject(jni->nativeintcb_class, mid, cb);
 }
 
-jobject JNI::ToNativeIntIntCB(IntIntCB c) {
-  static jmethodID mid = CheckNotNull(env->GetMethodID(nativeintintcb_class, "<init>", "(J)V"));
+jobject JNI::ToNativeIntIntCB(JNIEnv *env, IntIntCB c) {
+  static jmethodID mid = CheckNotNull(env->GetMethodID(jni->nativeintintcb_class, "<init>", "(J)V"));
   jlong cb = uintptr_t(new IntIntCB(move(c)));
-  return env->NewObject(nativeintintcb_class, mid, cb);
+  return env->NewObject(jni->nativeintintcb_class, mid, cb);
 }
 
-jobject JNI::ToNativePickerItemCB(const PickerItem::CB &c) {
-  static jmethodID mid = CheckNotNull(env->GetMethodID(nativepickeritemcb_class, "<init>", "(J)V"));
+jobject JNI::ToNativePickerItemCB(JNIEnv *env, const PickerItem::CB &c) {
+  static jmethodID mid = CheckNotNull(env->GetMethodID(jni->nativepickeritemcb_class, "<init>", "(J)V"));
   jlong cb = uintptr_t(new PickerItem::CB(c));
-  return env->NewObject(nativepickeritemcb_class, mid, cb);
+  return env->NewObject(jni->nativepickeritemcb_class, mid, cb);
 }
 
 BufferFile *JNI::OpenAsset(const string &fn) {
@@ -256,7 +258,7 @@ BufferFile *JNI::OpenAsset(const string &fn) {
   static jmethodID channels_newchan_mid = CheckNotNull(env->GetStaticMethodID(channels_class, "newChannel", "(Ljava/io/InputStream;)Ljava/nio/channels/ReadableByteChannel;"));
   static jmethodID readbytechan_read_mid = CheckNotNull(env->GetMethodID(readbytechan_class, "read", "(Ljava/nio/ByteBuffer;)I"));
 
-  LocalJNIString jfn(env, ToJString(fn));
+  LocalJNIString jfn(env, ToJString(env, fn));
   LocalJNIObject assets(env, env->CallObjectMethod(activity, get_assets_mid));
   LocalJNIObject input(env, env->CallObjectMethod(assets.v, assetmgr_open_mid, jfn.v));
   if (!input.v || CheckForException()) return nullptr;
@@ -279,19 +281,19 @@ BufferFile *JNI::OpenAsset(const string &fn) {
 string Application::GetVersion() {
   static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "getVersionName", "()Ljava/lang/String;"));
   LocalJNIString str(jni->env, (jstring)jni->env->CallObjectMethod(jni->activity, mid));
-  return jni->GetJString(str.v);
+  return JNI::GetJString(jni->env, str.v);
 }
 
 void Application::OpenSystemBrowser(const string &url_text) {
   static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "openBrowser", "(Ljava/lang/String;)V"));
-  LocalJNIString jurl(jni->env, jni->ToJString(url_text));
+  LocalJNIString jurl(jni->env, JNI::ToJString(jni->env, url_text));
   jni->env->CallVoidMethod(jni->activity, mid, jurl.v);
 }
 
 string Application::GetSystemDeviceName() {
   static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "getModelName", "()Ljava/lang/String;"));
   LocalJNIString str(jni->env, (jstring)jni->env->CallObjectMethod(jni->activity, mid));
-  return jni->GetJString(str.v);
+  return JNI::GetJString(jni->env, str.v);
 }
 
 bool Application::OpenSystemAppPreferences() {
@@ -308,7 +310,7 @@ string Application::GetLocalizedString(const char *key) {
   jfieldID fid = CheckNotNull(jni->env->GetStaticFieldID(jni->r_string_class, key, "I"));
   int resource_id = jni->env->GetStaticIntField(jni->r_string_class, fid);
   LocalJNIString str(jni->env, (jstring)jni->env->CallObjectMethod(jni->resources, mid, resource_id));
-  return jni->GetJString(str.v);
+  return JNI::GetJString(jni->env, str.v);
 }
 
 String16 Application::GetLocalizedInteger16(int number) { return String16(); }
@@ -318,20 +320,20 @@ string Application::GetLocalizedInteger(int number) {
 
 void Application::LoadDefaultSettings(const StringPairVec &v) {
   static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "setDefaultPreferences", "(Ljava/util/ArrayList;)V"));
-  LocalJNIObject prefs(jni->env, jni->ToJStringPairArrayList(v));
+  LocalJNIObject prefs(jni->env, JNI::ToJStringPairArrayList(jni->env, v));
   jni->env->CallVoidMethod(jni->activity, mid, prefs.v);
 }
 
 string Application::GetSetting(const string &key) {
   static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "getPreference", "(Ljava/lang/String;)Ljava/lang/String;"));
-  LocalJNIString jkey(jni->env, jni->ToJString(key));
+  LocalJNIString jkey(jni->env, JNI::ToJString(jni->env, key));
   LocalJNIString jval(jni->env, (jstring)jni->env->CallObjectMethod(jni->activity, mid, jkey.v));
-  return jval.v ? jni->GetJString(jval.v) : "";
+  return jval.v ? JNI::GetJString(jni->env, jval.v) : "";
 }
 
 void Application::SaveSettings(const StringPairVec &v) {
   static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "updatePreferences", "(Ljava/util/ArrayList;)V"));
-  LocalJNIObject prefs(jni->env, jni->ToJStringPairArrayList(v));
+  LocalJNIObject prefs(jni->env, JNI::ToJStringPairArrayList(jni->env, v));
   jni->env->CallVoidMethod(jni->activity, mid, prefs.v);
 }
 

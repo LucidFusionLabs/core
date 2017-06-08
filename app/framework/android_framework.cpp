@@ -64,7 +64,7 @@ const int Texture::updatesystemimage_pf = Pixel::BGRA;
 struct AndroidWindow : public Window {
   void SetCaption(const string &text) {
     static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "setCaption", "(Ljava/lang/String;)V"));
-    LocalJNIString jtext(jni->env, jni->ToJString(text));
+    LocalJNIString jtext(jni->env, JNI::ToJString(jni->env, text));
     jni->env->CallVoidMethod(jni->activity, mid, jtext.v);
   }
 
@@ -112,7 +112,7 @@ struct AndroidAssetLoader : public SimpleAssetLoader {
   virtual void *LoadAudioFileNamed(const string &filename) {
     static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "loadMusicResource", "(Ljava/lang/String;)Landroid/media/MediaPlayer;"));
     string fn = basename(filename.c_str());
-    LocalJNIString jfn(jni->env, jni->ToJString(fn.substr(0, fn.find('.'))));
+    LocalJNIString jfn(jni->env, JNI::ToJString(jni->env, fn.substr(0, fn.find('.'))));
     LocalJNIObject handle(jni->env, jni->env->CallObjectMethod(jni->activity, mid, jfn.v));
     return jni->env->NewGlobalRef(handle.v);
   }
@@ -126,7 +126,7 @@ struct AndroidTimer : public TimerInterface {
   GlobalJNIObject fired_cb;
   Time next = Time::zero();
   AndroidTimer(Callback c) :
-    cb(move(c)), fired_cb(jni->ToNativeCallback(bind(&AndroidTimer::FiredCB, this))) {}
+    cb(move(c)), fired_cb(JNI::ToNativeCallback(jni->env, bind(&AndroidTimer::FiredCB, this))) {}
 
   void FiredCB() {
     next = Time::zero();
@@ -236,7 +236,7 @@ void Application::SetKeepScreenOn(bool v) {
 
 void Application::SetTheme(const string &v) {
   static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "setTheme", "(Ljava/lang/String;)V"));
-  LocalJNIString vstr(jni->env, jni->ToJString(v));
+  LocalJNIString vstr(jni->env, JNI::ToJString(jni->env, v));
   jni->env->CallVoidMethod(jni->activity, mid, vstr.v);
 }
 
@@ -305,8 +305,7 @@ unique_ptr<TimerInterface> SystemToolkit::CreateTimer(Callback cb) { return make
 static void MainActivity_ShutdownMainLoop() {
   app->suspended = true;
   if (app->focused->unfocused_cb) app->focused->unfocused_cb();
-  while (app->messag
-      e_queue.HandleMessages()) {}
+  while (app->message_queue.HandleMessages()) {}
   app->focused->gd->Finish();
 }
 
@@ -323,7 +322,7 @@ extern "C" void Java_com_lucidfusionlabs_app_MainActivity_nativeCreate(JNIEnv *e
     CheckNotNull(jni->env->GetMethodID(jni->activity_class, "getPackageName", "()Ljava/lang/String;"));
 
   jni->Init(a, true);
-  jni->package_name = jni->GetJString((jstring)jni->env->CallObjectMethod(jni->activity, activity_getpkgname_mid));
+  jni->package_name = jni->GetJString(jni->env, (jstring)jni->env->CallObjectMethod(jni->activity, activity_getpkgname_mid));
   std::replace(jni->package_name.begin(), jni->package_name.end(), '.', '/');
 
   CHECK(jni->view_class         = (jclass)e->NewGlobalRef(e->GetObjectClass(jni->view)));
@@ -371,7 +370,7 @@ extern "C" void Java_com_lucidfusionlabs_app_MainActivity_nativeCreate(JNIEnv *e
   CHECK(jni->modelitemchange_construct = e->GetMethodID(jni->modelitemchange_class, "<init>", "(IIILjava/lang/String;Ljava/lang/String;IIIZLcom/lucidfusionlabs/core/NativeCallback;)V"));
   CHECK(jni->pickeritem_construct = e->GetMethodID(jni->pickeritem_class, "<init>", "(Ljava/util/ArrayList;Lcom/lucidfusionlabs/core/NativePickerItemCB;J)V"));
   CHECK(jni->int_intval = e->GetMethodID(jni->int_class, "intValue", "()I"));
-  CHECK(jni->long_longval = e->GetMethodID(jni->int_class, "longValue", "()J"));
+  CHECK(jni->long_longval = e->GetMethodID(jni->long_class, "longValue", "()J"));
   if (jni->gplus) CHECK(jni->gplus_class = (jclass)e->NewGlobalRef(e->GetObjectClass(jni->gplus)));
 
   static const char *argv[2] = { "LFLApp", 0 };
@@ -489,7 +488,7 @@ extern "C" void Java_com_lucidfusionlabs_core_NativeCallback_RunCallbackInMainTh
 }
 
 extern "C" void Java_com_lucidfusionlabs_core_NativeStringCB_RunStringCBInMainThread(JNIEnv *e, jclass c, jlong cb, jstring text) {
-  app->RunCallbackInMainThread(bind(*static_cast<StringCB*>(Void(cb)), JNI::GetEnvJString(e, text)));
+  app->RunCallbackInMainThread(bind(*static_cast<StringCB*>(Void(cb)), JNI::GetJString(e, text)));
 }
 
 extern "C" void Java_com_lucidfusionlabs_core_NativeIntCB_RunIntCBInMainThread(JNIEnv *e, jclass c, jlong cb, jint x) {
