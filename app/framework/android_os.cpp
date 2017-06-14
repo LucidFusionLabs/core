@@ -33,7 +33,6 @@ void JNI::Free() {
   if (1)           env->DeleteGlobalRef(handler);  handler  = 0;
   if (1)           env->DeleteGlobalRef(view);     view     = 0;
   if (1)           env->DeleteGlobalRef(activity); activity = 0;
-  activity_box = Box(-1, -1);
 }
 
 int JNI::CheckForException() {

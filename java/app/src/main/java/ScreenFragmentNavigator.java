@@ -56,7 +56,7 @@ public class ScreenFragmentNavigator {
                 if (shown_index >= 0) Log.i("lfl", "Show already shown navbar");
                 else {
                     activity.screens.navigators.add(self);
-                    activity.frame_layout.setVisibility(View.GONE);
+                    activity.gl_layout.setVisibility(View.GONE);
                     activity.action_bar.show();
                     shown_index = activity.screens.navigators.size()-1;
                     int stack_size = activity.getSupportFragmentManager().getBackStackEntryCount();
@@ -84,7 +84,7 @@ public class ScreenFragmentNavigator {
                         Fragment frag = activity.getSupportFragmentManager().findFragmentById(R.id.content_frame);
                         activity.getSupportFragmentManager().beginTransaction().remove(frag).commit();
                     }
-                    if (size == 1) activity.frame_layout.setVisibility(View.VISIBLE);
+                    if (size == 1) activity.gl_layout.setVisibility(View.VISIBLE);
                     shown_index = -1;
                 }
             }

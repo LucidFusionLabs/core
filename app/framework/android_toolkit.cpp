@@ -401,9 +401,15 @@ void AndroidTableView::SetHeader(int section, TableItem header) {
   jni->env->CallVoidMethod(impl.v, mid, jni->activity, jint(section), v.v);
 }
 
-void Application::ShowSystemFontChooser(const FontDesc &cur_font, const StringVecCB &cb) {}
-void Application::ShowSystemFileChooser(bool files, bool dirs, bool multi, const StringVecCB &cb) {}
-void Application::ShowSystemContextMenu(const MenuItemVec &items) {}
+void Application::ShowSystemFontChooser(const FontDesc &cur_font, const StringVecCB &cb) { return ERROR(not_implemented); }
+void Application::ShowSystemFileChooser(bool files, bool dirs, bool multi, const StringVecCB &cb) { return ERROR(not_implemented); }
+
+void Application::ShowSystemContextMenu(const MenuItemVec &items) {
+  static jmethodID mid = CheckNotNull
+    (jni->env->GetMethodID(jni->activity_class, "showContextMenu", "(Ljava/util/ArrayList;)V"));
+  LocalJNIObject v(jni->env, JNI::ToModelItemArrayList(jni->env, move(items)));
+  jni->env->CallVoidMethod(jni->activity, mid, v.v);
+}
 
 void Application::UpdateSystemImage(int n, Texture &t) {
   if (!t.buf) return;

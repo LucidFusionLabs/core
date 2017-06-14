@@ -36,9 +36,11 @@ import android.preference.PreferenceManager;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentManager;
 import android.support.v7.app.ActionBar;
+import com.lucidfusionlabs.core.ModelItem;
 
 public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity
-    implements FragmentManager.OnBackStackChangedListener {
+    implements FragmentManager.OnBackStackChangedListener, View.OnKeyListener, View.OnTouchListener,
+    SensorEventListener {
 
     static { System.loadLibrary("native-lib"); }
     
@@ -59,24 +61,28 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity
     public static Screens screens = new Screens();
     public static ArrayList<Bitmap> bitmaps = new ArrayList<Bitmap>();
 
+    public Handler handler = new Handler();
     public Resources resources;
-    public FrameLayout main_layout, frame_layout;
+    public FrameLayout main_layout;
+    public LinearLayout gl_layout;
     public ActionBar action_bar;
     public Window root_window;
     public View root_view;
-    public MainView view;
-    public Thread thread;
+    public OpenGLView gl_view;
     public AudioManager audio;
+    public SensorManager sensor;
+    public ClipboardManager clipboard;
     public boolean waiting_activity_result;
-    public int surface_width, surface_height, egl_version;
     public int attr_listPreferredItemHeight, attr_scrollbarSize;
     public float display_density;
-    public PreferenceFragment preference_fragment;
-    public HashMap<String, String> preference_default = new HashMap<String, String>();
+    public ArrayList<ModelItem> context_menu;
     public SharedPreferences preferences;
-    public Handler handler = new Handler();
+    public HashMap<String, String> preference_default = new HashMap<String, String>();
+    public GestureDetector gesture_detector;
+    public ScaleGestureDetector scale_detector;
 
     protected void onCreated() {}
+    protected PreferenceFragment createPreferenceFragment() { return null; }
 
     @Override protected void onCreate(Bundle savedInstanceState) {
         Log.i("lfl", "MainActivity.onCreate() native_created=" + native_created);
@@ -95,12 +101,25 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity
         onCreated();
         Context context = getApplication();
         LayoutInflater inflater = (LayoutInflater)context.getSystemService(LAYOUT_INFLATER_SERVICE);
-        main_layout = (FrameLayout)inflater.inflate(R.layout.main, null);
         root_window = getWindow();
+        root_view = root_window.getDecorView().findViewById(android.R.id.content);
+        main_layout = (FrameLayout)inflater.inflate(R.layout.main, null);
         resources = getResources();
-        view = new MainView(this, context);
         audio = (AudioManager)getSystemService(Context.AUDIO_SERVICE);
+        sensor = (SensorManager)getSystemService("sensor");
+        clipboard = (ClipboardManager)getSystemService(Context.CLIPBOARD_SERVICE);
         action_bar = getSupportActionBar();
+        display_density = resources.getDisplayMetrics().density;
+
+        int[] attr = new int[] { android.R.attr.listPreferredItemHeight, android.R.attr.scrollbarSize };
+        android.content.res.TypedArray attr_val = context.obtainStyledAttributes(attr);
+        attr_listPreferredItemHeight = attr_val.getDimensionPixelSize(0, -1);
+        attr_scrollbarSize           = attr_val.getDimensionPixelSize(1, -1);
+
+        gl_view = new OpenGLView(this, context);
+        gl_view.setOnKeyListener(this); 
+        gl_view.setOnTouchListener(this);
+        gl_view.requestFocus();
 
         if (!native_created) {
             native_created = true;
@@ -111,40 +130,11 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity
             if (disable_title) disableTitle();
         }
 
+        gl_layout = new LinearLayout(this);
+        gl_layout.setOrientation(LinearLayout.VERTICAL);
+        gl_layout.addView(gl_view, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1.0f));
+        main_layout.addView(gl_layout, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
         setContentView(main_layout);
-        frame_layout = new FrameLayout(this);
-        main_layout.addView(frame_layout, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
-        frame_layout.addView(view, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
-        display_density = resources.getDisplayMetrics().density;
-
-        int[] attr = new int[] { android.R.attr.listPreferredItemHeight, android.R.attr.scrollbarSize };
-        android.content.res.TypedArray attr_val = context.obtainStyledAttributes(attr);
-        attr_listPreferredItemHeight = attr_val.getDimensionPixelSize(0, -1);
-        attr_scrollbarSize           = attr_val.getDimensionPixelSize(1, -1);
-
-        root_view = root_window.getDecorView().findViewById(android.R.id.content);
-        root_view.getViewTreeObserver().addOnGlobalLayoutListener(
-            new ViewTreeObserver.OnGlobalLayoutListener() {
-            public void onGlobalLayout(){
-                if (!native_init) return;
-                Rect r = new Rect();
-                View view = root_window.getDecorView();
-                view.getWindowVisibleDisplayFrame(r);
-
-                int actionbar_h = action_bar.isShowing() ? action_bar.getHeight() : 0;
-                int h = r.bottom - r.top - actionbar_h;
-                for (Toolbar toolbar : screens.toolbar_bottom) {
-                    View tb = toolbar.view;
-                    if (tb == null) continue;
-                    FrameLayout.LayoutParams params = (FrameLayout.LayoutParams)tb.getLayoutParams();
-                    params.bottomMargin = surface_height - h;
-                    tb.setLayoutParams(params);
-                    h -= tb.getHeight();
-                }
-
-                // Log.i("lfl", "onGlobalLayout(" + r.left + ", " + r.top + ", " + r.right + ", " + r.bottom + ", " + actionbar_h + ") = " + h);
-                nativeReshaped(r.left, surface_height - h, r.right - r.left, h); 
-            }});
 
         getSupportFragmentManager().addOnBackStackChangedListener(this);
         staticLifecycle.onActivityCreated(this, savedInstanceState);
@@ -158,13 +148,11 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity
     }
 
     @Override public void onResume() {
-        boolean have_surface = view.have_surface, thread_exists = thread != null;
-        Log.i("lfl", "MainActivity.onResume() have_surface=" + have_surface + " thread_exists=" + thread_exists);
         super.onResume();
         screens.onResume(this);
         staticLifecycle.onActivityResumed(this);
         activityLifecycle.onActivityResumed(this);
-        if (have_surface && !thread_exists) startRenderThread(false);
+        gl_view.onResume();
     }
     
     @Override protected void onPause() {
@@ -172,13 +160,7 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity
         super.onPause();
         staticLifecycle.onActivityPaused(this);
         activityLifecycle.onActivityPaused(this);
-        if (waiting_activity_result || thread == null) return;
-
-        Thread t = thread;
-        thread = null;        
-        nativeMinimize();
-        try { t.join(); }
-        catch(Exception e) { Log.e("lfl", e.toString()); }
+        if (!waiting_activity_result) gl_view.onPause();
         Log.i("lfl", "MainActivity.onPause() exit");
     }
     
@@ -223,29 +205,26 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity
         return super.onOptionsItemSelected(item);
     }
 
+    @Override public void onCreateContextMenu(ContextMenu menu, View v, ContextMenu.ContextMenuInfo menuInfo) {
+        if (context_menu == null) return;
+        for (int i=0, l=context_menu.size(); i < l; i++) {
+            ModelItem item = context_menu.get(i);
+            menu.add(0, i, 0, item.val.equals("Keyboard") ? "Toggle Keyboard" : item.val);
+        }
+    }
+
+    @Override public boolean onContextItemSelected(MenuItem i) {
+        if (context_menu == null || i.getItemId() >= context_menu.size()) return false;
+        ModelItem item = context_menu.get(i.getItemId());
+        if (item.val.equals("Keyboard")) toggleKeyboard();
+        else if (item.val.equals("Paste")) paste(getClipboardText());
+        else if (item.cb != null) item.cb.run();
+        return true;
+    }
+
     @Override public void onBackPressed() { ScreenFragmentNavigator.onBackPressed(this); }
 
     public void superOnBackPressed() { super.onBackPressed(); } 
-
-    public void surfaceChanged(int format, int width, int height) {
-        surface_width = width;
-        surface_height = height;
-        boolean thread_exists = thread != null;
-        Log.i("lfl", "surfaceChanged thread_exists=" + thread_exists);
-        nativeReshaped(0, 0, width, height);
-        if (thread_exists) return;
-        startRenderThread(true);
-    }
-
-    public void startRenderThread(boolean native_reset) {
-        Log.i("lfl", "startRenderThread native_init=" + native_init + " native_reset=" + native_reset);
-        screens.onStartRenderThread(this, frame_layout);
-        if      (!native_init) thread = new Thread(new Runnable() { public void run() { view.initEGL();        nativeMain       ();      } }, "JNIMainThread");
-        else if (native_reset) thread = new Thread(new Runnable() { public void run() { view.initEGL();        nativeNewMainLoop(true);  } }, "JNIMainThread");
-        else                   thread = new Thread(new Runnable() { public void run() { view.makeCurrentEGL(); nativeNewMainLoop(false); } }, "JNIMainThread");
-        thread.start();
-        native_init = true;
-    }
 
     public void forceExit() {
         Log.i("lfl", "MainActivity.forceExit()");
@@ -265,47 +244,26 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity
 
     public void showKeyboard() {
         android.view.inputmethod.InputMethodManager imm = (android.view.inputmethod.InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
-        imm.showSoftInput(view, android.view.inputmethod.InputMethodManager.SHOW_FORCED);
+        imm.showSoftInput(gl_view, android.view.inputmethod.InputMethodManager.SHOW_FORCED);
     }
 
     public void hideKeyboard() {
         android.view.inputmethod.InputMethodManager imm = (android.view.inputmethod.InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
-        imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
+        imm.hideSoftInputFromWindow(gl_view.getWindowToken(), 0);
     }
 
     public void hideKeyboardAfterEnter() {
         android.view.inputmethod.InputMethodManager imm = (android.view.inputmethod.InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
-        imm.hideSoftInputFromWindow(view.getWindowToken(), android.view.inputmethod.InputMethodManager.HIDE_NOT_ALWAYS); 
+        imm.hideSoftInputFromWindow(gl_view.getWindowToken(), android.view.inputmethod.InputMethodManager.HIDE_NOT_ALWAYS);
     }
 
     public void disableTitle() {
         disable_title = true;
         action_bar.hide();
-        // requestWindowFeature(Window.FEATURE_NO_TITLE);
     }
 
-    public void enableKeepScreenOn(boolean enabled) {
+    public void enableKeepScreenOn(final boolean enabled) {
         if (enabled) root_window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-    }
-
-    public void enablePanRecognizer(boolean enabled) {
-    }
-
-    public void enablePinchRecognizer(final boolean enabled) {
-        final MainActivity self = this;
-        runOnUiThread(new Runnable() { public void run() {
-            if (!enabled) view.scale_gesture = null;
-            else view.scale_gesture = new ScaleGestureDetector
-                (self, new ScaleGestureDetector.SimpleOnScaleGestureListener() {
-                    @Override
-                    public boolean onScale(ScaleGestureDetector g) {
-                        float dx = g.getCurrentSpanX() - g.getPreviousSpanX();
-                        float dy = g.getCurrentSpanY() - g.getPreviousSpanY();
-                        Log.i("lfl", "scale " +  g.getFocusX() + " " + g.getFocusY() + " " + dx + " " + dy + " " + g.isInProgress());
-                        nativeScale(g.getFocusX(), g.getFocusY(), dx, dy, !g.isInProgress());
-                        return true;
-                    }});
-        }});
     }
 
     public void setCaption(final String text) {
@@ -356,6 +314,7 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity
     }
 
     public boolean openPreferences() {
+        PreferenceFragment preference_fragment = createPreferenceFragment();;
         if (preference_fragment == null) return false;
         getSupportFragmentManager().beginTransaction()
             .replace(R.id.content_frame, preference_fragment).addToBackStack("Preferences").commit();
@@ -410,6 +369,31 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity
         catch(Exception e) { return dp != null ? dp : ""; }
     }
 
+    public String getClipboardText() {
+        if (!clipboard.hasPrimaryClip() ||
+            !clipboard.getPrimaryClipDescription().hasMimeType(android.content.ClipDescription.MIMETYPE_TEXT_PLAIN)) return "";
+        ClipData.Item item = clipboard.getPrimaryClip().getItemAt(0);
+        String pasteData = item == null ? null : item.getText().toString();
+        return pasteData == null ? "" : pasteData;
+    }
+
+    public void setClipboardText(String v) {
+        clipboard.setPrimaryClip(ClipData.newPlainText("text", v));
+    }
+
+    public String getCurrentStackTrace() {
+        return java.util.Arrays.toString(Thread.currentThread().getStackTrace());
+    }
+
+    public void showContextMenu(final ArrayList<ModelItem> model) {
+        runOnUiThread(new Runnable() { public void run() {
+            context_menu = model;
+            registerForContextMenu(gl_layout);
+            openContextMenu(gl_layout);
+            unregisterForContextMenu(gl_layout);
+        }});
+    }
+
     public int maxVolume() { return audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC); }
     public int getVolume() { return audio.getStreamVolume(AudioManager.STREAM_MUSIC); }
     public void setVolume(int v) { audio.setStreamVolume(AudioManager.STREAM_MUSIC, v, 0); }
@@ -423,4 +407,135 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity
 
     public void playMusic(MediaPlayer mp) { mp.start(); }
     public void playBackgroundMusic(MediaPlayer mp) { mp.setLooping(true); mp.start(); }
+
+    public void paste(String s) {
+        for (char c : s.toCharArray()) {
+            nativeKeyPress(c, 0, 1);
+            nativeKeyPress(c, 0, 0);
+        }
+    }
+
+    public void enableAccelerometer(final boolean enabled) {
+        // sensor.registerListener(this, sensor.getDefaultSensor(Sensor.TYPE_ACCELEROMETER), SensorManager.SENSOR_DELAY_GAME, null);
+        // sensor.unregisterListener(this, sensor.getDefaultSensor(Sensor.TYPE_ACCELEROMETER));
+    }
+
+    public void enablePanRecognizer(final boolean enabled) {
+    }
+
+    public void enablePinchRecognizer(final boolean enabled) {
+        final MainActivity self = this;
+        runOnUiThread(new Runnable() { public void run() {
+            if (!enabled) scale_detector = null;
+            else scale_detector = new ScaleGestureDetector
+                (self, new ScaleGestureDetector.SimpleOnScaleGestureListener() {
+                    @Override
+                    public boolean onScale(ScaleGestureDetector g) {
+                        float dx = g.getCurrentSpanX() - g.getPreviousSpanX();
+                        float dy = g.getCurrentSpanY() - g.getPreviousSpanY();
+                        Log.i("lfl", "scale " +  g.getFocusX() + " " + g.getFocusY() + " " + dx + " " + dy + " " + g.isInProgress());
+                        nativeScale(g.getFocusX(), g.getFocusY(), dx, dy, !g.isInProgress());
+                        return true;
+                    }});
+        }});
+    }
+
+    @Override public boolean onKey(View v, int key_code, KeyEvent event) {
+        int key_char = event.getUnicodeChar(), mod = 0;
+        if (key_char == 0) {
+            int meta_state = event.getMetaState();
+            if ((meta_state & KeyEvent.META_SHIFT_ON) != 0) mod |= 1;
+            if ((meta_state & KeyEvent.META_CTRL_ON)  != 0) mod |= 2;
+            if ((meta_state & KeyEvent.META_ALT_ON)   != 0) mod |= 4;
+
+            switch(event.getKeyCode()) {
+                case KeyEvent.KEYCODE_DEL:        key_char = '\b';   break;
+                case KeyEvent.KEYCODE_ESCAPE:     key_char = 0xE100; break;
+                case KeyEvent.KEYCODE_DPAD_UP:    key_char = 0xE101; break;
+                case KeyEvent.KEYCODE_DPAD_DOWN:  key_char = 0xE102; break;
+                case KeyEvent.KEYCODE_DPAD_LEFT:  key_char = 0xE103; break;
+                case KeyEvent.KEYCODE_DPAD_RIGHT: key_char = 0xE104; break;
+                case KeyEvent.KEYCODE_CTRL_LEFT:  key_char = 0xE105; break;
+                case KeyEvent.KEYCODE_CTRL_RIGHT: key_char = 0xE106; break;
+                case KeyEvent.KEYCODE_META_LEFT:  key_char = 0xE107; break;
+                case KeyEvent.KEYCODE_META_RIGHT: key_char = 0xE108; break;
+                case KeyEvent.KEYCODE_TAB:        key_char = 0xE109; break;
+                case KeyEvent.KEYCODE_PAGE_UP:    key_char = 0xE10A; break;
+                case KeyEvent.KEYCODE_PAGE_DOWN:  key_char = 0xE10B; break;
+                case KeyEvent.KEYCODE_F1:         key_char = 0xE10C; break;
+                case KeyEvent.KEYCODE_F2:         key_char = 0xE10D; break;
+                case KeyEvent.KEYCODE_F3:         key_char = 0xE10E; break;
+                case KeyEvent.KEYCODE_F4:         key_char = 0xE10F; break;
+                case KeyEvent.KEYCODE_F5:         key_char = 0xE110; break;
+                case KeyEvent.KEYCODE_F6:         key_char = 0xE111; break;
+                case KeyEvent.KEYCODE_F7:         key_char = 0xE112; break;
+                case KeyEvent.KEYCODE_F8:         key_char = 0xE113; break;
+                case KeyEvent.KEYCODE_F9:         key_char = 0xE114; break;
+                case KeyEvent.KEYCODE_A:          key_char = 'a';    break;
+                case KeyEvent.KEYCODE_B:          key_char = 'b';    break;
+                case KeyEvent.KEYCODE_C:          key_char = 'c';    break;
+                case KeyEvent.KEYCODE_D:          key_char = 'd';    break;
+                case KeyEvent.KEYCODE_E:          key_char = 'e';    break;
+                case KeyEvent.KEYCODE_F:          key_char = 'f';    break;
+                case KeyEvent.KEYCODE_G:          key_char = 'g';    break;
+                case KeyEvent.KEYCODE_H:          key_char = 'h';    break;
+                case KeyEvent.KEYCODE_I:          key_char = 'i';    break;
+                case KeyEvent.KEYCODE_J:          key_char = 'j';    break;
+                case KeyEvent.KEYCODE_K:          key_char = 'k';    break;
+                case KeyEvent.KEYCODE_L:          key_char = 'l';    break;
+                case KeyEvent.KEYCODE_M:          key_char = 'm';    break;
+                case KeyEvent.KEYCODE_N:          key_char = 'n';    break;
+                case KeyEvent.KEYCODE_O:          key_char = 'o';    break;
+                case KeyEvent.KEYCODE_P:          key_char = 'p';    break;
+                case KeyEvent.KEYCODE_Q:          key_char = 'q';    break;
+                case KeyEvent.KEYCODE_R:          key_char = 'r';    break;
+                case KeyEvent.KEYCODE_S:          key_char = 's';    break;
+                case KeyEvent.KEYCODE_T:          key_char = 't';    break;
+                case KeyEvent.KEYCODE_U:          key_char = 'u';    break;
+                case KeyEvent.KEYCODE_V:          key_char = 'v';    break;
+                case KeyEvent.KEYCODE_W:          key_char = 'w';    break;
+                case KeyEvent.KEYCODE_X:          key_char = 'x';    break;
+                case KeyEvent.KEYCODE_Y:          key_char = 'y';    break;
+                case KeyEvent.KEYCODE_Z:          key_char = 'z';    break;
+            }
+        }
+        if (key_char == 0) return false;
+        else if (event.getAction() == KeyEvent.ACTION_UP)   { nativeKeyPress(key_char, mod, 0); return true; }
+        else if (event.getAction() == KeyEvent.ACTION_DOWN) { nativeKeyPress(key_char, mod, 1); return true; }
+        else return false;
+    }
+
+    @Override public boolean onTouch(View v, MotionEvent event) {
+        // gesture.onTouchEvent(event);
+        if (scale_detector != null) scale_detector.onTouchEvent(event);
+        final int action = event.getAction() & MotionEvent.ACTION_MASK;
+        if (action == MotionEvent.ACTION_MOVE) {
+            if (scale_detector == null || !scale_detector.isInProgress()) {
+                for (int i = 0; i < event.getPointerCount(); i++) {
+                    nativeTouch(action, event.getX(i), event.getY(i), event.getPressure(i));
+                }
+            }
+        } else {
+            int action_index = (action == MotionEvent.ACTION_POINTER_DOWN || action == MotionEvent.ACTION_POINTER_UP) ? event.getActionIndex() : 0;
+            nativeTouch(action, event.getX(action_index), event.getY(action_index), event.getPressure(action_index));
+        }
+        return true; 
+    }
+
+    @Override public void onAccuracyChanged(Sensor sensor, int accuracy) {}
+
+    @Override public void onSensorChanged(SensorEvent event) {
+        if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER)
+            nativeAccel(event.values[0], event.values[1], event.values[2]);
+    }
+}
+
+class MyGestureListener extends android.view.GestureDetector.SimpleOnGestureListener {
+    public MainActivity main_activity;
+
+    @Override
+    public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
+        main_activity.nativeFling(e1.getX(), e1.getY(), velocityX, velocityY);
+        return false;
+    }
 }

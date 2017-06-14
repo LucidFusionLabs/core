@@ -525,17 +525,15 @@ struct RateLimiter {
 };
 
 struct FrameScheduler {
-  struct WakeupFlag { enum { InMainThread=1 }; };
+  struct WakeupFlag { enum { InMainThread=1, ContingentOnEvents=2 }; };
   RateLimiter maxfps;
   mutex frame_mutex, wait_mutex;
   SocketWakeupThread wakeup_thread;
-  SelectSocketSet wait_forever_sockets;
-  Socket system_event_socket = InvalidSocket, wait_forever_wakeup_socket = InvalidSocket, iter_socket = InvalidSocket;
-  bool rate_limit = 1, wait_forever = 1, wait_forever_thread = 1, synchronize_waits = 1;
-  bool monolithic_frame = 1, run_main_loop = 1;
-  FrameScheduler() : maxfps(&FLAGS_target_fps), wakeup_thread(&frame_mutex, &wait_mutex) { Setup(); }
+  SelectSocketSet main_wait_sockets;
+  Socket system_event_socket = InvalidSocket, main_wait_wakeup_socket = InvalidSocket, iter_socket = InvalidSocket;
+  const bool rate_limit, wait_forever, wait_forever_thread, synchronize_waits, monolithic_frame, run_main_loop;
+  FrameScheduler();
 
-  void Setup();
   void Init();
   void Free();
   void Start();
@@ -976,10 +974,11 @@ struct SystemToolkit : public ToolkitInterface {
   static unique_ptr<PurchasesInterface> CreatePurchases(string);
 };
 
+Application *CreateApplication(int ac, const char* const* av);
 unique_ptr<Module> CreateFrameworkModule();
-unique_ptr<GraphicsDevice> CreateGraphicsDevice(Window*, int ver);
 unique_ptr<Module> CreateAudioModule(Audio*);
 unique_ptr<Module> CreateCameraModule(CameraState*);
+unique_ptr<GraphicsDevice> CreateGraphicsDevice(Window*, int ver);
 void InitCrashReporting(const string &id, const string &name, const string &email);
 void TestCrashReporting();
 

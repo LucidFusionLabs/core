@@ -829,8 +829,11 @@ int Video::Swap() {
   return 0;
 }
 
+FrameScheduler::FrameScheduler() :
+  maxfps(&FLAGS_target_fps), wakeup_thread(&frame_mutex, &wait_mutex), rate_limit(0), wait_forever(!FLAGS_target_fps),
+  wait_forever_thread(0), synchronize_waits(0), monolithic_frame(0), run_main_loop(0) {}
+
 bool FrameScheduler::DoMainWait() { return false; }
-void FrameScheduler::Setup() { rate_limit = synchronize_waits = wait_forever_thread = monolithic_frame = run_main_loop = 0; }
 void FrameScheduler::Wakeup(Window *w, int) {
   dispatch_async(dispatch_get_main_queue(), ^{ [dynamic_cast<iOSWindow*>(w)->glkview setNeedsDisplay]; });
 }
@@ -869,6 +872,7 @@ void FrameScheduler::DelMainWaitSocket(Window *w, Socket fd) {
 }
 
 Window *Window::Create() { return new iOSWindow(); }
+Application *CreateApplication(int ac, const char* const* av) { return new Application(ac, av); }
 unique_ptr<Module> CreateFrameworkModule() { return make_unique<iOSFrameworkModule>(); }
 unique_ptr<AssetLoaderInterface> CreateAssetLoader() { return make_unique<iOSAssetLoader>(); }
 unique_ptr<TimerInterface> SystemToolkit::CreateTimer(Callback cb) { return make_unique<AppleTimer>(move(cb)); }

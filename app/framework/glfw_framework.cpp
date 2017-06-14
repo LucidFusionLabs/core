@@ -171,7 +171,10 @@ int Video::Swap() {
   return 0;
 }
 
-void FrameScheduler::Setup() {}
+FrameScheduler::FrameScheduler() :
+  maxfps(&FLAGS_target_fps), wakeup_thread(&frame_mutex, &wait_mutex), rate_limit(1), wait_forever(!FLAGS_target_fps),
+  wait_forever_thread(1), synchronize_waits(1), monolithic_frame(1), run_main_loop(1) {}
+
 void FrameScheduler::DoMainWait() { glfwWaitEvents(); }
 void FrameScheduler::Wakeup(Window*, int) { if (wait_forever && screen && wait_forever_thread) glfwPostEmptyEvent(); }
 void FrameScheduler::UpdateWindowTargetFPS(Window*) {}
@@ -188,6 +191,7 @@ void FrameScheduler::DelMainWaitSocket(Window *w, Socket fd) {
   if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd);
 }
 
+Application *CreateApplication(int ac, const char* const* av) { return new Application(ac, av); }
 unique_ptr<Module> CreateFrameworkModule() {
   ONCE({ if (FLAGS_enable_video) {
     INFO("LFAppCreatePlatformModule: glfwInit()");

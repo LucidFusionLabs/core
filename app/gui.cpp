@@ -646,7 +646,7 @@ TextArea::TextArea(Window *W, const FontRef &F, int S, int LC) :
       app->ShowSystemContextMenu
         (MenuItemVec{ 
          MenuItem{"", "Copy", [=](){ selection.explicitly_initiated = true; } },
-         MenuItem{"", "Keyboard" } });
+         MenuItem{"", "Paste" }, MenuItem{"", "Keyboard" } });
       return true;
     }
 #if 0

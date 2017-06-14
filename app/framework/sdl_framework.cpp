@@ -222,11 +222,15 @@ int Video::Swap() {
   return 0;
 }
 
-void FrameScheduler::Setup() {
+FrameScheduler::FrameScheduler() :
+  maxfps(&FLAGS_target_fps), wakeup_thread(&frame_mutex, &wait_mutex), rate_limit(1), wait_forever(!FLAGS_target_fps),
+  wait_forever_thread(1), synchronize_waits(1), monolithic_frame(1),
 #ifdef EMSCRIPTEN
-  run_main_loop = false;
+  run_main_loop(0)
+#else
+  run_main_loop(1)
 #endif
-}
+{}
 
 bool FrameScheduler::DoMainWait() { return SDL_WaitEvent(NULL); }
 void FrameScheduler::UpdateWindowTargetFPS(Window *w) {}
@@ -254,6 +258,7 @@ void FrameScheduler::DelMainWaitSocket(Window *w, Socket fd) {
   if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd);
 }
 
+Application *CreateApplication(int ac, const char* const* av) { return new Application(ac, av); }
 unique_ptr<Module> CreateFrameworkModule() { return make_unique<SDLFrameworkModule>(); }
 
 extern "C" int main(int argc, const char* const* argv) {

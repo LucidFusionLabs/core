@@ -62,9 +62,9 @@ public class Screens {
         }
     }
 
-    public void onStartRenderThread(Activity activity, FrameLayout frame_layout) {
+    public void onStartRenderThread(Activity activity, View view) {
         if (navigators.size() > 0) {
-            frame_layout.setVisibility(View.GONE);
+            view.setVisibility(View.GONE);
         }
     }
 }

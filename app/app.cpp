@@ -617,20 +617,20 @@ int Application::Start() {
 
 int Application::HandleEvents(unsigned clicks) {
   int events = 0, module_events;
-  if (FLAGS_frame_debug) INFO("frame_debug Application::modules");
   for (auto i = modules.begin(); i != modules.end() && run; ++i)
     if ((module_events = (*i)->Frame(clicks)) > 0) events += module_events;
+  if (FLAGS_frame_debug) INFO("frame_debug Application::modules events=", events);
 
   // handle messages sent to main thread
   if (run) {
-    if (FLAGS_frame_debug) INFO("frame_debug Application::message_queue");
     events += message_queue.HandleMessages();
+    if (FLAGS_frame_debug) INFO("frame_debug Application::message_queue events=", events);
   }
 
   // fake threadpool that executes in main thread
   if (run && !FLAGS_threadpool_size) {
-    if (FLAGS_frame_debug) INFO("frame_debug Application::threadpool");
     events += thread_pool.worker[0].queue->HandleMessages();
+    if (FLAGS_frame_debug) INFO("frame_debug Application::threadpool events=", events);
   }
 
   if (FLAGS_frame_debug) INFO("frame_debug HandleEvents events=", events);
@@ -664,7 +664,8 @@ int Application::TimerDrivenFrame(bool got_wakeup) {
     if (w->minimized || !w->target_fps) continue;
 #endif
     int ret = w->Frame(clicks, 0);
-    if (FLAGS_frame_debug) INFO("frame_debug Application::Frame Window ", w->id, " = ", ret);
+    if (FLAGS_frame_debug) INFO("frame_debug Application::Frame Window ", w->id, " = ", ret,
+                                " target_fps=", w->target_fps, ", events=", events);
   }
 
   frames_ran++;
@@ -874,7 +875,6 @@ void Window::RenderToFrameBuffer(FrameBuffer *fb) {
 
 void FrameScheduler::Init() { 
   if (app->focused) app->focused->target_fps = FLAGS_target_fps;
-  wait_forever = !FLAGS_target_fps;
   maxfps.timer.GetTime(true);
   if (wait_forever && synchronize_waits) frame_mutex.lock();
 }

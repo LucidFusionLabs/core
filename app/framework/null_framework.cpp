@@ -110,8 +110,11 @@ bool Video::CreateWindow(Window *W) {
 void Video::StartWindow(Window*) {}
 int Video::Swap() { return 0; }
 
+FrameScheduler::FrameScheduler() :
+  maxfps(&FLAGS_target_fps), wakeup_thread(&frame_mutex, &wait_mutex), rate_limit(0), wait_forever(!FLAGS_target_fps),
+  wait_forever_thread(0), synchronize_waits(0), monolithic_frame(1), run_main_loop(1) {}
+
 bool FrameScheduler::DoMainWait() { return false; }
-void FrameScheduler::Setup() { rate_limit = synchronize_waits = wait_forever_thread = 0; }
 void FrameScheduler::Wakeup(Window*, int) {}
 void FrameScheduler::UpdateWindowTargetFPS(Window*) {}
 void FrameScheduler::AddMainWaitMouse(Window*) {}
@@ -127,7 +130,8 @@ extern "C" int main(int argc, const char *argv[]) {
 }
 
 Window *Window::Create() { return new NullWindow(); }
-unique_ptr<TimerInterface> SystemToolkit::CreateTimer(Callback cb) { return nullptr; }
+Application *CreateApplication(int ac, const char* const* av) { return new Application(ac, av); }
 unique_ptr<Module> CreateFrameworkModule() { return unique_ptr<NullFrameworkModule>(); }
+unique_ptr<TimerInterface> SystemToolkit::CreateTimer(Callback cb) { return nullptr; }
 
 }; // namespace LFL

@@ -100,9 +100,10 @@ public class Toolbar implements com.lucidfusionlabs.core.ViewOwner {
                 if (shown_index >= 0) Log.e("lfl", "Show already shown toolbar");
                 else {
                     activity.screens.toolbar_bottom.add(self);
-                    activity.frame_layout.addView(toolbar, new LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,
-                                                                            FrameLayout.LayoutParams.WRAP_CONTENT,
-                                                                            Gravity.BOTTOM));
+                    LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams
+                        (LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                    lp.gravity = Gravity.BOTTOM;
+                    activity.gl_layout.addView(toolbar, lp);
                     shown_index = activity.screens.toolbar_bottom.size()-1;
                 }
             } else {
@@ -111,7 +112,7 @@ public class Toolbar implements com.lucidfusionlabs.core.ViewOwner {
                     int size = activity.screens.toolbar_bottom.size();
                     if (shown_index != size-1) Log.e("lfl", "Hide shown_index=" + shown_index + " size=" + size);
                     if (size > 0) activity.screens.toolbar_bottom.remove(size-1);
-                    activity.frame_layout.removeView(toolbar);
+                    activity.gl_layout.removeView(toolbar);
                     shown_index = -1;
                 }
             }

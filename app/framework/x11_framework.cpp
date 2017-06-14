@@ -182,17 +182,20 @@ int Video::Swap() {
   return 0;
 }
 
+FrameScheduler::FrameScheduler() :
+  maxfps(&FLAGS_target_fps), wakeup_thread(&frame_mutex, &wait_mutex), rate_limit(1), wait_forever(!FLAGS_target_fps),
+  wait_forever_thread(0), synchronize_waits(0), monolithic_frame(1), run_main_loop(1) {}
+  
 bool FrameScheduler::DoMainWait() {
   unordered_set<Window*> wokeup;
-  wait_forever_sockets.Select(-1);
-  for (auto &s : wait_forever_sockets.socket)
-    if (wait_forever_sockets.GetReadable(s.first))
+  main_wait_sockets.Select(-1);
+  for (auto &s : main_wait_sockets.socket)
+    if (main_wait_sockets.GetReadable(s.first))
       if (s.first != system_event_socket) wokeup.insert(static_cast<Window*>(s.second.second));
   for (auto w : wokeup) app->scheduler.Wakeup(w);
   return false;
 }
 
-void FrameScheduler::Setup() { synchronize_waits = wait_forever_thread = 0; }
 bool FrameScheduler::WakeupIn(Window *w, Time interval, bool force) {}
 void FrameScheduler::Wakeup(Window *w) { 
   if (wait_forever && w) {
@@ -211,14 +214,15 @@ void FrameScheduler::DelMainWaitKeyboard(Window *w) {  }
 void FrameScheduler::AddMainWaitSocket(Window *w, Socket fd, int flag, function<bool()>) {
   if (fd == InvalidSocket) return;
   if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, w);
-  wait_forever_sockets.Add(fd, flag, w);
+  main_wait_sockets.Add(fd, flag, w);
 }
 void FrameScheduler::DelMainWaitSocket(Window *w, Socket fd) {
   if (fd == InvalidSocket) return;
   if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd);
-  wait_forever_sockets.Del(fd);
+  main_wait_sockets.Del(fd);
 }
 
+Application *CreateApplication(int ac, const char* const* av) { return new Application(ac, av); }
 unique_ptr<Module> CreateFrameworkModule() { return make_unique<X11FrameworkModule>(); }
 
 extern "C" int main(int argc, const char* const* argv) {

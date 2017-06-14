@@ -77,18 +77,16 @@ struct AndroidFrameworkModule : public Module {
   bool frame_on_keyboard_input = 0, frame_on_mouse_input = 0;
 
   int Init() {
-    INFO("AndroidFrameworkModule::Init()");
+    jfieldID w_fid = CheckNotNull(jni->env->GetFieldID(jni->view_class, "surface_width", "I"));
+    jfieldID h_fid = CheckNotNull(jni->env->GetFieldID(jni->view_class, "surface_height", "I"));
+    jfieldID v_fid = CheckNotNull(jni->env->GetFieldID(jni->view_class, "egl_version", "I"));
+
+    app->focused->width = CheckNotNull(jni->env->GetIntField(jni->view, w_fid));
+    app->focused->height = CheckNotNull(jni->env->GetIntField(jni->view, h_fid));
+    app->opengles_version = CheckNotNull(jni->env->GetIntField(jni->view, v_fid));
+    INFO("AndroidFrameworkModule::Init(), opengles_version=", app->opengles_version);
+
     auto screen = app->focused;
-    screen->x      = jni->activity_box.x;
-    screen->y      = jni->activity_box.y;
-    screen->width  = jni->activity_box.w;
-    screen->height = jni->activity_box.h;
-
-    jfieldID fid = CheckNotNull(jni->env->GetFieldID(jni->activity_class, "egl_version", "I"));
-    jint v = CheckNotNull(jni->env->GetIntField(jni->activity, fid));
-    app->opengles_version = v;
-    INFOf("AndroidFrameworkModule opengles_version: %d", v);
-
     CHECK(!screen->id);
     screen->id = screen;
     app->windows[screen->id] = screen;
@@ -96,7 +94,7 @@ struct AndroidFrameworkModule : public Module {
     Socket fd[2];
     CHECK(SystemNetwork::OpenSocketPair(fd));
     app->scheduler.AddMainWaitSocket(screen, (app->scheduler.system_event_socket = fd[0]), SocketSet::READABLE);
-    app->scheduler.wait_forever_wakeup_socket = fd[1];
+    app->scheduler.main_wait_wakeup_socket = fd[1];
     app->scheduler.Wakeup(screen);
     return 0;
   }
@@ -163,15 +161,22 @@ void Application::RunCallbackInMainThread(Callback cb) {
 
 void Application::CloseWindow(Window *W) {}
 void Application::MakeCurrentWindow(Window *W) {}
-
 void Application::GrabMouseFocus() {}
 void Application::ReleaseMouseFocus() {}
 
-string Application::GetClipboardText() { return ""; }
-void Application::SetClipboardText(const string &s) {}
+string Application::GetClipboardText() {
+  static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "getClipboardText", "()Ljava/lang/String;"));
+  LocalJNIString text(jni->env, jstring(jni->env->CallObjectMethod(jni->activity, mid)));
+  return JNI::GetJString(jni->env, text.v); 
+}
+
+void Application::SetClipboardText(const string &s) {
+  static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "setClipboardText", "(Ljava/lang/String;)V"));
+  LocalJNIString v(jni->env, JNI::ToJString(jni->env, s));
+  jni->env->CallVoidMethod(jni->activity, mid, v.v);
+}
 
 void Application::OpenTouchKeyboard() {
-  if (1/* || enable_frame*/) frame_disabled = false;
   static jmethodID jni_activity_method_show_keyboard =
     CheckNotNull(jni->env->GetMethodID(jni->activity_class, "showKeyboard", "()V"));
   jni->env->CallVoidMethod(jni->activity, jni_activity_method_show_keyboard);
@@ -220,7 +225,12 @@ int  Application::SetMultisample(bool v) { return 0; }
 int  Application::SetExtraScale(bool v) { return 0; }
 void Application::SetDownScale(bool v) {}
 void Application::ShowSystemStatusBar(bool v) {}
-string Application::PrintCallStack() { return ""; }
+
+string Application::PrintCallStack() {
+  static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "getCurrentStackTrace", "()Ljava/lang/String;"));
+  LocalJNIString text(jni->env, jstring(jni->env->CallObjectMethod(jni->activity, mid)) );
+  return JNI::GetJString(jni->env, text.v); 
+}
 
 void Application::SetTitleBar(bool v) {
   if (!v) {
@@ -251,31 +261,32 @@ int Video::Swap() {
   return 0;
 }
 
-void FrameScheduler::Setup() {
-  synchronize_waits = wait_forever_thread = 0;
-}
+FrameScheduler::FrameScheduler() :
+  maxfps(&FLAGS_target_fps), wakeup_thread(&frame_mutex, &wait_mutex), rate_limit(1), wait_forever(!FLAGS_target_fps),
+  wait_forever_thread(0), synchronize_waits(0), monolithic_frame(1), run_main_loop(1) {}
 
 bool FrameScheduler::DoMainWait() {
   bool ret = false;
-  wait_forever_sockets.Select(-1);
-  for (auto i = wait_forever_sockets.socket.begin(); i != wait_forever_sockets.socket.end(); /**/) {
+  main_wait_sockets.Select(-1);
+  for (auto i = main_wait_sockets.socket.begin(); i != main_wait_sockets.socket.end(); /**/) {
     iter_socket = i->first;
     auto f = static_cast<function<bool()>*>(i++->second.second);
     if (f) if ((*f)()) ret = true;
   }
+  int wakeups = 0;
   iter_socket = InvalidSocket;
-  if (wait_forever_sockets.GetReadable(system_event_socket)) {
+  if (main_wait_sockets.GetReadable(system_event_socket)) {
     char buf[512];
-    read(system_event_socket, buf, sizeof(buf));
-    ret = true;
+    wakeups = read(system_event_socket, buf, sizeof(buf));
+    if (wakeups >= 0) for (auto p = buf, e = p + wakeups; p != e; ++p) if (*p == 'W') { ret = true; break; }
   }
   return ret;
 }
 
 void FrameScheduler::UpdateWindowTargetFPS(Window *w) {}
-void FrameScheduler::Wakeup(Window *w, int) {
-  char c = 'W';
-  write(wait_forever_wakeup_socket, &c, 1);
+void FrameScheduler::Wakeup(Window*, int flag) {
+  char c = (flag & WakeupFlag::ContingentOnEvents) ? ' ' : 'W';
+  write(main_wait_wakeup_socket, &c, 1);
 }
 
 void FrameScheduler::AddMainWaitMouse(Window*)    { dynamic_cast<AndroidFrameworkModule*>(app->framework.get())->frame_on_mouse_input    = true;  }
@@ -284,20 +295,21 @@ void FrameScheduler::AddMainWaitKeyboard(Window*) { dynamic_cast<AndroidFramewor
 void FrameScheduler::DelMainWaitKeyboard(Window*) { dynamic_cast<AndroidFrameworkModule*>(app->framework.get())->frame_on_keyboard_input = false; }
 void FrameScheduler::AddMainWaitSocket(Window *w, Socket fd, int flag, function<bool()> f) {
   if (fd == InvalidSocket) return;
-  wait_forever_sockets.Add(fd, flag, f ? new function<bool()>(move(f)) : nullptr);
+  main_wait_sockets.Add(fd, flag, f ? new function<bool()>(move(f)) : nullptr);
 }
 
 void FrameScheduler::DelMainWaitSocket(Window*, Socket fd) {
   if (fd == InvalidSocket) return;
   if (iter_socket != InvalidSocket)
     CHECK_EQ(iter_socket, fd) << "Can only remove current socket from wait callback";
-  auto it = wait_forever_sockets.socket.find(fd);
-  if (it == wait_forever_sockets.socket.end()) return;
+  auto it = main_wait_sockets.socket.find(fd);
+  if (it == main_wait_sockets.socket.end()) return;
   if (auto f = static_cast<function<bool()>*>(it->second.second)) delete f;
-  wait_forever_sockets.Del(fd);
+  main_wait_sockets.Del(fd);
 }
 
 Window *Window::Create() { return new AndroidWindow(); }
+Application *CreateApplication(int ac, const char* const* av) { return new Application(ac, av); }
 unique_ptr<Module> CreateFrameworkModule() { return make_unique<AndroidFrameworkModule>(); }
 unique_ptr<AssetLoaderInterface> CreateAssetLoader() { return make_unique<AndroidAssetLoader>(); }
 unique_ptr<TimerInterface> SystemToolkit::CreateTimer(Callback cb) { return make_unique<AndroidTimer>(move(cb)); };
@@ -315,7 +327,7 @@ extern "C" void Java_com_lucidfusionlabs_app_MainActivity_nativeCreate(JNIEnv *e
   CHECK(jni->env = e);
   CHECK(jni->activity_class = (jclass)e->NewGlobalRef(e->GetObjectClass(a)));
   CHECK(jni->activity_resources = e->GetFieldID(jni->activity_class, "resources", "Landroid/content/res/Resources;"));
-  CHECK(jni->activity_view      = e->GetFieldID(jni->activity_class, "view",      "Lcom/lucidfusionlabs/app/MainView;"));
+  CHECK(jni->activity_view      = e->GetFieldID(jni->activity_class, "gl_view",   "Lcom/lucidfusionlabs/app/OpenGLView;"));
   CHECK(jni->activity_handler   = e->GetFieldID(jni->activity_class, "handler",   "Landroid/os/Handler;"));
   // CHECK(jni->activity_gplus     = e->GetFieldID(jni->activity_class, "gplus",     "Lcom/lucidfusionlabs/app/GPlusClient;"));
   static jmethodID activity_getpkgname_mid =
@@ -408,17 +420,16 @@ extern "C" void Java_com_lucidfusionlabs_app_MainActivity_nativeMinimize(JNIEnv*
 }
 
 extern "C" void Java_com_lucidfusionlabs_app_MainActivity_nativeReshaped(JNIEnv *e, jobject a, jint x, jint y, jint w, jint h) { 
-  bool init = !jni->activity_box.w && !jni->activity_box.h;
-  if (init) { jni->activity_box = Box(x, y, w, h); return; }
-  if (jni->activity_box.x == x && jni->activity_box.y == y &&
-      jni->activity_box.w == w && jni->activity_box.h == h) return;
-  jni->activity_box = Box(x, y, w, h);
-  app->RunInMainThread([=](){ app->focused->Reshaped(Box(x, y, w, h)); });
+  static jmethodID mid = CheckNotNull(e->GetMethodID(jni->view_class, "onSynchronizedReshape", "()V"));
+  app->RunInMainThread([=](){
+    jni->env->CallVoidMethod(jni->view, mid);
+    app->focused->Reshaped(Box(x, y, w, h));
+  });
 }
 
 extern "C" void Java_com_lucidfusionlabs_app_MainActivity_nativeKeyPress(JNIEnv *e, jobject a, jint keycode, jint mod, jint down) {
   app->input->QueueKeyPress(keycode, mod, down);
-  LFAppWakeup();
+  app->scheduler.Wakeup(app->focused, FrameScheduler::WakeupFlag::ContingentOnEvents);
 }
 
 extern "C" void Java_com_lucidfusionlabs_app_MainActivity_nativeTouch(JNIEnv *e, jobject a, jint action, jfloat x, jfloat y, jfloat p) {
@@ -428,7 +439,7 @@ extern "C" void Java_com_lucidfusionlabs_app_MainActivity_nativeTouch(JNIEnv *e,
   if (action == AndroidEvent::ACTION_DOWN || action == AndroidEvent::ACTION_POINTER_DOWN) {
     // INFOf("%d down %f, %f", dpind, x, screen->height - y);
     app->input->QueueMouseClick(1, 1, point(screen->x + x, screen->y + screen->height - y));
-    LFAppWakeup();
+    app->scheduler.Wakeup(app->focused, FrameScheduler::WakeupFlag::ContingentOnEvents);
     // screen->gesture_tap[dpind] = 1;
     // screen->gesture_dpad_x[dpind] = x;
     // screen->gesture_dpad_y[dpind] = y;
@@ -437,14 +448,14 @@ extern "C" void Java_com_lucidfusionlabs_app_MainActivity_nativeTouch(JNIEnv *e,
   } else if (action == AndroidEvent::ACTION_UP || action == AndroidEvent::ACTION_POINTER_UP) {
     // INFOf("%d up %f, %f", dpind, x, y);
     app->input->QueueMouseClick(1, 0, point(screen->x + x, screen->y + screen->height - y));
-    LFAppWakeup();
+    app->scheduler.Wakeup(app->focused, FrameScheduler::WakeupFlag::ContingentOnEvents);
     // screen->gesture_dpad_stop[dpind] = 1;
     // screen->gesture_dpad_x[dpind] = 0;
     // screen->gesture_dpad_y[dpind] = 0;
   } else if (action == AndroidEvent::ACTION_MOVE) {
     point p(screen->x + x, screen->y + screen->height - y);
     app->input->QueueMouseMovement(p, p - screen->mouse);
-    LFAppWakeup();
+    app->scheduler.Wakeup(app->focused, FrameScheduler::WakeupFlag::ContingentOnEvents);
     float vx = x - lx[dpind];
     float vy = y - ly[dpind];
     lx[dpind] = x;
@@ -476,7 +487,7 @@ extern "C" void Java_com_lucidfusionlabs_app_MainActivity_nativeAccel(JNIEnv *e,
 
 extern "C" void Java_com_lucidfusionlabs_app_MainActivity_nativeScale(JNIEnv *e, jobject a, jfloat x, jfloat y, jfloat dx, jfloat dy, jboolean begin) {
   app->input->QueueMouseZoom(point(x, y), point(dx, dy), begin); 
-  LFAppWakeup();
+  app->scheduler.Wakeup(app->focused, FrameScheduler::WakeupFlag::ContingentOnEvents);
 }
 
 extern "C" void Java_com_lucidfusionlabs_app_MainActivity_nativeShellRun(JNIEnv *e, jclass c, jstring text) {

@@ -294,8 +294,11 @@ void Application::SetTheme(const string &v) {}
 string Application::GetClipboardText() { return GetQString(QApplication::clipboard()->text()); }
 void Application::SetClipboardText(const string &s) { QApplication::clipboard()->setText(MakeQString(s)); }
 
+FrameScheduler::FrameScheduler() :
+  maxfps(&FLAGS_target_fps), wakeup_thread(&frame_mutex, &wait_mutex), rate_limit(0), wait_forever(!FLAGS_target_fps),
+  wait_forever_thread(0), synchronize_waits(0), monolithic_frame(0), run_main_loop(0) {}
+
 bool FrameScheduler::DoMainWait() { return false; }
-void FrameScheduler::Setup() { rate_limit = synchronize_waits = wait_forever_thread = monolithic_frame = run_main_loop = 0; }
 void FrameScheduler::Wakeup(Window *w, int) { if (wait_forever && w) dynamic_cast<QtWindow*>(w)->RequestRender(); }
 void FrameScheduler::UpdateWindowTargetFPS(Window *w) { /*QTTriggerFrame(w->id.value);*/ }
 void FrameScheduler::AddMainWaitMouse(Window *w) { if (w) dynamic_cast<QtWindow*>(w)->frame_on_mouse_input = true; }
@@ -326,6 +329,7 @@ extern "C" int main(int argc, const char *argv[]) {
 }
 
 Window *Window::Create() { return new QtWindow(); }
+Application *CreateApplication(int ac, const char* const* av) { return new Application(ac, av); }
 unique_ptr<Module> CreateFrameworkModule() { return make_unique<QtFrameworkModule>(); }
 
 }; // namespace LFL

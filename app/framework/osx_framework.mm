@@ -568,9 +568,11 @@ int Video::Swap() {
   return 0;
 }
 
-void FrameScheduler::Setup() { rate_limit = synchronize_waits = wait_forever_thread = monolithic_frame = run_main_loop = 0; }
-bool FrameScheduler::DoMainWait() { return false; }
+FrameScheduler::FrameScheduler() :
+  maxfps(&FLAGS_target_fps), wakeup_thread(&frame_mutex, &wait_mutex), rate_limit(0), wait_forever(!FLAGS_target_fps),
+  wait_forever_thread(0), synchronize_waits(0), monolithic_frame(0), run_main_loop(0) {}
 
+bool FrameScheduler::DoMainWait() { return false; }
 void FrameScheduler::Wakeup(Window *w, int flag) {
   if (wait_forever && w) {
     if (flag & WakeupFlag::InMainThread) [dynamic_cast<OSXWindow*>(w)->view setNeedsDisplay:YES];
@@ -602,6 +604,7 @@ void FrameScheduler::DelMainWaitSocket(Window *w, Socket fd) {
 }
 
 Window *Window::Create() { return new OSXWindow(); }
+Application *CreateApplication(int ac, const char* const* av) { return new Application(ac, av); }
 unique_ptr<Module> CreateFrameworkModule() { return make_unique<OSXFrameworkModule>(); }
 unique_ptr<TimerInterface> SystemToolkit::CreateTimer(Callback cb) { return make_unique<AppleTimer>(move(cb)); }
 

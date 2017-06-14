@@ -196,8 +196,11 @@ int Video::Swap() {
   return 0;
 }
 
+FrameScheduler::FrameScheduler() :
+  maxfps(&FLAGS_target_fps), wakeup_thread(&frame_mutex, &wait_mutex), rate_limit(0), wait_forever(!FLAGS_target_fps),
+  wait_forever_thread(1), synchronize_waits(0), monolithic_frame(0), run_main_loop(0) {}
+
 void FrameScheduler::DoMainWait() {}
-void FrameScheduler::Setup() { rate_limit = synchronize_waits = monolithic_frame = run_main_loop = 0; }
 void FrameScheduler::Wakeup(Window *w, int) { if (wait_forever && w && wait_forever_thread) dynamic_cast<wxGLCanvas*>(w->id)->Refresh(); }
 void FrameScheduler::AddMainWaitMouse(Window*) {}
 void FrameScheduler::DelMainWaitMouse(Window*) {}

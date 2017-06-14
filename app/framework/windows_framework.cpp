@@ -340,9 +340,12 @@ int Video::Swap() {
   return 0;
 }
 
+FrameScheduler::FrameScheduler() :
+  maxfps(&FLAGS_target_fps), wakeup_thread(&frame_mutex, &wait_mutex), rate_limit(1), wait_forever(!FLAGS_target_fps),
+  wait_forever_thread(0), synchronize_waits(0), monolithic_frame(1), run_main_loop(0) {}
+
 bool FrameScheduler::DoMainWait() { return false;  }
 void FrameScheduler::UpdateWindowTargetFPS(Window*) {}
-void FrameScheduler::Setup() { synchronize_waits = wait_forever_thread = run_main_loop = 0; }
 void FrameScheduler::Wakeup(Window *W, int) { 
   auto w = dynamic_cast<WinWindow*>(W);
   InvalidateRect(w->hwnd, NULL, 0);
@@ -364,6 +367,7 @@ void FrameScheduler::DelMainWaitSocket(Window *w, Socket fd) {
   WSAAsyncSelect(fd, dynamic_cast<WinWindow*>(w)->hwnd, WM_USER, 0);
 }
 
+Application *CreateApplication(int ac, const char* const* av) { return new Application(ac, av); }
 unique_ptr<Module> CreateFrameworkModule() { return make_unique<WinFrameworkModule>(); }
 }; // namespace LFL
 
