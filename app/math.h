@@ -105,6 +105,16 @@ template <class X> struct V2 {
   string DebugString() const { return StrCat("v(", x, ", ", y, ")"); }
 };
 
+template <class X> struct V2Type {};
+template <> struct V2Type<v2> {
+  static const v2& GetV2(const v2 &x) { return x; }
+  static point GetPoint(const v2 &x) { return point(x.x, x.y); }
+};
+template <> struct V2Type<point> {
+  static v2 GetV2(const point &x) { return v2(x.x, x.y); }
+  static const point& GetPoint(const point &x) { return x; }
+}; 
+
 struct v3 {
   float x, y, z;
   v3() : x(0), y(0), z(0) {}

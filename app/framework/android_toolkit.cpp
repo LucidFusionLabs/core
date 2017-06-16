@@ -72,6 +72,10 @@ struct AndroidToolbarView : public ToolbarViewInterface {
   string GetTheme() { return theme; }
 
   void ToggleButton(const string &n) {
+    static jmethodID mid = CheckNotNull
+      (jni->env->GetMethodID(jni->toolbar_class, "toggleButton", "(Lcom/lucidfusionlabs/app/MainActivity;Ljava/lang/String;)V"));
+    LocalJNIObject name(jni->env, JNI::ToJString(jni->env, n));
+    jni->env->CallVoidMethod(impl.v, mid, jni->activity, name.v);
   }
 
   void Show(bool show_or_hide) {

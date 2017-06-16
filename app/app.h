@@ -792,6 +792,7 @@ struct Application : public ::LFApp {
   void PlayBackgroundMusic(SoundAsset*);
 
   void RunCallbackInMainThread(Callback cb);
+  void RunNowInMainThread(Callback cb) { if (MainThread()) cb(); else RunCallbackInMainThread(move(cb)); }
   template <class... Args> void RunInMainThread(Args&&... args) {
     RunCallbackInMainThread(Callback(forward<Args>(args)...));
   }

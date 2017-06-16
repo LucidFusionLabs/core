@@ -81,8 +81,13 @@ public class TableScreen extends Screen {
             (new Callable<String>(){ public String call() throws Exception {
                 return model.getKey(s, r);
             }});
-        try { activity.runOnUiThread(future); return future.get(); }
-        catch(Exception e) { return new String(); }
+        try {
+            activity.runOnUiThread(future);
+            return future.get();
+        } catch(Exception e) {
+            Log.e("lfl", "getKey " + e.toString());
+            return new String();
+        }
     }
 
     public String getVal(final AppCompatActivity activity, final int s, final int r) {
@@ -90,8 +95,13 @@ public class TableScreen extends Screen {
             (new Callable<String>(){ public String call() throws Exception {
                 return model.getVal(s, r);
             }});
-        try { activity.runOnUiThread(future); return future.get(); }
-        catch(Exception e) { return new String(); }
+        try {
+            activity.runOnUiThread(future);
+            return future.get();
+        } catch(Exception e) {
+            Log.e("lfl", "getVal " + e.toString());
+            return new String();
+        }
     }
 
     public Integer getTag(final AppCompatActivity activity, final int s, final int r) {
@@ -99,8 +109,13 @@ public class TableScreen extends Screen {
             (new Callable<Integer>(){ public Integer call() throws Exception {
                 return model.getTag(s, r);
             }});
-        try { activity.runOnUiThread(future); return future.get(); }
-        catch(Exception e) { return 0; }
+        try {
+            activity.runOnUiThread(future);
+            return future.get();
+        } catch(Exception e) {
+            Log.e("lfl", "getTag " + e.toString());
+            return 0;
+        }
     }
     
     public Pair<Long, ArrayList<Integer>> getPicked(final AppCompatActivity activity, final int section, final int row) {
@@ -109,8 +124,13 @@ public class TableScreen extends Screen {
                 public Pair<Long, ArrayList<Integer>> call() throws Exception {
                     return model.getPicked(section, row);
                 }});
-        try { activity.runOnUiThread(future); return future.get(); }
-        catch(Exception e) { return null; }
+        try {
+            activity.runOnUiThread(future);
+            return future.get();
+        } catch(Exception e) {
+            Log.e("lfl", "getPicked " + e.toString());
+            return null;
+        }
     }
 
     public ArrayList<Pair<String, String>> getSectionText(final AppCompatActivity activity, final int section) {
@@ -119,8 +139,13 @@ public class TableScreen extends Screen {
                 public ArrayList<Pair<String, String>> call() throws Exception {
                     return model.getSectionText(model.recyclerview, section);
                 }});
-        try { activity.runOnUiThread(future); return future.get(); }
-        catch(Exception e) { return new ArrayList<Pair<String, String>>(); }
+        try {
+            activity.runOnUiThread(future);
+            return future.get();
+        } catch(Exception e) {
+            Log.e("lfl", "getSectionText " + e.toString());
+            return new ArrayList<Pair<String, String>>();
+        }
     }
 
     public void beginUpdates(final AppCompatActivity activity) {

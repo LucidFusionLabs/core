@@ -314,7 +314,7 @@ unique_ptr<Module> CreateFrameworkModule() { return make_unique<AndroidFramework
 unique_ptr<AssetLoaderInterface> CreateAssetLoader() { return make_unique<AndroidAssetLoader>(); }
 unique_ptr<TimerInterface> SystemToolkit::CreateTimer(Callback cb) { return make_unique<AndroidTimer>(move(cb)); };
 
-static void MainActivity_ShutdownMainLoop() {
+static void NativeAPI_shutdownMainLoop() {
   app->suspended = true;
   if (app->focused->unfocused_cb) app->focused->unfocused_cb();
   while (app->message_queue.HandleMessages()) {}
@@ -323,7 +323,7 @@ static void MainActivity_ShutdownMainLoop() {
 
 extern "C" jint JNI_OnLoad(JavaVM* vm, void* reserved) { return JNI_VERSION_1_4; }
 
-extern "C" void Java_com_lucidfusionlabs_app_MainActivity_nativeCreate(JNIEnv *e, jobject a) {
+extern "C" void Java_com_lucidfusionlabs_app_NativeAPI_create(JNIEnv *e, jclass c, jobject a) {
   CHECK(jni->env = e);
   CHECK(jni->activity_class = (jclass)e->NewGlobalRef(e->GetObjectClass(a)));
   CHECK(jni->activity_resources = e->GetFieldID(jni->activity_class, "resources", "Landroid/content/res/Resources;"));
@@ -389,17 +389,17 @@ extern "C" void Java_com_lucidfusionlabs_app_MainActivity_nativeCreate(JNIEnv *e
   MyAppCreate(1, argv);
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_MainActivity_nativeMain(JNIEnv *e, jobject a) {
+extern "C" void Java_com_lucidfusionlabs_app_NativeAPI_main(JNIEnv *e, jclass c) {
   CHECK(jni->env = e);
   INFOf("Main: env=%p", jni->env);
   int ret = MyAppMain();
 
-  MainActivity_ShutdownMainLoop();
+  NativeAPI_shutdownMainLoop();
   INFOf("Main: env=%p ret=%d", jni->env, ret);
   jni->Free();
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_MainActivity_nativeNewMainLoop(JNIEnv *e, jobject a, bool reset) {
+extern "C" void Java_com_lucidfusionlabs_app_NativeAPI_newMainLoop(JNIEnv *e, jclass c, jobject a, bool reset) {
   CHECK(jni->env = e);
   INFOf("NewMainLoop: env=%p reset=%d", jni->env, reset);
   jni->Init(a, false);
@@ -409,30 +409,30 @@ extern "C" void Java_com_lucidfusionlabs_app_MainActivity_nativeNewMainLoop(JNIE
   if (app->focused->focused_cb) app->focused->focused_cb();
   int ret = app->MainLoop();
 
-  MainActivity_ShutdownMainLoop();
+  NativeAPI_shutdownMainLoop();
   INFOf("NewMainLoop: env=%p ret=%d", jni->env, ret);
   jni->Free();
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_MainActivity_nativeMinimize(JNIEnv* env, jobject a) {
+extern "C" void Java_com_lucidfusionlabs_app_NativeAPI_minimize(JNIEnv* env, jclass c) {
   INFOf("%s", "minimize");
   app->RunInMainThread([=](){ app->suspended = true; });
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_MainActivity_nativeReshaped(JNIEnv *e, jobject a, jint x, jint y, jint w, jint h) { 
+extern "C" void Java_com_lucidfusionlabs_app_NativeAPI_reshaped(JNIEnv *e, jclass c, jint x, jint y, jint w, jint h) { 
   static jmethodID mid = CheckNotNull(e->GetMethodID(jni->view_class, "onSynchronizedReshape", "()V"));
-  app->RunInMainThread([=](){
+  app->RunNowInMainThread([=](){
     jni->env->CallVoidMethod(jni->view, mid);
     app->focused->Reshaped(Box(x, y, w, h));
   });
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_MainActivity_nativeKeyPress(JNIEnv *e, jobject a, jint keycode, jint mod, jint down) {
+extern "C" void Java_com_lucidfusionlabs_app_NativeAPI_keyPress(JNIEnv *e, jclass c, jint keycode, jint mod, jint down) {
   app->input->QueueKeyPress(keycode, mod, down);
   app->scheduler.Wakeup(app->focused, FrameScheduler::WakeupFlag::ContingentOnEvents);
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_MainActivity_nativeTouch(JNIEnv *e, jobject a, jint action, jfloat x, jfloat y, jfloat p) {
+extern "C" void Java_com_lucidfusionlabs_app_NativeAPI_touch(JNIEnv *e, jclass c, jint action, jfloat x, jfloat y, jfloat p) {
   static float lx[2]={0,0}, ly[2]={0,0};
   auto screen = app->focused;
   int dpind = (/*FLAGS_swap_axis*/ 0) ? y < screen->width/2 : x < screen->width/2;
@@ -470,7 +470,7 @@ extern "C" void Java_com_lucidfusionlabs_app_MainActivity_nativeTouch(JNIEnv *e,
   } else INFOf("unhandled action %d", action);
 } 
 
-extern "C" void Java_com_lucidfusionlabs_app_MainActivity_nativeFling(JNIEnv *e, jobject a, jfloat x, jfloat y, jfloat vx, jfloat vy) {
+extern "C" void Java_com_lucidfusionlabs_app_NativeAPI_fling(JNIEnv *e, jclass c, jfloat x, jfloat y, jfloat vx, jfloat vy) {
   auto screen = app->focused;
   int dpind = y < screen->width/2;
   // screen->gesture_dpad_dx[dpind] = vx;
@@ -478,20 +478,24 @@ extern "C" void Java_com_lucidfusionlabs_app_MainActivity_nativeFling(JNIEnv *e,
   INFOf("fling(%f, %f) = %d of (%d, %d) and vel = (%f, %f)", x, y, dpind, screen->width, screen->height, vx, vy);
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_MainActivity_nativeScroll(JNIEnv *e, jobject a, jfloat x, jfloat y, jfloat vx, jfloat vy) {
+extern "C" void Java_com_lucidfusionlabs_app_NativeAPI_scroll(JNIEnv *e, jclass c, jfloat x, jfloat y, jfloat vx, jfloat vy) {
   // screen->gesture_swipe_up = screen->gesture_swipe_down = 0;
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_MainActivity_nativeAccel(JNIEnv *e, jobject a, jfloat x, jfloat y, jfloat z) {
+extern "C" void Java_com_lucidfusionlabs_app_NativeAPI_accel(JNIEnv *e, jclass c, jfloat x, jfloat y, jfloat z) {
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_MainActivity_nativeScale(JNIEnv *e, jobject a, jfloat x, jfloat y, jfloat dx, jfloat dy, jboolean begin) {
-  app->input->QueueMouseZoom(point(x, y), point(dx, dy), begin); 
+extern "C" void Java_com_lucidfusionlabs_app_NativeAPI_scale(JNIEnv *e, jclass c, jfloat x, jfloat y, jfloat dx, jfloat dy, jboolean begin) {
+  app->input->QueueMouseZoom(v2(x, y), v2(-(dx-1.0)+1.0, -(dy-1.0)+1.0), begin); 
   app->scheduler.Wakeup(app->focused, FrameScheduler::WakeupFlag::ContingentOnEvents);
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_MainActivity_nativeShellRun(JNIEnv *e, jclass c, jstring text) {
+extern "C" void Java_com_lucidfusionlabs_app_NativeAPI_shellRun(JNIEnv *e, jclass c, jstring text) {
   app->focused->shell->Run(e->GetStringUTFChars(text, 0));
+}
+
+extern "C" jboolean Java_com_lucidfusionlabs_app_NativeAPI_getFrameEnabled(JNIEnv *e, jclass c) {
+  return !app->frame_disabled;
 }
 
 extern "C" void Java_com_lucidfusionlabs_core_NativeCallback_RunCallbackInMainThread(JNIEnv *e, jclass c, jlong cb) {

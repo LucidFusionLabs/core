@@ -57,10 +57,16 @@ public class Toolbar implements com.lucidfusionlabs.core.ViewOwner {
     private View createView(final Context context) {
         LayoutInflater inflater = LayoutInflater.from(context);
         LinearLayout toolbar = (LinearLayout)inflater.inflate(R.layout.toolbar, null, false);
-        View.OnClickListener listener = new View.OnClickListener() { public void onClick(View bt) {
-            ModelItem r = model.get(bt.getId());
-            if (r != null && r.cb != null) r.cb.run();
-        }};
+        View.OnTouchListener listener = new View.OnTouchListener() {
+            @Override public boolean onTouch(View bt, MotionEvent event) {
+                if (event.getAction() == MotionEvent.ACTION_DOWN) return true;
+                if (event.getAction() != MotionEvent.ACTION_UP) return false;
+                ModelItem r = model.get(bt.getId());
+                if (r == null) return true;
+                if (r.cb != null) r.cb.run();
+                if (r.val.equals("toggle")) bt.setPressed(!bt.isPressed());
+                return true;
+            }};
         
         for (int i = 0, l = model.size(); i != l; ++i) {
             ModelItem r = model.get(i);
@@ -83,8 +89,8 @@ public class Toolbar implements com.lucidfusionlabs.core.ViewOwner {
                 bt = b;
             }
             bt.setId(i);
-            bt.setTag(r.val);
-            bt.setOnClickListener(listener);
+            bt.setTag("toolbar_button:" + r.key);
+            bt.setOnTouchListener(listener);
             bt.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
             toolbar.addView(bt);
         }
@@ -93,13 +99,12 @@ public class Toolbar implements com.lucidfusionlabs.core.ViewOwner {
     }
 
     public void show(final MainActivity activity, final boolean show_or_hide) {
-        final Toolbar self = this;
         activity.runOnUiThread(new Runnable() { public void run() {
             View toolbar = getView(activity);
             if (show_or_hide) {
                 if (shown_index >= 0) Log.e("lfl", "Show already shown toolbar");
                 else {
-                    activity.screens.toolbar_bottom.add(self);
+                    activity.screens.toolbar_bottom.add(Toolbar.this);
                     LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams
                         (LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
                     lp.gravity = Gravity.BOTTOM;
@@ -116,6 +121,14 @@ public class Toolbar implements com.lucidfusionlabs.core.ViewOwner {
                     shown_index = -1;
                 }
             }
+        }});
+    }
+
+    public void toggleButton(final MainActivity activity, final String name) {
+        activity.runOnUiThread(new Runnable() { public void run() {
+            View toolbar = getView(activity);
+            View button = (View)toolbar.findViewWithTag("toolbar_button:" + name);
+            if (button != null) button.setPressed(!button.isPressed());
         }});
     }
 }

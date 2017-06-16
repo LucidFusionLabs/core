@@ -42,7 +42,10 @@ public class AlertScreen extends Screen {
     }
 
     @Override
-    public void clear() { view = null; }
+    public void clear() {
+        if (view != null) view.first.hide();
+        view = null;
+    }
 
     private Pair<AlertDialog, EditText> getView(final Activity activity) {
         if (view == null) view = createView(activity);

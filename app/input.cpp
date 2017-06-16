@@ -293,12 +293,12 @@ int Input::DispatchQueuedInput(bool event_on_keyboard_input, bool event_on_mouse
   int events = 0, v = 0;
   for (auto &i : icb)
     switch (i.type) { 
-      case InputCB::KeyPress:   v = KeyPress  (i.data.iv.x, i.data.iv.y, i.data.iv.a);                                     if (event_on_keyboard_input) events += v; break;
-      case InputCB::MouseClick: v = MouseClick(i.data.iv.a, i.data.iv.b, point(i.data.iv.x, i.data.iv.y));                 if (event_on_mouse_input)    events += v; break;
-      case InputCB::MouseMove:  v = MouseMove (point(i.data.iv.x, i.data.iv.y), point(i.data.iv.a, i.data.iv.b));          if (event_on_mouse_input)    events += v; break;
-      case InputCB::MouseSwipe: v = MouseSwipe(point(i.data.iv.x, i.data.iv.y), point(i.data.iv.a, i.data.iv.b));          if (event_on_mouse_input)    events += v; break;
-      case InputCB::MouseWheel: v = MouseWheel(point(i.data.fv.x, i.data.fv.y), point(i.data.fv.a, i.data.fv.b));          if (event_on_mouse_input)    events += v; break;
-      case InputCB::MouseZoom:  v = MouseZoom (point(i.data.fv.x, i.data.fv.y), point(i.data.fv.a, i.data.fv.b), i.begin); if (event_on_mouse_input)    events += v; break;
+      case InputCB::KeyPress:   v = KeyPress  (i.data.iv.x, i.data.iv.y, i.data.iv.a);                               if (event_on_keyboard_input) events += v; break;
+      case InputCB::MouseClick: v = MouseClick(i.data.iv.a, i.data.iv.b, point(i.data.iv.x, i.data.iv.y));           if (event_on_mouse_input)    events += v; break;
+      case InputCB::MouseMove:  v = MouseMove (point(i.data.iv.x, i.data.iv.y), point(i.data.iv.a, i.data.iv.b));    if (event_on_mouse_input)    events += v; break;
+      case InputCB::MouseSwipe: v = MouseSwipe(point(i.data.iv.x, i.data.iv.y), point(i.data.iv.a, i.data.iv.b));    if (event_on_mouse_input)    events += v; break;
+      case InputCB::MouseWheel: v = MouseWheel(v2(i.data.fv.x, i.data.fv.y), v2(i.data.fv.a, i.data.fv.b));          if (event_on_mouse_input)    events += v; break;
+      case InputCB::MouseZoom:  v = MouseZoom (v2(i.data.fv.x, i.data.fv.y), v2(i.data.fv.a, i.data.fv.b), i.begin); if (event_on_mouse_input)    events += v; break;
     }
   return events;
 }
@@ -455,6 +455,7 @@ void MouseControllerCallback::Destruct() {
     case CB_VOID:  cb.cb_void .~CB();      break;
     case CB_BOOL:  cb.cb_bool .~BoolCB();  break;
     case CB_COORD: cb.cb_coord.~CoordCB(); break;
+    case CB_SCALE: cb.cb_scale.~ScaleCB(); break;
     default:                               break;
   }
 }
@@ -465,21 +466,26 @@ void MouseControllerCallback::Assign(const MouseControllerCallback &c) {
     case CB_VOID:  new (&cb.cb_void)  CB     (c.cb.cb_void);  break;
     case CB_BOOL:  new (&cb.cb_bool)  BoolCB (c.cb.cb_bool);  break;
     case CB_COORD: new (&cb.cb_coord) CoordCB(c.cb.cb_coord); break;
+    case CB_SCALE: new (&cb.cb_scale) ScaleCB(c.cb.cb_scale); break;
     default:                                                  break;
   }
 }
 
-bool MouseControllerCallback::Run(point p, point d, int button, int down, bool wrote) {
+template <class X> bool MouseControllerCallback::Run(X p, X d, int button, int down, bool wrote) {
   if (run_from_message_loop && !wrote) { app->RunInMainThread([=]{ Run(p, d, button, down, true); }); return false; }
   bool ret = 1;
   switch (type) {
-    case CB_VOID:  cb.cb_void();                    break;
-    case CB_BOOL:  ret = cb.cb_bool();              break;
-    case CB_COORD: cb.cb_coord(button, p, d, down); break;
-    default:                                        break;
+    case CB_VOID:  cb.cb_void();                                                              break;
+    case CB_BOOL:  ret = cb.cb_bool();                                                        break;
+    case CB_COORD: cb.cb_coord(button, V2Type<X>::GetPoint(p), V2Type<X>::GetPoint(d), down); break;
+    case CB_SCALE: cb.cb_scale(button, V2Type<X>::GetV2   (p), V2Type<X>::GetV2   (d), down); break;
+    default:                                                                                  break;
   }
   return ret;
 }
+
+template bool MouseControllerCallback::Run(v2    p, v2    d, int button, int down, bool wrote);
+template bool MouseControllerCallback::Run(point p, point d, int button, int down, bool wrote);
 
 const char *MouseController::Event::Name(int e) {
   switch(e) {
@@ -494,15 +500,24 @@ const char *MouseController::Event::Name(int e) {
 }
 
 int MouseController::SendMouseEvent(InputEvent::Id event, const point &p, const point &dp, int down, int flag) {
+  return SendEvent(event, p, dp, 1, 0);
+}
+
+int MouseController::SendWheelEvent(InputEvent::Id event, const v2 &p, const v2 &d, bool begin) {
+  return SendEvent(event, p, d, 1, 0);
+}
+
+template <class X> int MouseController::SendEvent(InputEvent::Id event, const X &p, const X &dp, int down, int flag) {
   int fired = 0, boxes_checked = 0;
   bool but1  = event == Mouse::Event::Click;
   bool but2  = event == Mouse::Event::Click2;
   bool wheel = event == Mouse::Event::Wheel;
   bool zoom  = event == Mouse::Event::Zoom;
+  point pp = V2Type<X>::GetPoint(p);
 
   for (auto h = hover.begin(); h != hover.end(); /**/) {
     auto e = &hit.data[*h];
-    if (!e->deleted && e->box.within(p)) { ++h; continue; }
+    if (!e->deleted && e->box.within(pp)) { ++h; continue; }
     h = VectorEraseIterSwapBack(&hover, h);
     if (e->deleted) continue;
     e->val = 0;
@@ -515,12 +530,12 @@ int MouseController::SendMouseEvent(InputEvent::Id event, const point &p, const 
 
     if (e->deleted || !e->active || (e_hover && e->val) || 
         (!down && (e->evtype == Event::Click || e->evtype == Event::RightClick) &&
-         e->CB.type != MouseControllerCallback::CB_COORD)) continue;
+         e->CB.type != MouseControllerCallback::CB_COORD && e->CB.type != MouseControllerCallback::CB_SCALE)) continue;
 
     InputDebug("%s check %s within %s (%s)", InputEvent::Name(event), p.DebugString().c_str(),
                e->box.DebugString().c_str(), Event::Name(e->evtype));
     boxes_checked++;
-    if (e->box.within(p)) {
+    if (e->box.within(pp)) {
       if (e->run_only_if_first && fired) continue;
       switch (e->evtype) { 
         case Event::Click:      if (but1)         { thunk=1; } break;
@@ -551,10 +566,6 @@ int MouseController::SendMouseEvent(InputEvent::Id event, const point &p, const 
   InputDebugIfDown("MouseController::Input %s fired=%d, checked %zd of %zd hitboxes",
                    p.DebugString().c_str(), fired, boxes_checked, hit.data.size());
   return fired;
-}
-
-int MouseController::SendWheelEvent(InputEvent::Id event, const v2 &p, const v2 &d, bool begin) {
-  return SendMouseEvent(event, point(p.x, p.y), point(d.x*100, d.y*100), 1, 0);
 }
 
 }; // namespace LFL

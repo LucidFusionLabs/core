@@ -42,22 +42,7 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity
     implements FragmentManager.OnBackStackChangedListener, View.OnKeyListener, View.OnTouchListener,
     SensorEventListener {
 
-    static { System.loadLibrary("native-lib"); }
-    
-    public native void nativeCreate();
-    public native void nativeMain();
-    public native void nativeNewMainLoop(boolean reset);
-    public native void nativeMinimize();
-    public native void nativeReshaped(int x, int y, int w, int h);
-    public native void nativeKeyPress(int keycode, int mod, int down);
-    public native void nativeTouch(int action, float x, float y, float p);
-    public native void nativeFling(float x, float y, float vx, float vy);
-    public native void nativeScroll(float x, float y, float sx, float sy);
-    public native void nativeAccel(float x, float y, float z);
-    public native void nativeScale(float x, float y, float dx, float dy, boolean begin);
-    public static native void nativeShellRun(String text);
-
-    public static boolean native_created, native_init, disable_title;
+    public static boolean disable_title;
     public static Screens screens = new Screens();
     public static ArrayList<Bitmap> bitmaps = new ArrayList<Bitmap>();
 
@@ -85,7 +70,7 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity
     protected PreferenceFragment createPreferenceFragment() { return null; }
 
     @Override protected void onCreate(Bundle savedInstanceState) {
-        Log.i("lfl", "MainActivity.onCreate() native_created=" + native_created);
+        Log.i("lfl", "MainActivity.onCreate() NativeAPI.created=" + NativeAPI.created);
         preferences = PreferenceManager.getDefaultSharedPreferences(this);
         setTheme(preferences.getString("theme", "Dark").equals("Light") ?
                  android.support.v7.appcompat.R.style.Theme_AppCompat_Light :
@@ -121,11 +106,11 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity
         gl_view.setOnTouchListener(this);
         gl_view.requestFocus();
 
-        if (!native_created) {
-            native_created = true;
+        if (!NativeAPI.created) {
+            NativeAPI.created = true;
             ScreenFragmentNavigator.clearFragmentBackstack(this);
-            Log.i("lfl", "MainActivity.nativeCreate()");
-            nativeCreate();
+            Log.i("lfl", "NativeAPI.create()");
+            NativeAPI.create(this);
         } else {
             if (disable_title) disableTitle();
         }
@@ -410,8 +395,8 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity
 
     public void paste(String s) {
         for (char c : s.toCharArray()) {
-            nativeKeyPress(c, 0, 1);
-            nativeKeyPress(c, 0, 0);
+            NativeAPI.keyPress(c, 0, 1);
+            NativeAPI.keyPress(c, 0, 0);
         }
     }
 
@@ -424,17 +409,15 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity
     }
 
     public void enablePinchRecognizer(final boolean enabled) {
-        final MainActivity self = this;
         runOnUiThread(new Runnable() { public void run() {
             if (!enabled) scale_detector = null;
             else scale_detector = new ScaleGestureDetector
-                (self, new ScaleGestureDetector.SimpleOnScaleGestureListener() {
-                    @Override
-                    public boolean onScale(ScaleGestureDetector g) {
-                        float dx = g.getCurrentSpanX() - g.getPreviousSpanX();
-                        float dy = g.getCurrentSpanY() - g.getPreviousSpanY();
-                        Log.i("lfl", "scale " +  g.getFocusX() + " " + g.getFocusY() + " " + dx + " " + dy + " " + g.isInProgress());
-                        nativeScale(g.getFocusX(), g.getFocusY(), dx, dy, !g.isInProgress());
+                (MainActivity.this, new ScaleGestureDetector.SimpleOnScaleGestureListener() {
+                    @Override public boolean onScaleBegin(ScaleGestureDetector g) { return handleScale(g, true); }
+                    @Override public boolean onScale     (ScaleGestureDetector g) { return handleScale(g, false); }
+                    public boolean handleScale(ScaleGestureDetector g, boolean begin) {
+                        // Log.i("lfl", "scale " +  g.getFocusX() + " " + g.getFocusY() + " " + g.getScaleFactor() + " " + begin);
+                        NativeAPI.scale(g.getFocusX(), g.getFocusY(), g.getScaleFactor(), g.getScaleFactor(), begin);
                         return true;
                     }});
         }});
@@ -500,8 +483,8 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity
             }
         }
         if (key_char == 0) return false;
-        else if (event.getAction() == KeyEvent.ACTION_UP)   { nativeKeyPress(key_char, mod, 0); return true; }
-        else if (event.getAction() == KeyEvent.ACTION_DOWN) { nativeKeyPress(key_char, mod, 1); return true; }
+        else if (event.getAction() == KeyEvent.ACTION_UP)   { NativeAPI.keyPress(key_char, mod, 0); return true; }
+        else if (event.getAction() == KeyEvent.ACTION_DOWN) { NativeAPI.keyPress(key_char, mod, 1); return true; }
         else return false;
     }
 
@@ -512,12 +495,12 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity
         if (action == MotionEvent.ACTION_MOVE) {
             if (scale_detector == null || !scale_detector.isInProgress()) {
                 for (int i = 0; i < event.getPointerCount(); i++) {
-                    nativeTouch(action, event.getX(i), event.getY(i), event.getPressure(i));
+                    NativeAPI.touch(action, event.getX(i), event.getY(i), event.getPressure(i));
                 }
             }
         } else {
             int action_index = (action == MotionEvent.ACTION_POINTER_DOWN || action == MotionEvent.ACTION_POINTER_UP) ? event.getActionIndex() : 0;
-            nativeTouch(action, event.getX(action_index), event.getY(action_index), event.getPressure(action_index));
+            NativeAPI.touch(action, event.getX(action_index), event.getY(action_index), event.getPressure(action_index));
         }
         return true; 
     }
@@ -526,7 +509,7 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity
 
     @Override public void onSensorChanged(SensorEvent event) {
         if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER)
-            nativeAccel(event.values[0], event.values[1], event.values[2]);
+            NativeAPI.accel(event.values[0], event.values[1], event.values[2]);
     }
 }
 
@@ -535,7 +518,7 @@ class MyGestureListener extends android.view.GestureDetector.SimpleOnGestureList
 
     @Override
     public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
-        main_activity.nativeFling(e1.getX(), e1.getY(), velocityX, velocityY);
+        NativeAPI.fling(e1.getX(), e1.getY(), velocityX, velocityY);
         return false;
     }
 }

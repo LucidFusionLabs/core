@@ -145,6 +145,12 @@ public class ModelItemRecyclerViewAdapter
     }
 
     @Override
+    public void onDetachedFromRecyclerView(RecyclerView recyclerView) {
+        super.onDetachedFromRecyclerView(recyclerView);
+        recyclerview = null;
+    }
+
+    @Override
     public ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
         LayoutInflater inflater = LayoutInflater.from(parent.getContext());
         switch (viewType) {
@@ -445,7 +451,6 @@ public class ModelItemRecyclerViewAdapter
         }
 
         if (holder.radio != null) {
-            final ModelItemRecyclerViewAdapter self = this;
             holder.radio.setOnCheckedChangeListener(null);
             holder.radio.removeAllViews();
 
@@ -510,6 +515,7 @@ public class ModelItemRecyclerViewAdapter
         data.subList(position, position + 1).clear();
         moveSectionsAfterBy(getSectionIdFromPosition(position), -1);
         notifyItemRemoved(position);
+        parent_screen.changed = true;
     }
 
     @Override public boolean onItemTouchHelperMove(int fromPosition, int toPosition) {
@@ -518,6 +524,7 @@ public class ModelItemRecyclerViewAdapter
         if (fromPosition < toPosition) for (int i = fromPosition; i < toPosition; i++) Collections.swap(data, i, i + 1);
         else                           for (int i = fromPosition; i > toPosition; i--) Collections.swap(data, i, i - 1);
         notifyItemMoved(fromPosition, toPosition);
+        parent_screen.changed = true;
         return true;
     }
 
@@ -673,15 +680,18 @@ public class ModelItemRecyclerViewAdapter
             ModelItem item = data.get(section_row + 1 + i);
             if (recyclerview != null) {
                 ViewHolder holder = (ViewHolder)recyclerview.findViewHolderForAdapterPosition(section_row + 1 + i);
-                if (holder.toggle != null) val = holder.toggle.isChecked() ? "1" : "0";
-                else if (holder.radio != null) {
-                    int checked = holder.radio.getCheckedRadioButtonId();
-                    AppCompatRadioButton button = (AppCompatRadioButton)holder.radio.findViewById(checked);
-                    val = button.getText().toString();
-                } else if (holder.editText != null) val = holder.editText.getText().toString();
+                if (holder != null) {
+                    if (holder.toggle != null) val = holder.toggle.isChecked() ? "1" : "0";
+                    else if (holder.radio != null) {
+                        int checked = holder.radio.getCheckedRadioButtonId();
+                        AppCompatRadioButton button = (AppCompatRadioButton)holder.radio.findViewById(checked);
+                        val = button.getText().toString();
+                    } else if (holder.editText != null) val = holder.editText.getText().toString();
+                }
             }
             if (item.dropdown_key.length() > 0) ret.add(new Pair<String, String>(item.dropdown_key, item.key)); 
             if (val.length() == 0 && item.val.length() > 0 && item.val.charAt(0) != 1) val = item.val;
+            // Log.i("lfl", "getSectionText " + i + ": " + item.key + " = " + item.val);
             ret.add(new Pair<String, String>(item.key, val));
         }
         return ret;

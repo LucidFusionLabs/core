@@ -50,12 +50,11 @@ public class ScreenFragmentNavigator {
     public void clear() { shown_index = -1; }
 
     public void show(final MainActivity activity, final boolean show_or_hide) {
-        final ScreenFragmentNavigator self = this;
         activity.runOnUiThread(new Runnable() { public void run() {
             if (show_or_hide) {
                 if (shown_index >= 0) Log.i("lfl", "Show already shown navbar");
                 else {
-                    activity.screens.navigators.add(self);
+                    activity.screens.navigators.add(ScreenFragmentNavigator.this);
                     activity.gl_layout.setVisibility(View.GONE);
                     activity.action_bar.show();
                     shown_index = activity.screens.navigators.size()-1;

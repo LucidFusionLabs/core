@@ -28,7 +28,7 @@ public class OpenGLView extends android.view.SurfaceView implements SurfaceHolde
     public EGLDisplay egl_display;
     public Thread thread;
     public int surface_width, surface_height, egl_version;
-    public boolean have_surface, reshape_pending;
+    public boolean have_surface, reshape_synchronized, reshape_pending;
     public Object sync = new Object();
 
     public OpenGLView(MainActivity activity, Context context) {
@@ -65,22 +65,26 @@ public class OpenGLView extends android.view.SurfaceView implements SurfaceHolde
     }
 
     public void synchronizedReshape() {
-        if (Thread.currentThread() == thread) return;
-        reshape_pending = true;
-        main_activity.nativeReshaped(0, 0, surface_width, surface_height);
-        synchronized(sync) {
-            while (thread != null && reshape_pending) {
-                try { sync.wait(); }
-                catch (InterruptedException ex) { Thread.currentThread().interrupt(); }
+        boolean gl_thread = Thread.currentThread() == thread;
+        Log.i("lfl", "NativeAPI.reshaped(0, 0, " + surface_width + ", " + surface_height + ") gl_thread=" + gl_thread + " frame_enabled=" + NativeAPI.getFrameEnabled());
+        NativeAPI.reshaped(0, 0, surface_width, surface_height);
+        if (reshape_synchronized) {
+            if (gl_thread) return;
+            reshape_pending = true;
+            synchronized(sync) {
+                while (thread != null && reshape_pending && NativeAPI.getFrameEnabled()) {
+                    try { sync.wait(); }
+                    catch (InterruptedException ex) { Thread.currentThread().interrupt(); }
+                }
             }
+            Log.i("lfl", "OpenGLView synchronizedReshape done");
         }
-        Log.i("lfl", "OpenGLView synchronizedReshape done");
     }
 
     public void onSynchronizedReshape() {
-        synchronized(sync) { reshape_pending = false; }
         destroySurface();
         createSurface();
+        synchronized(sync) { reshape_pending = false; }
     }
 
     public void onResume() {
@@ -93,19 +97,19 @@ public class OpenGLView extends android.view.SurfaceView implements SurfaceHolde
         if (thread == null) return;
         Thread t = thread;
         thread = null;        
-        main_activity.nativeMinimize();
+        NativeAPI.minimize();
         try { t.join(); }
         catch(Exception e) { Log.e("lfl", e.toString()); }
     }
 
-    public void startRenderThread(boolean native_reset) {
-        Log.i("lfl", "startRenderThread native_init=" + main_activity.native_init + " native_reset=" + native_reset);
+    public void startRenderThread(boolean reset) {
+        Log.i("lfl", "startRenderThread NativeAPI.init=" + NativeAPI.init + " NativeAPI.reset=" + reset);
         main_activity.screens.onStartRenderThread(main_activity, main_activity.gl_layout);
-        if      (!main_activity.native_init) thread = new Thread(new Runnable() { public void run() { initEGL();        main_activity.nativeMain       ();      } }, "JNIMainThread");
-        else if (native_reset)               thread = new Thread(new Runnable() { public void run() { initEGL();        main_activity.nativeNewMainLoop(true);  } }, "JNIMainThread");
-        else                                 thread = new Thread(new Runnable() { public void run() { makeCurrentEGL(); main_activity.nativeNewMainLoop(false); } }, "JNIMainThread");
+        if      (!NativeAPI.init) thread = new Thread(new Runnable() { public void run() { initEGL();        NativeAPI.main       ();                     } }, "JNIMainThread");
+        else if (reset)           thread = new Thread(new Runnable() { public void run() { initEGL();        NativeAPI.newMainLoop(main_activity, true);  } }, "JNIMainThread");
+        else                      thread = new Thread(new Runnable() { public void run() { makeCurrentEGL(); NativeAPI.newMainLoop(main_activity, false); } }, "JNIMainThread");
         thread.start();
-        main_activity.native_init = true;
+        NativeAPI.init = true;
     }
 
     public boolean createSurface() {

@@ -136,12 +136,14 @@ struct TextboxController : public KeyboardController {
 struct MouseControllerCallback {
   typedef function<void()> CB;
   typedef function<bool()> BoolCB;
+  typedef function<void(int, v2, v2, int)> ScaleCB;
   typedef function<void(int, point, point, int)> CoordCB;
-  enum { NONE=0, CB_VOID=1, CB_BOOL=2, CB_COORD=3 } type;
+  enum { NONE=0, CB_VOID=1, CB_BOOL=2, CB_COORD=3, CB_SCALE=4 } type;
   UNION FunctionPointer {
     CB      cb_void;
     BoolCB  cb_bool;
     CoordCB cb_coord;
+    ScaleCB cb_scale;
     FunctionPointer() {}
     ~FunctionPointer() {}
   };
@@ -154,18 +156,20 @@ struct MouseControllerCallback {
   MouseControllerCallback(const CB       &c, bool mt=false) : type(CB_VOID)  { new (&cb.cb_void)  CB     (c); run_from_message_loop=mt; }
   MouseControllerCallback(const BoolCB   &c, bool mt=false) : type(CB_BOOL)  { new (&cb.cb_bool)  BoolCB (c); run_from_message_loop=mt; }
   MouseControllerCallback(const CoordCB  &c, bool mt=false) : type(CB_COORD) { new (&cb.cb_coord) CoordCB(c); run_from_message_loop=mt; }
+  MouseControllerCallback(const ScaleCB  &c, bool mt=false) : type(CB_SCALE) { new (&cb.cb_scale) ScaleCB(c); run_from_message_loop=mt; }
   MouseControllerCallback(const MouseControllerCallback &c) { Assign(c); }
   MouseControllerCallback &operator=(const MouseControllerCallback &c) { Destruct(); Assign(c); return *this; }
 
   void Destruct();
   void Assign(const MouseControllerCallback &c);
-  bool Run(point p, point d, int button, int down, bool wrote=false);
+  template <class X> bool Run(X p, X d, int button, int down, bool wrote=false);
 };
 
 struct MouseController {
   typedef MouseControllerCallback::CB CB;
   typedef MouseControllerCallback::BoolCB BoolCB;
   typedef MouseControllerCallback::CoordCB CoordCB;
+  typedef MouseControllerCallback::ScaleCB ScaleCB;
   struct Event {
     enum { Click=1, RightClick=2, Hover=3, Drag=4, Wheel=5, Zoom=6 }; 
     static const char *Name(int e);
@@ -194,6 +198,7 @@ struct MouseController {
   virtual int AddDragBox      (const Box &w, MouseControllerCallback cb) { return hit.Insert(HitBox(Event::Drag,       w, move(cb))); }
   virtual int SendMouseEvent(InputEvent::Id, const point &p, const point &d, int down, int flag);
   virtual int SendWheelEvent(InputEvent::Id, const v2    &p, const v2    &d, bool begin);
+  template <class X> int SendEvent(InputEvent::Id, const X &p, const X &d, int down, int flag);
 };
 
 struct DragTracker {
