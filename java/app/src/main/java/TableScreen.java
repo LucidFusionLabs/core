@@ -194,6 +194,11 @@ public class TableScreen extends Screen {
             (new Runnable() { public void run() { model.setSectionValues(section, v); }});
     }
 
+    public void setSectionColors(final AppCompatActivity activity, final int section, final ArrayList<Integer> v) {
+        activity.runOnUiThread
+            (new Runnable() { public void run() { model.setSectionColors(section, v); }});
+    }
+
     public void setTag(final AppCompatActivity activity, final int s, final int r, final int v) {
         activity.runOnUiThread
             (new Runnable() { public void run() { model.setTag(s, r, v); }});
@@ -207,6 +212,12 @@ public class TableScreen extends Screen {
     public void setValue(final AppCompatActivity activity, final int s, final int r, final String v) {
         activity.runOnUiThread
             (new Runnable() { public void run() { model.setValue(s, r, v); }});
+    }
+
+    public void setColor(final AppCompatActivity activity, final int s, final int r, final int v) {
+        activity.runOnUiThread(new Runnable() { public void run() {
+            model.setColor(s, r, v);
+        }});
     }
 
     public void setHidden(final AppCompatActivity activity, final int s, final int r, final int v) {

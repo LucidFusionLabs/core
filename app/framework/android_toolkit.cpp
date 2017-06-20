@@ -62,25 +62,31 @@ struct AndroidToolbarView : public ToolbarViewInterface {
     theme(t), impl(NewToolbarObject(t, move(items), f)) {}
 
   static jobject NewToolbarObject(const string &t, MenuItemVec items, int flag) {
-    static jmethodID mid = CheckNotNull
-      (jni->env->GetMethodID(jni->toolbar_class, "<init>", "(Ljava/lang/String;Ljava/util/ArrayList;I)V"));
+    static jmethodID mid = jni->GetMethodID(jni->toolbar_class, Java::Constructor, {Java::String, Java::ArrayList, Java::I}, Java::V);
     LocalJNIObject theme(jni->env, JNI::ToJString(jni->env, t)), l(jni->env, JNI::ToModelItemArrayList(jni->env, move(items)));
     return jni->env->NewObject(jni->toolbar_class, mid, theme.v, l.v, jint(flag));
   }
 
-  void SetTheme(const string &x) { theme=x; }
-  string GetTheme() { return theme; }
+  void SetTheme(const string &x) {
+    static jmethodID mid = jni->GetMethodID(jni->toolbar_class, "setTheme", {Java::MainActivity, Java::String}, Java::V);
+    LocalJNIObject name(jni->env, JNI::ToJString(jni->env, x));
+    jni->env->CallVoidMethod(impl.v, mid, jni->activity, name.v);
+  }
+
+  string GetTheme() {
+    static jfieldID fid = CheckNotNull(jni->env->GetFieldID(jni->toolbar_class, "theme", "Ljava/lang/String;"));
+    LocalJNIString theme(jni->env, CheckNotNull(jstring(jni->env->GetObjectField(impl.v, fid))));
+    return JNI::GetJString(jni->env, theme.v);
+  }
 
   void ToggleButton(const string &n) {
-    static jmethodID mid = CheckNotNull
-      (jni->env->GetMethodID(jni->toolbar_class, "toggleButton", "(Lcom/lucidfusionlabs/app/MainActivity;Ljava/lang/String;)V"));
+    static jmethodID mid = jni->GetMethodID(jni->toolbar_class, "toggleButton", {Java::MainActivity, Java::String}, Java::V);
     LocalJNIObject name(jni->env, JNI::ToJString(jni->env, n));
     jni->env->CallVoidMethod(impl.v, mid, jni->activity, name.v);
   }
 
   void Show(bool show_or_hide) {
-    static jmethodID mid = CheckNotNull
-      (jni->env->GetMethodID(jni->toolbar_class, "show", "(Lcom/lucidfusionlabs/app/MainActivity;Z)V"));
+    static jmethodID mid = jni->GetMethodID(jni->toolbar_class, "show", {Java::MainActivity, Java::Z}, Java::V);
     jni->env->CallVoidMethod(impl.v, mid, jni->activity, show_or_hide);
   }
 };
@@ -341,7 +347,13 @@ void AndroidTableView::SetSectionValues(int section, const StringVec &in) {
   jni->env->CallVoidMethod(impl.v, mid, jni->activity, jint(section), v.v);
 }
 
-void AndroidTableView::SetSectionColors(int seciton, const vector<Color>&) {
+void AndroidTableView::SetSectionColors(int section, const vector<Color> &in) {
+  static jmethodID mid = CheckNotNull
+    (jni->env->GetMethodID(jni->tablescreen_class,
+                           "setSectionColors", "(Landroid/support/v7/app/AppCompatActivity;ILjava/util/ArrayList;)V"));
+  vector<int> colors = VectorConvert<Color, int>(in, [](const Color &x){ return int(x.AsUnsigned()); });
+  LocalJNIObject v(jni->env, JNI::ToIntegerArrayList(jni->env, colors));
+  jni->env->CallVoidMethod(impl.v, mid, jni->activity, jint(section), v.v);
 }
 
 void AndroidTableView::SetTag(int section, int row, int val) {
@@ -380,6 +392,10 @@ void AndroidTableView::SetHidden(int section, int row, int val) {
 }
 
 void AndroidTableView::SetColor(int section, int row, const Color &val) {
+  static jmethodID mid = CheckNotNull
+    (jni->env->GetMethodID(jni->tablescreen_class,
+                           "setColor", "(Landroid/support/v7/app/AppCompatActivity;I)V"));
+  jni->env->CallVoidMethod(impl.v, mid, jni->activity, jint(val.AsUnsigned()));
 }
 
 void AndroidTableView::SetTitle(const string &title) {

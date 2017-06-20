@@ -17,6 +17,15 @@
  */
 
 namespace LFL {
+const char* Java::V = "V";
+const char* Java::I = "I";
+const char* Java::J = "J";
+const char* Java::Z = "Z";
+const char* Java::Constructor = "<init>";
+const char* Java::String = "Ljava/lang/String;";
+const char* Java::ArrayList = "Ljava/util/ArrayList;";
+const char* Java::MainActivity = "Lcom/lucidfusionlabs/app/MainActivity;";
+  
 static JNI *jni = Singleton<JNI>::Get();
 
 void JNI::Init(jobject a, bool first) {
@@ -33,6 +42,10 @@ void JNI::Free() {
   if (1)           env->DeleteGlobalRef(handler);  handler  = 0;
   if (1)           env->DeleteGlobalRef(view);     view     = 0;
   if (1)           env->DeleteGlobalRef(activity); activity = 0;
+}
+
+jmethodID JNI::GetMethodID(jclass c, const char *name, const StringVec &args, const char *ret) {
+  return CheckNotNull(env->GetMethodID(c, name, StrCat("(", Join(args, ""), ")", ret).c_str())); 
 }
 
 int JNI::CheckForException() {
@@ -124,6 +137,16 @@ jobject JNI::ToJStringPairArrayList(JNIEnv *env, const StringPairVec &items) {
   for (auto &i : items) {
     LocalJNIString ki(env, ToJString(env, i.first)), vi(env, ToJString(env, i.second));
     LocalJNIObject v(env, env->NewObject(jni->pair_class, jni->pair_construct, ki.v, vi.v));
+    CHECK(env->CallBooleanMethod(ret, jni->arraylist_add, v.v));
+  }
+  return ret;
+}
+
+jobject JNI::ToIntegerArrayList(JNIEnv *env, const vector<int> &items) {
+  static jmethodID mid = CheckNotNull(env->GetMethodID(jni->int_class, "<init>", "(I)V"));
+  jobject ret = env->NewObject(jni->arraylist_class, jni->arraylist_construct);
+  for (auto &i : items) {
+    LocalJNIObject v(env, env->NewObject(jni->int_class, mid, i));
     CHECK(env->CallBooleanMethod(ret, jni->arraylist_add, v.v));
   }
   return ret;

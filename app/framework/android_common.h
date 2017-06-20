@@ -27,6 +27,10 @@ struct AndroidEvent {
     ACTION_POINTER_UP=6 };
 };
 
+struct Java {
+  static const char *V, *I, *J, *Z, *Constructor, *String, *ArrayList, *MainActivity;
+};
+
 struct JNI {
   JNIEnv *env=0;
   jobject activity=0, resources=0, view=0, gplus=0, handler=0;
@@ -50,12 +54,14 @@ struct JNI {
   void Free();
   int CheckForException();
   void LogException(jthrowable &exception);
+  jmethodID GetMethodID(jclass, const char *name, const StringVec &args, const char *ret);
 
   static string GetJString(JNIEnv*, jstring);
   static jstring ToJString(JNIEnv *env , const string &x) { return env->NewStringUTF(x.c_str()); }
   static jstring ToJStringRaw(JNIEnv*, const string &x);
   static jobjectArray ToJStringArray(JNIEnv*, const StringVec &items);
   static pair<jobjectArray, jobjectArray> ToJStringArrays(JNIEnv*, const StringPairVec &items);
+  static jobject ToIntegerArrayList(JNIEnv*, const vector<int> &items);
   static jobject ToJStringArrayList(JNIEnv*, const StringVec &items);
   static jobject ToJStringPairArrayList(JNIEnv*, const StringPairVec &items);
   static jobject ToModelItemArrayList(JNIEnv*, AlertItemVec items);

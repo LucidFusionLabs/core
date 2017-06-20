@@ -5,4 +5,5 @@
     android:layout_width="wrap_content"
     android:layout_height="match_parent"
     android:scaleType="fitCenter"
-    android:background="?android:attr/selectableItemBackground"/>
+    android:background="?android:attr/selectableItemBackground"
+    android:theme="@style/Theme.AppCompat"/>

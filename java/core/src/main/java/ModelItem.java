@@ -52,7 +52,7 @@ public final class ModelItem {
     public static final int AD_TYPE_BANNER = 1;
 
     public String key, val, right_text, dropdown_key;
-    public int type, tag, flags, left_icon, right_icon, selected, height;
+    public int type, tag, flags, left_icon, right_icon, selected, height, fg_color, bg_color;
     public NativeCallback cb;
     public NativeStringCB right_cb;
     public PickerItem picker;
@@ -77,6 +77,8 @@ public final class ModelItem {
         right_cb = rcb;
         picker = p;
         hidden = h;
+        fg_color = fg;
+        bg_color = bg;
     }
 
     public static int HAlignToGravity(int halign) {

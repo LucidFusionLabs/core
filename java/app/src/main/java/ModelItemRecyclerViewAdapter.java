@@ -56,7 +56,7 @@ public class ModelItemRecyclerViewAdapter
         public View root_wrapper;
         public ModelItemLinearLayout root;
         public TextView textView, label, subtext, leftNav, rightNav;
-        public ColorStateList textViewTextColors, textViewLinkColors;
+        public ColorStateList textViewTextColors, textViewLinkColors, subtextTextColors;
         public EditText editText;
         public ImageView leftIcon, rightIcon, removeIcon;
         public SwitchCompat toggle;
@@ -70,6 +70,11 @@ public class ModelItemRecyclerViewAdapter
             textView = v;
             textViewTextColors = textView.getTextColors();
             textViewLinkColors = textView.getLinkTextColors();
+        }
+
+        public void setSubtext(TextView v) {
+            subtext = v;
+            subtextTextColors = subtext.getTextColors();
         }
     }
 
@@ -246,7 +251,7 @@ public class ModelItemRecyclerViewAdapter
                 holder.root = (ModelItemLinearLayout)itemView.findViewById(R.id.listview_cell_root);
                 holder.setTextView((TextView)itemView.findViewById(R.id.listview_cell_title));
                 holder.label = (TextView)itemView.findViewById(R.id.listview_cell_value);
-                holder.subtext = (TextView)itemView.findViewById(R.id.listview_cell_subtext);
+                holder.setSubtext((TextView)itemView.findViewById(R.id.listview_cell_subtext));
                 holder.removeIcon = (ImageView)itemView.findViewById(R.id.listview_cell_remove_icon);
                 holder.leftIcon = (ImageView)itemView.findViewById(R.id.listview_cell_left_icon);
                 holder.rightIcon = (ImageView)itemView.findViewById(R.id.listview_cell_right_icon);
@@ -338,6 +343,8 @@ public class ModelItemRecyclerViewAdapter
         boolean subtext = (item.flags & ModelItem.TABLE_FLAG_SUBTEXT) != 0;
         if (holder.subtext != null) {
             holder.subtext.setText(subtext ? item.val : "");
+            if (Color.alpha(item.fg_color) != 0 && ((item.flags & ModelItem.TABLE_FLAG_COLORSUBTEXT) != 0)) holder.subtext.setTextColor(item.fg_color);
+            else                                                                                            holder.subtext.setTextColor(holder.subtextTextColors);
         }
 
         if (holder.label != null) {
@@ -621,6 +628,16 @@ public class ModelItemRecyclerViewAdapter
         notifyItemRangeChanged(section_row + 1, section_size);
     }
 
+    public void setSectionColors(final int section, ArrayList<Integer> v) {
+        if (section == sections.size()) addSection();
+        if (section >= sections.size()) throw new java.lang.IllegalArgumentException();
+        int section_size = getSectionSize(section), section_row = getSectionBeginRowId(section);
+        if (section_size != v.size()) throw new java.lang.IllegalArgumentException();
+        for (int i = 0; i < section_size; ++i) {
+            data.get(section_row + 1 + i).fg_color = v.get(i);
+        }
+    }
+
     public void applyChangeList(final ArrayList<ModelItemChange> changes) {
         ModelItemChange.applyChangeList(changes, this, new ModelItemChange.ChangeWatcher() { @Override public void onChanged(int row) {
             notifyItemChanged(row);
@@ -638,6 +655,7 @@ public class ModelItemRecyclerViewAdapter
     public void setKey   (final int s, final int r, final String  v) { data.get(getCollapsedRowId(s, r)).key = v; }
     public void setTag   (final int s, final int r, final int     v) { data.get(getCollapsedRowId(s, r)).tag = v; } 
     public void setValue (final int s, final int r, final String  v) { data.get(getCollapsedRowId(s, r)).val = v; }
+    public void setColor (final int s, final int r, final int     v) { data.get(getCollapsedRowId(s, r)).fg_color = v; }
     public void setSelected(final int s, final int r, final int   v) { data.get(getCollapsedRowId(s, r)).selected = v; }
     
     public boolean setHidden(final int s, final int r, final int v) {

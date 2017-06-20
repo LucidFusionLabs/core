@@ -222,7 +222,7 @@ void Application::SetVerticalSwipeRecognizer(int touches) {}
 void Application::SetHorizontalSwipeRecognizer(int touches) {}
 void Application::SetTouchKeyboardTiled(bool v) {}
 int  Application::SetMultisample(bool v) { return 0; }
-int  Application::SetExtraScale(bool v) { return 0; }
+int  Application::SetExtraScale(bool v) { return 1; }
 void Application::SetDownScale(bool v) {}
 void Application::ShowSystemStatusBar(bool v) {}
 
@@ -539,7 +539,7 @@ extern "C" void Java_com_lucidfusionlabs_app_TableScreen_RunHideCB(JNIEnv *e, jo
   static jfieldID changed_fid = CheckNotNull(e->GetFieldID(jni->tablescreen_class, "changed",  "Z"));
   uintptr_t self = CheckNotNull(e->GetLongField(a, self_fid));
   TableViewInterface *view = static_cast<TableViewInterface*>(Void(self));
-  view->changed = e->GetBooleanField(a, changed_fid);
+  if (e->GetBooleanField(a, changed_fid)) view->changed = true;
   if (view->hide_cb) app->RunCallbackInMainThread(view->hide_cb);
 }
 
