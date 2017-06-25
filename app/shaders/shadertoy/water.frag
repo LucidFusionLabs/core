@@ -38,7 +38,7 @@ float time = iGlobalTime*1.3;
 
 void mainImage( out vec4 fragColor, in vec2 fragCoord )
 {
-vec2 p = SamplePointFlipY(), c1 = p, c2 = p;
+vec2 p = SamplePointFlipY, c1 = p, c2 = p;
 float cc1 = col(c1);
 
 c2.x += iResolution.x/delta;

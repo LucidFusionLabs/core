@@ -398,61 +398,71 @@ public class ModelItemRecyclerViewAdapter
             case ModelItem.TYPE_PICKER: {
                 holder.root.removeAllViews();
                 if (item.picker == null) break;
-                int num_pickers = item.picker.data.size();
-                ArrayList<String> picker_val = new ArrayList<String>();
-                if (position > 0 && num_pickers > 1) picker_val.addAll
-                    (java.util.Arrays.asList(data.get(position-1).val.trim().split("\\s+")));
+                final int num_pickers = item.picker.data.size();
+                final boolean have_header = position > 0 && data.get(position-1).type == ModelItem.TYPE_LABEL;
+                ArrayList<String> picker_val = com.lucidfusionlabs.core.Util.splitStringWords
+                    (have_header && num_pickers > 1 ? data.get(position-1).val : null);
 
                 for (int i = 0; i < num_pickers; i++) {
-                    ArrayList<String> picker_items = item.picker.data.get(i);
-                    if (picker_items.size() <= 0) continue;
-                    NumberPicker picker = new NumberPicker(holder.root.getContext()); 
+                    String[] arr = item.picker.getData(i);
+                    if (arr == null) continue;
+                    final int picker_ind = i;
 
+                    NumberPicker picker = new NumberPicker(holder.root.getContext()); 
                     picker.setMinValue(0);
-                    picker.setMaxValue(picker_items.size() - 1);
-                    String[] arr = new String[picker_items.size()];
-                    arr = picker_items.toArray(arr);
+                    picker.setMaxValue(arr.length - 1);
                     picker.setDisplayedValues(arr);
 
-                    if (position > 0 && data.get(position-1).type == ModelItem.TYPE_LABEL) {
+                    if (have_header) {
                         String v = num_pickers == 1 ? data.get(position-1).val :
                             (i < picker_val.size() ? picker_val.get(i) : "");
-                        for (int j = 0; j < arr.length; j++)
-                            if (v.equals(arr[j])) {
-                                item.picker.picked.set(i, j);
-                                picker.setValue(j);
-                                break;
-                            }
-                    
-                        final int picker_ind = i;
-                        picker.setOnValueChangedListener(new NumberPicker.OnValueChangeListener() {
-                            @Override public void onValueChange(NumberPicker numberPicker, int i1, int i2) {
-                                parent_screen.changed = true;
-                                int pos = holder.getAdapterPosition();
-                                item.picker.picked.set(picker_ind, numberPicker.getValue());
-                                if (pos > 0) {
-                                    String v = item.picker.getPickedString();
-                                    ViewHolder h = (ViewHolder)recyclerview.findViewHolderForAdapterPosition(pos-1);
-                                    h.label.setText(v);
-                                    data.get(pos-1).val = v;
-                                    notifyItemChanged(pos-1);
-                                }
-                            }});
-                    
-                        picker.setOnScrollListener(new NumberPicker.OnScrollListener() {
-                            @Override public void onScrollStateChange(NumberPicker view, int scrollState) {
-                                if (NumberPicker.OnScrollListener.SCROLL_STATE_IDLE == scrollState) {
-                                    final int pos = holder.getAdapterPosition();
-                                    data.get(pos).hidden = true;
-                                    notifyItemChanged(pos);
-                                }
-                            }});
-                    
+                        final int picked_val = item.picker.updatePicked(i, arr, v);
+                        if (picked_val >= 0) picker.setValue(picked_val);
                     } else picker.setValue(0);
+
+                    picker.setOnValueChangedListener(new NumberPicker.OnValueChangeListener() {
+                        @Override public void onValueChange(NumberPicker numberPicker, int i1, int i2) {
+                            parent_screen.changed = true;
+                            item.picker.picked.set(picker_ind, numberPicker.getValue());
+
+                            final int pos = holder.getAdapterPosition();
+                            if (pos > 0 && data.get(pos-1).type == ModelItem.TYPE_LABEL) {
+                                String v = item.picker.getPickedString();
+                                ViewHolder h = (ViewHolder)recyclerview.findViewHolderForAdapterPosition(pos-1);
+                                h.label.setText(v);
+                                data.get(pos-1).val = v;
+                                notifyItemChanged(pos-1);
+                            }
+                        }});
+                    
+                    picker.setOnScrollListener(new NumberPicker.OnScrollListener() {
+                        @Override public void onScrollStateChange(NumberPicker view, int scrollState) {
+                            if (NumberPicker.OnScrollListener.SCROLL_STATE_IDLE == scrollState) {
+                                final int pos = holder.getAdapterPosition();
+                                data.get(pos).hidden = true;
+                                notifyItemChanged(pos);
+                            }
+                        }});
 
                     picker.setLayoutParams(new LinearLayout.LayoutParams
                                            (0, RadioGroup.LayoutParams.WRAP_CONTENT, 1.0f));
                     holder.root.addView(picker);
+                }
+            } break;
+
+            case ModelItem.TYPE_HIDDEN: {
+                if      (item.type == ModelItem.TYPE_FONTPICKER) item.picker = PickerItem.getFontPickerItem();
+                else if (item.type != ModelItem.TYPE_PICKER || item.picker == null) break;
+                if (position == 0 || data.get(position-1).type != ModelItem.TYPE_LABEL) break;
+
+                final int num_pickers = item.picker.data.size();
+                ArrayList<String> picker_val = com.lucidfusionlabs.core.Util.splitStringWords
+                    (num_pickers > 1 ? data.get(position-1).val : null);
+
+                for (int i = 0; i < num_pickers; i++) {
+                    String[] arr = item.picker.getData(i);
+                    if (arr != null) item.picker.updatePicked(i, arr, num_pickers == 1 ? data.get(position-1).val :
+                                                              (i < picker_val.size() ? picker_val.get(i) : ""));
                 }
             } break;
         }

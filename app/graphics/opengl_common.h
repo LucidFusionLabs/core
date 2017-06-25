@@ -169,9 +169,14 @@ void CompileShader(int shader, vector<const char*> source) {
     int l = 0;
     char buf[1024] = {0};
     glGetShaderInfoLog(shader, sizeof(buf), &l, buf);
-    INFO(buf);
+    INFO("CompileShader failed: ", buf);
     INFO("Source:");
-    for (auto &s : source) INFO(s);
+    int line_no = 1;
+    for (auto &s : source) {
+      StringLineIter lines(s, StringLineIter::Flag::BlankLines);
+      for (const char *line = lines.Next(); line; line = lines.Next())
+        INFO(line_no++, ": ", string(line, lines.CurrentLength()));
+    }
   }
 }
 void AttachShader(int prog, int shader) { glAttachShader(prog, shader); }

@@ -1,6 +1,7 @@
 package com.lucidfusionlabs.core;
 
 import java.util.List;
+import java.util.ArrayList;
 import java.util.RandomAccess;
 import java.lang.Comparable;
 
@@ -23,4 +24,11 @@ public class Util {
         if (ind < arr.size() && arr.get(ind).compareTo(key) <= 0) return ind;
         return Math.max(0, ind - 1);
     }
+
+    public static ArrayList<String> splitStringWords(final String x) {
+        ArrayList<String> ret = new ArrayList<String>();
+        if (x != null) ret.addAll(java.util.Arrays.asList(x.trim().split("\\s+")));
+        return ret;
+    }
+
 }

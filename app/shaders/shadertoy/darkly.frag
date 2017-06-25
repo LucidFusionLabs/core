@@ -15,7 +15,7 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
 
   float speed = 5.0;
 
-  vec2 uv = SamplePoint();
+  vec2 uv = SamplePoint;
 
   float time= speed * iGlobalTime;
   float prevTime= speed * (iGlobalTime-1.0);

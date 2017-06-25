@@ -500,7 +500,7 @@ const char *MouseController::Event::Name(int e) {
 }
 
 int MouseController::SendMouseEvent(InputEvent::Id event, const point &p, const point &dp, int down, int flag) {
-  return SendEvent(event, p, dp, 1, 0);
+  return SendEvent(event, p, dp, down, flag);
 }
 
 int MouseController::SendWheelEvent(InputEvent::Id event, const v2 &p, const v2 &d, bool begin) {

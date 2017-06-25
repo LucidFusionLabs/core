@@ -98,7 +98,7 @@ C_Sample SampleMaterial(const in vec2 vUV, sampler2D sampler,  const in vec2 vTe
 
 void mainImage( out vec4 fragColor, in vec2 fragCoord )
 {	
-	vec2 vUV = SamplePoint();
+	vec2 vUV = SamplePoint;
 	
 	C_Sample materialSample;
 		

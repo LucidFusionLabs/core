@@ -16,6 +16,15 @@ public final class PickerItem {
         for (int i=0, l=data.size(); i < l; i++) picked.add(0);
     }
 
+    public int updatePicked(int i, String[] arr, String v) {
+        for (int j = 0; j < arr.length; j++)
+            if (v.equals(arr[j])) {
+                picked.set(i, j);
+                return j;
+            }
+        return -1;
+    }
+
     public String getPicked(int i) {
         return data.get(i).get(picked.get(i));
     }
@@ -24,6 +33,13 @@ public final class PickerItem {
         String v = "";
         for (int i=0, l=data.size(); i < l; i++) v += (i != 0 ? " " : "") + getPicked(i);
         return v;
+    }
+
+    public String[] getData(int i) {
+        ArrayList<String> picker_items = data.get(i);
+        if (picker_items.size() == 0) return null;
+        String[] arr = new String[picker_items.size()];
+        return picker_items.toArray(arr);
     }
 
     public static native PickerItem getFontPickerItem();
