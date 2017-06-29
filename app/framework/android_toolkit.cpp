@@ -193,11 +193,11 @@ AndroidTableView::AndroidTableView(const string &title, const string &style, Tab
 
 jobject AndroidTableView::NewTableScreenObject(AndroidTableView *parent, const string &title, const string &style, TableItemVec items) {
   static jmethodID mid = CheckNotNull
-    (jni->env->GetMethodID(jni->tablescreen_class, "<init>", "(Ljava/lang/String;Ljava/util/ArrayList;J)V"));
+    (jni->env->GetMethodID(jni->tablescreen_class, "<init>", "(Lcom/lucidfusionlabs/app/MainActivity;Ljava/lang/String;Ljava/util/ArrayList;J)V"));
   jlong np = uintptr_t(parent);
   LocalJNIString tstr(jni->env, JNI::ToJString(jni->env, title));
   LocalJNIObject l(jni->env, JNI::ToModelItemArrayList(jni->env, move(items)));
-  return jni->env->NewObject(jni->tablescreen_class, mid, tstr.v, l.v, np);
+  return jni->env->NewObject(jni->tablescreen_class, mid, jni->activity, tstr.v, l.v, np);
 }
 
 void AndroidTableView::SetTheme(const string &theme) {}
@@ -448,6 +448,11 @@ int Application::LoadSystemImage(const string &n) {
   LocalJNIString nstr(jni->env, JNI::ToJString(jni->env, n));
   jint ret = jni->env->CallIntMethod(jni->activity, mid, nstr.v);
   return ret;
+}
+
+void Application::UnloadSystemImage(int n) {
+  static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "unloadBitmap", "(I)V"));
+  jni->env->CallVoidMethod(jni->activity, mid, jint(n));
 }
 
 extern "C" jobject Java_com_lucidfusionlabs_core_PickerItem_getFontPickerItem(JNIEnv *e, jclass c) {

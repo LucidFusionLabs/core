@@ -39,9 +39,10 @@ public class TableScreen extends Screen {
     public ModelItemRecyclerViewAdapter model;
     public native void RunHideCB();
 
-    public TableScreen(String t, ArrayList<ModelItem> m, long lsp) {
+    public TableScreen(final MainActivity activity, String t, ArrayList<ModelItem> m, long lsp) {
         super(Screen.TYPE_TABLE, t, lsp);
         model = new ModelItemRecyclerViewAdapter(this, m);
+        model.display_density = activity.display_density;
     }
 
     @Override public void clear() {

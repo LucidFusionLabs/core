@@ -37,6 +37,7 @@ import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentManager;
 import android.support.v7.app.ActionBar;
 import com.lucidfusionlabs.core.ModelItem;
+import com.lucidfusionlabs.core.FreeListArrayList;
 
 public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity
     implements FragmentManager.OnBackStackChangedListener, View.OnKeyListener, View.OnTouchListener,
@@ -44,7 +45,7 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity
 
     public static boolean disable_title;
     public static Screens screens = new Screens();
-    public static ArrayList<Bitmap> bitmaps = new ArrayList<Bitmap>();
+    public static FreeListArrayList<Bitmap> bitmaps = new FreeListArrayList<Bitmap>();
 
     public Handler handler = new Handler();
     public Resources resources;
@@ -314,10 +315,7 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity
     public int getDrawableResId(final String n) { 
         if (n.length() == 0) {
             FutureTask<Integer> future = new FutureTask<Integer>(new Callable<Integer>(){
-                public Integer call() throws Exception {
-                    bitmaps.add(null);
-                    return -bitmaps.size();
-                }});
+                public Integer call() throws Exception { return -(bitmaps.add(null) + 1); }});
             try { runOnUiThread(future); return future.get(); }
             catch(Exception e) { return 0; }
         } else {
@@ -330,6 +328,14 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity
             final int id = -encoded_id - 1;
             if (id < 0 || id >= bitmaps.size()) throw new java.lang.IllegalArgumentException();
             bitmaps.set(id, Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888));
+        }});
+    }
+
+    public void unloadBitmap(final int encoded_id) {
+        runOnUiThread(new Runnable() { public void run() {
+            final int id = -encoded_id - 1;
+            if (id < 0 || id >= bitmaps.size()) throw new java.lang.IllegalArgumentException();
+            bitmaps.remove(id);
         }});
     }
 

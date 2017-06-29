@@ -28,7 +28,7 @@
 #include "qt_common.h"
 
 namespace LFL {
-static vector<unique_ptr<QIcon>> app_images;
+static FreeListVector<unique_ptr<QIcon>> app_images;
 struct QtTableView;
 
 struct QtAlertView : public AlertViewInterface {
@@ -738,9 +738,8 @@ void Application::ShowSystemContextMenu(const vector<MenuItem> &items) {
 }
 
 int Application::LoadSystemImage(const string &n) {
-  app_images.emplace_back(make_unique<QIcon>(MakeQString(StrCat(app->assetdir, "../drawable-xhdpi/",
-                                                                n, ".png"))));
-  return app_images.size();
+  return app_images.Insert(make_unique<QIcon>(MakeQString(StrCat(app->assetdir, "../drawable-xhdpi/",
+                                                          n, ".png")))) + 1;
 }
 
 void Application::UpdateSystemImage(int n, Texture &t) {
@@ -748,6 +747,11 @@ void Application::UpdateSystemImage(int n, Texture &t) {
   QPixmap pixmap;
   pixmap.convertFromImage(MakeQImage(t));
   app_images[n-1] = make_unique<QIcon>(move(pixmap));
+}
+
+void Application::UnloadSystemImage(int n) {
+  if (app_images[n-1]) app_images[n-1].reset();
+  app_images.Erase(n-1);
 }
 
 unique_ptr<AlertViewInterface> SystemToolkit::CreateAlert(AlertItemVec items) { return make_unique<QtAlertView>(move(items)); }

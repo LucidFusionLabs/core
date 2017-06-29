@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<merge xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <TextView
+        android:id="@+id/listview_cell_title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="18dp"
+        android:textColor="?android:textColorPrimary"
+        android:clickable="false"
+        android:focusable="false"
+        android:scrollHorizontally="true"
+        android:singleLine="true"
+        android:ellipsize="end" 
+        android:maxLines="1"
+        android:text="Title"/>
+
+    <TextView
+        android:id="@+id/listview_cell_subtext"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="10dp"
+        android:clickable="false"
+        android:focusable="false"
+        android:text="Subtext"/>
+
+</merge>

@@ -23,7 +23,7 @@
 #include "core/app/framework/apple_common.h"
 #include "core/app/framework/ios_common.h"
 
-static std::vector<UIImage*> app_images;
+static LFL::FreeListVector<UIImage*> app_images;
 struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
 
 @implementation IOSButton
@@ -1380,15 +1380,11 @@ void Application::ShowSystemContextMenu(const MenuItemVec &items) {
 }
 
 int Application::LoadSystemImage(const string &n) {
-  if (n.empty()) {
-    app_images.push_back(nullptr);
-    return app_images.size();
-  }
+  if (n.empty()) return app_images.Insert(nullptr) + 1;
   UIImage *image = [UIImage imageNamed:MakeNSString(StrCat("drawable-xhdpi/", n, ".png"))];
   if (!image) return 0;
   [image retain];
-  app_images.push_back(image);
-  return app_images.size();
+  return app_images.Insert(move(image)) + 1;
 }
 
 void Application::UpdateSystemImage(int n, Texture &t) {
@@ -1397,6 +1393,11 @@ void Application::UpdateSystemImage(int n, Texture &t) {
   if (app_images[n-1]) [app_images[n-1] release];
   if (!(app_images[n-1] = [[UIImage alloc] initWithCGImage:image])) ERROR("UpdateSystemImage failed");
   CGImageRelease(image);
+}
+
+void Application::UnloadSystemImage(int n) {
+  if (auto image = app_images[n-1]) { [image release]; app_images[n-1] = nullptr; }
+  app_images.Erase(n-1);
 }
 
 iOSTableView::~iOSTableView() { [table release]; }

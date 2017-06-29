@@ -18,10 +18,8 @@ public class ModelItemLinearLayout extends LinearLayout {
 
     @Override protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         super.onMeasure(widthMeasureSpec, heightMeasureSpec);
-        if (!patched &&
-            ((item.equals(section) && section.left_icon != 0) ||
-             (!item.equals(section) && section != null && 
-              (section.flags & ModelItem.TABLE_SECTION_FLAG_DOUBLE_ROW_HEIGHT) != 0))) {
+        if (!patched && (!item.equals(section) && section != null && 
+                         (section.flags & ModelItem.TABLE_SECTION_FLAG_DOUBLE_ROW_HEIGHT) != 0)) {
             patched = true;
             ViewGroup.LayoutParams lp = getLayoutParams();
             lp.height = getMeasuredHeight()*2;

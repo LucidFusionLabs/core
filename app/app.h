@@ -757,6 +757,7 @@ struct Application : public ::LFApp {
   void ShowSystemStatusBar(bool);
   int LoadSystemImage(const string &fn);
   void UpdateSystemImage(int n, Texture&);
+  void UnloadSystemImage(int n);
   bool OpenSystemAppPreferences();
   void OpenTouchKeyboard();
   void CloseTouchKeyboard();

@@ -23,7 +23,7 @@
 #include "core/app/framework/osx_common.h"
 
 struct OSXTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
-static std::vector<NSImage*> app_images;
+static LFL::FreeListVector<NSImage*> app_images;
 
 @interface OSXAlert : NSObject<NSTextFieldDelegate>
   @property (nonatomic, retain) NSAlert     *alert;
@@ -836,14 +836,19 @@ void Application::ShowSystemContextMenu(const MenuItemVec &items) {
   [dynamic_cast<OSXWindow*>(app->focused)->view clearKeyModifiers];
 }
 
-void Application::UpdateSystemImage(int n, Texture&) {}
 int Application::LoadSystemImage(const string &n) {
   NSImage *image = [[NSImage alloc] initWithContentsOfFile: MakeNSString(StrCat(app->assetdir, "../drawable-xhdpi/", n, ".png")) ];
   if (!image) return 0;
-  app_images.push_back(image);
-  return app_images.size();
+  return app_images.Insert(move(image)) + 1;
 }
 
+void Application::UpdateSystemImage(int n, Texture&) {
+}
+
+void Application::UnloadSystemImage(int n) {
+  if (auto image = app_images[n-1]) { [image release]; app_images[n-1] = nullptr; }
+  app_images.Erase(n-1);
+}
 
 unique_ptr<AlertViewInterface> SystemToolkit::CreateAlert(AlertItemVec items) { return make_unique<OSXAlertView>(move(items)); }
 unique_ptr<PanelViewInterface> SystemToolkit::CreatePanel(const Box &b, const string &title, PanelItemVec items) { return make_unique<OSXPanelView>(b, title, move(items)); }

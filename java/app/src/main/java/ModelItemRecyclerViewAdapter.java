@@ -59,6 +59,8 @@ public class ModelItemRecyclerViewAdapter
         public ColorStateList textViewTextColors, textViewLinkColors, subtextTextColors;
         public EditText editText;
         public ImageView leftIcon, rightIcon, removeIcon;
+        public LinearLayout titleRoot;
+        public RelativeLayout separator;
         public SwitchCompat toggle;
         public RadioGroup radio;
 
@@ -91,6 +93,7 @@ public class ModelItemRecyclerViewAdapter
     public ModelItem nav_left, nav_right;
     public int selected_section = -1, selected_row = -1;
     public int editable_section = -1, editable_start_row = -1;
+    public float display_density = 1;
     public NativeIntIntCB delete_row_cb;
     public RecyclerView recyclerview;
     public com.lucidfusionlabs.core.ViewOwner toolbar, advertising;
@@ -134,7 +137,7 @@ public class ModelItemRecyclerViewAdapter
     public int getItemViewType(int position) {
         ModelItem item = data.get(position);
         if (item.hidden) return ModelItem.TYPE_HIDDEN;
-        else if (item.type == ModelItem.TYPE_SEPARATOR && (position+1) < data.size() &&
+        else if (item.type == ModelItem.TYPE_SEPARATOR && item.left_icon == 0 && (position+1) < data.size() &&
             data.get(position+1).type == ModelItem.TYPE_SEPARATOR) return ModelItem.TYPE_HIDDEN;
         else if ((item.flags & ModelItem.TABLE_FLAG_HIDEKEY) != 0) {
             if (item.type == ModelItem.TYPE_SELECTOR) return ModelItem.TYPE_SELECTOR_HIDEKEY;
@@ -173,6 +176,7 @@ public class ModelItemRecyclerViewAdapter
                 ViewHolder holder = new ViewHolder(itemView);
                 itemView.setTag(holder);
                 holder.root = (ModelItemLinearLayout)itemView.findViewById(R.id.listview_cell_root);
+                holder.separator = (RelativeLayout)itemView.findViewById(R.id.listview_cell_separator);
                 holder.setTextView((TextView)itemView.findViewById(R.id.listview_cell_title));
                 holder.leftIcon = (ImageView)itemView.findViewById(R.id.listview_cell_left_icon);
                 holder.leftNav = (TextView)itemView.findViewById(R.id.listview_cell_nav_left);
@@ -191,6 +195,7 @@ public class ModelItemRecyclerViewAdapter
                 itemView.setTag(holder);
                 holder.root = (ModelItemLinearLayout)itemView.findViewById(R.id.listview_cell_root);
                 holder.setTextView((TextView)itemView.findViewById(R.id.listview_cell_title));
+                holder.setSubtext((TextView)itemView.findViewById(R.id.listview_cell_subtext));
                 holder.leftIcon = (ImageView)itemView.findViewById(R.id.listview_cell_left_icon);
                 holder.toggle = (SwitchCompat)itemView.findViewById(R.id.listview_cell_toggle);
                 holder.root_wrapper = holder.root;
@@ -216,6 +221,7 @@ public class ModelItemRecyclerViewAdapter
                 itemView.setMinimumHeight(parent.getMeasuredHeight() * 2);
                 holder.root = (ModelItemLinearLayout)itemView.findViewById(R.id.listview_cell_root);
                 holder.setTextView((TextView)itemView.findViewById(R.id.listview_cell_title));
+                holder.setSubtext((TextView)itemView.findViewById(R.id.listview_cell_subtext));
                 holder.editText = (EditText)itemView.findViewById(R.id.listview_cell_textinput);
                 holder.leftIcon = (ImageView)itemView.findViewById(R.id.listview_cell_left_icon);
                 holder.root_wrapper = holder.root;
@@ -228,6 +234,7 @@ public class ModelItemRecyclerViewAdapter
                 itemView.setTag(holder);
                 holder.root = (ModelItemLinearLayout)itemView.findViewById(R.id.listview_cell_root);
                 holder.setTextView((TextView)itemView.findViewById(R.id.listview_cell_title));
+                holder.setSubtext((TextView)itemView.findViewById(R.id.listview_cell_subtext));
                 holder.radio = (RadioGroup)itemView.findViewById(R.id.listview_cell_radio);
                 holder.leftIcon = (ImageView)itemView.findViewById(R.id.listview_cell_left_icon);
                 holder.root_wrapper = holder.root;
@@ -244,11 +251,24 @@ public class ModelItemRecyclerViewAdapter
                 return holder;
             }
 
+            case ModelItem.TYPE_BUTTON: {
+                View itemView = inflater.inflate(R.layout.listview_cell_button, parent, false);
+                ViewHolder holder = new ViewHolder(itemView);
+                itemView.setTag(holder);
+                holder.root = (ModelItemLinearLayout)itemView.findViewById(R.id.listview_cell_root);
+                holder.setTextView((TextView)itemView.findViewById(R.id.listview_cell_title));
+                holder.setSubtext((TextView)itemView.findViewById(R.id.listview_cell_subtext));
+                holder.leftIcon = (ImageView)itemView.findViewById(R.id.listview_cell_left_icon);
+                holder.root_wrapper = holder.root;
+                return holder;
+            }
+
             default: {
                 View itemView = inflater.inflate(R.layout.listview_cell, parent, false);
                 ViewHolder holder = new ViewHolder(itemView);
                 itemView.setTag(holder);
                 holder.root = (ModelItemLinearLayout)itemView.findViewById(R.id.listview_cell_root);
+                holder.titleRoot = (LinearLayout)itemView.findViewById(R.id.listview_cell_title_root);
                 holder.setTextView((TextView)itemView.findViewById(R.id.listview_cell_title));
                 holder.label = (TextView)itemView.findViewById(R.id.listview_cell_value);
                 holder.setSubtext((TextView)itemView.findViewById(R.id.listview_cell_subtext));
@@ -278,9 +298,12 @@ public class ModelItemRecyclerViewAdapter
         if (holder.root != null) {
             holder.root.item = item;
             holder.root.section = section_item;
-            holder.root_wrapper.setBackgroundColor
-                ((selected && ((section_item.flags & ModelItem.TABLE_SECTION_FLAG_HIGHLIGHT_SELECTED_ROW) != 0)) ?
-                 Color.GRAY : Color.TRANSPARENT);
+            if (selected && ((section_item.flags & ModelItem.TABLE_SECTION_FLAG_HIGHLIGHT_SELECTED_ROW) != 0))
+                holder.root_wrapper.setBackgroundColor(Color.GRAY);
+            else if (Color.alpha(item.bg_color) != 0) 
+                holder.root_wrapper.setBackgroundColor(item.bg_color);
+            else
+                holder.root_wrapper.setBackgroundColor(Color.TRANSPARENT);
         }
 
         if (holder.textView != null) {
@@ -317,19 +340,20 @@ public class ModelItemRecyclerViewAdapter
         }
 
         boolean label_gone = item.right_icon != 0;
-        if (editing && (section_item.flags & ModelItem.TABLE_SECTION_FLAG_MOVABLE_ROWS) != 0) {
-            label_gone = true;
-            holder.rightIcon.setImageResource(R.drawable.ic_reorder_grey_500_24dp);
-            holder.rightIcon.setOnClickListener(null);
-            holder.rightIcon.setOnTouchListener(new View.OnTouchListener() { @Override public boolean onTouch(View v, MotionEvent event) {
-                if (MotionEventCompat.getActionMasked(event) == MotionEvent.ACTION_DOWN)
-                    itemtouchhelper.startDrag(holder);
-                return false;
-            }});
-            holder.rightIcon.setVisibility(View.VISIBLE);
+        if (editing) {
+            if ((section_item.flags & ModelItem.TABLE_SECTION_FLAG_MOVABLE_ROWS) != 0) {
+                label_gone = true;
+                holder.rightIcon.setOnClickListener(null);
+                holder.rightIcon.setOnTouchListener(new View.OnTouchListener() { @Override public boolean onTouch(View v, MotionEvent event) {
+                    if (MotionEventCompat.getActionMasked(event) == MotionEvent.ACTION_DOWN)
+                        itemtouchhelper.startDrag(holder);
+                    return false;
+                }});
+                holder.rightIcon.setImageResource(R.drawable.ic_reorder_grey_500_24dp);
+            } else holder.rightIcon.setImageResource(R.drawable.blankstrip);
 
         } else if (holder.rightIcon != null) {
-            holder.rightIcon.setImageResource(item.right_icon);
+            holder.rightIcon.setImageResource(item.right_icon == 0 ? R.drawable.blankstrip : item.right_icon);
             holder.rightIcon.setOnTouchListener(null);
             if (item.right_cb == null) holder.rightIcon.setOnClickListener(null);
             else {
@@ -337,14 +361,24 @@ public class ModelItemRecyclerViewAdapter
                     item.right_cb.run("");
                 }});
             }
-            holder.rightIcon.setVisibility(item.right_icon == 0 ? View.GONE : View.VISIBLE);
         }
 
-        boolean subtext = (item.flags & ModelItem.TABLE_FLAG_SUBTEXT) != 0;
+        boolean subtext = (item.flags & ModelItem.TABLE_FLAG_SUBTEXT) != 0 && item.val.length() > 0;
         if (holder.subtext != null) {
-            holder.subtext.setText(subtext ? item.val : "");
-            if (Color.alpha(item.fg_color) != 0 && ((item.flags & ModelItem.TABLE_FLAG_COLORSUBTEXT) != 0)) holder.subtext.setTextColor(item.fg_color);
-            else                                                                                            holder.subtext.setTextColor(holder.subtextTextColors);
+            if (subtext) {
+                holder.subtext.setVisibility(View.VISIBLE);
+                holder.subtext.setText(subtext ? item.val : "");
+                if (Color.alpha(item.fg_color) != 0 && ((item.flags & ModelItem.TABLE_FLAG_COLORSUBTEXT) != 0)) holder.subtext.setTextColor(item.fg_color);
+                else                                                                                            holder.subtext.setTextColor(holder.subtextTextColors);
+            } else holder.subtext.setVisibility(View.GONE);
+        }
+
+        if (holder.titleRoot != null) {
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams
+                (LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            if (subtext) params.setMargins((int)(10 * display_density), (int)(5  * display_density), 0, (int)(5  * display_density));
+            else         params.setMargins((int)(10 * display_density), (int)(10 * display_density), 0, (int)(10 * display_density));
+            holder.titleRoot.setLayoutParams(params);
         }
 
         if (holder.label != null) {
@@ -370,6 +404,17 @@ public class ModelItemRecyclerViewAdapter
 
         switch (type) {
             case ModelItem.TYPE_SEPARATOR: {
+                LinearLayout.LayoutParams params = new LinearLayout.LayoutParams
+                    (LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                if (item.key.length() == 0) {
+                    params.setMargins(0, (int)(25 * display_density), 0, 0);
+                    holder.textView.setVisibility(View.GONE);
+                } else {
+                    params.setMargins(0, (int)(15 * display_density), 0, 0);
+                    holder.textView.setVisibility(View.VISIBLE);
+                }
+                holder.separator.setLayoutParams(params);
+
                 holder.leftNav.setText(item.val);
                 holder.leftNav.setVisibility(item.val.length() > 0 ? View.VISIBLE : View.GONE);
                 if (item.right_text.length() > 0) {

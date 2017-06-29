@@ -115,6 +115,7 @@ void Application::ShowSystemFileChooser(bool files, bool dirs, bool multi, const
 void Application::ShowSystemContextMenu(const vector<MenuItem>&items) {}
 int Application::LoadSystemImage(const string &n) { static int ret=0; return ++ret; }
 void Application::UpdateSystemImage(int n, Texture&) {}
+void Application::UnloadSystemImage(int n) {}
 
 unique_ptr<AlertViewInterface> SystemToolkit::CreateAlert(AlertItemVec items) { return make_unique<NullAlertView>(); }
 unique_ptr<PanelViewInterface> SystemToolkit::CreatePanel(const Box &b, const string &title, PanelItemVec items) { return nullptr; }
