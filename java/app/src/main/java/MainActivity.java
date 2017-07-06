@@ -33,6 +33,7 @@ import android.graphics.Rect;
 import android.graphics.Bitmap;
 import android.app.AlertDialog;
 import android.preference.PreferenceManager;
+import android.support.v4.view.MotionEventCompat;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentManager;
 import android.support.v7.app.ActionBar;
@@ -40,8 +41,7 @@ import com.lucidfusionlabs.core.ModelItem;
 import com.lucidfusionlabs.core.FreeListArrayList;
 
 public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity
-    implements FragmentManager.OnBackStackChangedListener, View.OnKeyListener, View.OnTouchListener,
-    SensorEventListener {
+    implements FragmentManager.OnBackStackChangedListener {
 
     public static boolean disable_title;
     public static Screens screens = new Screens();
@@ -64,8 +64,8 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity
     public ArrayList<ModelItem> context_menu;
     public SharedPreferences preferences;
     public HashMap<String, String> preference_default = new HashMap<String, String>();
-    public GestureDetector gesture_detector;
-    public ScaleGestureDetector scale_detector;
+    public KeyListener key_handler = new KeyListener();
+    public TouchListener touch_handler = new TouchListener();
 
     protected void onCreated() {}
     protected PreferenceFragment createPreferenceFragment() { return null; }
@@ -103,8 +103,8 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity
         attr_scrollbarSize           = attr_val.getDimensionPixelSize(1, -1);
 
         gl_view = new OpenGLView(this, context);
-        gl_view.setOnKeyListener(this); 
-        gl_view.setOnTouchListener(this);
+        gl_view.setOnKeyListener(key_handler);
+        gl_view.setOnTouchListener(touch_handler);
         gl_view.requestFocus();
 
         if (!NativeAPI.created) {
@@ -416,8 +416,8 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity
 
     public void enablePinchRecognizer(final boolean enabled) {
         runOnUiThread(new Runnable() { public void run() {
-            if (!enabled) scale_detector = null;
-            else scale_detector = new ScaleGestureDetector
+            if (!enabled) touch_handler.scale_detector = null;
+            else touch_handler.scale_detector = new ScaleGestureDetector
                 (MainActivity.this, new ScaleGestureDetector.SimpleOnScaleGestureListener() {
                     @Override public boolean onScaleBegin(ScaleGestureDetector g) { return handleScale(g, true); }
                     @Override public boolean onScale     (ScaleGestureDetector g) { return handleScale(g, false); }
@@ -428,7 +428,9 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity
                     }});
         }});
     }
+}
 
+class KeyListener implements View.OnKeyListener { 
     @Override public boolean onKey(View v, int key_code, KeyEvent event) {
         int key_char = event.getUnicodeChar(), mod = 0;
         if (key_char == 0) {
@@ -493,24 +495,58 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity
         else if (event.getAction() == KeyEvent.ACTION_DOWN) { NativeAPI.keyPress(key_char, mod, 1); return true; }
         else return false;
     }
+}
+
+class TouchListener implements View.OnTouchListener {
+    public GestureDetector gesture_detector;
+    public ScaleGestureDetector scale_detector;
+    public int active_pointer_id = MotionEvent.INVALID_POINTER_ID;
 
     @Override public boolean onTouch(View v, MotionEvent event) {
-        // gesture.onTouchEvent(event);
-        if (scale_detector != null) scale_detector.onTouchEvent(event);
+        if (gesture_detector != null) gesture_detector.onTouchEvent(event);
+        if (scale_detector   != null) scale_detector  .onTouchEvent(event);
+
         final int action = event.getAction() & MotionEvent.ACTION_MASK;
-        if (action == MotionEvent.ACTION_MOVE) {
-            if (scale_detector == null || !scale_detector.isInProgress()) {
-                for (int i = 0; i < event.getPointerCount(); i++) {
-                    NativeAPI.touch(action, event.getX(i), event.getY(i), event.getPressure(i));
-                }
-            }
-        } else {
-            int action_index = (action == MotionEvent.ACTION_POINTER_DOWN || action == MotionEvent.ACTION_POINTER_UP) ? event.getActionIndex() : 0;
-            NativeAPI.touch(action, event.getX(action_index), event.getY(action_index), event.getPressure(action_index));
+        switch(action) {
+            case MotionEvent.ACTION_MOVE: {
+                for (int i = 0; i < event.getPointerCount(); i++)
+                    if (scale_detector == null || event.getPointerId(i) == active_pointer_id)
+                        NativeAPI.touch(action, event.getX(i), event.getY(i), event.getPressure(i));
+            } break;
+
+            case MotionEvent.ACTION_DOWN: {
+                active_pointer_id = event.getPointerId(0);
+                NativeAPI.touch(action, event.getX(0), event.getY(0), event.getPressure(0));
+            } break;
+
+            case MotionEvent.ACTION_UP: {
+                active_pointer_id = MotionEvent.INVALID_POINTER_ID;
+                NativeAPI.touch(action, event.getX(0), event.getY(0), event.getPressure(0));
+            } break;
+
+            case MotionEvent.ACTION_CANCEL: {
+                active_pointer_id = MotionEvent.INVALID_POINTER_ID;
+            } break;
+
+            case MotionEvent.ACTION_POINTER_UP: {
+                final int action_index = event.getActionIndex();
+                if (active_pointer_id == event.getPointerId(action_index))
+                    active_pointer_id = MotionEvent.INVALID_POINTER_ID;
+                if (scale_detector != null) break;
+                NativeAPI.touch(action, event.getX(action_index), event.getY(action_index), event.getPressure(action_index));
+            } break;
+
+            case MotionEvent.ACTION_POINTER_DOWN: {
+                if (scale_detector != null) break;
+                final int action_index = event.getActionIndex();
+                NativeAPI.touch(action, event.getX(action_index), event.getY(action_index), event.getPressure(action_index));
+            } break;
         }
         return true; 
     }
+}
 
+class SensorListener implements SensorEventListener { 
     @Override public void onAccuracyChanged(Sensor sensor, int accuracy) {}
 
     @Override public void onSensorChanged(SensorEvent event) {
@@ -519,7 +555,7 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity
     }
 }
 
-class MyGestureListener extends android.view.GestureDetector.SimpleOnGestureListener {
+class GestureListener extends android.view.GestureDetector.SimpleOnGestureListener {
     public MainActivity main_activity;
 
     @Override

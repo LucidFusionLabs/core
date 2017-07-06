@@ -627,8 +627,6 @@ static const char* const* ios_argv = 0;
       UIView *v = [pinch view];
       CGPoint point0 = [pinch locationOfTouch:0 inView:v];
       CGPoint point1 = [pinch locationOfTouch:1 inView:v];
-      point0.y = s->y + s->height - point0.y;
-      point1.y = s->y + s->height - point1.y;
       pinch_point = CGPointMake((point0.x + point1.x) / 2.0, (point0.y + point1.y) / 2.0);
       pinch_scale = 1.0;
       _pinch_occurring = true;
@@ -641,7 +639,7 @@ static const char* const* ios_argv = 0;
     LFL::v2 p(pinch_point.x, s->y + s->height - pinch_point.y), d(p_scale, p_scale);
     int fired = LFL::app->input->MouseZoom(p, d, begin);
     if (fired && uiapp.frame_on_mouse_input) [uiapp.glk_view setNeedsDisplay];
-    pinch_scale = p_scale;
+    pinch_scale = pinch.scale;
   }
 
   - (BOOL)canPerformAction:(SEL)action withSender:(id)sender {

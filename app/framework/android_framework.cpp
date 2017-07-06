@@ -486,7 +486,8 @@ extern "C" void Java_com_lucidfusionlabs_app_NativeAPI_accel(JNIEnv *e, jclass c
 }
 
 extern "C" void Java_com_lucidfusionlabs_app_NativeAPI_scale(JNIEnv *e, jclass c, jfloat x, jfloat y, jfloat dx, jfloat dy, jboolean begin) {
-  app->input->QueueMouseZoom(v2(x, y), v2(-(dx-1.0)+1.0, -(dy-1.0)+1.0), begin); 
+  auto screen = app->focused;
+  app->input->QueueMouseZoom(v2(screen->x + x, screen->y + screen->height - y), v2(-(dx-1.0)+1.0, -(dy-1.0)+1.0), begin); 
   app->scheduler.Wakeup(app->focused, FrameScheduler::WakeupFlag::ContingentOnEvents);
 }
 

@@ -473,11 +473,13 @@ void TextBox::LinesFrameBuffer::PushBackAndUpdateOffset(TextBox::Line *l, int lo
 
 point TextBox::LinesFrameBuffer::Paint(TextBox::Line *l, point lp, const Box &b, int offset, int len) {
   auto p = l->parent;
-  GraphicsContext gc(p->root->gd);
-  Box sb(lp.x, lp.y - b.h, b.w, b.h);
-  app->fonts->SelectFillColor(gc.gd);
-  app->fonts->GetFillColor(p->bg_color ? *p->bg_color : Color::black)->Draw(&gc, sb);
-  l->Draw(lp + b.Position(), -1, offset, len, &sb);
+  if (!app->suspended) {
+    GraphicsContext gc(p->root->gd);
+    Box sb(lp.x, lp.y - b.h, b.w, b.h);
+    app->fonts->SelectFillColor(gc.gd);
+    app->fonts->GetFillColor(p->bg_color ? *p->bg_color : Color::black)->Draw(&gc, sb);
+    l->Draw(lp + b.Position(), -1, offset, len, &sb);
+  } else p->needs_redraw = true;
   return point(lp.x, lp.y-b.h);
 }
 

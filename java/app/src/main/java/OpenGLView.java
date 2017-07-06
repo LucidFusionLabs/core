@@ -55,7 +55,7 @@ public class OpenGLView extends android.view.SurfaceView implements SurfaceHolde
               ", size_changed=" + size_changed + ", thread_exists=" + thread_exists);
         surface_width = width;
         surface_height = height;
-        if (!thread_exists) startRenderThread(true);
+        if (!thread_exists) startRenderThread();
         if (size_changed && !init) synchronizedReshape();
     }
 
@@ -90,7 +90,7 @@ public class OpenGLView extends android.view.SurfaceView implements SurfaceHolde
     public void onResume() {
         boolean thread_exists = thread != null;
         Log.i("lfl", "OpenGLView.onResume() have_surface=" + have_surface + " thread_exists=" + thread_exists);
-        if (have_surface && !thread_exists) startRenderThread(false);
+        if (have_surface && !thread_exists) startRenderThread();
     }
 
     public void onPause() {
@@ -102,12 +102,11 @@ public class OpenGLView extends android.view.SurfaceView implements SurfaceHolde
         catch(Exception e) { Log.e("lfl", e.toString()); }
     }
 
-    public void startRenderThread(boolean reset) {
-        Log.i("lfl", "startRenderThread NativeAPI.init=" + NativeAPI.init + " NativeAPI.reset=" + reset);
+    public void startRenderThread() {
+        Log.i("lfl", "startRenderThread NativeAPI.init=" + NativeAPI.init);
         main_activity.screens.onStartRenderThread(main_activity, main_activity.gl_layout);
-        if      (!NativeAPI.init) thread = new Thread(new Runnable() { public void run() { initEGL();        NativeAPI.main       ();                     } }, "JNIMainThread");
-        else if (reset)           thread = new Thread(new Runnable() { public void run() { initEGL();        NativeAPI.newMainLoop(main_activity, true);  } }, "JNIMainThread");
-        else                      thread = new Thread(new Runnable() { public void run() { makeCurrentEGL(); NativeAPI.newMainLoop(main_activity, false); } }, "JNIMainThread");
+        if   (!NativeAPI.init) thread = new Thread(new Runnable() { public void run() { initEGL(); NativeAPI.main();                           shutdownEGL(); } }, "JNIMainThread");
+        else                   thread = new Thread(new Runnable() { public void run() { initEGL(); NativeAPI.newMainLoop(main_activity, true); shutdownEGL(); } }, "JNIMainThread");
         thread.start();
         NativeAPI.init = true;
     }
@@ -115,8 +114,8 @@ public class OpenGLView extends android.view.SurfaceView implements SurfaceHolde
     public boolean createSurface() {
         try {
             egl_surface = egl.eglCreateWindowSurface(egl_display, egl_configs[0], this, null);
-            if (egl_surface == null || egl_surface == EGL10.EGL_NO_SURFACE) throw new Exception("eglCreateWindowSurface");
-            if (!egl.eglMakeCurrent(egl_display, egl_surface, egl_surface, egl_context)) throw new Exception("eglMakeCurrent");
+            if (egl_surface == null || egl_surface == EGL10.EGL_NO_SURFACE) throw new Exception(getEGLError(egl, "eglCreateWindowSurface"));
+            if (!egl.eglMakeCurrent(egl_display, egl_surface, egl_surface, egl_context)) throw new Exception(getEGLError(egl, "eglMakeCurrent"));
             return true;
         } catch(Exception e) {
             Log.e("lfl", e.toString());
@@ -168,6 +167,17 @@ public class OpenGLView extends android.view.SurfaceView implements SurfaceHolde
         return createSurface();
     }
 
+    public void shutdownEGL() {
+        destroySurface();
+        try {
+            EGL10 egl = (EGL10)EGLContext.getEGL();
+            egl.eglDestroyContext(egl_display, egl_context);
+            egl.eglTerminate(egl_display);
+        } catch(Exception e) { Log.e("lfl", e.toString()); }
+        egl_display = null;
+        egl_context = null;
+    }
+
     public void makeCurrentEGL() {
         egl.eglMakeCurrent(egl_display, egl_surface, egl_surface, egl_context);
     }
@@ -177,5 +187,29 @@ public class OpenGLView extends android.view.SurfaceView implements SurfaceHolde
             egl.eglSwapBuffers(egl_display, egl_surface);
             synchronized(sync) { sync.notifyAll(); }
         } catch(Exception e) { Log.e("lfl", "swapEGL " + e.toString()); }
+    }
+
+    public static String getEGLError(EGL10 egl, String prefix) {
+        return prefix + ": " + getEGLString(egl.eglGetError());
+    }
+
+    public static String getEGLString(int error) {
+        switch(error) {
+            case EGL10.EGL_SUCCESS:             return "No error";
+            case EGL10.EGL_NOT_INITIALIZED:     return "EGL not initialized or failed to initialize";
+            case EGL10.EGL_BAD_ACCESS:          return "Resource inaccessible";
+            case EGL10.EGL_BAD_ALLOC:           return "Cannot allocate resources";
+            case EGL10.EGL_BAD_ATTRIBUTE:       return "Unrecognized attribute or attribute value";
+            case EGL10.EGL_BAD_CONTEXT:         return "Invalid EGL context";
+            case EGL10.EGL_BAD_CONFIG:          return "Invalid EGL frame buffer configuration";
+            case EGL10.EGL_BAD_CURRENT_SURFACE: return "Current surface is no longer valid";
+            case EGL10.EGL_BAD_DISPLAY:         return "Invalid EGL display";
+            case EGL10.EGL_BAD_SURFACE:         return "Invalid surface";
+            case EGL10.EGL_BAD_MATCH:           return "Inconsistent arguments";
+            case EGL10.EGL_BAD_PARAMETER:       return "Invalid argument";
+            case EGL10.EGL_BAD_NATIVE_PIXMAP:   return "Invalid native pixmap";
+            case EGL10.EGL_BAD_NATIVE_WINDOW:   return "Invalid native window";
+            default:                            return "Unknown";
+        }
     }
 }

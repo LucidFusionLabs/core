@@ -76,7 +76,7 @@ public class PurchaseManager extends com.lucidfusionlabs.core.ActivityLifecycleL
     }
 
     @Override public void onActivityDestroyed(LifecycleActivity act) {
-        if (mServiceConn == null) return;
+        if (mService == null || mServiceConn == null) return;
         mContext.unbindService(mServiceConn);
     }
 

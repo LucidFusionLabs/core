@@ -100,12 +100,6 @@ public class ModelItemRecyclerViewAdapter
 
     ItemTouchHelper itemtouchhelper = new ItemTouchHelper(new ItemTouchHelperCallback(this));
 
-    CompoundButton.OnCheckedChangeListener checked_listener = new CompoundButton.OnCheckedChangeListener() {
-        public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
-            parent_screen.changed = true;
-        }
-    };
-
     TextWatcher text_listener = new TextWatcher() {
         @Override
         public void onTextChanged(CharSequence s, int start, int before, int count) {
@@ -433,7 +427,12 @@ public class ModelItemRecyclerViewAdapter
             case ModelItem.TYPE_TOGGLE: {
                 holder.toggle.setOnCheckedChangeListener(null);
                 holder.toggle.setChecked(item.val.equals("1"));
-                holder.toggle.setOnCheckedChangeListener(checked_listener);
+                holder.toggle.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+                    public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                        final ModelItem item = data.get(holder.getAdapterPosition());
+                        if (item.right_cb != null) item.right_cb.run(isChecked ? "1" : "0");
+                        parent_screen.changed = true;
+                    }});
             } break;
 
             case ModelItem.TYPE_FONTPICKER: {

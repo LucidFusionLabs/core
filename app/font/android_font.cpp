@@ -233,6 +233,7 @@ unique_ptr<Font> AndroidFontEngine::Open(const FontDesc &d) {
 unique_ptr<Font> AndroidFontEngine::OpenTTF(const FontDesc &ttf) {
   static FreeTypeFontEngine *ttf_engine = app->fonts->freetype_engine.get();
   if (!ttf_engine->Init(ttf)) { ERROR("ttf init failed for ", ttf.DebugString()); return nullptr; }
+  INFO("AndroidFontEngine::OpenTTF ", ttf.DebugString());
   unique_ptr<Font> ret = ttf_engine->Open(ttf);
   ret->engine = this;
   return ret;

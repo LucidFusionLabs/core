@@ -106,7 +106,7 @@ string Application::GetSystemDeviceId() {
 }
 
 Connection *Application::ConnectTCP(const string &hostport, int default_port, Connection::CB *connected_cb, bool background_services) {
-#if 0
+#if 1
   static bool ios9_or_later = kCFCoreFoundationVersionNumber >= kCFCoreFoundationVersionNumber_iOS_9_0;
   INFO("Application::ConnectTCP ", hostport, " (default_port = ", default_port, ") background_services = ", background_services, " ios_9=", ios9_or_later);
   if (background_services && ios9_or_later) return new NSURLSessionStreamConnection(hostport, default_port, connected_cb ? move(*connected_cb) : Connection::CB());
