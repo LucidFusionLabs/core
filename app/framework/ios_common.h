@@ -16,6 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#import <SystemConfiguration/SystemConfiguration.h>
+
 @interface MyTouchView : UIView {}
 @end
 
@@ -52,7 +54,8 @@
   @property (nonatomic, retain) UINavigationBar *title_bar;
   @property (nonatomic, retain) NSMutableDictionary *main_wait_fh;
   @property (nonatomic, assign) UIViewController *root_controller, *top_controller;
-  @property BOOL overlay_top_controller, frame_disabled, frame_on_mouse_input, downscale, show_title;
+  @property (nonatomic, assign) SCNetworkReachabilityRef reachability;
+  @property BOOL overlay_top_controller, frame_disabled, frame_on_mouse_input, downscale, show_title, wifi;
   @property int screen_y, screen_width, screen_height;
   @property CGFloat scale;
   + (LFUIApplication *) sharedAppDelegate;

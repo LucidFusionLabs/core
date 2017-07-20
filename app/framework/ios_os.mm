@@ -107,9 +107,9 @@ string Application::GetSystemDeviceId() {
 
 Connection *Application::ConnectTCP(const string &hostport, int default_port, Connection::CB *connected_cb, bool background_services) {
 #if 1
-  static bool ios9_or_later = kCFCoreFoundationVersionNumber >= kCFCoreFoundationVersionNumber_iOS_9_0;
-  INFO("Application::ConnectTCP ", hostport, " (default_port = ", default_port, ") background_services = ", background_services, " ios_9=", ios9_or_later);
-  if (background_services && ios9_or_later) return new NSURLSessionStreamConnection(hostport, default_port, connected_cb ? move(*connected_cb) : Connection::CB());
+  bool wifi = [LFUIApplication sharedAppDelegate].wifi;
+  INFO("Application::ConnectTCP ", hostport, " (default_port = ", default_port, ") background_services = ", background_services, " wifi=", wifi);
+  if (background_services && !wifi) return new NSURLSessionStreamConnection(hostport, default_port, connected_cb ? move(*connected_cb) : Connection::CB());
   else return app->net->tcp_client->Connect(hostport, default_port, connected_cb);
 #else
   INFO("Application::ConnectTCP ", hostport, " (default_port = ", default_port, ") background_services = false"); 

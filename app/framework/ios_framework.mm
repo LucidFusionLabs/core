@@ -32,6 +32,8 @@
 #include "core/app/framework/apple_common.h"
 #include "core/app/framework/ios_common.h"
 
+#include <netinet/in.h>
+
 namespace LFL {
 const int Key::Escape     = -1;
 const int Key::Return     = 10;
@@ -75,6 +77,19 @@ static int                ios_argc = 0;
 static const char* const* ios_argv = 0;
 };
 
+static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReachabilityFlags flags, void *info) {
+  bool wifi = false;
+  if ((flags & kSCNetworkReachabilityFlagsReachable) == 0) wifi = false;
+  else {
+    if ((flags & kSCNetworkReachabilityFlagsConnectionRequired) == 0) wifi = true;
+    if ((((flags & kSCNetworkReachabilityFlagsConnectionOnDemand) != 0) ||
+         (flags & kSCNetworkReachabilityFlagsConnectionOnTraffic) != 0) &&
+         (flags & kSCNetworkReachabilityFlagsInterventionRequired) == 0) wifi = true;
+    if ((flags & kSCNetworkReachabilityFlagsIsWWAN) == kSCNetworkReachabilityFlagsIsWWAN) wifi = false;
+  }
+  [LFUIApplication sharedAppDelegate].wifi = wifi;
+}
+
 @implementation LFUIWindow
 @end
 
@@ -84,6 +99,7 @@ static const char* const* ios_argv = 0;
     int target_fps;
     LFL::Callback bg_task_cb;
     UIBackgroundTaskIdentifier bg_task;
+    SCNetworkReachabilityFlags reachability_flags;
   }
 
   + (LFUIApplication *)sharedAppDelegate { return (LFUIApplication *)[[UIApplication sharedApplication] delegate]; }
@@ -165,6 +181,19 @@ static const char* const* ios_argv = 0;
     // _rview.backgroundColor = [UIColor blueColor];
     // _rview.alpha = 0.3f;
     [_glk_view addSubview:_rview];
+
+    struct sockaddr_in zeroAddress;
+    bzero(&zeroAddress, sizeof(zeroAddress));
+    zeroAddress.sin_len = sizeof(zeroAddress);
+    zeroAddress.sin_family = AF_INET;
+    _reachability = SCNetworkReachabilityCreateWithAddress(kCFAllocatorDefault,
+                                                           (const struct sockaddr *)&zeroAddress);
+    SCNetworkReachabilityContext reachable_context = {0, self, NULL, NULL, NULL};
+    if (!SCNetworkReachabilitySetCallback(_reachability, ReachabilityCallback, &reachable_context) ||
+        !SCNetworkReachabilityScheduleWithRunLoop(_reachability, CFRunLoopGetCurrent(), kCFRunLoopDefaultMode) ||
+        !SCNetworkReachabilityGetFlags(_reachability, &reachability_flags))
+        { NSLog(@"SCNetworkReachabilityScheduleWithRunLoop failed"); CFRelease(_reachability); _reachability=nil; }
+    else ReachabilityCallback(_reachability, reachability_flags, reachable_context.info);
 
     [[NSFileManager defaultManager] changeCurrentDirectoryPath: [[NSBundle mainBundle] resourcePath]];
     NSLog(@"iOSMain argc=%d", LFL::app->argc);
@@ -627,6 +656,8 @@ static const char* const* ios_argv = 0;
       UIView *v = [pinch view];
       CGPoint point0 = [pinch locationOfTouch:0 inView:v];
       CGPoint point1 = [pinch locationOfTouch:1 inView:v];
+      point0.y = s->y + s->height - point0.y;
+      point1.y = s->y + s->height - point1.y;
       pinch_point = CGPointMake((point0.x + point1.x) / 2.0, (point0.y + point1.y) / 2.0);
       pinch_scale = 1.0;
       _pinch_occurring = true;
