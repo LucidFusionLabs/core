@@ -45,9 +45,12 @@ public class TableScreen extends Screen {
         model.display_density = activity.display_density;
     }
 
+    public void clearToolbarView()     { if (model.toolbar     != null) model.toolbar    .clearView(); }
+    public void clearAdvertisingView() { if (model.advertising != null) model.advertising.clearView(); }
+
     @Override public void clear() {
-        if (model.toolbar     != null) model.toolbar    .clearView();
-        if (model.advertising != null) model.advertising.clearView();
+        clearToolbarView();
+        clearAdvertisingView();
     }
 
     @Override public ScreenFragment createFragment() {
@@ -243,12 +246,16 @@ public class TableScreen extends Screen {
     }
 
     public void setToolbar(final AppCompatActivity activity, final com.lucidfusionlabs.core.ViewOwner x) {
-        activity.runOnUiThread
-            (new Runnable() { public void run() { model.toolbar = x; }});
+        activity.runOnUiThread(new Runnable() { public void run() {
+            clearToolbarView();
+            model.toolbar = x;
+        }});
     }
 
     public void setAdvertising(final AppCompatActivity activity, final com.lucidfusionlabs.core.ViewOwner x) {
-        activity.runOnUiThread
-            (new Runnable() { public void run() { model.advertising = x; }});
+        activity.runOnUiThread(new Runnable() { public void run() {
+            clearAdvertisingView();
+            model.advertising = x;
+        }});
     }
 }

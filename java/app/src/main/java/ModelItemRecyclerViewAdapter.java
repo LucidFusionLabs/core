@@ -414,6 +414,8 @@ public class ModelItemRecyclerViewAdapter
                 if (item.right_text.length() > 0) {
                     holder.rightNav.setText(item.right_text);
                     holder.rightNav.setVisibility(View.VISIBLE);
+                    if (item.right_cb != null) holder.rightNav.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { item.right_cb.run(""); }});
+                    else                       holder.rightNav.setOnClickListener(null);
                 } else if (section_id == editable_section) {
                     holder.rightNav.setVisibility(View.VISIBLE);
                     holder.rightNav.setText(section.editing ? "Done" : "Edit");

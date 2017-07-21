@@ -133,6 +133,7 @@ public class PurchaseManager extends com.lucidfusionlabs.core.ActivityLifecycleL
             return true;
         }
         catch(Exception e) {
+            Log.e("lfl", "makePurchase: " + e.toString());
             mOutstandingPurchase.remove(product);
             return false;
         }
@@ -143,7 +144,7 @@ public class PurchaseManager extends com.lucidfusionlabs.core.ActivityLifecycleL
     }
 
     public boolean restorePurchases() {
-        if (mService == null) return false;
+        if (mService == null) { Log.e("lfl", "restorePurchases: no service"); return false; }
         try {
             Bundle ownedItems = mService.getPurchases(3, packageName, "inapp", null);
             int response = ownedItems.getInt("RESPONSE_CODE");
@@ -152,10 +153,11 @@ public class PurchaseManager extends com.lucidfusionlabs.core.ActivityLifecycleL
 
             ArrayList<String> products = ownedItems.getStringArrayList("INAPP_PURCHASE_ITEM_LIST");
             ArrayList<String> data     = ownedItems.getStringArrayList("INAPP_PURCHASE_DATA_LIST");
-            ArrayList<String> sig      = ownedItems.getStringArrayList("INAPP_DATA_SIGNATURE");
+            ArrayList<String> sig      = ownedItems.getStringArrayList("INAPP_DATA_SIGNATURE_LIST");
             return savePurchasesToInternalStorage(products, data, sig);
         }
         catch(Exception e) {
+            Log.e("lfl", "restorePurchases: " + e.toString());
             return false;
         }
     }
@@ -178,13 +180,13 @@ public class PurchaseManager extends com.lucidfusionlabs.core.ActivityLifecycleL
             return true;
 
          } catch(Exception e) {
-            Log.e("lfl", "loadPurchasesToInternalStorage: " + e.toString());
+            Log.e("lfl", "loadPurchasesFromInternalStorage: " + e.toString());
             return false;
         }
     }
 
     public boolean savePurchasesToInternalStorage(ArrayList<String> products, ArrayList<String> data, ArrayList<String> sig) {
-        if (products.size() != data.size() || data.size() != sig.size()) return false;
+        if (products.size() != data.size() || data.size() != sig.size()) { Log.e("lfl", "invalid savePurchasesToInternalStorage"); return false; }
         try {
             FileOutputStream fos = mContext.openFileOutput(FILENAME, Context.MODE_PRIVATE);
             ObjectOutputStream oos = new ObjectOutputStream(fos);
@@ -225,7 +227,7 @@ public class PurchaseManager extends com.lucidfusionlabs.core.ActivityLifecycleL
             Signature sig = Signature.getInstance(SIGNATURE_ALGORITHM);
             sig.initVerify(pubkey);
             sig.update(signedData.getBytes());
-            if (!sig.verify(signatureBytes)) { Log.e("lf", "Signature verification failed."); return false; }
+            if (!sig.verify(signatureBytes)) { Log.e("lfl", "Signature verification failed."); return false; }
             return true;
         }
         catch (java.security.NoSuchAlgorithmException e) { Log.e("lfl", "NoSuchAlgorithmException."); }

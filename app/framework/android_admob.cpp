@@ -38,20 +38,12 @@ struct AndroidAdvertisingView : public AdvertisingViewInterface {
   }
 
   void Show(bool show_or_hide) {
-    if (show_or_hide) {
-    } else Hide();
+    ERROR(not_implemented);
   }
 
   void Show(TableViewInterface *t, bool show_or_hide) {
-    if (show_or_hide) {
-      static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->tablescreen_class, "setAdvertising", "(Landroid/support/v7/app/AppCompatActivity;Lcom/lucidfusionlabs/core/ViewOwner;)V"));
-      jni->env->CallVoidMethod(dynamic_cast<AndroidTableView*>(t)->impl.v, mid, jni->activity, impl.v);
-    } else Hide();
-  }
-
-  void Hide() {
-    static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->advertising_class, "hide", "(Landroid/app/Activity;)V"));
-    jni->env->CallVoidMethod(impl.v, mid, jni->activity);
+    static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->tablescreen_class, "setAdvertising", "(Landroid/support/v7/app/AppCompatActivity;Lcom/lucidfusionlabs/core/ViewOwner;)V"));
+    jni->env->CallVoidMethod(dynamic_cast<AndroidTableView*>(t)->impl.v, mid, jni->activity, show_or_hide ? impl.v : nullptr);
   }
 };
 

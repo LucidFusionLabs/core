@@ -220,8 +220,8 @@ void AndroidTableView::SetToolbar(ToolbarViewInterface *toolbar) {
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->tablescreen_class,
                            "setToolbar", "(Landroid/support/v7/app/AppCompatActivity;Lcom/lucidfusionlabs/core/ViewOwner;)V"));
-  if (auto tb = dynamic_cast<AndroidToolbarView*>(toolbar))
-    jni->env->CallVoidMethod(impl.v, mid, jni->activity, tb->impl.v);
+  auto tb = dynamic_cast<AndroidToolbarView*>(toolbar);
+  jni->env->CallVoidMethod(impl.v, mid, jni->activity, tb ? tb->impl.v : nullptr);
 }
 
 void AndroidTableView::Show(bool show_or_hide) {

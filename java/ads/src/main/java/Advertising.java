@@ -97,6 +97,11 @@ public class Advertising extends com.lucidfusionlabs.core.ActivityLifecycleListe
         }
     }
 
+    public void onViewDetached() {
+        shown = false;
+        if (adView != null) adView.setVisibility(AdView.GONE);
+    }
+
     public void show(final Activity activity, final FrameLayout frameLayout) {
         activity.runOnUiThread(new Runnable() {
             public void run() {
@@ -109,10 +114,11 @@ public class Advertising extends com.lucidfusionlabs.core.ActivityLifecycleListe
         });
     }
 
-    public void hide(Activity activity) {
+    public void hide(Activity activity, final FrameLayout frameLayout) {
         activity.runOnUiThread(new Runnable() {
             public void run() {
-                adView.setVisibility(AdView.INVISIBLE);
+                frameLayout.removeView(adView);
+                onViewDetached();
             }
         });
     }
