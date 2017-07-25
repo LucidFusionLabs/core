@@ -32,11 +32,12 @@ import android.app.AlertDialog;
 import android.app.Activity;
 
 public class Screens {
-    public boolean                            destroyed      = false;
-    public int                                next_screen_id = 1;
-    public HashMap<Integer, Screen>           screens        = new HashMap<Integer, Screen>();
-    public ArrayList<ScreenFragmentNavigator> navigators     = new ArrayList<ScreenFragmentNavigator>();
-    public ArrayList<Toolbar>                 toolbar_bottom = new ArrayList<Toolbar>();
+    public boolean                                 destroyed      = false;
+    public int                                     next_screen_id = 1, fullscreen_height = 0;
+    public HashMap<Integer, Screen>                screens        = new HashMap<Integer, Screen>();
+    public ArrayList<ScreenFragmentNavigator>      navigators     = new ArrayList<ScreenFragmentNavigator>();
+    public ArrayList<Toolbar>                      toolbar_bottom = new ArrayList<Toolbar>();
+    public ViewTreeObserver.OnGlobalLayoutListener global_layout_listener;
 
     public void onDestroy() {
         Log.i("lfl", "Screens.onDestroy()");
@@ -65,6 +66,47 @@ public class Screens {
     public void onStartRenderThread(Activity activity, View view) {
         if (navigators.size() > 0) {
             view.setVisibility(View.GONE);
+        }
+    }
+
+    public void onFullScreenChanged(final MainActivity activity) {
+        if (global_layout_listener != null) {
+            activity.root_view.getViewTreeObserver().removeOnGlobalLayoutListener(global_layout_listener);
+            global_layout_listener = null;
+        }
+
+        for (Toolbar t : toolbar_bottom) {
+            if (t.view == null) continue;
+            ViewParent parent = t.view.getParent();
+            if (parent != null && parent instanceof ViewGroup) ((ViewGroup)parent).removeView(t.view);
+            if (activity.fullscreen) activity.main_layout.addView(t.view, t.getFrameLayoutParams(activity));
+            else                     activity.gl_layout  .addView(t.view, t.getLinearLayoutParams(activity));
+        }
+
+        if (activity.fullscreen) {
+            global_layout_listener = new ViewTreeObserver.OnGlobalLayoutListener() { public void onGlobalLayout() {
+                Rect r = new Rect();
+                View view = activity.root_window.getDecorView();
+                view.getWindowVisibleDisplayFrame(r);
+                int h = r.bottom - r.top;
+                Log.i("lfl", "OnGlobalLayoutListener: " + r.toString() + " surface_height = " + activity.gl_view.surface_height);
+                for (Toolbar toolbar : toolbar_bottom) {
+                    View tb = toolbar.view;
+                    if (tb == null || toolbar.shown_index == -1) continue;
+                    FrameLayout.LayoutParams params = (FrameLayout.LayoutParams)tb.getLayoutParams();
+                    if (params.bottomMargin != activity.gl_view.surface_height - h) {
+                        params.bottomMargin = activity.gl_view.surface_height - h;
+                        Log.i("lfl", "set tb bottomMargin = " + (activity.gl_view.surface_height - h));
+                        tb.setLayoutParams(params);
+                    }
+                    h -= tb.getHeight();
+                }
+                if (fullscreen_height != h) {
+                    fullscreen_height = h;
+                    NativeAPI.reshaped(r.left, Math.max(0, activity.gl_view.surface_height - h), r.right - r.left, h);
+                }
+            }};
+            activity.root_view.getViewTreeObserver().addOnGlobalLayoutListener(global_layout_listener);
         }
     }
 }

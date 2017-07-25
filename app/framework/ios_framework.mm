@@ -420,6 +420,7 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
 
   - (void)setOverlapKeyboard:(bool)v { overlap_keyboard = v; }
   - (void)showStatusBar:(BOOL)v {
+    if (status_bar_hidden == !v) return;
     status_bar_hidden = !v;
     [self setNeedsStatusBarAppearanceUpdate]; 
   }

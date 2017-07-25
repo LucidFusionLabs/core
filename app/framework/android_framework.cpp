@@ -224,7 +224,11 @@ void Application::SetTouchKeyboardTiled(bool v) {}
 int  Application::SetMultisample(bool v) { return 0; }
 int  Application::SetExtraScale(bool v) { return 1; }
 void Application::SetDownScale(bool v) {}
-void Application::ShowSystemStatusBar(bool v) {}
+
+void Application::ShowSystemStatusBar(bool v) {
+  static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "setSystemStatusBar", "(Z)V"));
+  jni->env->CallVoidMethod(jni->activity, mid, jboolean(v));
+}
 
 string Application::PrintCallStack() {
   static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "getCurrentStackTrace", "()Ljava/lang/String;"));

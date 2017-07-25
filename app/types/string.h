@@ -890,15 +890,15 @@ struct SerializableProto : public Serializable {
   virtual bool    Check(int content_len) { return content_len >= Header::size +       Size(); }
 };
 
-typedef pair<unique_ptr<uint8_t, function<void(uint8_t*)>>, size_t> FlatBufferPiece;
-inline StringPiece MakeStringPiece(const FlatBufferPiece &s) { return StringPiece(reinterpret_cast<const char*>(s.first.get()), s.second); }
-inline BlobPiece   MakeBlobPiece  (const FlatBufferPiece &s) { return BlobPiece  (reinterpret_cast<const char*>(s.first.get()), s.second); }
+typedef flatbuffers::DetachedBuffer FlatBufferPiece;
+inline StringPiece MakeStringPiece(const FlatBufferPiece &s) { return StringPiece(reinterpret_cast<const char*>(s.data()), s.size()); }
+inline BlobPiece   MakeBlobPiece  (const FlatBufferPiece &s) { return BlobPiece  (reinterpret_cast<const char*>(s.data()), s.size()); }
 #ifdef LFL_FLATBUFFERS
 using flatbuffers::FlatBufferBuilder;
 inline string GetFlatBufferString(const flatbuffers::String *s) { return s ? s->data() : ""; }
 inline string GetFlatBufferString(const flatbuffers::Vector<uint8_t> *s) { return s ? string(reinterpret_cast<const char *>(s->data()), s->size()) : ""; }
 template<typename T> FlatBufferPiece CreateFlatBuffer(const std::function<flatbuffers::Offset<T>(FlatBufferBuilder &fb)> &f)
-{ FlatBufferBuilder fb; fb.Finish(f(fb)); size_t s=fb.GetSize(); return make_pair(fb.ReleaseBufferPointer(), s); }
+{ FlatBufferBuilder fb; fb.Finish(f(fb)); return fb.ReleaseBufferPointer(); }
 #define MakeFlatBufferOfType(t, x) CreateFlatBuffer(function<flatbuffers::Offset<t>(FlatBufferBuilder&)>([&](FlatBufferBuilder &fb){ return x; }))
 #else
 namespace flatbuffers { template<typename T> const T *GetRoot(const void *buf) { return nullptr; } }; 

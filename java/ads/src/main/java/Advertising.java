@@ -30,7 +30,7 @@ public class Advertising extends com.lucidfusionlabs.core.ActivityLifecycleListe
     public String adUnitId;
     public List<String> testDevices;
     public AdView adView;
-    public boolean started, shown;
+    public boolean shown;
 
     public static Advertising createInstance(LifecycleActivity act, int t, int v, String unitId, List<String> td) {
         return new Advertising(act, t, v, unitId, td, act.activityLifecycle);
@@ -49,11 +49,22 @@ public class Advertising extends com.lucidfusionlabs.core.ActivityLifecycleListe
         p.registerLifecycleListener(this);
     }
 
-    private AdView createView(final Context context) {
-        AdView ret = new AdView(context);
+    private AdRequest createAdRequest() {
+        AdRequest.Builder builder = new AdRequest.Builder();
+        for (String td : testDevices) builder.addTestDevice(td);
+        return builder.build();
+    }
+
+    private AdView createView(final Activity activity) {
+        final AdView ret = new AdView(activity);
         if (type == ModelItem.AD_TYPE_BANNER) ret.setAdSize(AdSize.BANNER);
         else Log.e("lfl", "unknown ad type=" + type);
         ret.setAdUnitId(adUnitId);
+
+        activity.runOnUiThread(new Runnable() { public void run() {
+            Log.i("lfl", "Advertising.loadAd");
+            ret.loadAd(createAdRequest());
+        }});
         return ret;
     }
 
@@ -74,27 +85,19 @@ public class Advertising extends com.lucidfusionlabs.core.ActivityLifecycleListe
     @Override public void onActivityDestroyed(LifecycleActivity act) {
         if (adView != null) adView.destroy();
         adView = null;
-        started = false;
     }
 
     @Override public void clearView() {}
 
     @Override public View getView(final Context context) {
-        if (adView == null) adView = createView(context);
+        if (adView == null) adView = createView((Activity)context);
         return adView; 
     }
 
     @Override public void onViewAttached() {
         shown = true;
-        if (!started && (started = true)) { 
-            Log.i("lfl", "creating adRequest");
-            AdRequest.Builder builder = new AdRequest.Builder();
-            for (String td : testDevices) builder.addTestDevice(td);
-            adView.loadAd(builder.build());
-        } else {
-            adView.setVisibility(AdView.VISIBLE);
-            adView.bringToFront();
-        }
+        adView.setVisibility(AdView.VISIBLE);
+        adView.bringToFront();
     }
 
     public void onViewDetached() {
@@ -103,23 +106,19 @@ public class Advertising extends com.lucidfusionlabs.core.ActivityLifecycleListe
     }
 
     public void show(final Activity activity, final FrameLayout frameLayout) {
-        activity.runOnUiThread(new Runnable() {
-            public void run() {
-                if (LifecycleActivity.replaceViewParent(adView, frameLayout))
-                    frameLayout.addView(adView, new LayoutParams
-                                        (LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT,
-                                         ModelItem.VAlignToGravity(valign) | Gravity.CENTER_HORIZONTAL));
-                onViewAttached();
-            }
-        });
+        activity.runOnUiThread(new Runnable() { public void run() {
+            if (LifecycleActivity.replaceViewParent(adView, frameLayout))
+                frameLayout.addView(adView, new LayoutParams
+                                    (LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT,
+                                     ModelItem.VAlignToGravity(valign) | Gravity.CENTER_HORIZONTAL));
+            onViewAttached();
+        }});
     }
 
     public void hide(Activity activity, final FrameLayout frameLayout) {
-        activity.runOnUiThread(new Runnable() {
-            public void run() {
-                frameLayout.removeView(adView);
-                onViewDetached();
-            }
-        });
+        activity.runOnUiThread(new Runnable() { public void run() {
+            frameLayout.removeView(adView);
+            onViewDetached();
+        }});
     }
 }

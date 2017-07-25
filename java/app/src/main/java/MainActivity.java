@@ -58,7 +58,7 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity
     public AudioManager audio;
     public SensorManager sensor;
     public ClipboardManager clipboard;
-    public boolean waiting_activity_result;
+    public boolean fullscreen, waiting_activity_result;
     public int attr_listPreferredItemHeight, attr_scrollbarSize;
     public float display_density;
     public ArrayList<ModelItem> context_menu;
@@ -250,6 +250,16 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity
 
     public void enableKeepScreenOn(final boolean enabled) {
         if (enabled) root_window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+    }
+
+    public void setSystemStatusBar(final boolean enabled) {
+        runOnUiThread(new Runnable() { public void run() {
+            if (fullscreen == !enabled) return;
+            fullscreen = !enabled;
+            if (fullscreen) getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+            else            getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+            screens.onFullScreenChanged(MainActivity.this);
+        }});
     }
 
     public void setCaption(final String text) {
