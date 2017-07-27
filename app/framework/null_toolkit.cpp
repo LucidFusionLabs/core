@@ -17,22 +17,6 @@
  */
 
 namespace LFL {
-struct NullAlertView : public AlertViewInterface {
-  void Hide() {}
-  void Show(const string &arg) {}
-  void ShowCB(const string &title, const string &msg, const string &arg, StringCB confirm_cb) {}
-  string RunModal(const string &arg) { return string(); }
-};
-
-struct NullMenuView : public MenuViewInterface {
-  void Show() {}
-};
-
-struct NullPanelView : public PanelViewInterface {
-  void Show() {}
-  void SetTitle(const string &title) {}
-};
-
 struct NullToolbarView : public ToolbarViewInterface {
   string theme;
   void Show(bool show_or_hide) {}
@@ -110,18 +94,11 @@ struct NullNavigationView : public NavigationViewInterface {
   void SetTheme(const string &theme) {}
 };
 
-void Application::ShowSystemFontChooser(const FontDesc &cur_font, const StringVecCB&) {}
-void Application::ShowSystemFileChooser(bool files, bool dirs, bool multi, const StringVecCB&) {}
-void Application::ShowSystemContextMenu(const vector<MenuItem>&items) {}
 int Application::LoadSystemImage(const string &n) { static int ret=0; return ++ret; }
 void Application::UpdateSystemImage(int n, Texture&) {}
 void Application::UnloadSystemImage(int n) {}
 
-unique_ptr<AlertViewInterface> SystemToolkit::CreateAlert(AlertItemVec items) { return make_unique<NullAlertView>(); }
-unique_ptr<PanelViewInterface> SystemToolkit::CreatePanel(const Box &b, const string &title, PanelItemVec items) { return nullptr; }
 unique_ptr<ToolbarViewInterface> SystemToolkit::CreateToolbar(const string &theme, MenuItemVec items, int flag) { return make_unique<NullToolbarView>(); }
-unique_ptr<MenuViewInterface> SystemToolkit::CreateMenu(const string &title, MenuItemVec items) { return make_unique<NullMenuView>(); }
-unique_ptr<MenuViewInterface> SystemToolkit::CreateEditMenu(vector<MenuItem> items) { return nullptr; }
 unique_ptr<TableViewInterface> SystemToolkit::CreateTableView(const string &title, const string &style, const string &theme, TableItemVec items) { return make_unique<NullTableView>(title, style, move(items)); }
 unique_ptr<TextViewInterface> SystemToolkit::CreateTextView(const string &title, File *file) { return make_unique<NullTextView>(); }
 unique_ptr<TextViewInterface> SystemToolkit::CreateTextView(const string &title, const string &text) { return make_unique<NullTextView>(); }

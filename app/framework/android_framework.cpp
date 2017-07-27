@@ -149,6 +149,59 @@ struct AndroidTimer : public TimerInterface {
   }
 };
 
+struct AndroidAlertView : public AlertViewInterface {
+  GlobalJNIObject impl;
+  AndroidAlertView(AlertItemVec items) : impl(NewAlertScreenObject(move(items))) {}
+
+  static jobject NewAlertScreenObject(AlertItemVec items) {
+    CHECK_EQ(4, items.size());
+    CHECK_EQ("style", items[0].first);
+    static jmethodID mid = CheckNotNull
+      (jni->env->GetMethodID(jni->alertscreen_class, "<init>", "(Ljava/util/ArrayList;)V"));
+    return jni->env->NewObject(jni->alertscreen_class, mid, JNI::ToModelItemArrayList(jni->env, move(items)));
+  }
+
+  void Hide() {
+    static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->alertscreen_class, "show", "(Lcom/lucidfusionlabs/app/MainActivity;Z)V"));
+    jni->env->CallVoidMethod(impl.v, mid, jni->activity, jboolean(false));
+  }
+
+  void Show(const string &arg) {
+    static jmethodID mid = CheckNotNull
+      (jni->env->GetMethodID(jni->alertscreen_class, "showText", "(Landroid/app/Activity;Ljava/lang/String;)V"));
+    LocalJNIString astr(jni->env, JNI::ToJString(jni->env, arg));
+    jni->env->CallVoidMethod(impl.v, mid, jni->activity, astr.v);
+  }
+
+  string RunModal(const string &arg) { return ERRORv(string(), "not implemented"); }
+  void ShowCB(const string &title, const string &msg, const string &arg, StringCB confirm_cb) {
+    static jmethodID mid = CheckNotNull
+      (jni->env->GetMethodID(jni->alertscreen_class, "showTextCB", "(Landroid/app/Activity;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lcom/lucidfusionlabs/core/NativeStringCB;)V"));
+    LocalJNIString tstr(jni->env, JNI::ToJString(jni->env, title)), mstr(jni->env, JNI::ToJString(jni->env, msg)), astr(jni->env, JNI::ToJString(jni->env, arg));
+    LocalJNIObject cb(jni->env, confirm_cb ? JNI::ToNativeStringCB(jni->env, move(confirm_cb)) : nullptr);
+    jni->env->CallVoidMethod(impl.v, mid, jni->activity, tstr.v, mstr.v, astr.v, cb.v);
+  }
+};
+
+struct AndroidMenuView : public MenuViewInterface {
+  GlobalJNIObject impl;
+  AndroidMenuView(const string &title, MenuItemVec items) : impl(NewMenuScreenObject(title, move(items))) {}
+
+  static jobject NewMenuScreenObject(const string &title, MenuItemVec items) {
+    static jmethodID mid = CheckNotNull
+      (jni->env->GetMethodID(jni->menuscreen_class, "<init>", "(Ljava/lang/String;Ljava/util/ArrayList;)V"));
+    LocalJNIString tstr(jni->env, JNI::ToJString(jni->env, title));
+    LocalJNIObject l(jni->env, JNI::ToModelItemArrayList(jni->env, move(items)));
+    return jni->env->NewObject(jni->menuscreen_class, mid, tstr.v, l.v);
+  }
+
+  void Show() {
+    static jmethodID mid = CheckNotNull
+      (jni->env->GetMethodID(jni->menuscreen_class, "show", "(Lcom/lucidfusionlabs/app/MainActivity;Z)V"));
+    jni->env->CallVoidMethod(impl.v, mid, jni->activity, true);
+  }
+};
+
 int Application::Suspended() {
   INFO("Application::Suspended");
   return 0;
@@ -225,10 +278,20 @@ int  Application::SetMultisample(bool v) { return 0; }
 int  Application::SetExtraScale(bool v) { return 1; }
 void Application::SetDownScale(bool v) {}
 
+void Application::ShowSystemFontChooser(const FontDesc &cur_font, const StringVecCB &cb) { return ERROR(not_implemented); }
+void Application::ShowSystemFileChooser(bool files, bool dirs, bool multi, const StringVecCB &cb) { return ERROR(not_implemented); }
 void Application::ShowSystemStatusBar(bool v) {
   static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "setSystemStatusBar", "(Z)V"));
   jni->env->CallVoidMethod(jni->activity, mid, jboolean(v));
 }
+
+void Application::ShowSystemContextMenu(const MenuItemVec &items) {
+  static jmethodID mid = CheckNotNull
+    (jni->env->GetMethodID(jni->activity_class, "showContextMenu", "(Ljava/util/ArrayList;)V"));
+  LocalJNIObject v(jni->env, JNI::ToModelItemArrayList(jni->env, move(items)));
+  jni->env->CallVoidMethod(jni->activity, mid, v.v);
+}
+
 
 string Application::PrintCallStack() {
   static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "getCurrentStackTrace", "()Ljava/lang/String;"));
@@ -317,6 +380,10 @@ Application *CreateApplication(int ac, const char* const* av) { return new Appli
 unique_ptr<Module> CreateFrameworkModule() { return make_unique<AndroidFrameworkModule>(); }
 unique_ptr<AssetLoaderInterface> CreateAssetLoader() { return make_unique<AndroidAssetLoader>(); }
 unique_ptr<TimerInterface> SystemToolkit::CreateTimer(Callback cb) { return make_unique<AndroidTimer>(move(cb)); };
+unique_ptr<AlertViewInterface> SystemToolkit::CreateAlert(AlertItemVec items) { return make_unique<AndroidAlertView>(move(items)); }
+unique_ptr<PanelViewInterface> SystemToolkit::CreatePanel(const Box &b, const string &title, PanelItemVec items) { return nullptr; }
+unique_ptr<MenuViewInterface> SystemToolkit::CreateMenu(const string &title, MenuItemVec items) { return make_unique<AndroidMenuView>(title, move(items)); }
+unique_ptr<MenuViewInterface> SystemToolkit::CreateEditMenu(MenuItemVec items) { return nullptr; }
 
 static void NativeAPI_shutdownMainLoop() {
   app->suspended = true;
@@ -537,6 +604,19 @@ extern "C" void Java_com_lucidfusionlabs_core_NativeIntIntCB_FreeIntIntCB(JNIEnv
 
 extern "C" void Java_com_lucidfusionlabs_core_NativePickerItemCB_FreePickerItemCB(JNIEnv *e, jclass c, jlong cb) {
   delete static_cast<PickerItem::CB*>(Void(cb));
+}
+
+extern "C" jobject Java_com_lucidfusionlabs_core_PickerItem_getFontPickerItem(JNIEnv *e, jclass c) {
+  static GlobalJNIObject *picker_item = nullptr;
+  if (picker_item == nullptr) {
+    auto font_picker = new PickerItem();
+    font_picker->picked.resize(2);
+    font_picker->data.resize(2);
+    font_picker->data[0].emplace_back("default");
+    for (int i=0; i<64; i++) font_picker->data[1].emplace_back(StrCat(i+1));
+    picker_item = new GlobalJNIObject(e, JNI::ToPickerItem(e, font_picker));
+  }
+  return picker_item->v;
 }
 
 extern "C" void Java_com_lucidfusionlabs_app_TableScreen_RunHideCB(JNIEnv *e, jobject a) {

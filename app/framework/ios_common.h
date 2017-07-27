@@ -85,6 +85,19 @@
   - (IBAction)buttonClicked:(IOSBarButtonItem*)sender;
 @end
 
+@interface IOSPicker : UIPickerView<UIPickerViewDelegate>
+  {
+    LFL::PickerItem item;
+    bool dark_theme;
+  }
+  - (LFL::PickerItem*)getItem;
+@end
+
+@interface IOSFontPicker : IOSPicker
+  + (void)getSystemFonts:(std::vector<std::string>*)out;
+  + (void)getSystemFontSizes:(std::vector<std::string>*)out;
+@end
+
 @interface IOSAlert : NSObject
   @property (nonatomic, retain) UIAlertController *alert;
   @property (nonatomic, retain) UIView *flash;

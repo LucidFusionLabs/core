@@ -25,109 +25,6 @@
 struct OSXTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
 static LFL::FreeListVector<NSImage*> app_images;
 
-@interface OSXAlert : NSObject<NSTextFieldDelegate>
-  @property (nonatomic, retain) NSAlert     *alert;
-  @property (nonatomic, retain) NSTextField *input;
-  @property (nonatomic)         bool         add_text;
-  @property (nonatomic)         std::string  style;
-  @property (nonatomic, assign) LFL::StringCB cancel_cb, confirm_cb;
-@end
-
-@implementation OSXAlert
-  - (id)init:(LFL::AlertItemVec) kv {
-    CHECK_EQ(4, kv.size());
-    CHECK_EQ("style", kv[0].first);
-    _style      = move(kv[0].second);
-    _cancel_cb  = move(kv[2].cb);
-    _confirm_cb = move(kv[3].cb);
-    _alert = [[NSAlert alloc] init];
-    [_alert addButtonWithTitle: [NSString stringWithUTF8String: kv[3].first.c_str()]];
-    [_alert addButtonWithTitle: [NSString stringWithUTF8String: kv[2].first.c_str()]];
-    [_alert setMessageText:     [NSString stringWithUTF8String: kv[1].first.c_str()]];
-    [_alert setInformativeText: [NSString stringWithUTF8String: kv[1].second.c_str()]];
-    [_alert setAlertStyle:NSWarningAlertStyle];
-    if ((_add_text = _style == "textinput")) {
-      _input = [[NSTextField alloc] initWithFrame:NSMakeRect(0, 0, 200, 24)];
-      _input.delegate = self;
-      [_alert setAccessoryView: _input];
-    } else if ((_add_text = _style == "pwinput")) {
-      _input = [[NSSecureTextField alloc] initWithFrame:NSMakeRect(0, 0, 200, 24)];
-      _input.delegate = self;
-      [_alert setAccessoryView: _input];
-    }
-
-    return self;
-  }
-
-  - (void)alertDidEnd:(NSAlert *)alert returnCode:(NSInteger)returnCode contextInfo:(void *)contextInfo {
-    if (returnCode != NSAlertFirstButtonReturn) { if (_cancel_cb) _cancel_cb(""); }
-    else { if (_confirm_cb) _confirm_cb(_add_text ? [[_input stringValue] UTF8String] : ""); }
-  }
-  
-  - (void)modalAlertDidEnd:(NSAlert *)alert returnCode:(NSInteger)returnCode contextInfo:(void *)contextInfo {
-    NSWindow *window = [dynamic_cast<LFL::OSXWindow*>(LFL::app->focused)->view window];
-    [NSApp endSheet: window];
-  }
-
-  - (void)controlTextDidChange:(NSNotification *)notification {}
-  - (void)controlTextDidEndEditing:(NSNotification *)notification {}
-@end
-
-@interface OSXPanel : NSObject
-  @property(readonly, assign) NSWindow *window;
-  - (void) show;
-  - (void) addTextField:(NSTextField*)tf withCB:(LFL::StringCB)cb;
-@end
-
-@implementation OSXPanel
-  {
-    std::vector<std::pair<NSButton*,    LFL::StringCB>> buttons;
-    std::vector<std::pair<NSTextField*, LFL::StringCB>> textfields;
-  }
-
-  - (id) initWithBox: (const LFL::Box&) b {
-    self = [super init];
-    _window = [[NSPanel alloc] initWithContentRect:NSMakeRect(b.x, b.y, b.w, b.h) 
-      styleMask:NSTitledWindowMask | NSClosableWindowMask 
-      backing:NSBackingStoreBuffered defer:YES];
-    [_window makeFirstResponder:nil];
-    return self;
-  }
-
-  - (void) show {
-    [_window setLevel:NSFloatingWindowLevel];
-    [_window center];
-    [_window makeKeyAndOrderFront:NSApp];
-    [_window retain];
-  }
-
-  - (void) addButton: (NSButton*)button withCB: (LFL::StringCB)cb {
-    [button setTarget: self];
-    [button setAction: @selector(buttonAction:)];
-    [button setTag: buttons.size()];
-    buttons.emplace_back(button, move(cb));
-  }
-  
-  - (void) addTextField: (NSTextField*)textfield withCB: (LFL::StringCB)cb {
-    [textfield setTarget: self];
-    [textfield setAction: @selector(textFieldAction:)];
-    [textfield setTag: textfields.size()];
-    textfields.emplace_back(textfield, move(cb));
-  }
-
-  - (void) buttonAction: (id)sender {
-    int tag = [sender tag];
-    CHECK_RANGE(tag, 0, buttons.size());
-    buttons[tag].second([[sender stringValue] UTF8String]);
-  }
-
-  - (void) textFieldAction: (id)sender {
-    int tag = [sender tag];
-    CHECK_RANGE(tag, 0, textfields.size());
-    textfields[tag].second([[sender stringValue] UTF8String]);
-  }
-@end
-
 @interface OSXToolbar : NSObject
   @property (nonatomic, retain) NSToolbar *toolbar;
   + (int)getBottomHeight;
@@ -135,32 +32,6 @@ static LFL::FreeListVector<NSImage*> app_images;
 
 @implementation OSXToolbar
   + (int)getBottomHeight { return 0; }
-@end
-
-@interface OSXFontChooser : NSObject
-@end
-
-@implementation OSXFontChooser
-  {
-    NSFont *font;
-    LFL::StringVecCB font_change_cb;
-  }
-
-  - (void)selectFont: (const char *)name size:(int)s cb:(LFL::StringVecCB)v {
-    font_change_cb = move(v);
-    font = [NSFont fontWithName:[NSString stringWithUTF8String:name] size:s];
-    NSFontManager *fontManager = [NSFontManager sharedFontManager];
-    [fontManager setSelectedFont:font isMultiple:NO];
-    [fontManager setDelegate:self];
-    [fontManager setTarget:self];
-    [fontManager orderFrontFontPanel:self];
-  }
-
-  - (void)changeFont:(id)sender {
-    font = [sender convertFont:font];
-    float size = [[[font fontDescriptor] objectForKey:NSFontSizeAttribute] floatValue];
-    font_change_cb(LFL::StringVec{ [[font fontName] UTF8String], LFL::StrCat(size) });
-  }
 @end
 
 @interface OSXNavigation : NSResponder
@@ -578,103 +449,6 @@ static LFL::FreeListVector<NSImage*> app_images;
 @end
 
 namespace LFL {
-static void AddNSMenuItems(NSMenu *menu, vector<MenuItem> items) {
-  NSMenuItem *item;
-  for (auto &i : items) { 
-    const string &k=i.shortcut, &n=i.name;
-    if (n == "<separator>") { [menu addItem:[NSMenuItem separatorItem]]; continue; }
-
-    NSString *key = nil;
-    if      (k == "<left>")  { unichar fk = NSLeftArrowFunctionKey;  key = [NSString stringWithCharacters:&fk length:1]; }
-    else if (k == "<right>") { unichar fk = NSRightArrowFunctionKey; key = [NSString stringWithCharacters:&fk length:1]; }
-    else if (k == "<up>"   ) { unichar fk = NSUpArrowFunctionKey;    key = [NSString stringWithCharacters:&fk length:1]; }
-    else if (k == "<down>")  { unichar fk = NSDownArrowFunctionKey;  key = [NSString stringWithCharacters:&fk length:1]; }
-    else key = [NSString stringWithUTF8String: k.c_str()];
-
-    item = [menu addItemWithTitle: [NSString stringWithUTF8String: n.c_str()]
-                 action:           (i.cb ? @selector(callbackRun:) : nil)
-                 keyEquivalent:    key];
-    if (i.cb) [item setRepresentedObject: [[ObjcCallback alloc] initWithCB: move(i.cb)]];
-  }
-}
-
-struct OSXAlertView : public AlertViewInterface {
-  OSXAlert *alert;
-  ~OSXAlertView() { [alert release]; }
-  OSXAlertView(AlertItemVec items) : alert([[OSXAlert alloc] init: move(items)]) {}
-
-  void Hide() {}
-  void Show(const string &arg) {
-    if (alert.add_text) [alert.input setStringValue: MakeNSString(arg)];
-    [alert.alert beginSheetModalForWindow:[dynamic_cast<OSXWindow*>(app->focused)->view window] modalDelegate:alert
-      didEndSelector:@selector(alertDidEnd:returnCode:contextInfo:) contextInfo:nil];
-    [dynamic_cast<OSXWindow*>(app->focused)->view  clearKeyModifiers];
-  }
-
-  void ShowCB(const string &title, const string &msg, const string &arg, StringCB confirm_cb) {
-    alert.confirm_cb = move(confirm_cb);
-    [alert.alert setMessageText: MakeNSString(title)];
-    [alert.alert setInformativeText: MakeNSString(msg)];
-    [alert.alert beginSheetModalForWindow:[dynamic_cast<OSXWindow*>(app->focused)->view  window] modalDelegate:alert
-      didEndSelector:@selector(alertDidEnd:returnCode:contextInfo:) contextInfo:nil];
-    [dynamic_cast<OSXWindow*>(app->focused)->view  clearKeyModifiers];
-  }
-
-  string RunModal(const string &arg) {
-    NSWindow *window = [dynamic_cast<OSXWindow*>(app->focused)->view  window];
-    if (alert.add_text) [alert.input setStringValue: MakeNSString(arg)];
-    [alert.alert beginSheetModalForWindow:window modalDelegate:alert
-      didEndSelector:@selector(modalAlertDidEnd:returnCode:contextInfo:) contextInfo:nil];
-    [NSApp runModalForWindow: window];
-    return alert.add_text ? GetNSString([alert.input stringValue]) : "";
-  }
-};
-
-struct OSXMenuView : public MenuViewInterface {
-  NSMenu *menu;
-  ~OSXMenuView() { [menu release]; }
-  OSXMenuView(const string &title, MenuItemVec items) :
-    menu([[NSMenu alloc] initWithTitle: MakeNSString(title)]) {
-    AddNSMenuItems(menu, move(items));
-    NSMenuItem *item = [[NSMenuItem alloc] initWithTitle: MakeNSString(title) action:nil keyEquivalent:@""];
-    [item setSubmenu: menu];
-    [[NSApp mainMenu] addItem: item];
-    [menu release];
-    [item release];
-  }
-  void Show() {}
-};
-
-struct OSXPanelView : public PanelViewInterface {
-  OSXPanel *panel;
-  ~OSXPanelView() { [panel release]; }
-  OSXPanelView(const Box &b, const string &title, PanelItemVec items) :
-    panel([[OSXPanel alloc] initWithBox: b]) {
-    [[panel window] setTitle: [NSString stringWithUTF8String: title.c_str()]];
-    for (auto &i : items) {
-      const Box &b = i.box;
-      const string &t = i.type;
-      if (t == "textbox") {
-        NSTextField *textfield = [[NSTextField alloc] initWithFrame:NSMakeRect(b.x, b.y, b.w, b.h)];
-        [panel addTextField: textfield withCB: move(i.cb)];
-        [[[panel window] contentView] addSubview: textfield];
-      } else if (PrefixMatch(t, "button:")) {
-        NSButton *button = [[[NSButton alloc] initWithFrame:NSMakeRect(b.x, b.y, b.w, b.h)] autorelease];
-        [panel addButton: button withCB: move(i.cb)];
-        [[[panel window] contentView] addSubview: button];
-        [button setTitle: [NSString stringWithUTF8String: t.substr(7).c_str()]];
-        [button setButtonType:NSMomentaryLightButton];
-        [button setBezelStyle:NSRoundedBezelStyle];
-      } else ERROR("unknown panel item ", t);
-    }
-  }
-
-  void Show() { [panel show]; }
-  void SetTitle(const string &title) { 
-    [[panel window] setTitle: [NSString stringWithUTF8String: title.c_str()]];
-  }
-};
-
 struct OSXToolbarView : public ToolbarViewInterface {
   string theme;
   ~OSXToolbarView() {}
@@ -791,51 +565,6 @@ struct OSXNavigationView : public NavigationViewInterface {
   void SetTheme(const string &theme) {}
 };
 
-void Application::ShowSystemFontChooser(const FontDesc &cur_font, const StringVecCB &choose_cb) {
-  static OSXFontChooser *font_chooser = [OSXFontChooser alloc];
-  [font_chooser selectFont:cur_font.name.c_str() size:cur_font.size cb:choose_cb];
-}
-
-void Application::ShowSystemFileChooser(bool choose_files, bool choose_dirs, bool choose_multi, const StringVecCB &choose_cb) {
-  NSOpenPanel *panel = [NSOpenPanel openPanel];
-  [panel setCanChooseFiles:choose_files];
-  [panel setCanChooseDirectories:choose_dirs];
-  [panel setAllowsMultipleSelection:choose_multi];
-  NSInteger clicked = [panel runModal];
-  app->LoseFocus();
-  if (clicked != NSFileHandlingPanelOKButton) return;
-
-  StringVec arg;
-  for (NSURL *url in [panel URLs]) arg.emplace_back([[url absoluteString] UTF8String]);
-  if (arg.size()) choose_cb(arg);
-}
-
-void Application::ShowSystemContextMenu(const MenuItemVec &items) {
-  NSEvent *event = [NSEvent mouseEventWithType: NSLeftMouseDown
-                            location:           NSMakePoint(app->focused->mouse.x, app->focused->mouse.y)
-                            modifierFlags:      NSLeftMouseDownMask
-                            timestamp:          0
-                            windowNumber:       [[dynamic_cast<OSXWindow*>(app->focused)->view window] windowNumber]
-                            context:            [[dynamic_cast<OSXWindow*>(app->focused)->view window] graphicsContext]
-                            eventNumber:        0
-                            clickCount:         1
-                            pressure:           1];
-
-  NSMenuItem *item;
-  NSMenu *menu = [[NSMenu alloc] init];
-  for (auto &i : items) {
-    const char *k = i.shortcut.c_str(), *n = i.name.c_str();
-    if (!strcmp(n, "<separator>")) { [menu addItem:[NSMenuItem separatorItem]]; continue; }
-    item = [menu addItemWithTitle: [NSString stringWithUTF8String: n]
-                 action:           (i.cb ? @selector(callbackRun:) : nil)
-                 keyEquivalent:    [NSString stringWithUTF8String: k]];
-    if (i.cb) [item setRepresentedObject: [[ObjcCallback alloc] initWithCB: i.cb]];
-  }
-
-  [NSMenu popUpContextMenu:menu withEvent:event forView:dynamic_cast<OSXWindow*>(app->focused)->view];
-  [dynamic_cast<OSXWindow*>(app->focused)->view clearKeyModifiers];
-}
-
 int Application::LoadSystemImage(const string &n) {
   NSImage *image = [[NSImage alloc] initWithContentsOfFile: MakeNSString(StrCat(app->assetdir, "../drawable-xhdpi/", n, ".png")) ];
   if (!image) return 0;
@@ -850,25 +579,7 @@ void Application::UnloadSystemImage(int n) {
   app_images.Erase(n-1);
 }
 
-unique_ptr<AlertViewInterface> SystemToolkit::CreateAlert(AlertItemVec items) { return make_unique<OSXAlertView>(move(items)); }
-unique_ptr<PanelViewInterface> SystemToolkit::CreatePanel(const Box &b, const string &title, PanelItemVec items) { return make_unique<OSXPanelView>(b, title, move(items)); }
 unique_ptr<ToolbarViewInterface> SystemToolkit::CreateToolbar(const string &theme, MenuItemVec items, int flag) { return make_unique<OSXToolbarView>(move(items)); }
-
-unique_ptr<MenuViewInterface> SystemToolkit::CreateMenu(const string &title, MenuItemVec items) { return make_unique<OSXMenuView>(title, move(items)); }
-unique_ptr<MenuViewInterface> SystemToolkit::CreateEditMenu(MenuItemVec items) {
-  NSMenuItem *item; 
-  NSMenu *menu = [[NSMenu alloc] initWithTitle:@"Edit"];
-  item = [menu addItemWithTitle:@"Copy"  action:@selector(copy:)  keyEquivalent:@"c"];
-  item = [menu addItemWithTitle:@"Paste" action:@selector(paste:) keyEquivalent:@"v"];
-  AddNSMenuItems(menu, move(items));
-  item = [[NSMenuItem alloc] initWithTitle:@"Edit" action:nil keyEquivalent:@""];
-  [item setSubmenu: menu];
-  [[NSApp mainMenu] addItem: item];
-  [menu release];
-  [item release];
-  return make_unique<OSXMenuView>("", MenuItemVec());
-}
-
 unique_ptr<TableViewInterface> SystemToolkit::CreateTableView(const string &title, const string &style, const string &theme, TableItemVec items) { return make_unique<OSXTableView>(title, style, move(items)); }
 unique_ptr<TextViewInterface> SystemToolkit::CreateTextView(const string &title, File *file) { return make_unique<OSXTextView>(title, file); }
 unique_ptr<TextViewInterface> SystemToolkit::CreateTextView(const string &title, const string &text) { return make_unique<OSXTextView>(title, text); }

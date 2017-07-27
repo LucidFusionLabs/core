@@ -21,40 +21,6 @@
 namespace LFL {
 static JNI *jni = Singleton<JNI>::Get();
 
-struct AndroidAlertView : public AlertViewInterface {
-  GlobalJNIObject impl;
-  AndroidAlertView(AlertItemVec items) : impl(NewAlertScreenObject(move(items))) {}
-
-  static jobject NewAlertScreenObject(AlertItemVec items) {
-    CHECK_EQ(4, items.size());
-    CHECK_EQ("style", items[0].first);
-    static jmethodID mid = CheckNotNull
-      (jni->env->GetMethodID(jni->alertscreen_class, "<init>", "(Ljava/util/ArrayList;)V"));
-    return jni->env->NewObject(jni->alertscreen_class, mid, JNI::ToModelItemArrayList(jni->env, move(items)));
-  }
-
-  void Hide() {
-    static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->alertscreen_class, "show", "(Lcom/lucidfusionlabs/app/MainActivity;Z)V"));
-    jni->env->CallVoidMethod(impl.v, mid, jni->activity, jboolean(false));
-  }
-
-  void Show(const string &arg) {
-    static jmethodID mid = CheckNotNull
-      (jni->env->GetMethodID(jni->alertscreen_class, "showText", "(Landroid/app/Activity;Ljava/lang/String;)V"));
-    LocalJNIString astr(jni->env, JNI::ToJString(jni->env, arg));
-    jni->env->CallVoidMethod(impl.v, mid, jni->activity, astr.v);
-  }
-
-  string RunModal(const string &arg) { return ERRORv(string(), "not implemented"); }
-  void ShowCB(const string &title, const string &msg, const string &arg, StringCB confirm_cb) {
-    static jmethodID mid = CheckNotNull
-      (jni->env->GetMethodID(jni->alertscreen_class, "showTextCB", "(Landroid/app/Activity;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lcom/lucidfusionlabs/core/NativeStringCB;)V"));
-    LocalJNIString tstr(jni->env, JNI::ToJString(jni->env, title)), mstr(jni->env, JNI::ToJString(jni->env, msg)), astr(jni->env, JNI::ToJString(jni->env, arg));
-    LocalJNIObject cb(jni->env, confirm_cb ? JNI::ToNativeStringCB(jni->env, move(confirm_cb)) : nullptr);
-    jni->env->CallVoidMethod(impl.v, mid, jni->activity, tstr.v, mstr.v, astr.v, cb.v);
-  }
-};
-
 struct AndroidToolbarView : public ToolbarViewInterface {
   GlobalJNIObject impl;
   string theme;
@@ -88,25 +54,6 @@ struct AndroidToolbarView : public ToolbarViewInterface {
   void Show(bool show_or_hide) {
     static jmethodID mid = jni->GetMethodID(jni->toolbar_class, "show", {Java::MainActivity, Java::Z}, Java::V);
     jni->env->CallVoidMethod(impl.v, mid, jni->activity, show_or_hide);
-  }
-};
-
-struct AndroidMenuView : public MenuViewInterface {
-  GlobalJNIObject impl;
-  AndroidMenuView(const string &title, MenuItemVec items) : impl(NewMenuScreenObject(title, move(items))) {}
-
-  static jobject NewMenuScreenObject(const string &title, MenuItemVec items) {
-    static jmethodID mid = CheckNotNull
-      (jni->env->GetMethodID(jni->menuscreen_class, "<init>", "(Ljava/lang/String;Ljava/util/ArrayList;)V"));
-    LocalJNIString tstr(jni->env, JNI::ToJString(jni->env, title));
-    LocalJNIObject l(jni->env, JNI::ToModelItemArrayList(jni->env, move(items)));
-    return jni->env->NewObject(jni->menuscreen_class, mid, tstr.v, l.v);
-  }
-
-  void Show() {
-    static jmethodID mid = CheckNotNull
-      (jni->env->GetMethodID(jni->menuscreen_class, "show", "(Lcom/lucidfusionlabs/app/MainActivity;Z)V"));
-    jni->env->CallVoidMethod(impl.v, mid, jni->activity, true);
   }
 };
 
@@ -421,16 +368,6 @@ void AndroidTableView::SetHeader(int section, TableItem header) {
   jni->env->CallVoidMethod(impl.v, mid, jni->activity, jint(section), v.v);
 }
 
-void Application::ShowSystemFontChooser(const FontDesc &cur_font, const StringVecCB &cb) { return ERROR(not_implemented); }
-void Application::ShowSystemFileChooser(bool files, bool dirs, bool multi, const StringVecCB &cb) { return ERROR(not_implemented); }
-
-void Application::ShowSystemContextMenu(const MenuItemVec &items) {
-  static jmethodID mid = CheckNotNull
-    (jni->env->GetMethodID(jni->activity_class, "showContextMenu", "(Ljava/util/ArrayList;)V"));
-  LocalJNIObject v(jni->env, JNI::ToModelItemArrayList(jni->env, move(items)));
-  jni->env->CallVoidMethod(jni->activity, mid, v.v);
-}
-
 void Application::UpdateSystemImage(int n, Texture &t) {
   if (!t.buf) return;
   static jmethodID mid = CheckNotNull
@@ -455,24 +392,7 @@ void Application::UnloadSystemImage(int n) {
   jni->env->CallVoidMethod(jni->activity, mid, jint(n));
 }
 
-extern "C" jobject Java_com_lucidfusionlabs_core_PickerItem_getFontPickerItem(JNIEnv *e, jclass c) {
-  static GlobalJNIObject *picker_item = nullptr;
-  if (picker_item == nullptr) {
-    auto font_picker = new PickerItem();
-    font_picker->picked.resize(2);
-    font_picker->data.resize(2);
-    font_picker->data[0].emplace_back("default");
-    for (int i=0; i<64; i++) font_picker->data[1].emplace_back(StrCat(i+1));
-    picker_item = new GlobalJNIObject(e, JNI::ToPickerItem(e, font_picker));
-  }
-  return picker_item->v;
-}
-
-unique_ptr<AlertViewInterface> SystemToolkit::CreateAlert(AlertItemVec items) { return make_unique<AndroidAlertView>(move(items)); }
-unique_ptr<PanelViewInterface> SystemToolkit::CreatePanel(const Box &b, const string &title, PanelItemVec items) { return nullptr; }
 unique_ptr<ToolbarViewInterface> SystemToolkit::CreateToolbar(const string &theme, MenuItemVec items, int flag) { return make_unique<AndroidToolbarView>(theme, move(items), flag); }
-unique_ptr<MenuViewInterface> SystemToolkit::CreateMenu(const string &title, MenuItemVec items) { return make_unique<AndroidMenuView>(title, move(items)); }
-unique_ptr<MenuViewInterface> SystemToolkit::CreateEditMenu(MenuItemVec items) { return nullptr; }
 unique_ptr<TableViewInterface> SystemToolkit::CreateTableView(const string &title, const string &style, const string &theme, TableItemVec items) { return make_unique<AndroidTableView>(title, style, move(items)); }
 unique_ptr<TextViewInterface> SystemToolkit::CreateTextView(const string &title, File *file) { return make_unique<AndroidTextView>(title, file); }
 unique_ptr<TextViewInterface> SystemToolkit::CreateTextView(const string &title, const string &text) { return make_unique<AndroidTextView>(title, text); }

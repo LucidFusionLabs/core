@@ -755,6 +755,233 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
 #endif
 @end
 
+@implementation IOSPicker
+  - (id)initWithColumns:(LFL::PickerItem)in andTheme:(const LFL::string&)theme {
+    self = [super init];
+    return [self finishInit:in withTheme:theme];
+  }
+
+  - (id)initWithColumns:(LFL::PickerItem)in andTheme:(const LFL::string&)theme andFrame:(CGRect)r {
+    self = [super initWithFrame:r];
+    return [self finishInit:in withTheme:theme];
+  }
+
+  - (id)finishInit:(LFL::PickerItem)in withTheme:(const LFL::string&)theme {
+    item = move(in);
+    super.delegate = self;
+    super.showsSelectionIndicator = YES;
+    super.hidden = NO;
+    super.layer.borderColor = [UIColor grayColor].CGColor;
+    super.layer.borderWidth = 4;
+    [self setTheme: theme];
+    return self;
+  }
+
+  - (void)setTheme: (const LFL::string&)x {
+    if ((dark_theme = (x == "Dark"))) [self setBackgroundColor:[UIColor colorWithWhite:0.249 alpha:.5]];
+    else                              [self setBackgroundColor:[UIColor whiteColor]];
+  }
+
+  - (void)pickerView:(UIPickerView *)pV didSelectRow:(NSInteger)row inComponent:(NSInteger)component {
+    CHECK_RANGE(component, 0, item.data.size());
+    if (item.picked.size() != item.data.size()) item.picked.resize(item.data.size());
+    item.picked[component] = row;
+    if (item.cb) { if (item.cb(&item)) [self removeFromSuperview]; }
+  }
+
+  - (LFL::PickerItem*)getItem { return &item; }
+  - (NSInteger)numberOfComponentsInPickerView:(UIPickerView *)pickerView { return item.data.size(); }
+  - (NSInteger)pickerView:(UIPickerView *)pickerView numberOfRowsInComponent:(NSInteger)component { 
+    CHECK_RANGE(component, 0, item.data.size());
+    return item.data[component].size();
+  }
+
+  - (NSString *)pickerView:(UIPickerView *)pickerView titleForRow:(NSInteger)row forComponent:(NSInteger)component {
+    CHECK_RANGE(component, 0, item.data.size());
+    CHECK_RANGE(row, 0, item.data[component].size());
+    return [NSString stringWithUTF8String: item.data[component][row].c_str()];
+  }
+
+  - (NSAttributedString *)pickerView:(UIPickerView *)pickerView attributedTitleForRow:(NSInteger)row forComponent:(NSInteger)component {
+    CHECK_RANGE(component, 0, item.data.size());
+    CHECK_RANGE(row, 0, item.data[component].size());
+    NSString *title = [NSString stringWithUTF8String: item.data[component][row].c_str()];
+    NSAttributedString *attString = 
+      [[NSAttributedString alloc] initWithString:title attributes:@{
+        NSForegroundColorAttributeName:(dark_theme ? [UIColor whiteColor] : [UIColor blackColor]) }];
+    return attString;
+  }
+
+  - (void)selectRows:(const LFL::StringVec&)v {
+    if (item.picked.size() != item.data.size()) item.picked.resize(item.data.size());
+    CHECK_EQ(item.picked.size(), v.size());
+    for (int col=0, l=v.size(); col != v.size(); ++col) {
+      const LFL::string &name = v[col];
+      for (auto b = item.data[col].begin(), e = item.data[col].end(), i = b; i != e; ++i) {
+        if (*i == name) { item.picked[col] = i - b; break; }
+      }
+      [self selectRow:item.picked[col] inComponent:col animated:NO];
+    }
+  }
+@end
+
+@implementation IOSFontPicker
+  {
+    LFL::StringVecCB font_change_cb;
+  }
+
+  - (id)initWithTheme: (const LFL::string&)theme {
+    LFL::PickerItem p;
+    p.cb = [=](LFL::PickerItem *x) -> bool {
+      if (font_change_cb) font_change_cb(LFL::StringVec{x->data[0][x->picked[0]], x->data[1][x->picked[1]]});
+      return true;
+    };
+    [IOSFontPicker getSystemFonts:     &LFL::PushBack(p.data, {})];
+    [IOSFontPicker getSystemFontSizes: &LFL::PushBack(p.data, {})];
+    self = [super initWithColumns: move(p) andTheme: theme];
+    return self;
+  }
+
+  - (void)selectFont:(const std::string&)name size:(int)s cb:(LFL::StringVecCB)v {
+    font_change_cb = move(v);
+    [IOSFontPicker selectFont:name withPicker:self size:s];
+  }
+
+  + (void)getSystemFonts:(std::vector<std::string>*)out {
+    NSArray *families = [UIFont familyNames];
+    for (NSString *family_name in families) {
+      NSArray *fonts = [UIFont fontNamesForFamilyName:family_name];
+      for (NSString *font_name in fonts) out->push_back([font_name UTF8String]);
+    }
+  }
+
+  + (void)getSystemFontSizes:(std::vector<std::string>*)out {
+    for (int i=0; i<64; ++i) out->push_back(LFL::StrCat(i+1));
+  }
+
+  + (void)selectFont:(const std::string&)name withPicker:(IOSPicker*)picker size:(int)s {
+    [picker selectRows:LFL::StringVec{ name, LFL::StrCat(s) }];
+  }
+@end
+
+@implementation IOSAlert
+  - (id)init:(const LFL::AlertItemVec&) kv {
+    self = [super init];
+    CHECK_EQ(4, kv.size());
+    CHECK_EQ("style", kv[0].first);
+    _style       = kv[0].second;
+    _cancel_cb   = kv[2].cb;
+    _confirm_cb  = kv[3].cb;
+
+    if (kv[2].first.empty() && kv[3].first.empty()) {
+      CGRect bounds = [[UIScreen mainScreen] bounds];
+      CGFloat cornerRadius = 7, flashWidth = 150, flashHeight = 30;
+
+      _flash = [[UIView alloc] initWithFrame:
+        CGRectMake((bounds.size.width - flashWidth) / 2, (bounds.size.height - flashHeight) / 2, flashWidth, flashHeight)];
+      _flash.autoresizingMask = UIViewAutoresizingFlexibleRightMargin | UIViewAutoresizingFlexibleLeftMargin |
+        UIViewAutoresizingFlexibleTopMargin | UIViewAutoresizingFlexibleBottomMargin;
+      _flash.layer.cornerRadius = cornerRadius;
+      _flash.layer.borderColor = [[UIColor colorWithRed:198.0/255.0 green:198.0/255.0 blue:198.0/255.0 alpha:1.0f] CGColor];
+      _flash.layer.borderWidth = 1;
+      _flash.layer.shadowRadius = cornerRadius + 5;
+      _flash.layer.shadowOpacity = 0.1f;
+      _flash.layer.shadowOffset = CGSizeMake(0 - (cornerRadius+5)/2, 0 - (cornerRadius+5)/2);
+      _flash.layer.shadowColor = [UIColor blackColor].CGColor;
+      _flash.layer.shadowPath = [UIBezierPath bezierPathWithRoundedRect:_flash.bounds cornerRadius:_flash.layer.cornerRadius].CGPath;
+
+      CAGradientLayer *gradient = [CAGradientLayer layer];
+      gradient.cornerRadius = cornerRadius;
+      gradient.frame = _flash.bounds;
+      gradient.colors = [NSArray arrayWithObjects:
+        (id)[[UIColor colorWithRed:218.0/255.0 green:218.0/255.0 blue:218.0/255.0 alpha:1.0f] CGColor],
+        (id)[[UIColor colorWithRed:233.0/255.0 green:233.0/255.0 blue:233.0/255.0 alpha:1.0f] CGColor],
+        (id)[[UIColor colorWithRed:218.0/255.0 green:218.0/255.0 blue:218.0/255.0 alpha:1.0f] CGColor],
+        nil];
+      [_flash.layer insertSublayer:gradient atIndex:0];
+
+      _flash_text = [[UILabel alloc] initWithFrame: CGRectMake(10, 0, flashWidth-20, 30)];
+      _flash_text.font = [UIFont boldSystemFontOfSize:18.0];
+      _flash_text.autoresizingMask = _flash.autoresizingMask;
+      _flash_text.textAlignment = NSTextAlignmentCenter;
+      [_flash addSubview: _flash_text];
+
+    } else {
+      self.alert   = [UIAlertController
+        alertControllerWithTitle: LFL::MakeNSString(kv[1].first)
+        message:                  LFL::MakeNSString(kv[1].second)
+        preferredStyle:           UIAlertControllerStyleAlert];
+      
+      if ((_add_text = _style == "textinput")) {
+        [_alert addTextFieldWithConfigurationHandler:^(UITextField *textField) {
+        }];
+      } else if ((_add_text = _style == "pwinput")) {
+        [_alert addTextFieldWithConfigurationHandler:^(UITextField *textField) {
+          textField.secureTextEntry = YES;
+        }];
+      }
+      
+      if (!kv[2].first.empty()) {
+        UIAlertAction *a = [UIAlertAction
+          actionWithTitle: LFL::MakeNSString(kv[2].first)
+          style:           UIAlertActionStyleCancel
+          handler:         ^(UIAlertAction *action) {
+            _done = true;
+            if (_cancel_cb) _cancel_cb("");
+          }];
+        [_alert addAction:a];
+      }
+      
+      if (!kv[3].first.empty()) {
+        UIAlertAction *a = [UIAlertAction
+          actionWithTitle: LFL::MakeNSString(kv[3].first)
+          style:           UIAlertActionStyleDefault
+          handler:         ^(UIAlertAction *action) {
+            _done = true;
+            if (_confirm_cb) _confirm_cb(_add_text ? LFL::GetNSString(_alert.textFields[0].text) : "");
+          }];
+        [_alert addAction:a];
+      }
+    }
+
+    return self;
+  }
+
+  - (void)show: (bool)show_or_hide {
+    LFUIApplication *uiapp = [LFUIApplication sharedAppDelegate];
+    _done = !show_or_hide;
+    if (_flash) [_flash removeFromSuperview];
+    if (show_or_hide) {
+      if (!_flash) [uiapp.top_controller presentViewController:_alert animated:YES completion:nil];
+      else [uiapp.top_controller.view addSubview: _flash];
+    } else if (!_flash) [_alert dismissViewControllerAnimated:YES completion:nil];
+  }
+@end
+
+@interface IOSMenu : NSObject<UIActionSheetDelegate>
+  {
+    std::vector<LFL::MenuItem> menu;
+  }
+  @property (nonatomic, retain) UIActionSheet *actions;
+@end
+
+@implementation IOSMenu
+  - (id)init:(const std::string&)title_text items:(LFL::MenuItemVec)item {
+    self = [super init];
+    menu = move(item);
+    NSString *title = LFL::MakeNSString(title_text);
+    _actions = [[UIActionSheet alloc] initWithTitle:title delegate:self
+      cancelButtonTitle:@"Cancel" destructiveButtonTitle:nil otherButtonTitles:nil];
+    for (auto &i : menu) [_actions addButtonWithTitle: LFL::MakeNSString(i.name)];
+    return self;
+  }
+
+  - (void)actionSheet:(UIActionSheet *)actions clickedButtonAtIndex:(NSInteger)buttonIndex {
+    if (buttonIndex < 1 || buttonIndex > menu.size()) { ERRORf("invalid buttonIndex %d size=%d", buttonIndex, menu.size()); return; }
+    if (menu[buttonIndex-1].cb) menu[buttonIndex-1].cb();
+  }
+@end
+
 namespace LFL {
 struct iOSFrameworkModule : public Module {
   int Init() {
@@ -789,6 +1016,46 @@ struct iOSAssetLoader : public SimpleAssetLoader {
 
   virtual void LoadAudio(void *handle, SoundAsset *a, int seconds, int flag) { a->handle = handle; }
   virtual int RefillAudio(SoundAsset *a, int reset) { return 0; }
+};
+
+struct iOSAlertView : public AlertViewInterface {
+  IOSAlert *alert;
+  ~iOSAlertView() { [alert release]; }
+  iOSAlertView(AlertItemVec items) : alert([[IOSAlert alloc] init: move(items)]) {}
+
+  void Hide() { [alert show: false]; }
+  void Show(const string &arg) {
+    if (alert.add_text) alert.alert.textFields[0].text = MakeNSString(arg);
+    [alert show: true];
+  }
+
+  void ShowCB(const string &title, const string &msg, const string &arg, StringCB confirm_cb) {
+    alert.confirm_cb = move(confirm_cb);
+    if (alert.flash) alert.flash_text.text = LFL::MakeNSString(title);
+    else {
+      alert.alert.title = MakeNSString(title);
+      alert.alert.message = MakeNSString(msg);
+    }
+    Show(arg);
+  }
+
+  string RunModal(const string &arg) {
+    if (alert.add_text) alert.alert.textFields[0].text = MakeNSString(arg);
+    alert.done = false;
+    [alert show: true];
+    NSRunLoop *rl = [NSRunLoop currentRunLoop];
+    // do { [rl runMode:NSRunLoopCommonModes beforeDate:[NSDate distantFuture]]; }
+    do { [rl runMode:NSRunLoopCommonModes beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.3]]; }
+    while(!alert.done);
+    return alert.add_text ? GetNSString(alert.alert.textFields[0].text) : "";
+  }
+};
+
+struct iOSMenuView : public MenuViewInterface {
+  IOSMenu *menu;
+  ~iOSMenuView() { [menu release]; }
+  iOSMenuView(const string &t, MenuItemVec i) : menu([[IOSMenu alloc] init:t items:move(i)]) {}
+  void Show() { [menu.actions showInView: [UIApplication sharedApplication].keyWindow]; }
 };
 
 int Application::Suspended() { return 0; }
@@ -837,6 +1104,34 @@ void Application::SetPanRecognizer(bool enabled) { [[LFUIApplication sharedAppDe
 void Application::SetPinchRecognizer(bool enabled) { [[LFUIApplication sharedAppDelegate].controller initPinchGestureRecognizers]; }
 void Application::ShowSystemStatusBar(bool v) { [[LFUIApplication sharedAppDelegate].controller showStatusBar:v]; }
 void Application::SetTheme(const string &v) {}
+
+void Application::ShowSystemFontChooser(const FontDesc &cur_font, const StringVecCB &cb) {
+  static IOSFontPicker *font_chooser = [[IOSFontPicker alloc] initWithTheme: "Light"];
+  [font_chooser selectFont:cur_font.name size:cur_font.size cb:cb];
+  [[LFUIApplication sharedAppDelegate].glk_view addSubview: font_chooser];
+}
+
+void Application::ShowSystemContextMenu(const MenuItemVec &items) {
+  auto uiapp = [LFUIApplication sharedAppDelegate];
+  UIMenuController* mc = [UIMenuController sharedMenuController];
+  vector<UIMenuItem*> menuitems;
+  for (auto &i : items) {
+    if      (i.name == "Copy") { uiapp.glk_view.copy_cb = i.cb; continue; }
+    else if (i.name == "Keyboard") {
+      string title = [[LFUIApplication sharedAppDelegate] isKeyboardFirstResponder] ? "Hide Keyboard" : "Show Keyboard";
+      UIMenuItem *mi = [[UIMenuItem alloc] initWithTitle: MakeNSString(title) action:@selector(toggleKeyboard:)];
+      menuitems.push_back(mi);
+    }
+  }
+  if (menuitems.size())
+    mc.menuItems = [NSArray arrayWithObjects:&menuitems[0] count:menuitems.size()];
+
+  auto w = app->focused;
+  float s = [uiapp getScale];
+  CGRect rect = CGRectMake(w->mouse.x / s, (w->height + w->y - w->mouse.y) / s, w->default_font->Height(), 100);
+  [mc setTargetRect:rect inView:dynamic_cast<iOSWindow*>(w)->glkview];
+  [mc setMenuVisible:![mc isMenuVisible] animated:TRUE];
+}
 
 void iOSWindow::SetResizeIncrements(float x, float y) {}
 void iOSWindow::SetTransparency(float v) {}
@@ -906,6 +1201,10 @@ Application *CreateApplication(int ac, const char* const* av) { return new Appli
 unique_ptr<Module> CreateFrameworkModule() { return make_unique<iOSFrameworkModule>(); }
 unique_ptr<AssetLoaderInterface> CreateAssetLoader() { return make_unique<iOSAssetLoader>(); }
 unique_ptr<TimerInterface> SystemToolkit::CreateTimer(Callback cb) { return make_unique<AppleTimer>(move(cb)); }
+unique_ptr<AlertViewInterface> SystemToolkit::CreateAlert(AlertItemVec items) { return make_unique<iOSAlertView>(move(items)); }
+unique_ptr<PanelViewInterface> SystemToolkit::CreatePanel(const Box &b, const string &title, PanelItemVec items) { return nullptr; }
+unique_ptr<MenuViewInterface> SystemToolkit::CreateMenu(const string &title, MenuItemVec items) { return make_unique<iOSMenuView>(title, move(items)); }
+unique_ptr<MenuViewInterface> SystemToolkit::CreateEditMenu(vector<MenuItem> items) { return nullptr; }
 
 extern "C" int main(int ac, const char* const* av) {
   ios_argc = ac;

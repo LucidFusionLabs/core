@@ -118,9 +118,7 @@ public class Toolbar implements com.lucidfusionlabs.core.ViewOwner {
             } else {
                 if (shown_index < 0) Log.e("lfl", "Hide unshown toolbar");
                 else {
-                    int size = activity.screens.toolbar_bottom.size();
-                    if (shown_index != size-1) Log.e("lfl", "Hide shown_index=" + shown_index + " size=" + size);
-                    if (size > 0) activity.screens.toolbar_bottom.remove(size-1);
+                    activity.screens.toolbar_bottom.remove(Toolbar.this);
                     ViewParent parent = toolbar.getParent();
                     if (parent != null && parent instanceof ViewGroup) ((ViewGroup)parent).removeView(toolbar);
                     else Log.e("lfl", "Hide toolbar without parent shown_index=" + shown_index);

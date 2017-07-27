@@ -1088,7 +1088,7 @@ struct GameMenuGUI : public View, public Connection::Handler {
 
       if (sub_selected == 1) {
 #ifdef LFL_ANDROID
-        Scissor s(screen->gd, *menuflow.container);
+        Scissor s(root->gd, *menuflow.container);
         bool gplus_signedin = gplus->GetSignedIn();
         if (!gplus_signedin) LayoutGPlusSigninButton(&menuflow, gplus_signedin);
         else {

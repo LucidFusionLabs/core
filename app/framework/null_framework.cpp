@@ -71,6 +71,22 @@ struct NullFrameworkModule : public Module {
   }
 };
 
+struct NullAlertView : public AlertViewInterface {
+  void Hide() {}
+  void Show(const string &arg) {}
+  void ShowCB(const string &title, const string &msg, const string &arg, StringCB confirm_cb) {}
+  string RunModal(const string &arg) { return string(); }
+};
+
+struct NullMenuView : public MenuViewInterface {
+  void Show() {}
+};
+
+struct NullPanelView : public PanelViewInterface {
+  void Show() {}
+  void SetTitle(const string &title) {}
+};
+
 int Application::Suspended() { return 0; }
 void Application::RunCallbackInMainThread(Callback cb) {
   message_queue.Write(new Callback(move(cb)));
@@ -100,6 +116,9 @@ void Application::CloseTouchKeyboardAfterReturn(bool v) {}
 void Application::SetTouchKeyboardTiled(bool v) {}
 void Application::SetAutoRotateOrientation(bool v) {}
 void Application::ShowSystemStatusBar(bool v) {}
+void Application::ShowSystemFontChooser(const FontDesc &cur_font, const StringVecCB&) {}
+void Application::ShowSystemFileChooser(bool files, bool dirs, bool multi, const StringVecCB&) {}
+void Application::ShowSystemContextMenu(const vector<MenuItem>&items) {}
 void Application::SetKeepScreenOn(bool v) {}
 void Application::SetTheme(const string &v) {}
 
@@ -133,5 +152,9 @@ Window *Window::Create() { return new NullWindow(); }
 Application *CreateApplication(int ac, const char* const* av) { return new Application(ac, av); }
 unique_ptr<Module> CreateFrameworkModule() { return unique_ptr<NullFrameworkModule>(); }
 unique_ptr<TimerInterface> SystemToolkit::CreateTimer(Callback cb) { return nullptr; }
+unique_ptr<AlertViewInterface> SystemToolkit::CreateAlert(AlertItemVec items) { return make_unique<NullAlertView>(); }
+unique_ptr<PanelViewInterface> SystemToolkit::CreatePanel(const Box &b, const string &title, PanelItemVec items) { return nullptr; }
+unique_ptr<MenuViewInterface> SystemToolkit::CreateMenu(const string &title, MenuItemVec items) { return make_unique<NullMenuView>(); }
+unique_ptr<MenuViewInterface> SystemToolkit::CreateEditMenu(vector<MenuItem> items) { return nullptr; }
 
 }; // namespace LFL
