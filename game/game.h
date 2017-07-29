@@ -894,11 +894,12 @@ struct GameMenuGUI : public View, public Connection::Handler {
 #endif
   Browser browser;
   unique_ptr<AdvertisingViewInterface> ads;
+  unique_ptr<TableView> singleplayer;
   MenuParticles particles;
   Entity *cam=0;
 
-  GameMenuGUI(Window *W, const string &master_url, int port, Texture *Title=0) :
-    View(W), topbar(W), pinger(-1), master_get_url(master_url), title(Title),
+  GameMenuGUI(Window *W, const string &master_url, int port, GameSettings *Settings=0, Texture *Title=0) :
+    View(W), settings(Settings), topbar(W), pinger(-1), master_get_url(master_url), title(Title),
     font       (FontDesc(FLAGS_font,                 "", 12, Color::grey80)),
     bright_font(FontDesc(FLAGS_font,                 "", 12, Color::white)),
     glow_font  (FontDesc(StrCat(FLAGS_font, "Glow"), "", 12)),
@@ -954,6 +955,12 @@ struct GameMenuGUI : public View, public Connection::Handler {
     SystemNetwork::SetSocketBroadcastEnabled(pinger.GetListener()->socket, true);
     Sniffer::GetIPAddress(&ip);
     Sniffer::GetBroadcastAddress(&broadcast_ip);
+
+    {
+      TableItemVec v;
+      for (auto &i : settings->vec) v.emplace_back(i.key, TableItem::TextInput, i.value->Cur());
+      singleplayer = make_unique<TableView>(root, "Single Player", "", "", move(v));
+    }
   }
 
   void EnableParticles(Entity *c, Texture *parts) {
@@ -1131,9 +1138,9 @@ struct GameMenuGUI : public View, public Connection::Handler {
       }
     }
     if (my_selected == 1) {
+#if 1
       menuflow.AppendNewline();
       if (settings) {
-        Scissor s(root->gd, *menuflow.container);
         for (GameSettings::Vector::iterator i = settings->vec.begin(); i != settings->vec.end(); ++i) {
           if (DecayBoxIfMatch(line_clicked, menuflow.out->line.size())) i->value->Next();
           menuflow.AppendText(0,  i->key + ":");
@@ -1141,6 +1148,9 @@ struct GameMenuGUI : public View, public Connection::Handler {
           menuflow.AppendNewlines(1);
         }
       }
+#else
+      singleplayer->AppendFlow(&menuflow);
+#endif
       tab1_server_start.LayoutBox(&menuflow, bright_font, Box(box.w*.2, -box.h*.8, box.w*.6, box.h*.1));
     }
     if (my_selected == 3) {

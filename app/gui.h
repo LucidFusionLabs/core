@@ -897,20 +897,27 @@ struct HelperView : public View {
 };
 
 struct ToolbarView : public View, public ToolbarViewInterface {
+  MenuItemVec data;
+  string theme;
   ToolbarView(Window *w, const string &theme, MenuItemVec items);
+
   void Layout();
   void Draw();
 
   void Show(bool show_or_hide);
   void ToggleButton(const string &n);
   void SetTheme(const string &theme);
-  string GetTheme();
+  string GetTheme() { return theme; }
 };
 
 struct TableView : public View, public TableViewInterface {
+  vector<TableSection> data;
+  string title, style, theme;
   TableView(Window *w, const string &title, const string &style, const string &theme, TableItemVec items);
+
   void Layout();
   void Draw();
+  void AppendFlow(Flow *flow);
 
   void DelNavigationButton(int id);
   void AddNavigationButton(int id, const TableItem &item);
@@ -945,7 +952,9 @@ struct TableView : public View, public TableViewInterface {
 };
 
 struct NavigationView : public View, public NavigationViewInterface {
+  string style, theme;
   NavigationView(Window *w, const string &style, const string &theme);
+
   void Layout();
   void Draw();
 
@@ -959,7 +968,7 @@ struct NavigationView : public View, public NavigationViewInterface {
   void SetTheme(const string &theme);
 };
 
-struct Toolkit {
+struct Toolkit : public ToolkitInterface {
   unique_ptr<AlertViewInterface> CreateAlert(AlertItemVec items);
   unique_ptr<PanelViewInterface> CreatePanel(const Box&, const string &title, PanelItemVec);
   unique_ptr<ToolbarViewInterface> CreateToolbar(const string &theme, MenuItemVec items, int flag);

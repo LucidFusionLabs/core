@@ -58,6 +58,7 @@ public class ModelItemRecyclerViewAdapter
         public TextView textView, label, subtext, leftNav, rightNav;
         public ColorStateList textViewTextColors, textViewLinkColors, subtextTextColors;
         public EditText editText;
+        public TextWatcher editTextListener;
         public ImageView leftIcon, rightIcon, removeIcon;
         public LinearLayout titleRoot;
         public RelativeLayout separator;
@@ -97,19 +98,7 @@ public class ModelItemRecyclerViewAdapter
     public NativeIntIntCB delete_row_cb;
     public RecyclerView recyclerview;
     public com.lucidfusionlabs.core.ViewOwner toolbar, advertising;
-
-    ItemTouchHelper itemtouchhelper = new ItemTouchHelper(new ItemTouchHelperCallback(this));
-
-    TextWatcher text_listener = new TextWatcher() {
-        @Override
-        public void onTextChanged(CharSequence s, int start, int before, int count) {
-            parent_screen.changed = true;
-        }
-        @Override
-        public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-        @Override
-        public void afterTextChanged(android.text.Editable s) {}
-    };
+    public ItemTouchHelper itemtouchhelper = new ItemTouchHelper(new ItemTouchHelperCallback(this));
 
     public ModelItemRecyclerViewAdapter(final TableScreen p, final ArrayList<ModelItem> d) {
         parent_screen = p;
@@ -389,11 +378,18 @@ public class ModelItemRecyclerViewAdapter
         }
 
         if (holder.editText != null) {
-            holder.editText.removeTextChangedListener(text_listener);
+            holder.editText.removeTextChangedListener(holder.editTextListener);
             if (item.val.length() > 0 && item.val.charAt(0) == 1) { holder.editText.setText(""); holder.editText.setHint(item.val.substring(1)); }
             else                                                  { holder.editText.setText(item.val); holder.editText.setHint(""); }
             holder.editText.setInputType(InputType.TYPE_CLASS_TEXT | (type == ModelItem.TYPE_PASSWORDINPUT ? InputType.TYPE_TEXT_VARIATION_PASSWORD : 0));
-            holder.editText.addTextChangedListener(text_listener);
+            holder.editTextListener = new TextWatcher() {
+                @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
+                @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+                @Override public void afterTextChanged(android.text.Editable s) {
+                    parent_screen.changed = true;
+                    if (item.right_cb != null) item.right_cb.run(holder.editText.getText().toString());
+                }};
+            holder.editText.addTextChangedListener(holder.editTextListener);
         }
 
         switch (type) {

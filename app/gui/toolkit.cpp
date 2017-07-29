@@ -19,15 +19,18 @@
 #include "core/app/gui.h"
 
 namespace LFL {
-ToolbarView::ToolbarView(Window *w, const string &theme, MenuItemVec items) : View(w) {}
+ToolbarView::ToolbarView(Window *w, const string &t, MenuItemVec items) :
+  View(w), data(move(items)), theme(t) {}
+
 void ToolbarView::Show(bool show_or_hide) {}
 void ToolbarView::ToggleButton(const string &n) {}
-void ToolbarView::SetTheme(const string &theme) {}
-string ToolbarView::GetTheme() { return ""; }
+void ToolbarView::SetTheme(const string &t) { theme=t; }
 void ToolbarView::Layout() {}
 void ToolbarView::Draw() {}
 
-TableView::TableView(Window *w, const string &title, const string &style, const string &theme, TableItemVec items) : View(w) {}
+TableView::TableView(Window *w, const string &t, const string &s, const string &th, TableItemVec items) :
+  View(w), data(TableSection::Convert(move(items))), title(t), style(s), theme(th) {}
+
 void TableView::DelNavigationButton(int id) {}
 void TableView::AddNavigationButton(int id, const TableItem &item) {}
 void TableView::SetToolbar(ToolbarViewInterface*) {}
@@ -56,10 +59,20 @@ void TableView::SetHidden(int section, int row, int val) {}
 void TableView::SetColor(int section, int row, const Color &val) {}
 void TableView::SetTitle(const string &title) {}
 void TableView::SetTheme(const string &theme) {}
+
 void TableView::Layout() {}
 void TableView::Draw() {}
+void TableView::AppendFlow(Flow *flow) {
+  flow->AppendNewline();
+  for (auto &s : data)
+    for (auto &i : s.item) {
+      flow->AppendText(0,  i.key + ":");
+      flow->AppendText(.6, i.val);
+      flow->AppendNewlines(1);
+    }
+}
 
-NavigationView::NavigationView(Window *w, const string &style, const string &theme) : View(w) {}
+NavigationView::NavigationView(Window *w, const string &s, const string &t) : View(w) {}
 TableViewInterface *NavigationView::Back() { return nullptr; }
 void NavigationView::Show(bool show_or_hide) {}
 void NavigationView::PushTableView(TableViewInterface*) {}

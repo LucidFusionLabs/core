@@ -219,7 +219,8 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity
 
     public String getFilesDirCanonicalPath() {
         try {
-            return getFilesDir().getCanonicalPath();
+            // return getFilesDir().getCanonicalPath();
+            return getExternalFilesDir(null).getCanonicalPath();
         } catch (final Exception e) { Log.e("lfl", e.toString()); return ""; }
     }
 
