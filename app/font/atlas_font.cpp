@@ -16,7 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "core/app/gui.h"
+#include "core/app/gl/view.h"
 
 namespace LFL {
 extern FlagOfType<string> FLAGS_font_engine_;

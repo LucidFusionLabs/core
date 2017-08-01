@@ -22,7 +22,6 @@ import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.content.pm.ActivityInfo;
 import android.hardware.*;
-import android.util.Log;
 import android.util.Pair;
 import android.util.TypedValue;
 import android.net.Uri;

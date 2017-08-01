@@ -1,5 +1,5 @@
 /*
- * $Id: gui.h 1336 2014-12-08 09:29:59Z justin $
+ * $Id: view.h 1336 2014-12-08 09:29:59Z justin $
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef LFL_CORE_APP_GUI_H__
-#define LFL_CORE_APP_GUI_H__
+#ifndef LFL_CORE_APP_GL_VIEW_H__
+#define LFL_CORE_APP_GL_VIEW_H__
 
 #include "core/app/flow.h"
 
@@ -29,7 +29,7 @@ DECLARE_string(console_font);
 DECLARE_int(console_font_flag);
 DECLARE_FLAG(testbox, Box);
 
-struct View {
+struct View : public Drawable {
   Window *root;
   Box box;
   DrawableBoxArray child_box;
@@ -53,8 +53,9 @@ struct View {
   virtual bool ToggleActive() { if ((active = !active)) Activate(); else Deactivate(); return active; }
   virtual point RelativePosition(const point &p) const { return p - box.TopLeft(); }
   virtual void SetLayoutDirty() { child_box.Clear(); }
-  virtual void Layout(const Box &b) { box=b; Layout(); }
+  virtual void LayoutBox(const Box &b) { box=b; Layout(); }
   virtual void Layout() {}
+  virtual void Draw(GraphicsContext*, const LFL::Box&) const { const_cast<View*>(this)->Draw(); }
   virtual void Draw();
   virtual void ResetGL(int flag) {}
   virtual void HandleTextMessage(const string &s) {}
@@ -530,187 +531,6 @@ struct DirectoryTree : public PropertyTree {
   virtual void HandleCollapsed(Id id) { tree.Erase(id-1); }
 };
 
-struct Editor : public TextView {
-  struct LineOffset { 
-    long long file_offset=-1;
-    int file_size=0, wrapped_lines=0, annotation_ind=-1, main_tu_line=-1, next_tu_line=-1;
-    SyntaxMatch::ListPointer syntax_region_start_parent={0,0}, syntax_region_end_parent={0,0};
-    vector<SyntaxMatch::State> syntax_region_start_sig, syntax_region_end_sig;
-    vector<SyntaxMatch::List> syntax_region_ancestor_list_storage;
-    bool colored=0;
-    LineOffset(int O=0, int S=0, int WL=1, int AI=-1) :
-      file_offset(O), file_size(S), wrapped_lines(WL), annotation_ind(AI) {}
-
-    static string GetString(const LineOffset *v) { return StrCat(v->file_offset); }
-    static int    GetLines (const LineOffset *v) { return v->wrapped_lines; }
-    static int VectorGetLines(const vector<LineOffset> &v, int i) { return v[i].wrapped_lines; }
-  };
-  typedef PrefixSumKeyedRedBlackTree<int, LineOffset> LineMap;
-  struct SyntaxColors : public Colors, public SyntaxStyleInterface {
-    struct Rule { string name; Color fg, bg; int style; };
-    string name;
-    vector<Color> color;
-    unordered_map<string, int> style;
-    SyntaxColors(const string &n, const vector<Rule>&);
-    virtual const Color *GetColor(int n) const { CHECK_RANGE(n, 0, color.size()); return &color[n]; }
-    virtual int GetSyntaxStyle(const string &n, int da) { return FindOrDefault(style, n, da); }
-    const Color *GetFGColor(const string &n) { return GetColor(Style::GetFGColorIndex(GetSyntaxStyle(n, SetDefaultAttr(0)))); }
-    const Color *GetBGColor(const string &n) { return GetColor(Style::GetBGColorIndex(GetSyntaxStyle(n, SetDefaultAttr(0)))); }
-  };
-  struct Base16DefaultDarkSyntaxColors : public SyntaxColors { Base16DefaultDarkSyntaxColors(); };
-  struct Modification { point p; bool erase; String16 data; };
-  struct VersionNumber {
-    int major, offset;
-    bool operator==(const VersionNumber &x) const { return major == x.major && offset == x.offset; }
-    bool operator!=(const VersionNumber &x) const { return major != x.major || offset != x.offset; }
-  };
-
-  shared_ptr<File> file;
-  LineMap file_line;
-  FreeListVector<String16> edits;
-  Time modified=Time(0);
-  Callback modified_cb, newline_cb, tab_cb;
-  vector<Modification> version;
-  VersionNumber version_number={0,0}, saved_version_number={0,0}, cached_text_version_number={-1,0};
-  function<const DrawableAnnotation*(const LineMap::Iterator&, const String16&, bool, int, int)> annotation_cb;
-  shared_ptr<BufferFile> cached_text;
-  Line *cursor_glyphs=0;
-  LineOffset *cursor_offset=0;
-  int cursor_anchor=0, cursor_line_index=0, cursor_start_line_number=0, cursor_start_line_number_offset=0;
-  int syntax_parsed_anchor=0, syntax_parsed_line_index=0;
-  bool opened=0;
-  virtual ~Editor();
-  Editor(Window *W, const FontRef &F=FontRef(), File *I=0);
-
-  bool Init(File *I) { return (opened = (file = shared_ptr<File>(I)) && I->Opened()); }
-  void Input(char k)  { Modify(k,    false); }
-  void Enter()        { Modify('\n', false); }
-  void Erase()        { Modify(0,    true); }
-  void CursorLeft()   { UpdateCursorX(max(cursor.i.x-1, 0)); }
-  void CursorRight()  { UpdateCursorX(min(cursor.i.x+1, CursorGlyphsSize())); }
-  void Home()         { UpdateCursorX(0); }
-  void End()          { UpdateCursorX(CursorGlyphsSize()); }
-  void Tab()          { if (tab_cb) tab_cb(); }
-  void HistUp();
-  void HistDown();
-  void SelectionCB(const Selection::Point&);
-  bool Empty() const { return !file_line.size(); }
-  void UpdateMapping(int width, int flag=0);
-  int UpdateMappedLines(pair<int, int>, bool, bool, bool, bool, bool);
-  int UpdateLines(float vs, int *first_ind, int *first_offset, int *first_len);
-
-  int CursorGlyphsSize() const { return cursor_glyphs ? cursor_glyphs->Size() : 0; }
-  uint16_t CursorGlyph() const { String16 v = CursorLineGlyphs(cursor.i.x, 1); return v.empty() ? 0 : v[0]; }
-  String16 CursorLineGlyphs(size_t o, size_t l) const { return cursor_glyphs ? cursor_glyphs->data->glyphs.Text16(o, l) : String16(); }
-  void MarkCursorLineFirstDirty() { syntax_parsed_line_index=cursor_line_index; syntax_parsed_anchor=cursor_anchor; }
-  const String16 *ReadLine(const Editor::LineMap::Iterator &ui, String16 *buf);
-  void SetWrapMode(const string &n);
-  void SetShouldWrap(bool v, bool word_break);
-  void UpdateCursor();
-  void UpdateCursorLine();
-  void UpdateCursorX(int x);
-  int CursorLinesChanged(const String16 &b, int add_lines=0);
-  int ModifyCursorLine();
-  void Modify(char16_t, bool erase, bool undo_or_redo=false);
-  int Save();
-  int SaveTo(File *out);
-  bool CacheModifiedText(bool force=false);
-  void RecordModify(const point &p, bool erase, char16_t c);
-  bool WalkUndo(bool backwards);
-  bool ScrollTo(int line_index, int x);
-};
-
-struct Terminal : public TextArea {
-  struct State { enum { TEXT=0, ESC=1, CSI=2, OSC=3, CHARSET=4 }; };
-  struct ByteSink {
-    virtual ~ByteSink() {}
-    virtual int Write(const StringPiece &b) = 0;
-    virtual void IOCtlWindowSize(int w, int h) {}
-  };
-  struct Controller : public ByteSink {
-    bool ctrl_down=0, alt_down=0, frame_on_keyboard_input=0;
-    virtual ~Controller() {}
-    virtual int Open(TextArea*) = 0;
-    virtual StringPiece Read() = 0;
-    virtual void Close() {}
-    virtual void Dispose() {}
-  };
-  struct TerminalColors : public Colors {
-    Color c[16 + 3];
-    TerminalColors() { normal_index=16; bold_index=17; background_index=18; }
-    const Color *GetColor(int n) const { CHECK_RANGE(n, 0, sizeofarray(c)); return &c[n]; }
-  };
-  struct StandardVGAColors       : public TerminalColors { StandardVGAColors(); };
-  struct SolarizedDarkColors     : public TerminalColors { SolarizedDarkColors(); };
-  struct SolarizedLightColors    : public TerminalColors { SolarizedLightColors(); };
-
-  ByteSink *sink=0;
-  int term_width=0, term_height=0, parse_state=State::TEXT;
-  int scroll_region_beg=0, scroll_region_end=0, tab_width=8;
-  string parse_text, parse_csi, parse_osc;
-  unsigned char parse_charset=0;
-  bool parse_osc_escape=0, first_resize=1, newline_mode=0;
-  char erase_char = 0x7f, enter_char = '\r'; 
-  point term_cursor=point(1,1), saved_term_cursor=point(1,1);
-  LinesFrameBuffer::FromLineCB fb_cb;
-  LinesFrameBuffer *last_fb=0;
-  Border clip_border;
-  set<int> tab_stop;
-
-  Terminal(ByteSink *O, Window *W, const FontRef &F=FontRef(), const point &dim=point(1,1));
-  virtual ~Terminal() {}
-  virtual void Resized(const Box &b, bool font_size_changed=false);
-  virtual void ResizedLeftoverRegion(int w, int h, bool update_fb=true);
-  virtual void SetScrollRegion(int b, int e, bool release_fb=false);
-  virtual void SetTerminalDimension(int w, int h);
-  virtual void Draw(const Box &b, int flag=DrawFlag::Default, Shader *shader=0);
-  virtual void Write(const StringPiece &s, bool update_fb=true, bool release_fb=true);
-  virtual void Input(char k) {                       sink->Write(StringPiece(&k, 1)); }
-  virtual void Erase      () {                       sink->Write(StringPiece(&erase_char, 1)); }
-  virtual void Enter      () {                       sink->Write(StringPiece(&enter_char, 1)); }
-  virtual void Tab        () { char k = '\t';        sink->Write(StringPiece(&k, 1)); }
-  virtual void Escape     () { char k = 0x1b;        sink->Write(StringPiece(&k, 1)); }
-  virtual void HistUp     () { char k[] = "\x1bOA";  sink->Write(StringPiece( k, 3)); }
-  virtual void HistDown   () { char k[] = "\x1bOB";  sink->Write(StringPiece( k, 3)); }
-  virtual void CursorRight() { char k[] = "\x1bOC";  sink->Write(StringPiece( k, 3)); }
-  virtual void CursorLeft () { char k[] = "\x1bOD";  sink->Write(StringPiece( k, 3)); }
-  virtual void PageUp     () { char k[] = "\x1b[5~"; sink->Write(StringPiece( k, 4)); }
-  virtual void PageDown   () { char k[] = "\x1b[6~"; sink->Write(StringPiece( k, 4)); }
-  virtual void Home       () { char k[] = "\x1bOH";  sink->Write(StringPiece( k, 3)); }
-  virtual void End        () { char k[] = "\x1bOF";  sink->Write(StringPiece( k, 3)); }
-  virtual void MoveToOrFromScrollRegion(LinesFrameBuffer *fb, Line *l, const point &p, int flag);
-  // virtual int UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int *first_len) { return 0; }
-  virtual void UpdateCursor() { cursor.p = point(GetCursorX(term_cursor.x, term_cursor.y), GetCursorY(term_cursor.y)); }
-  virtual void UpdateToken(Line*, int word_offset, int word_len, int update_type, const TokenProcessor<DrawableBox>*);
-  virtual bool GetGlyphFromCoords(const point &p, Selection::Point *out) { return GetGlyphFromCoordsOffset(p, out, clip ? 0 : start_line, 0); }
-  virtual void ScrollUp  () { TextArea::PageDown(); }
-  virtual void ScrollDown() { TextArea::PageUp(); }
-  int GetFrameY(int y) const;
-  int GetCursorY(int y) const;
-  int GetCursorX(int x, int y) const;
-  int GetTermLineIndex(int y) const { return -term_height + y-1; }
-  const Line *GetTermLine(int y) const { return &line[GetTermLineIndex(y)]; }
-  /**/  Line *GetTermLine(int y)       { return &line[GetTermLineIndex(y)]; }
-  Line *GetCursorLine() { return GetTermLine(term_cursor.y); }
-  LinesFrameBuffer *GetPrimaryFrameBuffer()   { return line_fb.Attach(&last_fb); }
-  LinesFrameBuffer *GetSecondaryFrameBuffer() { return cmd_fb .Attach(&last_fb); }
-  LinesFrameBuffer *GetFrameBuffer(const Line *l);
-  void PushBackLines (int n) { TextArea::Write(string(n, '\n'), true, false); }
-  void PushFrontLines(int n) { for (int i=0; i<n; ++i) LineUpdate(line.InsertAt(-term_height, 1, start_line_adjust), GetPrimaryFrameBuffer(), LineUpdate::PushFront); }
-  point GetCursorPosition() const { return point(0, -scrolled_lines * style.font->Height()) + cursor.p; }
-  Border *UpdateClipBorder();
-  void MoveLines(int sy, int ey, int dy, bool move_fb_p);
-  void Scroll(int sl);
-  void FlushParseText();
-  void Newline(bool carriage_return=false);
-  void NewTopline();
-  void TabNext(int n);
-  void TabPrev(int n);
-  void Redraw(bool attach=true, bool relayout=false);
-  void ResetTerminal();
-  void ClearTerminal();
-};
-
 struct Console : public TextArea {
   Color color=Color(25,60,130,120);
   Callback animating_cb;
@@ -853,7 +673,7 @@ template <class X> struct TextViewDialogT  : public Dialog {
     if (1)     view.UpdateScrolled();
     if (1)     Dialog::Draw();
     if (1)     view.Draw(content + box.TopLeft(), TextArea::DrawFlag::CheckResized |
-                         (view.cursor_enabled ? Editor::DrawFlag::DrawCursor : 0));
+                         (view.cursor_enabled ? TextArea::DrawFlag::DrawCursor : 0));
     if (1)     v_scrollbar.Update();
     if (!wrap) h_scrollbar.Update();
   }
@@ -867,15 +687,6 @@ struct PropertyTreeDialog : public TextViewDialogT<PropertyTree> {
 
 struct DirectoryTreeDialog : public TextViewDialogT<DirectoryTree> {
   using TextViewDialogT::TextViewDialogT;
-};
-
-struct EditorDialog : public TextViewDialogT<Editor> {
-  struct Flag { enum { Wrap=Dialog::Flag::Next }; };
-  EditorDialog(Window *W, const FontRef &F, File *I, float w=.5, float h=.5, int flag=0) :
-    TextViewDialogT(W, F, w, h, flag) {
-    if (I) { title_text = BaseName(I->Filename()); view.Init(I); }
-    view.line_fb.wrap = flag & Flag::Wrap; 
-  }
 };
 
 struct HelperView : public View {
@@ -896,90 +707,5 @@ struct HelperView : public View {
   void Draw();
 };
 
-struct ToolbarView : public View, public ToolbarViewInterface {
-  MenuItemVec data;
-  string theme;
-  ToolbarView(Window *w, const string &theme, MenuItemVec items);
-
-  void Layout();
-  void Draw();
-
-  void Show(bool show_or_hide);
-  void ToggleButton(const string &n);
-  void SetTheme(const string &theme);
-  string GetTheme() { return theme; }
-};
-
-struct TableView : public View, public TableViewInterface {
-  vector<TableSection> data;
-  string title, style, theme;
-  TableView(Window *w, const string &title, const string &style, const string &theme, TableItemVec items);
-
-  void Layout();
-  void Draw();
-  void AppendFlow(Flow *flow);
-
-  void DelNavigationButton(int id);
-  void AddNavigationButton(int id, const TableItem &item);
-  void SetToolbar(ToolbarViewInterface*);
-  void Show(bool show_or_hide);
-
-  string GetKey(int section, int row);
-  string GetValue(int section, int row);
-  int GetTag(int section, int row);
-  PickerItem *GetPicker(int section, int row);
-  StringPairVec GetSectionText(int section);
-
-  void BeginUpdates();
-  void EndUpdates();
-  void AddRow(int section, TableItem item);
-  void SelectRow(int section, int row);
-  void ReplaceRow(int section, int row, TableItem item);
-  void ReplaceSection(int section, TableItem header, int flag, TableItemVec item);
-  void ApplyChangeList(const TableSection::ChangeList&);
-  void SetSectionValues(int section, const StringVec&);
-  void SetSectionColors(int seciton, const vector<Color>&);
-  void SetSectionEditable(int section, int start_row, int skip_last_rows, IntIntCB cb=IntIntCB());
-  void SetHeader(int section, TableItem header);
-  void SetKey(int secton, int row, const string &key);
-  void SetTag(int section, int row, int val);
-  void SetValue(int section, int row, const string &val);
-  void SetSelected(int section, int row, int selected);
-  void SetHidden(int section, int row, int val);
-  void SetColor(int section, int row, const Color &val);
-  void SetTitle(const string &title);
-  void SetTheme(const string &theme);
-};
-
-struct NavigationView : public View, public NavigationViewInterface {
-  string style, theme;
-  NavigationView(Window *w, const string &style, const string &theme);
-
-  void Layout();
-  void Draw();
-
-  TableViewInterface *Back();
-  void Show(bool show_or_hide);
-  void PushTableView(TableViewInterface*);
-  void PushTextView(TextViewInterface*);
-  void PopView(int num=1);
-  void PopToRoot();
-  void PopAll();
-  void SetTheme(const string &theme);
-};
-
-struct Toolkit : public ToolkitInterface {
-  unique_ptr<AlertViewInterface> CreateAlert(AlertItemVec items);
-  unique_ptr<PanelViewInterface> CreatePanel(const Box&, const string &title, PanelItemVec);
-  unique_ptr<ToolbarViewInterface> CreateToolbar(const string &theme, MenuItemVec items, int flag);
-  unique_ptr<MenuViewInterface> CreateMenu(const string &title, MenuItemVec items);
-  unique_ptr<MenuViewInterface> CreateEditMenu(MenuItemVec items);
-  unique_ptr<TableViewInterface> CreateTableView
-    (const string &title, const string &style, const string &theme, TableItemVec items);
-  unique_ptr<TextViewInterface> CreateTextView(const string &title, File *file);
-  unique_ptr<TextViewInterface> CreateTextView(const string &title, const string &text);
-  unique_ptr<NavigationViewInterface> CreateNavigationView(const string &style, const string &theme);
-};
-
 }; // namespace LFL
-#endif // LFL_CORE_APP_GUI_H__
+#endif // LFL_CORE_APP_GL_VIEW_H__

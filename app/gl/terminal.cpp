@@ -16,7 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "core/app/gui.h"
+#include "core/app/gl/view.h"
+#include "core/app/gl/terminal.h"
 
 #ifdef  LFL_TERMINAL_DEBUG
 #define TerminalDebug(...) ERRORf(__VA_ARGS__)

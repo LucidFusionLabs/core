@@ -154,10 +154,10 @@ struct QtMenuView : public MenuViewInterface {
 };
 
 struct QtTableInterface {
-  vector<TableSection> data;
+  vector<TableSection<TableItem>> data;
   int data_rows=0;
   virtual ~QtTableInterface() {}
-  QtTableInterface(vector<TableSection> d) : data(move(d)) {}
+  QtTableInterface(vector<TableSection<TableItem>> d) : data(move(d)) {}
 
   void CheckExists(int section, int r) {
     CHECK_LT(section, data.size());
@@ -181,7 +181,7 @@ class QtStyledItemDelegate : public QStyledItemDelegate {
     if (1)                painter->drawLine(rect.bottomLeft(), rect.bottomRight());
     if (col == 1) {
       int section = -1, row = -1;
-      LFL::TableSection::FindSectionOffset(table->data, index.row(), &section, &row);
+      LFL::TableSection<TableItem>::FindSectionOffset(table->data, index.row(), &section, &row);
       if (row >= 0) {
         table->CheckExists(section, row);
         auto &ci = table->data[section].item[row];
@@ -220,7 +220,7 @@ class QtStyledItemDelegate : public QStyledItemDelegate {
     } else if (event->type() == QEvent::MouseButtonRelease) {
       int section = -1, row = -1;
       if (!(index.flags() & Qt::ItemIsEnabled)) return false;
-      LFL::TableSection::FindSectionOffset(table->data, index.row(), &section, &row);
+      LFL::TableSection<TableItem>::FindSectionOffset(table->data, index.row(), &section, &row);
       if (row < 0) return false;
       auto &ci = table->data[section].item[row];
 
@@ -244,7 +244,7 @@ class QtStyledItemDelegate : public QStyledItemDelegate {
     auto editor = static_cast<QLineEdit*>(editor_widget);
     editor->setPlaceholderText("");
     int section = -1, row = -1;
-    LFL::TableSection::FindSectionOffset(table->data, index.row(), &section, &row);
+    LFL::TableSection<TableItem>::FindSectionOffset(table->data, index.row(), &section, &row);
     if (row < 0) return;
     table->CheckExists(section, row);
     auto &ci = table->data[section].item[row];
@@ -262,12 +262,12 @@ class QtStyledItemDelegate : public QStyledItemDelegate {
 
 class QtTableModel : public QStandardItemModel {
   public:
-  vector<TableSection> *v;
-  QtTableModel(vector<TableSection> *V) : v(V) {}
+  vector<TableSection<TableItem>> *v;
+  QtTableModel(vector<TableSection<TableItem>> *V) : v(V) {}
   QVariant data(const QModelIndex &index, int role) const override {
     if (role == Qt::ForegroundRole) {
       int section = -1, row = -1;
-      TableSection::FindSectionOffset(*v, index.row(), &section, &row);
+      TableSection<TableItem>::FindSectionOffset(*v, index.row(), &section, &row);
       if (section >= 0 && row < (*v)[section].item.size()) {
         auto &ci = (*v)[section].item[row];
         if ((index.column() == 0 && ci.dropdown_key.size()) ||
@@ -295,7 +295,7 @@ struct QtTableView : public QtTableInterface, public TableViewInterface {
   QtStyledItemDelegate item_delegate;
 
   QtTableView(const string &title, string sty, vector<TableItem> item) :
-    QtTableInterface(TableSection::Convert(move(item))), table(make_unique<QtTableWidget>(this)),
+    QtTableInterface(TableSection<TableItem>::Convert(move(item))), table(make_unique<QtTableWidget>(this)),
     model(make_unique<QtTableModel>(&data)), style(move(sty)), item_delegate(nullptr, this) {
 
     vector<int> hide_indices;
@@ -323,7 +323,7 @@ struct QtTableView : public QtTableInterface, public TableViewInterface {
     QObject::connect(model.get(), &QStandardItemModel::itemChanged, bind(&QtTableView::HandleCellChanged, this, _1));
   }
 
-  QList<QStandardItem*> MakeRow(const TableSection &s) {
+  QList<QStandardItem*> MakeRow(const TableSection<TableItem> &s) {
     auto key = make_unique<QStandardItem>(MakeQString(s.header.key));
     auto val = make_unique<QStandardItem>();
     key->setTextAlignment(Qt::AlignRight | Qt::AlignBottom);
@@ -435,7 +435,7 @@ struct QtTableView : public QtTableInterface, public TableViewInterface {
     int size_delta = item_size - old_item_size, section_start_row = data[section].start_row;
     HideHiddenRows(data[section], false);
 
-    data[section] = LFL::TableSection(move(h), flag, section_start_row);
+    data[section] = LFL::TableSection<LFL::TableItem>(move(h), flag, section_start_row);
     data[section].item = move(item);
     data_rows += size_delta;
     for (int i=0; i < item_size; ++i) {
@@ -453,8 +453,8 @@ struct QtTableView : public QtTableInterface, public TableViewInterface {
     HideHiddenRows(data[section], true);
   }
 
-  void ApplyChangeList(const TableSection::ChangeList &ci) {
-    TableSection::ApplyChangeList(ci, &data, [=](const LFL::TableSection::Change &d){
+  void ApplyChangeList(const TableSectionInterface::ChangeList &ci) {
+    TableSection<TableItem>::ApplyChangeList(ci, &data, [=](const LFL::TableSectionInterface::Change &d){
       int section_start_row = data[d.section].start_row;
       auto row = MakeRow(&data[d.section].item[d.row]);
       model->blockSignals(true);
@@ -532,14 +532,14 @@ struct QtTableView : public QtTableInterface, public TableViewInterface {
   }
   
   void HideIndices(const vector<int> &ind, bool v) { for (auto &i : ind) table->setRowHidden(i, v); }
-  void HideHiddenRows(const TableSection &s, bool v) {
+  void HideHiddenRows(const TableSection<TableItem> &s, bool v) {
     for (auto rb = s.item.begin(), re = s.item.end(), r = rb; r != re; ++r)
       if (r->hidden) table->setRowHidden(s.start_row + 1 + (r - rb), v);
   }
 
   void HandleCellClicked(const QModelIndex &index) {
     int section = -1, row = -1;
-    LFL::TableSection::FindSectionOffset(data, index.row(), &section, &row);
+    LFL::TableSection<LFL::TableItem>::FindSectionOffset(data, index.row(), &section, &row);
     if (row < 0) return;
     CheckExists(section, row);
     selected_section = section;
@@ -562,7 +562,7 @@ struct QtTableView : public QtTableInterface, public TableViewInterface {
   void HandleCellChanged(QStandardItem *item) {
     if (item->column() != 1) return;
     int section = -1, row = -1;
-    LFL::TableSection::FindSectionOffset(data, item->row(), &section, &row);
+    LFL::TableSection<LFL::TableItem>::FindSectionOffset(data, item->row(), &section, &row);
     if (row < 0) return;
     CheckExists(section, row);
     auto &ci = data[section].item[row];

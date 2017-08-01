@@ -392,7 +392,7 @@ struct Decoder {
   static string Transcript(const AcousticModel::Compiled *model, const Matrix *viterbi, Allocator *alloc=0);
 };
 
-#ifdef LFL_CORE_APP_GUI_H__
+#ifdef LFL_CORE_APP_GL_VIEW_H__
 struct PhoneticSegmentationGUI : public View {
   struct Segment {
     string name; int beg, end; Box win; bool hover;
@@ -468,7 +468,7 @@ struct PhoneticSegmentationGUI : public View {
     root->shell->play(args);
   }
 };
-#endif /* LFL_CORE_APP_GUI_H__ */
+#endif /* LFL_CORE_APP_GL_VIEW_H__ */
 
 int Resynthesize(Audio *s, const SoundAsset *sa);
 

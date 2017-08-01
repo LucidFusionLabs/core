@@ -182,6 +182,14 @@ int Video::Swap() {
   return 0;
 }
 
+void *Video::BeginGLContextCreate(Window *W) {}
+void *Video::CompleteGLContextCreate(Window *W, void *gl_context) {
+  X11VideoModule *video = dynamic_cast<X11VideoModule*>(app->video->impl.get());
+  GLXContext glc = glXCreateContext(video->display, video->vi, GetTyped<GLXContext>(W->gl), GL_TRUE);
+  glXMakeCurrent(video->display, (::Window)(W->id), glc);
+  return glc;
+}
+
 FrameScheduler::FrameScheduler() :
   maxfps(&FLAGS_target_fps), wakeup_thread(&frame_mutex, &wait_mutex), rate_limit(1), wait_forever(!FLAGS_target_fps),
   wait_forever_thread(0), synchronize_waits(0), monolithic_frame(1), run_main_loop(1) {}

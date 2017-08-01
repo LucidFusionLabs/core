@@ -41,7 +41,7 @@ endif()
 add_subdirectory(framework)
 add_subdirectory(types)
 add_subdirectory(math)
-add_subdirectory(graphics)
+add_subdirectory(gl/device)
 add_subdirectory(font)
 add_subdirectory(audio)
 add_subdirectory(loader)
@@ -52,9 +52,9 @@ add_subdirectory(camera)
 add_subdirectory(cuda)
 add_subdirectory(db)
 
-add_library(lfl_app ${LFL_APP_TYPE} gui.cpp gui/terminal.cpp gui/editor.cpp gui/toolkit.cpp
+add_library(lfl_app ${LFL_APP_TYPE} gl/view.cpp gl/terminal.cpp gl/editor.cpp gl/toolkit.cpp
             font.cpp flow.cpp app.cpp types/types.cpp types/string.cpp types/time.cpp "file.cpp"
-            assets.cpp loader.cpp audio.cpp video.cpp input.cpp math.cpp ipc.cpp
+            assets.cpp loader.cpp audio.cpp gl.cpp input.cpp math.cpp ipc.cpp
             network.cpp net/http.cpp net/resolver.cpp
             camera.cpp scene.cpp shell.cpp crypto.cpp ${FLATBUFFERS_SRC_OUTPUTS})
 

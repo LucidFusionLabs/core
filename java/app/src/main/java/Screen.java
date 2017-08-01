@@ -2,7 +2,6 @@ package com.lucidfusionlabs.app;
 
 import java.util.HashMap;
 import java.util.ArrayList;
-import android.util.Log;
 
 public class Screen {
     public static final int TYPE_NONE       = 0;

@@ -884,17 +884,17 @@ struct GameMenuGUI : public View, public Connection::Handler {
   FontRef font, glow_font, bright_font, mobile_font;
   Box titlewin, menuhdr, menuftr1, menuftr2;
   int default_port, selected=1, last_selected=0, sub_selected=0, last_sub_selected=0, master_server_selected=-1;
-  int line_clicked=-1, decay_box_line=-1, decay_box_left=0;
-  Widget::Button tab1, tab2, tab3, tab4, tab1_server_start, tab2_server_join, sub_tab1, sub_tab2, sub_tab3; 
+  int line_clicked=-1;
+  Widget::Button tab1, tab2, tab3, tab4, tab1_server_start, tab2_server_join, sub_tab1, sub_tab2, sub_tab3;
   TextBox tab2_server_address, tab3_player_name;
   Widget::Slider tab1_options, tab2_servers, tab3_sensitivity, tab3_volume, *current_scrollbar;
 #ifdef LFL_ANDROID
   GPlus *gplus;
   Widget::Button gplus_signin_button, gplus_signout_button, gplus_quick, gplus_invite, gplus_accept;
 #endif
-  Browser browser;
+  unique_ptr<TableView> singleplayer, startserver, serverlist, gplusinvite, options;
   unique_ptr<AdvertisingViewInterface> ads;
-  unique_ptr<TableView> singleplayer;
+  Browser browser;
   MenuParticles particles;
   Entity *cam=0;
 
@@ -957,9 +957,44 @@ struct GameMenuGUI : public View, public Connection::Handler {
     Sniffer::GetBroadcastAddress(&broadcast_ip);
 
     {
-      TableItemVec v;
-      for (auto &i : settings->vec) v.emplace_back(i.key, TableItem::TextInput, i.value->Cur());
-      singleplayer = make_unique<TableView>(root, "Single Player", "", "", move(v));
+      TableItemVec items;
+      for (auto &i : settings->vec)
+        items.emplace_back(i.key, TableItem::Selector, Join(i.value->data, ","));
+      singleplayer = make_unique<TableView>(root, "Single Player", "", "", move(items));
+    }
+
+    {
+      TableItemVec items;
+      startserver = make_unique<TableView>(root, "Start Server", "", "", move(items));
+    }
+
+    {
+      TableItemVec items;
+      serverlist = make_unique<TableView>(root, "Multiplayer", "", "", move(items));
+    }
+
+    {
+      TableItemVec items = {
+        TableItem("Player Name",         TableItem::TextInput, ""),
+        TableItem("Control Sensitivity", TableItem::Slider,    ""),
+        TableItem("Volume",              TableItem::Slider,    ""),
+        TableItem("Move Forward:",       TableItem::Label,     "W"),
+        TableItem("Move Left:",          TableItem::Label,     "A"),
+        TableItem("Move Reverse:",       TableItem::Label,     "S"),
+        TableItem("Move Right:",         TableItem::Label,     "D"),
+        TableItem("Change Player:",      TableItem::Label,     "R"),
+        TableItem("Charge Speed Boost:", TableItem::Label,     "Hold Click"),
+        TableItem("Grab Mouse:",         TableItem::Label,     "Enter"),
+        TableItem("Topbar Menu:",        TableItem::Label,     "Escape"),
+        TableItem("Player List:",        TableItem::Label,     "Tab"),
+        TableItem("Console:",            TableItem::Label,     "~"),
+      };
+      options = make_unique<TableView>(root, "Options", "", "", move(items));
+    }
+
+    {
+      TableItemVec items;
+      gplusinvite = make_unique<TableView>(root, "GPlus", "", "", move(items));
     }
   }
 
@@ -971,7 +1006,7 @@ struct GameMenuGUI : public View, public Connection::Handler {
 
   bool Activate  () { active=1; topbar.active=1; selected=last_selected=0; root->shell->mouseout(vector<string>()); if (ads) ads->Show(false); return 1; }
   bool Deactivate() { active=0; topbar.active=0; UpdateSettings(); tab3_player_name.Deactivate(); if (ads) ads->Show(true); return 1; }
-  bool DecayBoxIfMatch(int l1, int l2) { if (l1 != l2) return 0; decay_box_line = l1; decay_box_left = 10; return 1; }
+  bool DecayBoxIfMatch(int l1, int l2) { if (l1 != l2) return 0; return 1; }
   void UpdateSettings() {
     root->shell->Run(StrCat("name ", String::ToUTF8(tab3_player_name.Text16())));
     root->shell->Run(StrCat("msens ", StrCat(tab3_sensitivity.scrolled * tab3_sensitivity.doc_height)));
@@ -1069,8 +1104,6 @@ struct GameMenuGUI : public View, public Connection::Handler {
     Box b;
     int fh = font->Height(), scrolled = 0;
     Flow menuflow(&box, bright_font, ResetView());
-    mouse.AddClickBox(Box(0, -box.h, box.w-tab1_options.dot_size, box.h),
-                      MouseController::CB(bind(&GameMenuGUI::MenuLineClicked, this)));
 
     current_scrollbar = 0;
     if      (selected == 1) { current_scrollbar = &tab1_options;        menuflow.container = &menuftr1; }
@@ -1095,6 +1128,7 @@ struct GameMenuGUI : public View, public Connection::Handler {
 
       if (sub_selected == 1) {
 #ifdef LFL_ANDROID
+        child_view = gplusinvite.get();
         Scissor s(root->gd, *menuflow.container);
         bool gplus_signedin = gplus->GetSignedIn();
         if (!gplus_signedin) LayoutGPlusSigninButton(&menuflow, gplus_signedin);
@@ -1107,6 +1141,7 @@ struct GameMenuGUI : public View, public Connection::Handler {
         }
 #endif
       } else if (sub_selected == 2) {
+        child_view = serverlist.get();
         if (last_selected != 2 || last_sub_selected != 2) Refresh();
         {
           Scissor s(root->gd, *menuflow.container);
@@ -1134,80 +1169,32 @@ struct GameMenuGUI : public View, public Connection::Handler {
         }
         tab2_server_join.LayoutBox(&menuflow, bright_font, Box(box.w*.2, -box.h*.8, box.w*.6, box.h*.1));
       } else if (sub_selected == 3) {
+        child_view = startserver.get();
         my_selected = 1;
       }
     }
     if (my_selected == 1) {
-#if 1
-      menuflow.AppendNewline();
-      if (settings) {
-        for (GameSettings::Vector::iterator i = settings->vec.begin(); i != settings->vec.end(); ++i) {
-          if (DecayBoxIfMatch(line_clicked, menuflow.out->line.size())) i->value->Next();
-          menuflow.AppendText(0,  i->key + ":");
-          menuflow.AppendText(.6, i->value->Cur());
-          menuflow.AppendNewlines(1);
-        }
-      }
-#else
+      singleplayer->LayoutBox(box);
       singleplayer->AppendFlow(&menuflow);
-#endif
+      child_box.PushBack(box, menuflow.out->attr.GetAttrId(menuflow.cur_attr), (child_view = singleplayer.get()));
       tab1_server_start.LayoutBox(&menuflow, bright_font, Box(box.w*.2, -box.h*.8, box.w*.6, box.h*.1));
     }
-    if (my_selected == 3) {
+    else if (my_selected == 3) {
+      child_view = options.get();
       Scissor s(root->gd, *menuflow.container);
 #ifdef LFL_ANDROID
       LayoutGPlusSigninButton(&menuflow, gplus->GetSignedIn());
 #endif
-      menuflow.AppendText("\nPlayer Name:");
-      if (DecayBoxIfMatch(line_clicked, menuflow.out->line.size())) {
-        app->OpenTouchKeyboard();
-        tab3_player_name.Activate();
-      }
-      menuflow.AppendRow(.6, .4, &b);
-      tab3_player_name.Draw(b + box.TopLeft());
-
-      menuflow.AppendText("\nControl Sensitivity:");
-      menuflow.AppendRow(.6, .35, &b);
-      tab3_sensitivity.LayoutFixed(b);
-      tab3_sensitivity.Update();
-
-      menuflow.AppendText("\nVolume:");
-      menuflow.AppendRow(.6, .35, &b);
-      tab3_volume.LayoutFixed(b);
-      tab3_volume.Update();
-
-      menuflow.AppendText("\nMove Forward:");
-      menuflow.AppendText(.6, "W");
-      menuflow.AppendText("\nMove Left:");
-      menuflow.AppendText(.6, "A");
-      menuflow.AppendText("\nMove Reverse:");
-      menuflow.AppendText(.6, "S");
-      menuflow.AppendText("\nMove Right:");
-      menuflow.AppendText(.6, "D");
-      menuflow.AppendText("\nChange Player:");
-      menuflow.AppendText(.6, "R");
-      menuflow.AppendText("\nCharge Speed Boost:");
-      menuflow.AppendText(.6, "Hold Click");
-      menuflow.AppendText("\nGrab Mouse:");
-      menuflow.AppendText(.6, "Enter");
-      menuflow.AppendText("\nTopbar Menu:");
-      menuflow.AppendText(.6, "Escape");
-      menuflow.AppendText("\nPlayer List:");
-      menuflow.AppendText(.6, "Tab");
-      menuflow.AppendText("\nConsole:");
-      menuflow.AppendText(.6, "~");
-
-      if (tab3_volume.dirty) {
-        tab3_volume.dirty = false;
-        app->SetVolume(int(tab3_volume.scrolled * tab3_volume.doc_height));
-      }
+      options->LayoutBox(box);
+      options->AppendFlow(&menuflow);
+      child_box.PushBack(box, menuflow.out->attr.GetAttrId(menuflow.cur_attr), (child_view = options.get()));
 
       menuflow.AppendNewlines(1);
       if (last_selected != 3) browser.Open("http://lucidfusionlabs.com/apps.html");
       browser.Paint(&menuflow, box.TopLeft() + point(0, scrolled));
       // browser.doc.gui.Draw();
       browser.UpdateScrollbar();
-    }
+    } else child_view = nullptr;
     if (current_scrollbar) current_scrollbar->SetDocHeight(menuflow.Height());
   }
 
@@ -1262,10 +1249,6 @@ struct GameMenuGUI : public View, public Connection::Handler {
     if (selected) {
       gc.gd->SetColor(Color::grey80); BoxTopLeftOutline    ().Draw(&gc, box);
       gc.gd->SetColor(Color::grey40); BoxBottomRightOutline().Draw(&gc, box);
-    }
-    if (decay_box_line >= 0 && decay_box_line < child_box.line.size() && decay_box_left > 0) {
-      BoxOutline().Draw(&gc, child_box.line[decay_box_line] + box.TopLeft());
-      decay_box_left--;
     }
 
     line_clicked = -1;

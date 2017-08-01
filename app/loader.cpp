@@ -16,7 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "core/app/gui.h"
+#include "core/app/gl/view.h"
 #include "core/app/ipc.h"
 #include <zlib.h>
 
@@ -407,6 +407,144 @@ void SimpleAssetLoader::LoadMovie(void *h, MovieAsset *a) {}
 int SimpleAssetLoader::PlayMovie(MovieAsset *a, int seek) { return 0; }
 
 unique_ptr<AssetLoaderInterface> CreateSimpleAssetLoader() { return make_unique<SimpleAssetLoader>(); }
+
+void SimpleVideoResampler::RGB2BGRCopyPixels(unsigned char *dst, const unsigned char *src, int l, int bpp) {
+  for (int k = 0; k < l; k++) for (int i = 0; i < bpp; i++) dst[k*bpp+(!i?2:(i==2?0:i))] = src[k*bpp+i];
+}
+
+bool SimpleVideoResampler::Supports(int f) { return f == Pixel::RGB24 || f == Pixel::BGR24 || f == Pixel::RGB32 || f == Pixel::BGR32 || f == Pixel::RGBA || f == Pixel::ARGB; }
+
+bool SimpleVideoResampler::Opened() const { return s_fmt && d_fmt && s_width && d_width && s_height && d_height; }
+
+void SimpleVideoResampler::Open(int sw, int sh, int sf, int dw, int dh, int df) {
+  s_fmt = sf; s_width = sw; s_height = sh;
+  d_fmt = df; d_width = dw; d_height = dh;
+  // INFO("resample ", BlankNull(Pixel::Name(s_fmt)), " -> ", BlankNull(Pixel::Name(d_fmt)), " : (", sw, ",", sh, ") -> (", dw, ",", dh, ")");
+}
+
+void SimpleVideoResampler::Resample(const unsigned char *sb, int sls, unsigned char *db, int dls, bool flip_x, bool flip_y) {
+  if (!Opened()) return ERROR("resample not opened()");
+
+  int spw = Pixel::Size(s_fmt), dpw = Pixel::Size(d_fmt);
+  if (spw * s_width > sls) return ERROR(spw * s_width, " > ", sls);
+  if (dpw * d_width > dls) return ERROR(dpw * d_width, " > ", dls);
+
+  if (s_width == d_width && s_height == d_height) {
+    for (int y=0; y<d_height; y++) {
+      for (int x=0; x<d_width; x++) {
+        const unsigned char *sp = (sb + sls * y                           + x                          * spw);
+        /**/  unsigned char *dp = (db + dls * (flip_y ? d_height-1-y : y) + (flip_x ? d_width-1-x : x) * dpw);
+        CopyPixel(s_fmt, d_fmt, sp, dp, x == 0, x == d_width-1);
+      }
+    }
+  } else {
+    for (int poi=0; poi<4 && poi<4; poi++) {
+      int pi = Pixel::GetRGBAIndex(s_fmt, poi), po = Pixel::GetRGBAIndex(d_fmt, poi);
+      if (pi < 0 || po < 0) continue;
+      Matrix M(s_height, s_width);
+      CopyColorChannelsToMatrix(sb, s_width, s_height, spw, sls, 0, 0, &M, pi);
+      for (int y=0; y<d_height; y++) {
+        for (int x=0; x<d_width; x++) {
+          unsigned char *dp = (db + dls * (flip_y ? d_height-1-y : y) + (flip_x ? d_width-1-x : x) * dpw);
+          *(dp + po) = MatrixAsFunc(&M, x?float(x)/(d_width-1):0, y?float(y)/(d_height-1):0) * 255;
+        }
+      }
+    }
+  }
+}
+
+void SimpleVideoResampler::CopyPixel(int s_fmt, int d_fmt, const unsigned char *sp, unsigned char *dp, bool sxb, bool sxe, int f) {
+  unsigned char r, g, b, a;
+  switch (s_fmt) {
+    case Pixel::RGB24: r = *sp++; g = *sp++; b = *sp++; a = ((f & Flag::TransparentBlack) && !r && !g && !b) ? 0 : 255; break;
+    case Pixel::BGR24: b = *sp++; g = *sp++; r = *sp++; a = ((f & Flag::TransparentBlack) && !r && !g && !b) ? 0 : 255; break;
+    case Pixel::RGB32: r = *sp++; g = *sp++; b = *sp++; a=255; sp++; break;
+    case Pixel::BGR32: r = *sp++; g = *sp++; b = *sp++; a=255; sp++; break;
+    case Pixel::RGBA:  r = *sp++; g = *sp++; b = *sp++; a=*sp++; break;
+    case Pixel::BGRA:  b = *sp++; g = *sp++; r = *sp++; a=*sp++; break;
+    case Pixel::ARGB:  a = *sp++; r = *sp++; g = *sp++; b=*sp++; break;
+    case Pixel::GRAY8: r = 255;   g = 255;   b = 255;   a=*sp++; break;
+    // case Pixel::GRAY8: r = g = b = a = *sp++; break;
+    case Pixel::LCD: 
+      r = (sxb ? 0 : *(sp-1)) / 3.0 + *sp / 3.0 + (          *(sp+1)) / 3.0; sp++; 
+      g = (          *(sp-1)) / 3.0 + *sp / 3.0 + (          *(sp+1)) / 3.0; sp++; 
+      b = (          *(sp-1)) / 3.0 + *sp / 3.0 + (sxe ? 0 : *(sp+1)) / 3.0; sp++;
+      a = ((f & Flag::TransparentBlack) && !r && !g && !b) ? 0 : 255;
+      break;
+    default: return ERROR("s_fmt ", s_fmt, " not supported");
+  }
+  switch (d_fmt) {
+    case Pixel::RGB24: *dp++ = r; *dp++ = g; *dp++ = b; break;
+    case Pixel::BGR24: *dp++ = b; *dp++ = g; *dp++ = r; break;
+    case Pixel::RGB32: *dp++ = r; *dp++ = g; *dp++ = b; *dp++ = a; break;
+    case Pixel::BGR32: *dp++ = b; *dp++ = g; *dp++ = r; *dp++ = a; break;
+    case Pixel::RGBA:  *dp++ = r; *dp++ = g; *dp++ = b; *dp++ = a; break;
+    case Pixel::BGRA:  *dp++ = b; *dp++ = g; *dp++ = r; *dp++ = a; break;
+    case Pixel::ARGB:  *dp++ = a; *dp++ = r; *dp++ = g; *dp++ = b; break;
+    default: return ERROR("d_fmt ", d_fmt, " not supported");
+  }
+}
+
+void SimpleVideoResampler::Blit(const unsigned char *src, unsigned char *dst, int w, int h,
+                                int sf, int sls, int sx, int sy,
+                                int df, int dls, int dx, int dy, int flag) {
+  bool flip_y = flag & Flag::FlipY;
+  int sw = Pixel::Size(sf), dw = Pixel::Size(df); 
+  for (int yi = 0; yi < h; ++yi) {
+    for (int xi = 0; xi < w; ++xi) {
+      int sind = flip_y ? sy + h - yi - 1 : sy + yi;
+      const unsigned char *sp = src + (sls*(sind)    + (sx + xi)*sw);
+      unsigned       char *dp = dst + (dls*(dy + yi) + (dx + xi)*dw);
+      CopyPixel(sf, df, sp, dp, xi == 0, xi == w-1, flag);
+    }
+  }
+}
+
+void SimpleVideoResampler::Filter(unsigned char *buf, int w, int h,
+                                  int pf, int ls, int x, int y,
+                                  Matrix *kernel, int channel, int flag) {
+  Matrix M(h, w), out(h, w);
+  int pw = Pixel::Size(pf);
+  CopyColorChannelsToMatrix(buf, w, h, pw, ls, x, y, &M, ColorChannel::PixelOffset(channel));
+  Matrix::Convolve(&M, kernel, &out, (flag & Flag::ZeroOnly) ? mZeroOnly : 0);
+  CopyMatrixToColorChannels(&out, w, h, pw, ls, x, y, buf, ColorChannel::PixelOffset(channel));
+}
+
+void SimpleVideoResampler::Fill(unsigned char *dst, int len, int pf, const Color &c) {
+  int pw = Pixel::Size(pf); 
+  unsigned char pixel[4] = { uint8_t(c.R()), uint8_t(c.G()), uint8_t(c.B()), uint8_t(c.A()) };
+  for (int i = 0; i != len; ++i) CopyPixel(Pixel::RGBA, pf, pixel, dst + i*pw);
+}
+
+void SimpleVideoResampler::Fill(unsigned char *dst, int w, int h,
+                                int pf, int ls, int x, int y, const Color &c) {
+  int pw = Pixel::Size(pf); 
+  unsigned char pixel[4] = { uint8_t(c.R()), uint8_t(c.G()), uint8_t(c.B()), uint8_t(c.A()) };
+  for (int yi = 0; yi < h; ++yi) {
+    for (int xi = 0; xi < w; ++xi) {
+      unsigned char *dp = dst + (ls*(y + yi) + (x + xi)*pw);
+      CopyPixel(Pixel::RGBA, pf, pixel, dp);
+    }
+  }
+}
+
+void SimpleVideoResampler::CopyColorChannelsToMatrix(const unsigned char *buf, int w, int h,
+                                                     int pw, int ls, int x, int y,
+                                                     Matrix *out, int po) {
+  MatrixIter(out) { 
+    const unsigned char *p = buf + (ls*(y + i) + (x + j)*pw);
+    out->row(i)[j] = *(p + po) / 255.0;
+  }
+}
+
+void SimpleVideoResampler::CopyMatrixToColorChannels(const Matrix *M, int w, int h,
+                                                     int pw, int ls, int x, int y,
+                                                     unsigned char *out, int po) {
+  MatrixIter(M) { 
+    unsigned char *p = out + (ls*(y + i) + (x + j)*pw);
+    *(p + po) = M->row(i)[j] * 255.0;
+  }
+}
 
 AssetLoader::AssetLoader() {}
 AssetLoader::~AssetLoader() {}

@@ -24,7 +24,6 @@ import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.content.pm.ActivityInfo;
 import android.hardware.*;
-import android.util.Log;
 import android.util.Pair;
 import android.util.TypedValue;
 import android.net.Uri;
@@ -89,7 +88,7 @@ public class TableScreen extends Screen {
             activity.runOnUiThread(future);
             return future.get();
         } catch(Exception e) {
-            Log.e("lfl", "getKey " + e.toString());
+            NativeAPI.ERROR("getKey " + e.toString());
             return new String();
         }
     }
@@ -103,7 +102,7 @@ public class TableScreen extends Screen {
             activity.runOnUiThread(future);
             return future.get();
         } catch(Exception e) {
-            Log.e("lfl", "getVal " + e.toString());
+            NativeAPI.ERROR("getVal " + e.toString());
             return new String();
         }
     }
@@ -117,7 +116,7 @@ public class TableScreen extends Screen {
             activity.runOnUiThread(future);
             return future.get();
         } catch(Exception e) {
-            Log.e("lfl", "getTag " + e.toString());
+            NativeAPI.ERROR("getTag " + e.toString());
             return 0;
         }
     }
@@ -132,7 +131,7 @@ public class TableScreen extends Screen {
             activity.runOnUiThread(future);
             return future.get();
         } catch(Exception e) {
-            Log.e("lfl", "getPicked " + e.toString());
+            NativeAPI.ERROR("getPicked " + e.toString());
             return null;
         }
     }
@@ -147,7 +146,7 @@ public class TableScreen extends Screen {
             activity.runOnUiThread(future);
             return future.get();
         } catch(Exception e) {
-            Log.e("lfl", "getSectionText " + e.toString());
+            NativeAPI.ERROR("getSectionText " + e.toString());
             return new ArrayList<Pair<String, String>>();
         }
     }

@@ -16,7 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "core/app/gui.h"
+#include "core/app/gl/view.h"
 
 #ifdef LFL_DEBUG
 #define InputDebug(...)         if (FLAGS_input_debug)           DebugPrintf(__VA_ARGS__);

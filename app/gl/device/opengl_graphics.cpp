@@ -327,7 +327,7 @@ struct OpenGLES2 : public GraphicsDevice {
 #else
 struct OpenGLES2 : public GraphicsDevice, public QOpenGLFunctions {
 #endif
-#include "core/app/graphics/opengl_common.h"
+#include "core/app/gl/device/opengl_common.h"
   struct BoundTexture {
     int t, n, l;
     bool operator!=(const BoundTexture &x) const { return t != x.t || n != x.n || l != x.l; };

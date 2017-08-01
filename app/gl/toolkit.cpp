@@ -16,7 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "core/app/gui.h"
+#include "core/app/gl/view.h"
+#include "core/app/gl/toolkit.h"
 
 namespace LFL {
 ToolbarView::ToolbarView(Window *w, const string &t, MenuItemVec items) :
@@ -29,7 +30,7 @@ void ToolbarView::Layout() {}
 void ToolbarView::Draw() {}
 
 TableView::TableView(Window *w, const string &t, const string &s, const string &th, TableItemVec items) :
-  View(w), data(TableSection::Convert(move(items))), title(t), style(s), theme(th) {}
+  View(w), data(TableViewSection::Convert(move(items))), title(t), style(s), theme(th), scrollbar(this) { Activate(); }
 
 void TableView::DelNavigationButton(int id) {}
 void TableView::AddNavigationButton(int id, const TableItem &item) {}
@@ -46,7 +47,7 @@ void TableView::AddRow(int section, TableItem item) {}
 void TableView::SelectRow(int section, int row) {}
 void TableView::ReplaceRow(int section, int row, TableItem item) {}
 void TableView::ReplaceSection(int section, TableItem header, int flag, TableItemVec item) {}
-void TableView::ApplyChangeList(const TableSection::ChangeList&) {}
+void TableView::ApplyChangeList(const TableSectionInterface::ChangeList&) {}
 void TableView::SetSectionValues(int section, const StringVec&) {}
 void TableView::SetSectionColors(int seciton, const vector<Color>&) {}
 void TableView::SetSectionEditable(int section, int start_row, int skip_last_rows, IntIntCB cb) {}
@@ -60,9 +61,39 @@ void TableView::SetColor(int section, int row, const Color &val) {}
 void TableView::SetTitle(const string &title) {}
 void TableView::SetTheme(const string &theme) {}
 
-void TableView::Layout() {}
-void TableView::Draw() {}
+void TableView::Layout() {
+  mouse.Clear();
+  mouse.AddClickBox(Box(0, -box.h, box.w - scrollbar.dot_size, box.h),
+                    MouseController::CoordCB(bind(&TableView::OnClick, this, _1, _2, _3, _4)));
+}
+
+void TableView::OnClick(int but, point p, point d, int down) {
+  if (!down) return;
+  int line_clicked = -RelativePosition(root->mouse).y / row_height, section_id = -1, row = -1;
+  if (line_clicked < 0) return;
+  decay_box_line = line_clicked;
+  decay_box_left = 10;
+  TableViewSection::FindSectionOffset(data, line_clicked, &section_id, &row);
+  if (section_id < 0 || section_id >= data.size() || row < 0 || row >= data[section_id].item.size()) return;
+  TableViewSection &section = data[section_id];
+  TableViewItem &item = section.item[row];
+  if (item.type == TableItem::TextInput) {
+    app->OpenTouchKeyboard();
+    if (item.textbox) item.textbox->Activate();
+  }
+}
+
+void TableView::Draw() {
+  View::Draw();
+  if (out && decay_box_line >= 0 && decay_box_line < out->line.size() && decay_box_left > 0) {
+      BoxOutline().DrawGD(root->gd, out->line[decay_box_line] + box.TopLeft());
+      decay_box_left--;
+  }
+}
+
 void TableView::AppendFlow(Flow *flow) {
+  if (!(row_height = flow->cur_attr.font->Height())) row_height = 16;
+  out = flow->out;
   flow->AppendNewline();
   for (auto &s : data)
     for (auto &i : s.item) {
@@ -70,6 +101,23 @@ void TableView::AppendFlow(Flow *flow) {
       flow->AppendText(.6, i.val);
       flow->AppendNewlines(1);
     }
+#if 0
+      menuflow.AppendRow(.6, .4, &b);
+      tab3_player_name.Draw(b + box.TopLeft());
+
+      menuflow.AppendRow(.6, .35, &b);
+      tab3_sensitivity.LayoutFixed(b);
+      tab3_sensitivity.Update();
+
+      menuflow.AppendRow(.6, .35, &b);
+      tab3_volume.LayoutFixed(b);
+      tab3_volume.Update();
+
+      if (tab3_volume.dirty) {
+        tab3_volume.dirty = false;
+        app->SetVolume(int(tab3_volume.scrolled * tab3_volume.doc_height));
+      }
+#endif
 }
 
 NavigationView::NavigationView(Window *w, const string &s, const string &t) : View(w) {}

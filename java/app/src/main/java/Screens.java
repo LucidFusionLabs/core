@@ -23,7 +23,6 @@ import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.content.pm.ActivityInfo;
 import android.hardware.*;
-import android.util.Log;
 import android.util.Pair;
 import android.util.TypedValue;
 import android.net.Uri;
@@ -40,7 +39,7 @@ public class Screens {
     public ViewTreeObserver.OnGlobalLayoutListener global_layout_listener;
 
     public void onDestroy() {
-        Log.i("lfl", "Screens.onDestroy()");
+        NativeAPI.INFO("Screens.onDestroy()");
         for (Screen w : screens.values()) w.clear();
         for (Toolbar w : toolbar_bottom) w.clearView();
         destroyed = true;
@@ -49,7 +48,7 @@ public class Screens {
     public void onResume(MainActivity activity) {
         if (!destroyed) return;
         destroyed = false;
-        Log.i("lfl", "Screens.onResume(Activity) toolbars=" + toolbar_bottom.size());
+        NativeAPI.INFO("Screens.onResume(Activity) toolbars=" + toolbar_bottom.size());
 
         ArrayList<Toolbar> tb_bottom = new ArrayList<Toolbar>();
         tb_bottom.addAll(toolbar_bottom);
@@ -89,14 +88,14 @@ public class Screens {
                 View view = activity.root_window.getDecorView();
                 view.getWindowVisibleDisplayFrame(r);
                 int h = r.bottom - r.top;
-                Log.i("lfl", "OnGlobalLayoutListener: " + r.toString() + " surface_height = " + activity.gl_view.surface_height);
+                NativeAPI.INFO("OnGlobalLayoutListener: " + r.toString() + " surface_height = " + activity.gl_view.surface_height);
                 for (Toolbar toolbar : toolbar_bottom) {
                     View tb = toolbar.view;
                     if (tb == null || toolbar.shown_index == -1) continue;
                     FrameLayout.LayoutParams params = (FrameLayout.LayoutParams)tb.getLayoutParams();
                     if (params.bottomMargin != activity.gl_view.surface_height - h) {
                         params.bottomMargin = activity.gl_view.surface_height - h;
-                        Log.i("lfl", "set tb bottomMargin = " + (activity.gl_view.surface_height - h));
+                        NativeAPI.INFO("set tb bottomMargin = " + (activity.gl_view.surface_height - h));
                         tb.setLayoutParams(params);
                     }
                     h -= tb.getHeight();

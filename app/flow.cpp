@@ -16,7 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "core/app/gui.h"
+#include "core/app/gl/view.h"
 
 namespace LFL {
 void DrawableAnnotation::ExtendBack(const pair<int, int> &a) {

@@ -22,7 +22,6 @@ import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.content.pm.ActivityInfo;
 import android.hardware.*;
-import android.util.Log;
 import android.util.Pair;
 import android.util.TypedValue;
 import android.net.Uri;
@@ -108,7 +107,7 @@ public class Toolbar implements com.lucidfusionlabs.core.ViewOwner {
         activity.runOnUiThread(new Runnable() { public void run() {
             View toolbar = getView(activity);
             if (show_or_hide) {
-                if (shown_index >= 0) Log.e("lfl", "Show already shown toolbar");
+                if (shown_index >= 0) NativeAPI.ERROR("Show already shown toolbar");
                 else {
                     activity.screens.toolbar_bottom.add(Toolbar.this);
                     if (activity.fullscreen) activity.main_layout.addView(toolbar, getFrameLayoutParams (activity));
@@ -116,12 +115,12 @@ public class Toolbar implements com.lucidfusionlabs.core.ViewOwner {
                     shown_index = activity.screens.toolbar_bottom.size()-1;
                 }
             } else {
-                if (shown_index < 0) Log.e("lfl", "Hide unshown toolbar");
+                if (shown_index < 0) NativeAPI.ERROR("Hide unshown toolbar");
                 else {
                     activity.screens.toolbar_bottom.remove(Toolbar.this);
                     ViewParent parent = toolbar.getParent();
                     if (parent != null && parent instanceof ViewGroup) ((ViewGroup)parent).removeView(toolbar);
-                    else Log.e("lfl", "Hide toolbar without parent shown_index=" + shown_index);
+                    else NativeAPI.ERROR("Hide toolbar without parent shown_index=" + shown_index);
                     shown_index = -1;
                 }
             }

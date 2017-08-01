@@ -26,7 +26,6 @@ import android.content.res.Resources;
 import android.content.res.ColorStateList;
 import android.content.pm.ActivityInfo;
 import android.hardware.*;
-import android.util.Log;
 import android.util.Pair;
 import android.util.TypedValue;
 import android.net.Uri;
@@ -761,7 +760,7 @@ public class ModelItemRecyclerViewAdapter
             }
             if (item.dropdown_key.length() > 0) ret.add(new Pair<String, String>(item.dropdown_key, item.key)); 
             if (val.length() == 0 && item.val.length() > 0 && item.val.charAt(0) != 1) val = item.val;
-            // Log.i("lfl", "getSectionText " + i + ": " + item.key + " = " + item.val);
+            // NativeAPI.INFO("getSectionText " + i + ": " + item.key + " = " + item.val);
             ret.add(new Pair<String, String>(item.key, val));
         }
         return ret;

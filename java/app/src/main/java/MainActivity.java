@@ -25,7 +25,6 @@ import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.content.pm.ActivityInfo;
 import android.hardware.*;
-import android.util.Log;
 import android.util.Pair;
 import android.util.TypedValue;
 import android.net.Uri;
@@ -71,7 +70,7 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity
     protected PreferenceFragment createPreferenceFragment() { return null; }
 
     @Override protected void onCreate(Bundle savedInstanceState) {
-        Log.i("lfl", "MainActivity.onCreate() NativeAPI.created=" + NativeAPI.created);
+        NativeAPI.INFO("MainActivity.onCreate() NativeAPI.created=" + NativeAPI.created);
         preferences = PreferenceManager.getDefaultSharedPreferences(this);
         setTheme(preferences.getString("theme", "Dark").equals("Light") ?
                  android.support.v7.appcompat.R.style.Theme_AppCompat_Light :
@@ -79,7 +78,7 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity
         super.onCreate(savedInstanceState);
 
         if (!isTaskRoot()) {
-            Log.i("lfl", "MainActivity.onCreate() isTaskRoot() == false");
+            NativeAPI.INFO("MainActivity.onCreate() isTaskRoot() == false");
             finish();
             return;
         }
@@ -110,7 +109,7 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity
         if (!NativeAPI.created) {
             NativeAPI.created = true;
             ScreenFragmentNavigator.clearFragmentBackstack(this);
-            Log.i("lfl", "NativeAPI.create()");
+            NativeAPI.INFO("NativeAPI.create()");
             NativeAPI.create(this);
         } else {
             if (disable_title) disableTitle();
@@ -127,7 +126,7 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity
     }
 
     @Override protected void onStart() {
-        Log.i("lfl", "MainActivity.onStart()");
+        NativeAPI.INFO("MainActivity.onStart()");
         super.onStart();
         staticLifecycle.onActivityStarted(this);
         activityLifecycle.onActivityStarted(this);
@@ -142,23 +141,23 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity
     }
     
     @Override protected void onPause() {
-        Log.i("lfl", "MainActivity.onPause() enter");
+        NativeAPI.INFO("MainActivity.onPause() enter");
         super.onPause();
         staticLifecycle.onActivityPaused(this);
         activityLifecycle.onActivityPaused(this);
         if (!waiting_activity_result) gl_view.onPause();
-        Log.i("lfl", "MainActivity.onPause() exit");
+        NativeAPI.INFO("MainActivity.onPause() exit");
     }
     
     @Override protected void onStop() {
-        Log.i("lfl", "MainActivity.onStop()");
+        NativeAPI.INFO("MainActivity.onStop()");
         super.onStop();
         staticLifecycle.onActivityStopped(this);
         activityLifecycle.onActivityStopped(this);
     }
 
     @Override protected void onDestroy() {
-        Log.i("lfl", "MainActivity.onDestroy()");
+        NativeAPI.INFO("MainActivity.onDestroy()");
         staticLifecycle.onActivityDestroyed(this);
         activityLifecycle.onActivityDestroyed(this);
         screens.onDestroy();
@@ -166,12 +165,12 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity
     }
 
     @Override public void onConfigurationChanged(Configuration newConfig) {
-        Log.i("lfl", "onConfigurationChanged");
+        NativeAPI.INFO("onConfigurationChanged");
         super.onConfigurationChanged(newConfig);
     }
 
     @Override protected void onActivityResult(int request, int response, Intent data) {
-        Log.i("lfl", "MainActivity.onActivityResult(" + request + ", " + response + ")");
+        NativeAPI.INFO("MainActivity.onActivityResult(" + request + ", " + response + ")");
         waiting_activity_result = false;
         super.onActivityResult(request, response, data);
         staticLifecycle.onActivityResult(this, request, response, data);
@@ -212,16 +211,20 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity
 
     public void superOnBackPressed() { super.onBackPressed(); } 
 
+    public void viewOnSynchronizedReshape() { gl_view.onSynchronizedReshape(); }
+    public void viewSwapEGL()               { gl_view.swapEGL(); }
+
     public void forceExit() {
-        Log.i("lfl", "MainActivity.forceExit()");
+        NativeAPI.INFO("MainActivity.forceExit()");
         android.os.Process.killProcess(android.os.Process.myPid());
     }
 
     public String getFilesDirCanonicalPath() {
         try {
-            // return getFilesDir().getCanonicalPath();
-            return getExternalFilesDir(null).getCanonicalPath();
-        } catch (final Exception e) { Log.e("lfl", e.toString()); return ""; }
+            java.io.File file = getExternalFilesDir(null);
+            if (file == null) file = getFilesDir();
+            return file.getCanonicalPath();
+        } catch (final Exception e) { NativeAPI.ERROR(e.toString()); return ""; }
     }
 
     public void toggleKeyboard() {
@@ -268,7 +271,7 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity
     }
 
     public void setTheme(final String text) {
-        Log.i("lfl", "setTheme: " + text);
+        NativeAPI.INFO("setTheme: " + text);
         runOnUiThread(new Runnable() { public void run() { recreate(); } });
     }
 
@@ -299,10 +302,10 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity
                 for (java.util.Enumeration<InetAddress> IpAddresses = intf.getInetAddresses(); IpAddresses.hasMoreElements();) {
                     InetAddress inetAddress = IpAddresses.nextElement(), bcastAddress = null;
                     if (inetAddress.isLoopbackAddress() || inetAddress instanceof Inet6Address) continue;
-                    // Log.i("lfl", "ip address: " + inetAddress);
+                    // NativeAPI.INFO("ip address: " + inetAddress);
                     NetworkInterface ipv4_intf = NetworkInterface.getByInetAddress(inetAddress);
                     for (InterfaceAddress ifaceAddress : ipv4_intf.getInterfaceAddresses()) bcastAddress = ifaceAddress.getBroadcast();
-                    // Log.i("lfl", "broadcast aaddress: " + bcastAddress);
+                    // NativeAPI.INFO("broadcast aaddress: " + bcastAddress);
                     ret = ByteBuffer.wrap(bcastAddress.getAddress()).getInt();   
                 }
             }  
@@ -403,7 +406,7 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity
     public MediaPlayer loadMusicResource(String filename) {
         String package_name = getPackageName();
         int soundId = resources.getIdentifier(filename, "raw", getPackageName());
-        Log.i("lfl", "loadMusicAsset " + package_name + " " + filename + " " + soundId);
+        NativeAPI.INFO("loadMusicAsset " + package_name + " " + filename + " " + soundId);
         return MediaPlayer.create(this, soundId);
     }
 
@@ -433,7 +436,7 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity
                     @Override public boolean onScaleBegin(ScaleGestureDetector g) { return handleScale(g, true); }
                     @Override public boolean onScale     (ScaleGestureDetector g) { return handleScale(g, false); }
                     public boolean handleScale(ScaleGestureDetector g, boolean begin) {
-                        // Log.i("lfl", "scale " +  g.getFocusX() + " " + g.getFocusY() + " " + g.getScaleFactor() + " " + begin);
+                        // NativeAPI.INFO("scale " +  g.getFocusX() + " " + g.getFocusY() + " " + g.getScaleFactor() + " " + begin);
                         NativeAPI.scale(g.getFocusX(), g.getFocusY(), g.getScaleFactor(), g.getScaleFactor(), begin);
                         return true;
                     }});

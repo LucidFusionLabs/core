@@ -41,7 +41,7 @@ struct AndroidTableView : public TableViewInterface {
   void SelectRow(int section, int row);
   void ReplaceRow(int section, int row, TableItem item);
   void ReplaceSection(int section, TableItem header, int flag, TableItemVec item);
-  void ApplyChangeList(const TableSection::ChangeList &changes);
+  void ApplyChangeList(const TableSectionInterface::ChangeList &changes);
   void SetSectionValues(int section, const StringVec &in);
   void SetSectionColors(int seciton, const vector<Color>&);
   void SetTag(int section, int row, int val);

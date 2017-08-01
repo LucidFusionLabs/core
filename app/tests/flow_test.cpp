@@ -17,7 +17,7 @@
  */
 
 #include "gtest/gtest.h"
-#include "core/app/gui.h"
+#include "core/app/gl/view.h"
 #include "core/web/dom.h"
 
 namespace LFL {

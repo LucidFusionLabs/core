@@ -16,7 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "core/app/gui.h"
+#include "core/app/gl/view.h"
+#include "core/app/gl/editor.h"
 #include "core/app/ipc.h"
 #include "core/ide/ide.h"
 #include "json/json.h"

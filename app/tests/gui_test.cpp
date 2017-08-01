@@ -17,7 +17,9 @@
  */
 
 #include "gtest/gtest.h"
-#include "core/app/gui.h"
+#include "core/app/gl/view.h"
+#include "core/app/gl/editor.h"
+#include "core/app/gl/terminal.h"
 #include "core/app/ipc.h"
 
 namespace LFL {

@@ -31,17 +31,15 @@ static JNI *jni = Singleton<JNI>::Get();
 void JNI::Init(jobject a, bool first) {
   if      (1)           CHECK(activity  = env->NewGlobalRef(a));
   if      (1)           CHECK(resources = env->NewGlobalRef(env->GetObjectField(activity, activity_resources)));
-  if      (1)           CHECK(view      = env->NewGlobalRef(env->GetObjectField(activity, activity_view)));
   if      (1)           CHECK(handler   = env->NewGlobalRef(env->GetObjectField(activity, activity_handler)));
-  // if      (first)             gplus     = env->NewGlobalRef(env->GetObjectField(activity, activity_gplus));
-  // else if (gplus_class) CHECK(gplus     = env->NewGlobalRef(env->GetObjectField(activity, activity_gplus)));
+  // if   (gplus_class) CHECK(gplus     = env->NewGlobalRef(env->GetObjectField(activity, activity_gplus)));
 }
 
 void JNI::Free() {
-  if (gplus_class) env->DeleteGlobalRef(gplus);    gplus    = 0;
-  if (1)           env->DeleteGlobalRef(handler);  handler  = 0;
-  if (1)           env->DeleteGlobalRef(view);     view     = 0;
-  if (1)           env->DeleteGlobalRef(activity); activity = 0;
+  if (gplus) env->DeleteGlobalRef(gplus);     gplus     = 0;
+  if (1)     env->DeleteGlobalRef(handler);   handler   = 0;
+  if (1)     env->DeleteGlobalRef(resources); resources = 0;
+  if (1)     env->DeleteGlobalRef(activity);  activity  = 0;
 }
 
 jmethodID JNI::GetMethodID(jclass c, const char *name, const StringVec &args, const char *ret) {
@@ -179,7 +177,7 @@ jobject JNI::ToModelItemArrayList(JNIEnv *env, TableItemVec items) {
   return ret;
 }
 
-jobject JNI::ToModelItemChangeList(JNIEnv *env, const TableSection::ChangeList &items) {
+jobject JNI::ToModelItemChangeList(JNIEnv *env, const TableSectionInterface::ChangeList &items) {
   jobject ret = env->NewObject(jni->arraylist_class, jni->arraylist_construct);
   for (auto &i : items) {
     LocalJNIObject v(env, ToModelItemChange(env, i));
@@ -221,7 +219,7 @@ jobject JNI::ToModelItem(JNIEnv *env, TableItem item) {
                         fg, bg);
 }
 
-jobject JNI::ToModelItemChange(JNIEnv *env, const TableSection::Change &item) {
+jobject JNI::ToModelItemChange(JNIEnv *env, const TableSectionInterface::Change &item) {
   LocalJNIObject k(env, ToJString(env, item.key)), v(env, ToJString(env, item.val));
   LocalJNIObject cb(env, item.cb ? ToNativeCallback(env, item.cb) : nullptr);
   return env->NewObject(jni->modelitemchange_class, jni->modelitemchange_construct, jint(item.section), jint(item.row),

@@ -6,7 +6,6 @@ import java.util.List;
 import android.annotation.SuppressLint;
 import android.app.Fragment;
 import android.os.Bundle;
-import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -40,7 +39,7 @@ public class RecyclerViewScreenFragment extends ScreenFragment {
         if (parent_screen_id < MainActivity.screens.screens.size()) {
             if ((parent_screen = MainActivity.screens.screens.get(parent_screen_id)) instanceof TableScreen)
                 adapter = ((TableScreen)parent_screen).model;
-        } else Log.e("lfl", "invalid screen_id=" + parent_screen_id + " total=" + MainActivity.screens.screens.size());
+        } else NativeAPI.ERROR("invalid screen_id=" + parent_screen_id + " total=" + MainActivity.screens.screens.size());
     }
 
     @Override

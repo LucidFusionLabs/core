@@ -1,5 +1,5 @@
 /*
- * $Id: gui.cpp 1336 2014-12-08 09:29:59Z justin $
+ * $Id: view.cpp 1336 2014-12-08 09:29:59Z justin $
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -16,7 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "core/app/gui.h"
+#include "core/app/gl/view.h"
 
 namespace LFL {
 #ifdef LFL_MOBILE

@@ -205,7 +205,7 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
 
 @implementation IOSTable
   {
-    std::vector<LFL::TableSection> data;
+    std::vector<LFL::TableSection<LFL::TableItem>> data;
     bool dark_theme;
   }
 
@@ -233,7 +233,7 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
     else _needs_reload = true;
   }
 
-  - (void)load:(LFL::TableViewInterface*)lself withTitle:(const std::string&)title withStyle:(const std::string&)sty items:(std::vector<LFL::TableSection>)item {
+  - (void)load:(LFL::TableViewInterface*)lself withTitle:(const std::string&)title withStyle:(const std::string&)sty items:(std::vector<LFL::TableSection<LFL::TableItem>>)item {
     _lfl_self = lself;
     _style = sty;
     _needs_reload = true;
@@ -305,12 +305,12 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
       [self.tableView reloadRowsAtIndexPaths:@[p] withRowAnimation:UITableViewRowAnimationNone];
     } else hi.item[r].hidden = v;
 
-    if (hi.flag & LFL::TableSection::Flag::DeleteRowsWhenAllHidden) {
+    if (hi.flag & LFL::TableSectionInterface::Flag::DeleteRowsWhenAllHidden) {
       for (auto &i : hi.item) if (!i.hidden) return;
       hi.item.clear();
       [self.tableView reloadSections:[NSIndexSet indexSetWithIndex: section]
         withRowAnimation:UITableViewRowAnimationNone];
-      if (hi.flag & LFL::TableSection::Flag::ClearLeftNavWhenEmpty)
+      if (hi.flag & LFL::TableSectionInterface::Flag::ClearLeftNavWhenEmpty)
         self.navigationItem.leftBarButtonItem = nil;
     }
   }
@@ -362,9 +362,9 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
     data[section].SetEditable(sr, sll, move(cb));
   }
 
-  - (void)applyChangeList:(const LFL::TableSection::ChangeList&)changes {
+  - (void)applyChangeList:(const LFL::TableSectionInterface::ChangeList&)changes {
     UITableView *tv = _tableView;
-    LFL::TableSection::ApplyChangeList(changes, &data, [=](const LFL::TableSection::Change &d){
+    LFL::TableSection<LFL::TableItem>::ApplyChangeList(changes, &data, [=](const LFL::TableSectionInterface::Change &d){
       NSIndexPath *p = [NSIndexPath indexPathForRow:d.row inSection:d.section];
       [tv reloadRowsAtIndexPaths:@[p] withRowAnimation:UITableViewRowAnimationNone];
     });
@@ -387,7 +387,7 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
     if (ci.hidden) return 0;
     else if ((ci.flags & iOSTableItem::GUILoaded) &&
              (ci.type == LFL::TableItem::Picker || ci.type == LFL::TableItem::FontPicker)) return ci.height;
-    else if (hi.flag & LFL::TableSection::Flag::DoubleRowHeight) return tableView.rowHeight * 2;
+    else if (hi.flag & LFL::TableSectionInterface::Flag::DoubleRowHeight) return tableView.rowHeight * 2;
     else if (ci.flags & LFL::TableItem::Flag::SubText) return UITableViewAutomaticDimension;
     else return tableView.rowHeight;
   }
@@ -429,9 +429,9 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
       cell = [[UITableViewCell alloc] initWithStyle: (subtext ? UITableViewCellStyleSubtitle : UITableViewCellStyleDefault)
         reuseIdentifier: nil];
       cell.selectionStyle = UITableViewCellSelectionStyleNone;
-      if      (ci.bg_a)                                                                      [cell setBackgroundColor:[UIColor colorWithRed:ci.bg_r/255.0 green:ci.bg_g/255.0 blue:ci.bg_b/255.0 alpha:ci.bg_a/255.0]];
-      else if (is_selected_row && (hi.flag & LFL::TableSection::Flag::HighlightSelectedRow)) [cell setBackgroundColor:[UIColor lightGrayColor]];
-      else if (dark_theme)                                                                   [cell setBackgroundColor:[UIColor colorWithWhite:0.349 alpha:1.000]];
+      if      (ci.bg_a)                                                                               [cell setBackgroundColor:[UIColor colorWithRed:ci.bg_r/255.0 green:ci.bg_g/255.0 blue:ci.bg_b/255.0 alpha:ci.bg_a/255.0]];
+      else if (is_selected_row && (hi.flag & LFL::TableSectionInterface::Flag::HighlightSelectedRow)) [cell setBackgroundColor:[UIColor lightGrayColor]];
+      else if (dark_theme)                                                                            [cell setBackgroundColor:[UIColor colorWithWhite:0.349 alpha:1.000]];
 
       if (dark_theme) {
         cell.textLabel.textColor = [UIColor whiteColor];
@@ -746,7 +746,7 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
       [label release];
     }
 
-    bool edit_button = hi.flag & LFL::TableSection::Flag::EditButton;
+    bool edit_button = hi.flag & LFL::TableSectionInterface::Flag::EditButton;
     if (edit_button || hi.header.right_text.size()) {
       IOSButton *button = [IOSButton buttonWithType:UIButtonTypeSystem];
       if (edit_button) {
@@ -784,13 +784,13 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
 
   - (UITableViewCellEditingStyle)tableView:(UITableView *)tableView editingStyleForRowAtIndexPath:(NSIndexPath *)path {
     if (![self tableView:tableView canEditRowAtIndexPath: path]) return UITableViewCellEditingStyleNone;
-    return (data[path.section].flag & LFL::TableSection::Flag::EditableIfHasTag && !data[path.section].item[path.row].tag) ?
+    return (data[path.section].flag & LFL::TableSectionInterface::Flag::EditableIfHasTag && !data[path.section].item[path.row].tag) ?
       UITableViewCellEditingStyleNone : UITableViewCellEditingStyleDelete;
   }
 
   - (BOOL)tableView:(UITableView *)tableView canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
     if (indexPath.section >= data.size()) return NO;
-    return data[indexPath.section].flag & LFL::TableSection::Flag::MovableRows;
+    return data[indexPath.section].flag & LFL::TableSectionInterface::Flag::MovableRows;
   }
 
   - (void)tableView:(UITableView *)tableView moveRowAtIndexPath:(NSIndexPath *)sourceIndexPath toIndexPath:(NSIndexPath *)destinationIndexPath {
@@ -1098,7 +1098,7 @@ iOSTableView::~iOSTableView() { [table release]; }
 iOSTableView::iOSTableView(const string &title, const string &style, const string &theme, TableItemVec items) :
   table([[IOSTable alloc] initWithStyle: UITableViewStyleGrouped]) {
     // INFOf("iOSTableView %s IOSTable: %p", title.c_str(), table);
-    [table load:this withTitle:title withStyle:style items:TableSection::Convert(move(items))];
+    [table load:this withTitle:title withStyle:style items:TableSection<TableItem>::Convert(move(items))];
     [table setTheme: theme];
   }
 
@@ -1155,7 +1155,7 @@ void iOSTableView::BeginUpdates() { [table.tableView beginUpdates]; }
 void iOSTableView::EndUpdates() { [table.tableView endUpdates]; }
 void iOSTableView::SetSectionValues(int section, const StringVec &item) { [table setSectionValues:section items:item]; }
 void iOSTableView::SetSectionColors(int section, const vector<Color> &item) { [table setSectionColors:section items:item]; }
-void iOSTableView::ApplyChangeList(const TableSection::ChangeList &changes) { [table applyChangeList:changes]; }
+void iOSTableView::ApplyChangeList(const TableSectionInterface::ChangeList &changes) { [table applyChangeList:changes]; }
 void iOSTableView::ReplaceRow(int section, int row, TableItem h) { [table replaceRow:section row:row val:move(h)]; }
 void iOSTableView::ReplaceSection(int section, TableItem h, int flag, TableItemVec item)
 { [table replaceSection:section items:move(item) header:move(h) flag:flag]; }

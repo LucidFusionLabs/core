@@ -23,7 +23,6 @@ import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.content.pm.ActivityInfo;
 import android.hardware.*;
-import android.util.Log;
 import android.util.Pair;
 import android.util.TypedValue;
 import android.net.Uri;
@@ -52,14 +51,14 @@ public class ScreenFragmentNavigator {
     public void show(final MainActivity activity, final boolean show_or_hide) {
         activity.runOnUiThread(new Runnable() { public void run() {
             if (show_or_hide) {
-                if (shown_index >= 0) Log.i("lfl", "Show already shown navbar");
+                if (shown_index >= 0) NativeAPI.INFO("Show already shown navbar");
                 else {
                     activity.screens.navigators.add(ScreenFragmentNavigator.this);
                     activity.gl_layout.setVisibility(View.GONE);
                     activity.action_bar.show();
                     shown_index = activity.screens.navigators.size()-1;
                     int stack_size = activity.getSupportFragmentManager().getBackStackEntryCount();
-                    if (stack_size != 0) Log.e("lfl", "nested show? stack_size=" + stack_size);
+                    if (stack_size != 0) NativeAPI.ERROR("nested show? stack_size=" + stack_size);
                     synchronized(stack) {
                         for (Screen x : stack) {
                             x.changed = false;
@@ -72,11 +71,11 @@ public class ScreenFragmentNavigator {
                     }
                 }
             } else {
-                if (shown_index < 0) Log.i("lfl", "Hide unshown navbar");
+                if (shown_index < 0) NativeAPI.INFO("Hide unshown navbar");
                 else {
                     activity.getSupportFragmentManager().popBackStackImmediate(null, FragmentManager.POP_BACK_STACK_INCLUSIVE);
                     int size = activity.screens.navigators.size();
-                    if (shown_index != size-1) Log.e("lfl", "hide navigator  shown_index=" + shown_index + " size=" + size);
+                    if (shown_index != size-1) NativeAPI.ERROR("hide navigator  shown_index=" + shown_index + " size=" + size);
                     if (shown_index < size) activity.screens.navigators.remove(shown_index);
                     if (activity.disable_title) activity.action_bar.hide();
                     if (activity.getSupportFragmentManager().findFragmentById(R.id.content_frame) != null) {
@@ -109,7 +108,7 @@ public class ScreenFragmentNavigator {
     public void popView(final AppCompatActivity activity, final int n) {
         if (n <= 0) return;
         synchronized(stack) {
-            if (stack.size() < n) Log.e("lfl", "pop " + n + " views with stack size " + stack.size());
+            if (stack.size() < n) NativeAPI.ERROR("pop " + n + " views with stack size " + stack.size());
             if (stack.size() > 0) stack.subList(Math.max(0, stack.size()-n), stack.size()).clear();
         }
         activity.runOnUiThread(new Runnable() { public void run() {
@@ -164,10 +163,10 @@ public class ScreenFragmentNavigator {
             if (activity.screens.navigators.size() >= 0) {
                 ScreenFragmentNavigator n = activity.screens.navigators.get(activity.screens.navigators.size()-1);
                 synchronized(n.stack) {
-                    if (back_count != n.stack.size()) Log.e("lfl", "back_count=" + back_count + " but stack_size=" + n.stack.size());
+                    if (back_count != n.stack.size()) NativeAPI.ERROR("back_count=" + back_count + " but stack_size=" + n.stack.size());
                     if (n.stack.size() > 0) n.stack.remove(n.stack.size()-1);
                 }
-            } else Log.e("lfl", "back_count=" + back_count + " but no navigators");
+            } else NativeAPI.ERROR("back_count=" + back_count + " but no navigators");
 
             runBackFragmentHideCB(activity, 1);
             activity.superOnBackPressed();
@@ -209,7 +208,7 @@ public class ScreenFragmentNavigator {
         if (stack_size == 0) return;
         String tag = Integer.toString(stack_size-1);
         Fragment frag = activity.getSupportFragmentManager().findFragmentByTag(tag);
-        if (frag == null) { Log.e("lfl", "showBackFragment tag=" + tag + ": null"); return; }
+        if (frag == null) { NativeAPI.ERROR("showBackFragment tag=" + tag + ": null"); return; }
         if (show_content) activity.getSupportFragmentManager().beginTransaction().replace(R.id.content_frame, frag, tag).commit();
         if (show_title && frag instanceof ScreenFragment) activity.setTitle(((ScreenFragment)frag).parent_screen.title);
     }

@@ -16,7 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "core/app/gui.h"
+#include "core/app/gl/view.h"
 #include "core/app/ipc.h"
 
 #include <time.h>
@@ -309,17 +309,19 @@ void Application::Log(int level, const char *file, int line, const char *message
     WriteLogLine(log_pid ? StrCat("[", pid, "] ", tbuf).c_str() : tbuf, message, file, line);
   }
   if (level == LFApp::Log::Fatal) LFAppFatal();
-  if (run && FLAGS_enable_video && focused && focused->console) focused->console->Write(message);
+  if (run && FLAGS_enable_video && focused && focused->console && MainThread()) focused->console->Write(message);
 }
 
 void Application::WriteLogLine(const char *tbuf, const char *message, const char *file, int line) {
   if (app) {
     if (app->logout) {
-      fprintf(app->logout, "%s %s (%s:%d)\r\n", tbuf, message, file, line);
+      if (file) fprintf(app->logout, "%s %s (%s:%d)\r\n", tbuf, message, file, line);
+      else      fprintf(app->logout, "%s %s\r\n",         tbuf, message);
       fflush(app->logout);
     }
     if (app->logfile) {
-      fprintf(app->logfile, "%s %s (%s:%d)\r\n", tbuf, message, file, line);
+      if (file) fprintf(app->logfile, "%s %s (%s:%d)\r\n", tbuf, message, file, line);
+      else      fprintf(app->logfile, "%s %s\r\n",         tbuf, message);
       fflush(app->logfile);
     }
   }
@@ -923,14 +925,6 @@ void FrameScheduler::SetAnimating(Window *w, bool is_animating) {
     UpdateTargetFPS(w, target_fps);
     Wakeup(w);
   }
-}
-
-/* ViewInterface */
-
-void TableViewInterface::ApplyChangeSet(const string &v, const TableSection::ChangeSet &changes) {
-  auto it = changes.find(v);
-  if (it == changes.end()) return ERROR("Missing TableView ChangeSet ", v);
-  ApplyChangeList(it->second);
 }
 
 }; // namespace LFL

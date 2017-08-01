@@ -279,7 +279,7 @@ void AndroidTableView::ReplaceSection(int section, TableItem header, int flag, T
   jni->env->CallVoidMethod(impl.v, mid, jni->activity, jint(section), h.v, jint(flag), l.v);
 }
 
-void AndroidTableView::ApplyChangeList(const TableSection::ChangeList &changes) {
+void AndroidTableView::ApplyChangeList(const TableSectionInterface::ChangeList &changes) {
   LocalJNIObject l(jni->env, JNI::ToModelItemChangeList(jni->env, changes));
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->tablescreen_class, "applyChangeList", "(Landroid/support/v7/app/AppCompatActivity;Ljava/util/ArrayList;)V"));

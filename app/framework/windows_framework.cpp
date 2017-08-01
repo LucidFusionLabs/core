@@ -333,6 +333,16 @@ bool Video::CreateWindow(Window *W) {
   return true;
 }
 
+void *Video::BeginGLContextCreate(Window *W) {
+  if (wglewIsSupported("WGL_ARB_create_context")) return wglCreateContextAttribsARB((HDC)W->surface, (HGLRC)W->gl, 0);
+  else { HGLRC ret = wglCreateContext((HDC)W->surface); wglShareLists((HGLRC)W->gl, ret); return ret; }
+}
+
+void *Video::CompleteGLContextCreate(Window *W, void *gl_context) {
+  wglMakeCurrent((HDC)W->surface, (HGLRC)gl_context);
+  return gl_context;
+}
+
 int Video::Swap() {
   screen->gd->Flush();
   SwapBuffers(dynamic_cast<WinWindow*>(screen)->surface);

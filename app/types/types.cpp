@@ -166,36 +166,13 @@ TableItem::TableItem(string K, int T, string V, string RT, int TG, int LI, int R
 void TableItem::SetFGColor(const Color &c) { fg_r=c.R(); fg_g=c.G(); fg_b=c.B(); fg_a=c.A(); }
 void TableItem::SetBGColor(const Color &c) { bg_r=c.R(); bg_g=c.G(); bg_b=c.B(); bg_a=c.A(); }
 
-vector<TableSection> TableSection::Convert(vector<TableItem> in) {
-  vector<TableSection> ret;
-  ret.emplace_back();
-  for (auto &i : in) {
-    if (i.type == LFL::TableItem::Separator) ret.emplace_back(move(i));
-    else                                     ret.back().item.emplace_back(move(i));
-  }
-  return ret;
+void TableViewInterface::ApplyChangeSet(const string &v, const TableSectionInterface::ChangeSet &changes) {
+  auto it = changes.find(v);
+  if (it == changes.end()) return ERROR("Missing TableView ChangeSet ", v);
+  ApplyChangeList(it->second);
 }
 
-void TableSection::FindSectionOffset(const vector<TableSection> &data, int collapsed_row, int *section_out, int *row_out) {
-  auto it = lower_bound(data.begin(), data.end(), TableSection(collapsed_row),
-                        MemberLessThanCompare<TableSection, int, &TableSection::start_row>());
-  if (it != data.end() && it->start_row == collapsed_row) { *section_out = it - data.begin(); return; }
-  CHECK_NE(data.begin(), it);
-  *section_out = (it != data.end() ? (it - data.begin()) : data.size()) - 1;
-  *row_out = collapsed_row - data[*section_out].start_row - 1;
-}
-
-void TableSection::ApplyChangeList(const TableSection::ChangeList &changes, vector<TableSection> *out, function<void(const TableSection::Change&)> f) {
-  for (auto &d : changes) {
-    CHECK_LT(d.section, out->size());
-    CHECK_LT(d.row, (*out)[d.section].item.size());
-    auto &ci = (*out)[d.section].item[d.row];
-    ApplyChange(&ci, d);
-    if (f) f(d);
-  }
-}
-
-void TableSection::ApplyChange(TableItem *out, const TableSection::Change &d) {
+void TableSectionInterface::ApplyChange(TableItem *out, const TableSectionInterface::Change &d) {
   if (1)            out->val        = d.val;
   if (1)            out->hidden     = d.hidden;
   if (1)            out->flags      = d.flags;

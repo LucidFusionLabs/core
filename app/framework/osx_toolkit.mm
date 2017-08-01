@@ -160,10 +160,10 @@ static LFL::FreeListVector<NSImage*> app_images;
 @implementation OSXTable
   {
     int data_rows;
-    std::vector<LFL::TableSection> data;
+    std::vector<LFL::TableSection<LFL::TableItem>> data;
   }
 
-  - (id)init: (LFL::TableViewInterface*)lself withTitle:(const std::string&)title andStyle:(const std::string&)style items:(std::vector<LFL::TableSection>)item { 
+  - (id)init: (LFL::TableViewInterface*)lself withTitle:(const std::string&)title andStyle:(const std::string&)style items:(std::vector<LFL::TableSection<LFL::TableItem>>)item { 
     self = [super init];
     self.title = LFL::MakeNSString(title);
     _lfl_self = lself;
@@ -220,7 +220,7 @@ static LFL::FreeListVector<NSImage*> app_images;
     [OSXTable addHiddenIndices:data[section] to:show_indices];
     [_tableView unhideRowsAtIndexes:show_indices withAnimation:NSTableViewAnimationEffectNone];
 
-    data[section] = LFL::TableSection(move(h), f, data[section].start_row);
+    data[section] = LFL::TableSection<LFL::TableItem>(move(h), f, data[section].start_row);
     data[section].item = move(item);
     data_rows += size_delta;
     if (size_delta) for (int i=section+1, e=data.size(); i < e; ++i) data[i].start_row += size_delta;
@@ -298,8 +298,8 @@ static LFL::FreeListVector<NSImage*> app_images;
     for (int i=0, l=data[section].item.size(); i != l; ++i) [self setColor:section row:i val:item[i]];
   }
 
-  - (void)applyChangeList:(const LFL::TableSection::ChangeList&)changes {
-    LFL::TableSection::ApplyChangeList(changes, &data, [=](const LFL::TableSection::Change &d){
+  - (void)applyChangeList:(const LFL::TableSectionInterface::ChangeList&)changes {
+    LFL::TableSection<LFL::TableItem>::ApplyChangeList(changes, &data, [=](const LFL::TableSectionInterface::Change &d){
     #if 0
       NSIndexPath *p = [NSIndexPath indexPathForRow:d.row inSection:d.section];
       [self.tableView reloadRowsAtIndexPaths:@[p] withRowAnimation:UITableViewRowAnimationNone];
@@ -315,7 +315,7 @@ static LFL::FreeListVector<NSImage*> app_images;
 
   - (CGFloat)tableView:(NSTableView *)tableView heightOfRow:(NSInteger)collapsed_row {
     int section = -1, row = -1;
-    LFL::TableSection::FindSectionOffset(data, collapsed_row, &section, &row);
+    LFL::TableSection<LFL::TableItem>::FindSectionOffset(data, collapsed_row, &section, &row);
     if (section < 0 || section >= data.size() || row < 0 || row >= data[section].item.size()) return _row_height;
     const auto &ci = data[section].item[row];
     if ((ci.flags & OSXTableItem::GUILoaded) &&
@@ -335,7 +335,7 @@ static LFL::FreeListVector<NSImage*> app_images;
     OSXTableCellView *cellView = [tableView makeViewWithIdentifier:identifier owner:self];
     if (cellView == nil) {
       int section = -1, row = -1;
-      LFL::TableSection::FindSectionOffset(data, collapsed_row, &section, &row);
+      LFL::TableSection<LFL::TableItem>::FindSectionOffset(data, collapsed_row, &section, &row);
       if (row < 0) return (cellView = [self headerForSection: section]);
 
       [self checkExists:section row:row];
@@ -401,7 +401,7 @@ static LFL::FreeListVector<NSImage*> app_images;
 
   - (BOOL)tableView:(NSTableView *)tableView shouldSelectRow:(NSInteger)collapsed_row {
     int section = -1, row = -1;
-    LFL::TableSection::FindSectionOffset(data, collapsed_row, &section, &row);
+    LFL::TableSection<LFL::TableItem>::FindSectionOffset(data, collapsed_row, &section, &row);
     if (row < 0) return NO;
     [self checkExists:section row:row];
     _selected_section = section;
@@ -428,7 +428,7 @@ static LFL::FreeListVector<NSImage*> app_images;
     return ret;
   }
 
-  + (void)addHiddenIndices:(const LFL::TableSection&)in to:(NSMutableIndexSet*)out {
+  + (void)addHiddenIndices:(const LFL::TableSection<LFL::TableItem>&)in to:(NSMutableIndexSet*)out {
     for (auto b = in.item.begin(), e = in.item.end(), j = b; j != e; ++j) 
       if (j->hidden) [out addIndex: in.start_row + (j - b) + 1];
   }
@@ -463,7 +463,7 @@ struct OSXTableView : public TableViewInterface {
   OSXTable *table;
   ~OSXTableView() { [table release]; }
   OSXTableView(const string &title, const string &style, TableItemVec items) :
-    table([[OSXTable alloc] init:this withTitle:title andStyle:style items:TableSection::Convert(move(items))]) {}
+    table([[OSXTable alloc] init:this withTitle:title andStyle:style items:TableSection<TableItem>::Convert(move(items))]) {}
 
   void DelNavigationButton(int align) {}
   void AddNavigationButton(int align, const TableItem &item) {}
@@ -492,7 +492,7 @@ struct OSXTableView : public TableViewInterface {
   void ReplaceSection(int section, TableItem h, int flag, TableItemVec item)
   { [table replaceSection:section items:move(item) header:h flag:flag]; }
 
-  void ApplyChangeList(const TableSection::ChangeList &changes) { [table applyChangeList:changes]; }
+  void ApplyChangeList(const TableSectionInterface::ChangeList &changes) { [table applyChangeList:changes]; }
   void SetSectionValues(int section, const StringVec &item) { [table setSectionValues:section items:item]; }
   void SetSectionColors(int section, const vector<Color> &item) { [table setSectionColors:section items:item]; }
   void SetHeader(int section, TableItem header) {}

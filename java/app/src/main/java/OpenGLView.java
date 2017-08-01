@@ -14,7 +14,6 @@ import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.content.pm.ActivityInfo;
 import android.hardware.*;
-import android.util.Log;
 
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.egl.*;
@@ -40,18 +39,18 @@ public class OpenGLView extends android.view.SurfaceView implements SurfaceHolde
     }
 
     @Override protected void onSizeChanged(int xNew, int yNew, int xOld, int yOld) {
-        Log.i("lfl", "OpenGLView.onSizeChanged(" + xNew + ", " + yNew + " <- " + xOld + ", " + yOld + ")");
+        NativeAPI.INFO("OpenGLView.onSizeChanged(" + xNew + ", " + yNew + " <- " + xOld + ", " + yOld + ")");
     }
 
     @Override public void surfaceCreated(SurfaceHolder holder) {
-        Log.i("lfl", "OpenGLView.surfaceCreated()");
+        NativeAPI.INFO("OpenGLView.surfaceCreated()");
         have_surface = true;
     }
 
     @Override public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
         boolean init = surface_width == 0 && surface_height == 0, thread_exists = thread != null;
         boolean size_changed = height != surface_height || width != surface_width;
-        Log.i("lfl", "OpenGLView.surfaceChanged(" + width + ", " + height + ") init=" + init + 
+        NativeAPI.INFO("OpenGLView.surfaceChanged(" + width + ", " + height + ") init=" + init + 
               ", size_changed=" + size_changed + ", thread_exists=" + thread_exists);
         surface_width = width;
         surface_height = height;
@@ -60,13 +59,13 @@ public class OpenGLView extends android.view.SurfaceView implements SurfaceHolde
     }
 
     @Override public void surfaceDestroyed(SurfaceHolder holder) {
-        Log.i("lfl", "surfaceDestroyed()");
+        NativeAPI.INFO("surfaceDestroyed()");
         have_surface = false;
     }
 
     public void synchronizedReshape() {
         boolean gl_thread = Thread.currentThread() == thread;
-        Log.i("lfl", "NativeAPI.reshaped(0, 0, " + surface_width + ", " + surface_height + ") gl_thread=" + gl_thread + " frame_enabled=" + NativeAPI.getFrameEnabled());
+        NativeAPI.INFO("NativeAPI.reshaped(0, 0, " + surface_width + ", " + surface_height + ") gl_thread=" + gl_thread + " frame_enabled=" + NativeAPI.getFrameEnabled());
         NativeAPI.reshaped(0, 0, surface_width, surface_height);
         if (reshape_synchronized) {
             if (gl_thread) return;
@@ -77,7 +76,7 @@ public class OpenGLView extends android.view.SurfaceView implements SurfaceHolde
                     catch (InterruptedException ex) { Thread.currentThread().interrupt(); }
                 }
             }
-            Log.i("lfl", "OpenGLView synchronizedReshape done");
+            NativeAPI.INFO("OpenGLView synchronizedReshape done");
         }
     }
 
@@ -89,7 +88,7 @@ public class OpenGLView extends android.view.SurfaceView implements SurfaceHolde
 
     public void onResume() {
         boolean thread_exists = thread != null;
-        Log.i("lfl", "OpenGLView.onResume() have_surface=" + have_surface + " thread_exists=" + thread_exists);
+        NativeAPI.INFO("OpenGLView.onResume() have_surface=" + have_surface + " thread_exists=" + thread_exists);
         if (have_surface && !thread_exists) startRenderThread();
     }
 
@@ -99,14 +98,14 @@ public class OpenGLView extends android.view.SurfaceView implements SurfaceHolde
         thread = null;        
         NativeAPI.minimize();
         try { t.join(); }
-        catch(Exception e) { Log.e("lfl", e.toString()); }
+        catch(Exception e) { NativeAPI.ERROR(e.toString()); }
     }
 
     public void startRenderThread() {
-        Log.i("lfl", "startRenderThread NativeAPI.init=" + NativeAPI.init);
+        NativeAPI.INFO("startRenderThread NativeAPI.init=" + NativeAPI.init);
         main_activity.screens.onStartRenderThread(main_activity, main_activity.gl_layout);
-        if   (!NativeAPI.init) thread = new Thread(new Runnable() { public void run() { initEGL(); NativeAPI.main();                           shutdownEGL(); } }, "JNIMainThread");
-        else                   thread = new Thread(new Runnable() { public void run() { initEGL(); NativeAPI.newMainLoop(main_activity, true); shutdownEGL(); } }, "JNIMainThread");
+        if   (!NativeAPI.init) thread = new Thread(new Runnable() { public void run() { initEGL(); NativeAPI.main(surface_width, surface_height, egl_version); shutdownEGL(); } }, "JNIMainThread");
+        else                   thread = new Thread(new Runnable() { public void run() { initEGL(); NativeAPI.newMainLoop(main_activity, true);                 shutdownEGL(); } }, "JNIMainThread");
         thread.start();
         NativeAPI.init = true;
     }
@@ -118,7 +117,7 @@ public class OpenGLView extends android.view.SurfaceView implements SurfaceHolde
             if (!egl.eglMakeCurrent(egl_display, egl_surface, egl_surface, egl_context)) throw new Exception(getEGLError(egl, "eglMakeCurrent"));
             return true;
         } catch(Exception e) {
-            Log.e("lfl", e.toString());
+            NativeAPI.ERROR(e.toString());
             egl_surface = null;
             return false;
         }
@@ -130,7 +129,7 @@ public class OpenGLView extends android.view.SurfaceView implements SurfaceHolde
             egl.eglMakeCurrent(egl_display, EGL10.EGL_NO_SURFACE, EGL10.EGL_NO_SURFACE, EGL10.EGL_NO_CONTEXT);
             egl.eglDestroySurface(egl_display, egl_surface);
         }
-        catch(Exception e) { Log.e("lfl", e.toString()); }
+        catch(Exception e) { NativeAPI.ERROR(e.toString()); }
         finally { egl_surface = null; }
     }
 
@@ -157,7 +156,7 @@ public class OpenGLView extends android.view.SurfaceView implements SurfaceHolde
             if (!egl.eglChooseConfig(egl_display, attrib_list, egl_configs, 1, num_config) || num_config[0] == 0) throw new Exception("eglChooseConfig");
             if ((egl_context = egl.eglCreateContext(egl_display, egl_configs[0], EGL10.EGL_NO_CONTEXT, context_attrib)) == EGL10.EGL_NO_CONTEXT) throw new Exception("eglCreateContext");
         } catch(Exception e) {
-            Log.e("lfl", e.toString());
+            NativeAPI.ERROR(e.toString());
             egl = null;
             egl_display = null;
             egl_context = null;
@@ -173,7 +172,7 @@ public class OpenGLView extends android.view.SurfaceView implements SurfaceHolde
             EGL10 egl = (EGL10)EGLContext.getEGL();
             egl.eglDestroyContext(egl_display, egl_context);
             egl.eglTerminate(egl_display);
-        } catch(Exception e) { Log.e("lfl", e.toString()); }
+        } catch(Exception e) { NativeAPI.ERROR(e.toString()); }
         egl_display = null;
         egl_context = null;
     }
@@ -186,7 +185,7 @@ public class OpenGLView extends android.view.SurfaceView implements SurfaceHolde
         try {
             egl.eglSwapBuffers(egl_display, egl_surface);
             synchronized(sync) { sync.notifyAll(); }
-        } catch(Exception e) { Log.e("lfl", "swapEGL " + e.toString()); }
+        } catch(Exception e) { NativeAPI.ERROR("swapEGL " + e.toString()); }
     }
 
     public static String getEGLError(EGL10 egl, String prefix) {

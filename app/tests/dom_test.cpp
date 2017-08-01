@@ -17,7 +17,7 @@
  */
 
 #include "gtest/gtest.h"
-#include "core/app/gui.h"
+#include "core/app/gl/view.h"
 #include "core/app/ipc.h"
 #include "core/web/browser.h"
 #include "core/web/document.h"

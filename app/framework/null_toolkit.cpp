@@ -26,9 +26,9 @@ struct NullToolbarView : public ToolbarViewInterface {
 };
 
 struct NullTableView : public TableViewInterface {
-  vector<TableSection> data;
+  vector<TableSection<TableItem>> data;
   NullTableView(const string &title, const string &style, TableItemVec items) :
-    data(TableSection::Convert(move(items))) {}
+    data(TableSection<TableItem>::Convert(move(items))) {}
 
   void DelNavigationButton(int align) {}
   void AddNavigationButton(int align, const TableItem &item) {}
@@ -53,7 +53,7 @@ struct NullTableView : public TableViewInterface {
   void SelectRow(int section, int row) {} 
   void ReplaceRow(int section, int row, TableItem item) {}
   void ReplaceSection(int section, TableItem h, int flag, TableItemVec item) {}
-  void ApplyChangeList(const TableSection::ChangeList&) {}
+  void ApplyChangeList(const TableSectionInterface::ChangeList&) {}
   void SetSectionValues(int section, const StringVec &item) {
     if (section == data.size()) data.emplace_back();
     CHECK_LT(section, data.size());

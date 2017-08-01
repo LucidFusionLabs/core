@@ -77,15 +77,7 @@ struct AndroidFrameworkModule : public Module {
   bool frame_on_keyboard_input = 0, frame_on_mouse_input = 0;
 
   int Init() {
-    jfieldID w_fid = CheckNotNull(jni->env->GetFieldID(jni->view_class, "surface_width", "I"));
-    jfieldID h_fid = CheckNotNull(jni->env->GetFieldID(jni->view_class, "surface_height", "I"));
-    jfieldID v_fid = CheckNotNull(jni->env->GetFieldID(jni->view_class, "egl_version", "I"));
-
-    app->focused->width = CheckNotNull(jni->env->GetIntField(jni->view, w_fid));
-    app->focused->height = CheckNotNull(jni->env->GetIntField(jni->view, h_fid));
-    app->opengles_version = CheckNotNull(jni->env->GetIntField(jni->view, v_fid));
     INFO("AndroidFrameworkModule::Init(), opengles_version=", app->opengles_version);
-
     auto screen = app->focused;
     CHECK(!screen->id);
     screen->id = screen;
@@ -320,10 +312,10 @@ void Application::SetTheme(const string &v) {
 bool Video::CreateWindow(Window *W) { return true; }
 void Video::StartWindow(Window *W) {}
 int Video::Swap() {
-  static jmethodID jni_view_method_swap = CheckNotNull(jni->env->GetMethodID(jni->view_class, "swapEGL", "()V"));
+  static jmethodID jni_activity_method_swap = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "viewSwapEGL", "()V"));
   auto gd = app->focused->gd;
   gd->Flush();
-  jni->env->CallVoidMethod(jni->view, jni_view_method_swap);
+  jni->env->CallVoidMethod(jni->activity, jni_activity_method_swap);
   gd->CheckForError(__FILE__, __LINE__);
   return 0;
 }
@@ -389,6 +381,7 @@ static void NativeAPI_shutdownMainLoop() {
   app->suspended = true;
   if (app->focused->unfocused_cb) app->focused->unfocused_cb();
   while (app->message_queue.HandleMessages()) {}
+  app->ResetGL(LFL::ResetGLFlag::Delete);
   app->focused->gd->Finish();
 }
 
@@ -398,7 +391,6 @@ extern "C" void Java_com_lucidfusionlabs_app_NativeAPI_create(JNIEnv *e, jclass 
   CHECK(jni->env = e);
   CHECK(jni->activity_class = (jclass)e->NewGlobalRef(e->GetObjectClass(a)));
   CHECK(jni->activity_resources = e->GetFieldID(jni->activity_class, "resources", "Landroid/content/res/Resources;"));
-  CHECK(jni->activity_view      = e->GetFieldID(jni->activity_class, "gl_view",   "Lcom/lucidfusionlabs/app/OpenGLView;"));
   CHECK(jni->activity_handler   = e->GetFieldID(jni->activity_class, "handler",   "Landroid/os/Handler;"));
   // CHECK(jni->activity_gplus     = e->GetFieldID(jni->activity_class, "gplus",     "Lcom/lucidfusionlabs/app/GPlusClient;"));
   static jmethodID activity_getpkgname_mid =
@@ -408,7 +400,6 @@ extern "C" void Java_com_lucidfusionlabs_app_NativeAPI_create(JNIEnv *e, jclass 
   jni->package_name = jni->GetJString(jni->env, (jstring)jni->env->CallObjectMethod(jni->activity, activity_getpkgname_mid));
   std::replace(jni->package_name.begin(), jni->package_name.end(), '.', '/');
 
-  CHECK(jni->view_class         = (jclass)e->NewGlobalRef(e->GetObjectClass(jni->view)));
   CHECK(jni->arraylist_class    = (jclass)e->NewGlobalRef(e->FindClass("java/util/ArrayList")));
   CHECK(jni->hashmap_class      = (jclass)e->NewGlobalRef(e->FindClass("java/util/HashMap")));
   CHECK(jni->string_class       = (jclass)e->NewGlobalRef(e->FindClass("java/lang/String")));
@@ -460,9 +451,12 @@ extern "C" void Java_com_lucidfusionlabs_app_NativeAPI_create(JNIEnv *e, jclass 
   MyAppCreate(1, argv);
 }
 
-extern "C" void Java_com_lucidfusionlabs_app_NativeAPI_main(JNIEnv *e, jclass c) {
+extern "C" void Java_com_lucidfusionlabs_app_NativeAPI_main(JNIEnv *e, jclass c, jint w, jint h, jint v) {
   CHECK(jni->env = e);
-  INFOf("Main: env=%p", jni->env);
+  INFOf("Main: env=%p w=%d h=%d opengles_version=%d", jni->env, w, h, v);
+  app->focused->width = w;
+  app->focused->height = h;
+  app->opengles_version = v;
   int ret = MyAppMain();
 
   NativeAPI_shutdownMainLoop();
@@ -476,7 +470,7 @@ extern "C" void Java_com_lucidfusionlabs_app_NativeAPI_newMainLoop(JNIEnv *e, jc
   jni->Init(a, false);
   app->suspended = false;
   SetLFAppMainThread();
-  if (reset) app->ResetGL(ResetGLFlag::Reload);
+  if (reset) app->ResetGL(LFL::ResetGLFlag::Delete | ResetGLFlag::Reload);
   if (app->focused->focused_cb) app->focused->focused_cb();
   int ret = app->MainLoop();
 
@@ -491,9 +485,9 @@ extern "C" void Java_com_lucidfusionlabs_app_NativeAPI_minimize(JNIEnv* env, jcl
 }
 
 extern "C" void Java_com_lucidfusionlabs_app_NativeAPI_reshaped(JNIEnv *e, jclass c, jint x, jint y, jint w, jint h) { 
-  static jmethodID mid = CheckNotNull(e->GetMethodID(jni->view_class, "onSynchronizedReshape", "()V"));
+  static jmethodID mid = CheckNotNull(e->GetMethodID(jni->activity_class, "viewOnSynchronizedReshape", "()V"));
   app->RunNowInMainThread([=](){
-    jni->env->CallVoidMethod(jni->view, mid);
+    jni->env->CallVoidMethod(jni->activity, mid);
     app->focused->Reshaped(Box(x, y, w, h));
   });
 }
@@ -562,8 +556,12 @@ extern "C" void Java_com_lucidfusionlabs_app_NativeAPI_scale(JNIEnv *e, jclass c
   app->scheduler.Wakeup(app->focused, FrameScheduler::WakeupFlag::ContingentOnEvents);
 }
 
+extern "C" void Java_com_lucidfusionlabs_app_NativeAPI_log(JNIEnv *e, jclass c, jint level, jstring text) {
+  app->Log(level, nullptr, 0, jni->GetJString(e, text).c_str());
+}
+
 extern "C" void Java_com_lucidfusionlabs_app_NativeAPI_shellRun(JNIEnv *e, jclass c, jstring text) {
-  app->focused->shell->Run(e->GetStringUTFChars(text, 0));
+  app->focused->shell->Run(jni->GetJString(e, text));
 }
 
 extern "C" jboolean Java_com_lucidfusionlabs_app_NativeAPI_getFrameEnabled(JNIEnv *e, jclass c) {
@@ -629,18 +627,12 @@ extern "C" void Java_com_lucidfusionlabs_app_TableScreen_RunHideCB(JNIEnv *e, jo
 }
 
 extern "C" void Java_com_lucidfusionlabs_app_GPlusClient_startGame(JNIEnv *e, jobject a, jboolean server, jstring pid) {
-  char buf[128];
-  const char *participant_id = e->GetStringUTFChars(pid, 0);
-  snprintf(buf, sizeof(buf), "%s %s", server ? "gplus_server" : "gplus_client", participant_id);
-  app->focused->shell->Run(buf);
-  e->ReleaseStringUTFChars(pid, participant_id);
+  app->focused->shell->Run(StrCat((server ? "gplus_server " : "gplus_client "), jni->GetJString(e, pid)));
 }
 
 extern "C" void Java_com_lucidfusionlabs_app_GPlusClient_read(JNIEnv *e, jobject a, jstring pid, jobject bb, jint len) {
   static GPlus *gplus = Singleton<GPlus>::Get();
-  const char *participant_id = e->GetStringUTFChars(pid, 0);
-  if (gplus->server) gplus->server->EndpointRead(participant_id, (const char*)e->GetDirectBufferAddress(bb), len);
-  e->ReleaseStringUTFChars(pid, participant_id);
+  if (gplus->server) gplus->server->EndpointRead(jni->GetJString(e, pid), (const char*)e->GetDirectBufferAddress(bb), len);
 }
 
 }; // namespace LFL

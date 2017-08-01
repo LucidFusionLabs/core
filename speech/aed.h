@@ -309,7 +309,7 @@ struct AcousticEventDetector {
   }
 };
 
-#ifdef LFL_CORE_APP_GUI_H__
+#ifdef LFL_CORE_APP_GL_VIEW_H__
 struct AcousticEventGUI {
   static void Draw(AcousticEventDetector *AED, Box win, bool flip=false) {
     AED->alloc.Reset();
@@ -378,7 +378,7 @@ struct AcousticEventGUI {
     Scene::Draw(gd, geom, 0);
   }
 };
-#endif /* LFL_CORE_APP_GUI_H__ */
+#endif /* LFL_CORE_APP_GL_VIEW_H__ */
 
 }; // namespace LFL
 #endif // LFL_CORE_SPEECH_AED_H__

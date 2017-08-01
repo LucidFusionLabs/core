@@ -155,7 +155,7 @@ struct iOSTableView : public TableViewInterface {
   void SelectRow(int section, int row);
   void ReplaceRow(int section, int row, TableItem item);
   void ReplaceSection(int section, TableItem h, int flag, TableItemVec item);
-  void ApplyChangeList(const TableSection::ChangeList &changes);
+  void ApplyChangeList(const TableSectionInterface::ChangeList &changes);
   void SetSectionValues(int section, const StringVec &item);
   void SetSectionColors(int section, const vector<Color> &item);
   void SetSectionEditable(int section, int start_row, int skip_last_rows, LFL::IntIntCB cb);

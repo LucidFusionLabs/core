@@ -16,7 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "core/app/gui.h"
+#include "core/app/gl/view.h"
+#include "core/app/gl/editor.h"
 
 namespace LFL {
 Editor::SyntaxColors::SyntaxColors(const string &n, const vector<Rule> &rules) :

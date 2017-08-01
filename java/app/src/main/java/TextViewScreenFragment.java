@@ -14,7 +14,6 @@ import android.widget.AdapterView.OnItemClickListener;
 import android.widget.ArrayAdapter;
 import android.widget.TextView;
 import android.widget.LinearLayout;
-import android.util.Log;
 
 public class TextViewScreenFragment extends ScreenFragment implements OnItemClickListener {
     public String data;

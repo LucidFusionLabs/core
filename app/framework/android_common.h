@@ -33,9 +33,9 @@ struct Java {
 
 struct JNI {
   JNIEnv *env=0;
-  jobject activity=0, resources=0, view=0, gplus=0, handler=0;
+  jobject activity=0, resources=0, gplus=0, handler=0;
   jclass activity_class=0, resources_class=0, throwable_class=0, string_class=0, arraylist_class=0,
-         pair_class=0, hashmap_class=0, view_class=0, frame_class=0, assetmgr_class=0, 
+         pair_class=0, hashmap_class=0, frame_class=0, assetmgr_class=0, 
          inputstream_class=0, channels_class=0, readbytechan_class=0, r_string_class=0,
          toolbar_class=0, advertising_class=0, gplus_class=0, purchases_class=0, handler_class=0,
          modelitem_class=0, modelitemchange_class=0, pickeritem_class=0, alertscreen_class=0,
@@ -46,7 +46,7 @@ struct JNI {
             hashmap_construct=0, hashmap_size=0, hashmap_get=0, hashmap_put=0, pair_construct=0,
             modelitem_construct=0, modelitemchange_construct=0, pickeritem_construct=0,
             int_intval=0, long_longval=0;
-  jfieldID activity_resources=0, activity_view=0, activity_handler=0, activity_gplus=0,
+  jfieldID activity_resources=0, activity_handler=0, activity_gplus=0,
            pair_first=0, pair_second=0;
   string package_name;
 
@@ -67,11 +67,11 @@ struct JNI {
   static jobject ToModelItemArrayList(JNIEnv*, AlertItemVec items);
   static jobject ToModelItemArrayList(JNIEnv*, MenuItemVec items);
   static jobject ToModelItemArrayList(JNIEnv*, TableItemVec items);
-  static jobject ToModelItemChangeList(JNIEnv*, const TableSection::ChangeList&);
+  static jobject ToModelItemChangeList(JNIEnv*, const TableSectionInterface::ChangeList&);
   static jobject ToModelItem(JNIEnv*, AlertItem);
   static jobject ToModelItem(JNIEnv*, MenuItem);
   static jobject ToModelItem(JNIEnv*, TableItem);
-  static jobject ToModelItemChange(JNIEnv*, const TableSection::Change&);
+  static jobject ToModelItemChange(JNIEnv*, const TableSectionInterface::Change&);
   static jobject ToPickerItem(JNIEnv*, PickerItem*);
   static jobject ToNativeCallback(JNIEnv*, Callback c);
   static jobject ToNativeStringCB(JNIEnv*, StringCB c);

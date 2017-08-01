@@ -168,5 +168,34 @@ struct SimpleAssetLoader : public AssetLoaderInterface {
   virtual int PlayMovie(MovieAsset *a, int seek) ;
 };
 
+struct SimpleVideoResampler : public VideoResamplerInterface {
+  virtual ~SimpleVideoResampler() {}
+  virtual bool Opened() const;
+  virtual void Open(int sw, int sh, int sf, int dw, int dh, int df);
+  virtual void Resample(const unsigned char *s, int sls, unsigned char *d, int dls, bool flip_x=0, bool flip_y=0);
+
+  static bool Supports(int fmt);
+  static void CopyPixel(int s_fmt, int d_fmt, const unsigned char *sp, unsigned char *dp, bool sxb=0, bool sxe=0, int flag=0);
+  static void RGB2BGRCopyPixels(unsigned char *dst, const unsigned char *src, int l, int bpp);
+
+  struct Flag { enum { FlipY=1, TransparentBlack=2, ZeroOnly=4 }; };
+
+  static void Blit(const unsigned char *src, unsigned char *dst, int w, int h,
+                   int sf, int sls, int sx, int sy,
+                   int df, int dls, int dx, int dy, int flag=0);
+
+  static void Filter(unsigned char *dst, int w, int h,
+                     int pf, int ls, int x, int y, Matrix *kernel, int channel, int flag=0);
+
+  static void Fill(unsigned char *dst, int l, int pf, const Color &c);
+  static void Fill(unsigned char *dst, int w, int h,
+                   int pf, int ls, int x, int y, const Color &c);
+
+  static void CopyColorChannelsToMatrix(const unsigned char *buf, int w, int h,
+                                        int pw, int ls, int x, int y, Matrix *out, int po);
+  static void CopyMatrixToColorChannels(const Matrix *M, int w, int h,
+                                        int pw, int ls, int x, int y, unsigned char *out, int po);
+};
+
 }; // namespace LFL
 #endif // LFL_CORE_APP_LOADER_H__
