@@ -1,5 +1,5 @@
 /*
- * $Id: toolkit.cpp 1336 2014-12-08 09:29:59Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -98,7 +98,15 @@ void TableView::AppendFlow(Flow *flow) {
   for (auto &s : data)
     for (auto &i : s.item) {
       flow->AppendText(0,  i.key + ":");
-      flow->AppendText(.6, i.val);
+      switch(i.type) {
+        case TableItem::TextInput: {
+          flow->AppendRow(.6, .4, &i.val_box);
+        }; break;
+        
+        default: {
+          flow->AppendText(.6, i.val);
+        }; break;
+      }
       flow->AppendNewlines(1);
     }
 #if 0

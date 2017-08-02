@@ -1,4 +1,4 @@
-# $Id: CMakeLists.txt 1298 2011-12-11 18:46:06Z justin $
+# $Id$
 
 lfl_add_target(app_null_framework STATIC_LIBRARY SOURCES null_framework.cpp)
 lfl_add_target(app_null_os STATIC_LIBRARY SOURCES null_os.cpp)
@@ -48,6 +48,12 @@ if(LFL_IOS)
                         "-framework CFNetwork" "-framework AudioToolbox" "-framework MediaPlayer"
                         "-framework MessageUI" "-framework MobileCoreServices"
                         "-framework SystemConfiguration")
+
+  add_library(app_ios_nag ../../imports/appirater/Appirater.m)
+  lfl_set_xcode_properties(app_ios_nag)
+  target_include_directories(app_ios_nag PUBLIC ${LFL_APP_INCLUDE})
+  target_compile_definitions(app_ios_nag PUBLIC ${LFL_APP_DEF})
+  target_compile_options(app_ios_nag PUBLIC -fobjc-abi-version=2 -fobjc-legacy-dispatch -fobjc-arc)
 endif()
 
 if(LFL_OSX)

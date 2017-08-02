@@ -1,5 +1,5 @@
 /*
- * $Id: camera.cpp 1330 2014-11-06 03:04:15Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -87,6 +87,9 @@ struct NullPanelView : public PanelViewInterface {
   void SetTitle(const string &title) {}
 };
 
+struct NullNag : public NagInterface {
+};
+
 int Application::Suspended() { return 0; }
 void Application::RunCallbackInMainThread(Callback cb) {
   message_queue.Write(new Callback(move(cb)));
@@ -156,5 +159,6 @@ unique_ptr<AlertViewInterface> SystemToolkit::CreateAlert(AlertItemVec items) { 
 unique_ptr<PanelViewInterface> SystemToolkit::CreatePanel(const Box &b, const string &title, PanelItemVec items) { return nullptr; }
 unique_ptr<MenuViewInterface> SystemToolkit::CreateMenu(const string &title, MenuItemVec items) { return make_unique<NullMenuView>(); }
 unique_ptr<MenuViewInterface> SystemToolkit::CreateEditMenu(vector<MenuItem> items) { return nullptr; }
+unique_ptr<NagInterface> SystemToolkit::CreateNag(const string &id, int min_days, int min_uses, int min_events, int remind_days) { return make_unique<NullNag>(); }
 
 }; // namespace LFL

@@ -1,5 +1,5 @@
 /*
- * $Id: video.cpp 1336 2014-12-08 09:29:59Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -44,7 +44,7 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
 @implementation IOSSegmentedControl
 @end
 
-@interface IOSTextField : UITextField
+@interface IOSTextField : UITextField<UITextFieldDelegate>
   @property (nonatomic) bool modified;
   @property (nonatomic, assign) LFL::StringCB changed_cb;
   - (void)textFieldDidChange:(IOSTextField*)sender;
@@ -52,6 +52,10 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
 @implementation IOSTextField
   - (void)textFieldDidChange:(IOSTextField*)sender {
     if (_changed_cb) _changed_cb(LFL::GetNSString(self.text));
+  }
+  - (BOOL)textFieldShouldReturn:(UITextField *)textField {
+    [textField resignFirstResponder];
+    return YES;
   }
 @end
 
@@ -479,6 +483,7 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
         textfield.returnKeyType = UIReturnKeyDone;
         // textfield.layer.cornerRadius = 10.0;
         // [textfield setBorderStyle: UITextBorderStyleRoundedRect];
+        [textfield setDelegate: textfield];
         [textfield addTarget:self action:@selector(textFieldDidChange:) 
           forControlEvents:UIControlEventEditingChanged];
 

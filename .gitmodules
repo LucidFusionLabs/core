@@ -98,3 +98,6 @@
 [submodule "imports/OpenSSL-for-Android-Prebuilt"]
 	path = imports/OpenSSL-for-Android-Prebuilt
 	url = https://github.com/LucidFusionLabs/OpenSSL-for-Android-Prebuilt
+[submodule "imports/appirater"]
+	path = imports/appirater
+	url = https://github.com/arashpayan/appirater

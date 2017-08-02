@@ -1,5 +1,5 @@
 /*
- * $Id: toolkit.h 1336 2014-12-08 09:29:59Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -251,6 +251,10 @@ struct PurchasesInterface {
   virtual bool MakePurchase(ProductInterface*, IntCB result_cb) = 0;
 };
 
+struct NagInterface {
+  virtual ~NagInterface() {}
+};
+
 struct ToolkitInterface {
   virtual unique_ptr<AlertViewInterface> CreateAlert(AlertItemVec items) = 0;
   virtual unique_ptr<PanelViewInterface> CreatePanel(const Box&, const string &title, PanelItemVec) = 0;
@@ -281,6 +285,7 @@ struct SystemToolkit : public ToolkitInterface {
   static unique_ptr<AdvertisingViewInterface> CreateAdvertisingView
     (int type, int placement, const string &id, const StringVec &test_devices);
   static unique_ptr<PurchasesInterface> CreatePurchases(string);
+  static unique_ptr<NagInterface> CreateNag(const string &id, int min_days, int min_uses, int min_events, int remind_days);
 };
 
 }; // namespace LFL

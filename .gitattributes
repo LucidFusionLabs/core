@@ -1,0 +1,7 @@
+*.h ident
+*.c ident
+*.cc ident
+*.cpp ident
+*.m ident
+*.mm ident
+*.txt ident

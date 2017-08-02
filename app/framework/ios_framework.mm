@@ -1,5 +1,5 @@
 /*
- * $Id: video.cpp 1336 2014-12-08 09:29:59Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -31,6 +31,7 @@
 #include "core/app/app.h"
 #include "core/app/framework/apple_common.h"
 #include "core/app/framework/ios_common.h"
+#include "core/imports/appirater/Appirater.h"
 
 #include <netinet/in.h>
 
@@ -1058,6 +1059,18 @@ struct iOSMenuView : public MenuViewInterface {
   void Show() { [menu.actions showInView: [UIApplication sharedApplication].keyWindow]; }
 };
 
+struct iOSNag : public NagInterface {
+  iOSNag(const string &id, int min_days, int min_uses, int min_events, int remind_days) {
+    [Appirater setAppId: MakeNSString(id)];
+    [Appirater setDaysUntilPrompt: min_days];
+    [Appirater setUsesUntilPrompt: min_uses];
+    [Appirater setSignificantEventsUntilPrompt: min_events];
+    [Appirater setTimeBeforeReminding: remind_days];
+    [Appirater setDebug: NO];
+    [Appirater appLaunched:YES];
+  }
+};
+
 int Application::Suspended() { return 0; }
 void Application::RunCallbackInMainThread(Callback cb) {
 #if 0
@@ -1205,6 +1218,7 @@ unique_ptr<AlertViewInterface> SystemToolkit::CreateAlert(AlertItemVec items) { 
 unique_ptr<PanelViewInterface> SystemToolkit::CreatePanel(const Box &b, const string &title, PanelItemVec items) { return nullptr; }
 unique_ptr<MenuViewInterface> SystemToolkit::CreateMenu(const string &title, MenuItemVec items) { return make_unique<iOSMenuView>(title, move(items)); }
 unique_ptr<MenuViewInterface> SystemToolkit::CreateEditMenu(vector<MenuItem> items) { return nullptr; }
+unique_ptr<NagInterface> SystemToolkit::CreateNag(const string &id, int min_days, int min_uses, int min_events, int remind_days) { return make_unique<iOSNag>(id, min_days, min_uses, min_events, remind_days); }
 
 extern "C" int main(int ac, const char* const* av) {
   ios_argc = ac;

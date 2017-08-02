@@ -1,5 +1,5 @@
 /*
- * $Id: ios_common.h 1336 2014-12-08 09:29:59Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -90,6 +90,10 @@
     LFL::PickerItem item;
     bool dark_theme;
   }
+  - (id)initWithColumns:(LFL::PickerItem)in andTheme:(const LFL::string&)theme;
+  - (id)initWithColumns:(LFL::PickerItem)in andTheme:(const LFL::string&)theme andFrame:(CGRect)r;
+  - (void)setTheme: (const LFL::string&)x;
+  - (void)selectRows:(const LFL::StringVec&)v;
   - (LFL::PickerItem*)getItem;
 @end
 
