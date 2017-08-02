@@ -1,4 +1,4 @@
-# $Id: CMakeLists.txt 1298 2011-12-11 18:46:06Z justin $
+# $Id$
 
 set(LFL_GLES2 1)
 

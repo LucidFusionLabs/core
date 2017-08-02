@@ -1,5 +1,5 @@
 /*
- * $Id: input.cpp 1328 2014-11-04 09:35:46Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify

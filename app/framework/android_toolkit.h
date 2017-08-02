@@ -1,5 +1,5 @@
 /*
- * $Id: android_toolkit.h 770 2013-09-25 00:27:33Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify

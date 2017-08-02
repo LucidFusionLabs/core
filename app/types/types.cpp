@@ -1,5 +1,5 @@
 /*
- * $Id: lftypes.cpp 1334 2014-11-28 09:14:21Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify

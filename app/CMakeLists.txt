@@ -1,4 +1,4 @@
-# $Id: CMakeLists.txt 1327 2014-11-03 23:26:43Z justin $
+# $Id$
 
 set(LFL_APP_CFLAGS)
 set(LFL_APP_DEF -D__STDC_CONSTANT_MACROS -D__STDC_LIMIT_MACROS)
