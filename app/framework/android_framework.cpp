@@ -199,6 +199,14 @@ int Application::Suspended() {
   return 0;
 }
 
+struct AndroidNag : public NagInterface {
+  AndroidNag(const string &name, int min_days, int min_uses, int min_events, int remind_days) {
+    static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "createNag", "(Ljava/lang/String;IIII)V"));
+    LocalJNIString nstr(jni->env, JNI::ToJString(jni->env, name));
+    jni->env->CallVoidMethod(jni->activity, mid, nstr.v, jint(min_days), jint(min_uses), jint(min_events), jint(remind_days));
+  }
+};
+
 void Application::RunCallbackInMainThread(Callback cb) {
   message_queue.Write(new Callback(move(cb)));
   if (!FLAGS_target_fps) scheduler.Wakeup(focused);
@@ -376,12 +384,13 @@ unique_ptr<AlertViewInterface> SystemToolkit::CreateAlert(AlertItemVec items) { 
 unique_ptr<PanelViewInterface> SystemToolkit::CreatePanel(const Box &b, const string &title, PanelItemVec items) { return nullptr; }
 unique_ptr<MenuViewInterface> SystemToolkit::CreateMenu(const string &title, MenuItemVec items) { return make_unique<AndroidMenuView>(title, move(items)); }
 unique_ptr<MenuViewInterface> SystemToolkit::CreateEditMenu(MenuItemVec items) { return nullptr; }
+unique_ptr<NagInterface> SystemToolkit::CreateNag(const string &id, int min_days, int min_uses, int min_events, int remind_days) { return make_unique<AndroidNag>(id, min_days, min_uses, min_events, remind_days); }
 
 static void NativeAPI_shutdownMainLoop() {
   app->suspended = true;
   if (app->focused->unfocused_cb) app->focused->unfocused_cb();
   while (app->message_queue.HandleMessages()) {}
-  app->ResetGL(LFL::ResetGLFlag::Delete);
+  // app->ResetGL(LFL::ResetGLFlag::Delete);
   app->focused->gd->Finish();
 }
 
@@ -470,7 +479,7 @@ extern "C" void Java_com_lucidfusionlabs_app_NativeAPI_newMainLoop(JNIEnv *e, jc
   jni->Init(a, false);
   app->suspended = false;
   SetLFAppMainThread();
-  if (reset) app->ResetGL(LFL::ResetGLFlag::Delete | ResetGLFlag::Reload);
+  if (reset) app->ResetGL(/*LFL::ResetGLFlag::Delete | */ResetGLFlag::Reload);
   if (app->focused->focused_cb) app->focused->focused_cb();
   int ret = app->MainLoop();
 

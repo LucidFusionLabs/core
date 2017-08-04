@@ -89,7 +89,6 @@ public class OpenGLView extends android.view.SurfaceView implements SurfaceHolde
     public void onResume() {
         boolean thread_exists = thread != null;
         NativeAPI.INFO("OpenGLView.onResume() have_surface=" + have_surface + " thread_exists=" + thread_exists);
-        if (have_surface && !thread_exists) startRenderThread();
     }
 
     public void onPause() {
@@ -130,7 +129,7 @@ public class OpenGLView extends android.view.SurfaceView implements SurfaceHolde
             egl.eglDestroySurface(egl_display, egl_surface);
         }
         catch(Exception e) { NativeAPI.ERROR(e.toString()); }
-        finally { egl_surface = null; }
+        finally { egl_surface = null; have_surface = false; }
     }
 
     public void initEGL() {

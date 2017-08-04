@@ -353,9 +353,19 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity
         }});
     }
 
+    public void createNag(final String id, final int min_days, final int min_uses, final int min_events, final int remind_days) {
+        runOnUiThread(new Runnable() { public void run() {
+            try {
+                // com.sbstrm.appirater.Appirater.testMode = true;
+                com.sbstrm.appirater.Appirater.appName = id;
+                com.sbstrm.appirater.Appirater.appLaunched(MainActivity.this, min_days, min_uses, min_events, remind_days);
+            } catch(Exception e) { NativeAPI.ERROR("createNag: " + e.toString()); }
+        }});
+    }
+
     public String getVersionName() {
         try { return getPackageManager().getPackageInfo(getPackageName(), 0).versionName; }
-        catch(Exception e) { return ""; }
+        catch(Exception e) { NativeAPI.ERROR("getVersionName: " + e.toString()); return ""; }
     }
 
     public void setDefaultPreferences(final ArrayList<Pair<String, String>> prefs) {

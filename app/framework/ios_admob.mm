@@ -33,14 +33,16 @@
 @end
 
 @implementation IOSAdMob
-  - (id)initWithAdUnitID:(NSString*)adid {
+  - (id)initWithAdUnitID:(NSString*)adid andTestDevices:(const LFL::StringVec&)test_devices {
     self = [super init];
     _banner = [[GADBannerView alloc] initWithAdSize:kGADAdSizeBanner];
     _banner.adUnitID = adid;
     _banner.delegate = self;
     [_banner setAutoresizingMask:UIViewAutoresizingFlexibleTopMargin|UIViewAutoresizingFlexibleWidth];
+
     _testDevices = [[NSMutableArray alloc] init];
     [_testDevices addObject: kGADSimulatorID];
+    for (auto &id : test_devices) [_testDevices addObject: LFL::MakeNSString(id)];
 
     GADRequest *request = [GADRequest request];
     request.testDevices = _testDevices;
@@ -90,9 +92,8 @@ struct iOSAdvertisingView : public AdvertisingViewInterface {
   IOSAdMob *admob;
   virtual ~iOSAdvertisingView() { [admob release]; }
   iOSAdvertisingView(int type, int placement, const string &adid, const StringVec &test_devices) :
-    admob([[IOSAdMob alloc] initWithAdUnitID: MakeNSString(adid)]) {
+    admob([[IOSAdMob alloc] initWithAdUnitID: MakeNSString(adid) andTestDevices:test_devices]) {
     // INFO("Starting iOS AdMob with DeviceId = ", DeviceId());
-    for (auto id : test_devices) [admob.testDevices addObject: MakeNSString(id)];
   }
 
   void Show(bool show_or_hide) {}
