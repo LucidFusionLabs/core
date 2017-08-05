@@ -158,9 +158,14 @@ struct MenuViewInterface {
   virtual void Show() = 0;
 };
 
-struct TableViewInterface {
+struct StackViewInterface {
+  Callback hide_cb, show_cb;
+  virtual ~StackViewInterface() {}
+};
+
+struct TableViewInterface : public StackViewInterface {
   bool changed=0;
-  Callback hide_cb, show_cb = [=](){ changed=0; }; 
+  TableViewInterface() { show_cb = [=](){ changed=0; };  }
   virtual ~TableViewInterface() {}
 
   virtual void DelNavigationButton(int id) = 0;
@@ -205,8 +210,7 @@ struct TableViewController {
   virtual ~TableViewController() {}
 };
 
-struct TextViewInterface {
-  Callback hide_cb, show_cb;
+struct TextViewInterface : public StackViewInterface {
   virtual ~TextViewInterface() {}
 };
 

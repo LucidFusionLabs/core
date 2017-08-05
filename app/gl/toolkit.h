@@ -93,6 +93,7 @@ struct TableView : public View, public TableViewInterface {
 
 struct NavigationView : public View, public NavigationViewInterface {
   string style, theme;
+  vector<StackViewInterface*> stack;
   NavigationView(Window *w, const string &style, const string &theme);
 
   void Layout();

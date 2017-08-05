@@ -178,14 +178,37 @@ void TableView::AppendFlow(Flow *flow) {
 }
 
 NavigationView::NavigationView(Window *w, const string &s, const string &t) : View(w) {}
-TableViewInterface *NavigationView::Back() { return nullptr; }
+TableViewInterface *NavigationView::Back() { return stack.size() ? dynamic_cast<TableViewInterface*>(stack.back()) : nullptr; }
 void NavigationView::Show(bool show_or_hide) {}
-void NavigationView::PushTableView(TableViewInterface*) {}
-void NavigationView::PushTextView(TextViewInterface*) {}
-void NavigationView::PopView(int num) {}
-void NavigationView::PopToRoot() {}
-void NavigationView::PopAll() {}
-void NavigationView::SetTheme(const string &theme) {}
+
+void NavigationView::PushTableView(TableViewInterface *t) { if (t->show_cb) t->show_cb(); stack.push_back(t); }
+void NavigationView::PushTextView (TextViewInterface  *t) { if (t->show_cb) t->show_cb(); stack.push_back(t); }
+
+void NavigationView::PopView(int num) {
+  for (int i=0; i<num && stack.size(); ++i) {
+    StackViewInterface *t = stack.back();
+    if (t->hide_cb) t->hide_cb();
+    stack.pop_back();
+  }
+}
+
+void NavigationView::PopToRoot() { if (stack.size() > 1) stack.resize(1);
+  while (stack.size() > 1) {
+    StackViewInterface *t = stack.back();
+    if (t->hide_cb) t->hide_cb();
+    stack.pop_back();
+  }
+}
+
+void NavigationView::PopAll() {
+  while (stack.size()) {
+    StackViewInterface *t = stack.back();
+    if (t->hide_cb) t->hide_cb();
+    stack.pop_back();
+  }
+}
+
+void NavigationView::SetTheme(const string &t) { theme = t; }
 void NavigationView::Layout() {}
 void NavigationView::Draw() {}
 
