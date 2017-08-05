@@ -45,16 +45,19 @@ struct TableView : public View, public TableViewInterface {
   typedef TableSection<TableViewItem> TableViewSection;
 
   vector<TableViewSection> data;
+  TableViewItem nav_left, nav_right;
+  ToolbarViewInterface *toolbar;
   string title, style, theme;
   Widget::Slider scrollbar;
   DrawableBoxArray *out=0;
-  int row_height=0, decay_box_line=-1, decay_box_left=0;
+  int row_height=0, decay_box_line=-1, decay_box_left=0, selected_section=-1, selected_row=-1;
   TableView(Window *w, const string &title, const string &style, const string &theme, TableItemVec items);
 
   void Layout();
   void Draw();
   void AppendFlow(Flow *flow);
   void OnClick(int, point, point, int);
+  void CheckExists(int section, int row);
 
   void DelNavigationButton(int id);
   void AddNavigationButton(int id, const TableItem &item);

@@ -32,39 +32,88 @@ void ToolbarView::Draw() {}
 TableView::TableView(Window *w, const string &t, const string &s, const string &th, TableItemVec items) :
   View(w), data(TableViewSection::Convert(move(items))), title(t), style(s), theme(th), scrollbar(this) { Activate(); }
 
-void TableView::DelNavigationButton(int id) {}
-void TableView::AddNavigationButton(int id, const TableItem &item) {}
-void TableView::SetToolbar(ToolbarViewInterface*) {}
+void TableView::DelNavigationButton(int id) { nav_left.type=0; }
+void TableView::AddNavigationButton(int id, const TableItem &item) { nav_left = item; }
+void TableView::SetToolbar(ToolbarViewInterface *tb) { toolbar = tb;}
 void TableView::Show(bool show_or_hide) {}
-string TableView::GetKey(int section, int row) { return 0; }
-string TableView::GetValue(int section, int row) { return 0; }
-int TableView::GetTag(int section, int row) { return 0; }
-PickerItem *TableView::GetPicker(int section, int row) { return nullptr; }
-StringPairVec TableView::GetSectionText(int section) { return StringPairVec(); }
+
+string        TableView::GetKey   (int s, int r) { CheckExists(s, r); return data[s].item[r].key; }
+string        TableView::GetValue (int s, int r) { CheckExists(s, r); return data[s].item[r].val; }
+int           TableView::GetTag   (int s, int r) { CheckExists(s, r); return data[s].item[r].tag; }
+PickerItem   *TableView::GetPicker(int s, int r) { CheckExists(s, r); return data[s].item[r].picker; }
+
+StringPairVec TableView::GetSectionText(int ind) {
+  StringPairVec ret;
+  CHECK_RANGE(ind, 0, data.size());
+  for (int i=0, l=data[ind].item.size(); i != l; i++) {
+    auto &ci = data[ind].item[i];
+    if (ci.dropdown_key.size()) ret.emplace_back(ci.dropdown_key, ci.key);
+    ret.emplace_back(ci.key, GetValue(ind, i));
+  }
+  return ret;
+}
+
 void TableView::BeginUpdates() {}
 void TableView::EndUpdates() {}
-void TableView::AddRow(int section, TableItem item) {}
-void TableView::SelectRow(int section, int row) {}
-void TableView::ReplaceRow(int section, int row, TableItem item) {}
-void TableView::ReplaceSection(int section, TableItem header, int flag, TableItemVec item) {}
-void TableView::ApplyChangeList(const TableSectionInterface::ChangeList&) {}
-void TableView::SetSectionValues(int section, const StringVec&) {}
-void TableView::SetSectionColors(int seciton, const vector<Color>&) {}
-void TableView::SetSectionEditable(int section, int start_row, int skip_last_rows, IntIntCB cb) {}
-void TableView::SetHeader(int section, TableItem header) {}
-void TableView::SetKey(int secton, int row, const string &key) {}
-void TableView::SetTag(int section, int row, int val) {}
-void TableView::SetValue(int section, int row, const string &val) {}
-void TableView::SetSelected(int section, int row, int selected) {}
-void TableView::SetHidden(int section, int row, int val) {}
-void TableView::SetColor(int section, int row, const Color &val) {}
-void TableView::SetTitle(const string &title) {}
-void TableView::SetTheme(const string &theme) {}
+void TableView::AddRow(int section, TableItem item) {
+  if (section == data.size()) data.emplace_back();
+  CHECK_RANGE(section, 0, data.size());
+  data[section].item.emplace_back(move(item));
+}
+
+void TableView::SelectRow(int section, int row) { selected_section=section; selected_row=row; }
+void TableView::ReplaceRow(int s, int r, TableItem item) { CheckExists(s, r); data[s].item[r] = move(item); }
+
+void TableView::ReplaceSection(int section, TableItem header, int flag, TableItemVec item) {
+  if (section == data.size()) data.emplace_back();
+  CHECK_RANGE(section, 0, data.size());
+  auto &hi = data[section];
+  hi.header = move(header);
+  hi.flag = flag;
+  hi.item.resize(item.size());
+  for (int i=0, l=item.size(); i != l; ++i) hi.item[i] = move(item[i]);
+}
+
+void TableView::ApplyChangeList(const TableSectionInterface::ChangeList &changes) {
+  TableViewSection::ApplyChangeList(changes, &data, [=](const LFL::TableSectionInterface::Change &d){});
+}
+
+void TableView::SetSectionValues(int section, const StringVec &v) {
+  CHECK_RANGE(section, 0, data.size());
+  CHECK_EQ(v.size(), data[section].item.size());
+  for (int i=0, l=data[section].item.size(); i != l; ++i) SetValue(section, i, v[i]);
+}
+
+void TableView::SetSectionColors(int section, const vector<Color> &v) {
+  CHECK_RANGE(section, 0, data.size());
+  CHECK_EQ(v.size(), data[section].item.size());
+  for (int i=0, l=data[section].item.size(); i != l; ++i) SetColor(section, i, v[i]);
+}
+
+void TableView::SetSectionEditable(int section, int start_row, int skip_last_rows, IntIntCB cb) {
+  CHECK_RANGE(section, 0, data.size());
+  data[section].SetEditable(start_row, skip_last_rows, move(cb));
+}
+
+void TableView::SetHeader(int s, TableItem header) { CHECK_RANGE(s, 0, data.size()); data[s].header = move(header); }
+void TableView::SetKey     (int s, int r, const string &key) { CheckExists(s, r); data[s].item[r].key = key; }
+void TableView::SetTag     (int s, int r, int val)           { CheckExists(s, r); data[s].item[r].tag = val; }
+void TableView::SetValue   (int s, int r, const string &val) { CheckExists(s, r); data[s].item[r].val = val; }
+void TableView::SetSelected(int s, int r, int selected)      { CheckExists(s, r); data[s].item[r].selected = selected; }
+void TableView::SetHidden  (int s, int r, int val)           { CheckExists(s, r); data[s].item[r].hidden = val; }
+void TableView::SetColor   (int s, int r, const Color &val)  { CheckExists(s, r); data[s].item[r].SetFGColor(val); }
+void TableView::SetTitle(const string &t) { title = t; }
+void TableView::SetTheme(const string &t) { theme = t; }
 
 void TableView::Layout() {
   mouse.Clear();
   mouse.AddClickBox(Box(0, -box.h, box.w - scrollbar.dot_size, box.h),
                     MouseController::CoordCB(bind(&TableView::OnClick, this, _1, _2, _3, _4)));
+}
+
+void TableView::CheckExists(int section, int row) {
+  CHECK_RANGE(section, 0, data.size());
+  CHECK_RANGE(row, 0, data[section].item.size());
 }
 
 void TableView::OnClick(int but, point p, point d, int down) {
