@@ -106,7 +106,7 @@ void TableView::SetTitle(const string &t) { title = t; }
 void TableView::SetTheme(const string &t) { theme = t; }
 
 void TableView::Layout() {
-  mouse.Clear();
+  ClearView();
   mouse.AddClickBox(Box(0, -box.h, box.w - scrollbar.dot_size, box.h),
                     MouseController::CoordCB(bind(&TableView::OnClick, this, _1, _2, _3, _4)));
 }
@@ -146,12 +146,31 @@ void TableView::AppendFlow(Flow *flow) {
   flow->AppendNewline();
   for (auto &s : data)
     for (auto &i : s.item) {
-      flow->AppendText(0,  i.key + ":");
+      flow->AppendText(0, i.key);
       switch(i.type) {
         case TableItem::TextInput: {
+          if (!i.textbox) {
+            i.textbox = make_unique<TextBox>(root);
+            i.textbox->style.font = flow->cur_attr.font;
+            i.textbox->cursor.type = TextBox::Cursor::Underline;
+            i.textbox->bg_color = &Color::clear;
+            i.textbox->deactivate_on_enter = true;
+            i.textbox->cmd_prefix.clear();
+            i.textbox->SetToggleKey(0, true);
+            i.textbox->UpdateCursor();
+          } else i.textbox->style.font = flow->cur_attr.font;
+          i.textbox->runcb = i.right_cb;
           flow->AppendRow(.6, .4, &i.val_box);
+          flow->out->PushBack(i.val_box, flow->cur_attr, i.textbox.get());
         }; break;
-        
+
+        case TableItem::Slider: {
+          if (!i.slider) i.slider = make_unique<Widget::Slider>(this, Widget::Slider::Flag::Horizontal);
+          flow->AppendRow(.6, .35, &i.val_box);
+          i.slider->LayoutFixed(i.val_box);
+          i.slider->Update();
+        }; break;
+
         default: {
           flow->AppendText(.6, i.val);
         }; break;
@@ -159,17 +178,6 @@ void TableView::AppendFlow(Flow *flow) {
       flow->AppendNewlines(1);
     }
 #if 0
-      menuflow.AppendRow(.6, .4, &b);
-      tab3_player_name.Draw(b + box.TopLeft());
-
-      menuflow.AppendRow(.6, .35, &b);
-      tab3_sensitivity.LayoutFixed(b);
-      tab3_sensitivity.Update();
-
-      menuflow.AppendRow(.6, .35, &b);
-      tab3_volume.LayoutFixed(b);
-      tab3_volume.Update();
-
       if (tab3_volume.dirty) {
         tab3_volume.dirty = false;
         app->SetVolume(int(tab3_volume.scrolled * tab3_volume.doc_height));

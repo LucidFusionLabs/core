@@ -485,6 +485,10 @@ int Application::Create(const char *source_filename) {
   ThreadLocalStorage::Init();
   Singleton<NullAllocator>::Get();
   Singleton<MallocAllocator>::Get();
+#ifdef LFL_ANDROID
+  JNI *jni = LFL::Singleton<LFL::JNI>::Get();
+  jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "getFilesDirCanonicalPath", "(Z)Ljava/lang/String;"));
+#endif
 
 #ifdef LFL_WINDOWS
   if (argc > 1) {
@@ -496,11 +500,8 @@ int Application::Create(const char *source_filename) {
 
   {
 #if defined(LFL_ANDROID)
-    JNI *jni = LFL::Singleton<LFL::JNI>::Get();
-    jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "getFilesDirCanonicalPath", "()Ljava/lang/String;"));
-    jstring path = jstring(jni->env->CallObjectMethod(jni->activity, mid));
-    savedir = StrCat(JNI::GetJString(jni->env, path), "/");
-    jni->env->DeleteLocalRef(path);
+    LocalJNIString path(jni->env, CheckNotNull(jstring(jni->env->CallObjectMethod(jni->activity, mid, false))));
+    savedir = StrCat(JNI::GetJString(jni->env, path.v), "/");
 #elif defined(LFL_APPLE) && !defined(LFL_IOS_SIM)
     savedir = StrCat(GetNSDocumentDirectory(), "/");
 #elif defined(LFL_WINDOWS)
@@ -514,7 +515,15 @@ int Application::Create(const char *source_filename) {
   if (FLAGS_logfile.empty() && !FLAGS_logfile_.override) FLAGS_logfile = "\x01";
 #endif
   if (!FLAGS_logfile.empty()) {
-    if (FLAGS_logfile == "\x01") FLAGS_logfile = StrCat(savedir, name, ".txt");
+    if (FLAGS_logfile == "\x01") {
+#ifdef LFL_ANDROID
+      LocalJNIString path(jni->env, CheckNotNull(jstring(jni->env->CallObjectMethod(jni->activity, mid, true))));
+      string logdir = StrCat(JNI::GetJString(jni->env, path.v), "/");
+#else
+      auto &logdir = savedir;
+#endif
+      FLAGS_logfile = StrCat(logdir, name, ".txt");
+    }
     logfile = fopen(FLAGS_logfile.c_str(), "a");
     if (logfile) SystemNetwork::SetSocketCloseOnExec(fileno(logfile), 1);
     INFO("logfile = ", FLAGS_logfile, " (opened=", logfile != nullptr, ")");

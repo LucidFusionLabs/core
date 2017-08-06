@@ -219,9 +219,9 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity
         android.os.Process.killProcess(android.os.Process.myPid());
     }
 
-    public String getFilesDirCanonicalPath() {
+    public String getFilesDirCanonicalPath(boolean external) {
         try {
-            java.io.File file = getExternalFilesDir(null);
+            java.io.File file = external ? getExternalFilesDir(null) : null;
             if (file == null) file = getFilesDir();
             return file.getCanonicalPath();
         } catch (final Exception e) { NativeAPI.ERROR(e.toString()); return ""; }

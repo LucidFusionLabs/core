@@ -357,6 +357,7 @@ struct TextBox : public View, public TextboxController {
   virtual void UpdateCursor() { cursor.p = cmd_line.data->glyphs.Position(cursor.i.x) + point(0, style.font->Height()); }
   virtual void UpdateCommandFB() { UpdateLineFB(&cmd_line, &cmd_fb); }
   virtual void UpdateLineFB(Line *L, LinesFrameBuffer *fb, int flag=0);
+  virtual void Draw(GraphicsContext*, const LFL::Box &b) const { const_cast<TextBox*>(this)->Draw(b); }
   virtual void Draw(const Box &b);
   virtual void DrawCursor(point p, Shader *shader=0);
   virtual void UpdateToken(Line*, int word_offset, int word_len, int update_type, const TokenProcessor<DrawableBox>*);

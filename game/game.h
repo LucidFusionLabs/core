@@ -933,15 +933,7 @@ struct GameMenuGUI : public View, public Connection::Handler {
     tab1_server_start.solid = tab2_server_join.solid = &Color::grey60;
     tab1_options.dot_size = tab2_servers.dot_size = tab3_sensitivity.dot_size = tab3_volume.dot_size = browser.v_scrollbar.dot_size = 25;
     Layout();
-    tab3_player_name.cursor.type         = tab2_server_address.cursor.type         = TextBox::Cursor::Underline;
-    tab3_player_name.bg_color            = tab2_server_address.bg_color            = &Color::clear;
-    tab3_player_name.deactivate_on_enter = tab2_server_address.deactivate_on_enter = true;
-    tab3_player_name.runcb = bind(&TextBox::AssignInput, &tab3_player_name, _1);
-    tab3_player_name.cmd_prefix.clear();
-    tab3_player_name   .SetToggleKey(0, true);
-    tab2_server_address.SetToggleKey(0, true);
     tab2_server_address.runcb = bind(&GameMenuGUI::MenuAddServer, this, _1);
-    tab2_server_address.cmd_prefix.clear();
     tab2_server_address.UpdateCursor();
     tab3_sensitivity.increment = .1;
     tab3_sensitivity.doc_height = 10;
@@ -975,7 +967,7 @@ struct GameMenuGUI : public View, public Connection::Handler {
 
     {
       TableItemVec items = {
-        TableItem("Player Name",         TableItem::TextInput, ""),
+        TableItem("Player Name",         TableItem::TextInput, "", "", 0, 0, 0, Callback(), bind(&TextBox::AssignInput, &tab3_player_name, _1)),
         TableItem("Control Sensitivity", TableItem::Slider,    ""),
         TableItem("Volume",              TableItem::Slider,    ""),
         TableItem("Move Forward:",       TableItem::Label,     "W"),
