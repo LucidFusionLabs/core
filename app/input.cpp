@@ -248,8 +248,8 @@ void Input::QueueMouseZoom(const v2 &p, const v2 &d, bool begin) {
 }
 
 point Input::TransformMouseCoordinate(point p) {
-  if (FLAGS_swap_axis) p = point(app->focused->width - p.y, p.x);
-  return point(p.x, app->focused->height - p.y);
+  if (FLAGS_swap_axis) p = point(app->focused->gl_w - p.y, p.x);
+  return point(p.x, app->focused->gl_h - p.y);
 }
 
 void Input::ClearButtonsDown() {

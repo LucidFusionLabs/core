@@ -133,6 +133,7 @@ public class MainActivity extends com.lucidfusionlabs.core.LifecycleActivity
     }
 
     @Override public void onResume() {
+        NativeAPI.INFO("MainActivity.onResume()");
         super.onResume();
         screens.onResume(this);
         staticLifecycle.onActivityResumed(this);

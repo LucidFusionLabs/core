@@ -764,7 +764,7 @@ void GraphicsDevice::PopColor() {
   UpdateColor();
 }
 
-void GraphicsDevice::RestoreViewport(int dm) { ViewPort(Box(parent->x + parent->width, parent->y + parent->height)); DrawMode(dm); }
+void GraphicsDevice::RestoreViewport(int dm) { ViewPort(Box(parent->gl_x + parent->gl_w, parent->gl_y + parent->gl_h)); DrawMode(dm); }
 void GraphicsDevice::TranslateRotateTranslate(float a, const Box &b) { float x=b.x+b.w/2.0, y=b.y+b.h/2.0; Translate(x,y,0); Rotatef(a,0,0,1); Translate(-x,-y,0); }
 
 void GraphicsDevice::DrawMode(int dm, bool flush) { return DrawMode(dm, parent->Box(), flush); }

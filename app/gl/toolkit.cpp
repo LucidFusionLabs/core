@@ -140,7 +140,8 @@ void TableView::Draw() {
   }
 }
 
-void TableView::AppendFlow(Flow *flow) {
+View *TableView::AppendFlow(Flow *flow) {
+  LayoutBox(*flow->container);
   if (!(row_height = flow->cur_attr.font->Height())) row_height = 16;
   out = flow->out;
   flow->AppendNewline();
@@ -183,6 +184,7 @@ void TableView::AppendFlow(Flow *flow) {
         app->SetVolume(int(tab3_volume.scrolled * tab3_volume.doc_height));
       }
 #endif
+  return this;
 }
 
 NavigationView::NavigationView(Window *w, const string &s, const string &t) : View(w) {}
@@ -219,6 +221,7 @@ void NavigationView::PopAll() {
 void NavigationView::SetTheme(const string &t) { theme = t; }
 void NavigationView::Layout() {}
 void NavigationView::Draw() {}
+View *NavigationView::AppendFlow(Flow *flow) { return stack.size() ? stack.back()->AppendFlow(flow) : nullptr; }
 
 unique_ptr<AlertViewInterface> Toolkit::CreateAlert(AlertItemVec items) { return Singleton<SystemToolkit>::Get()->CreateAlert(move(items)); }
 unique_ptr<PanelViewInterface> Toolkit::CreatePanel(const Box &b, const string &title, PanelItemVec items) { return Singleton<SystemToolkit>::Get()->CreatePanel(b, title, move(items)); }

@@ -156,7 +156,7 @@
     [context update];
     SetLFAppWindow(_screen);
     float screen_w = [self frame].size.width, screen_h = [self frame].size.height;
-    _screen->Reshaped(LFL::Box(0, 0, int(screen_w), int(screen_h)));
+    _screen->Reshaped(LFL::point(screen_w, screen_h), LFL::Box(0, 0, int(screen_w), int(screen_h)));
   }
 
   - (void)addMainWaitSocket:(int)fd callback:(std::function<bool()>)cb {
@@ -737,7 +737,7 @@ void Application::GrabMouseFocus() {
   focused->cursor_grabbed = 1;
   CGWarpMouseCursorPosition
     (NSPointToCGPoint([[dynamic_cast<OSXWindow*>(focused)->view window] convertRectToScreen:
-                      NSMakeRect(focused->width / 2, focused->height / 2, 0, 0)].origin));
+                      NSMakeRect(focused->gl_w / 2, focused->gl_h / 2, 0, 0)].origin));
 }
 
 void Application::SetClipboardText(const string &s) {
@@ -819,7 +819,7 @@ void Application::ShowSystemContextMenu(const MenuItemVec &items) {
 bool Video::CreateWindow(Window *W) { 
   [dynamic_cast<OSXWindow*>(app->focused)->view clearKeyModifiers];
   W->id = (dynamic_cast<OSXWindow*>(W)->view =
-           [static_cast<AppDelegate*>([NSApp delegate]) createWindow:W->width height:W->height nativeWindow:W]);
+           [static_cast<AppDelegate*>([NSApp delegate]) createWindow:W->gl_w height:W->gl_h nativeWindow:W]);
   if (W->id) app->windows[W->id] = W;
   W->SetCaption(W->caption);
   return true; 

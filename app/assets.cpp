@@ -286,9 +286,9 @@ void glIntersect(GraphicsDevice *gd, int x, int y, Color *c) {
   v2 *vert = reinterpret_cast<v2*>(&geom->vert[0]);
 
   vert[0] = v2(0, y);
-  vert[1] = v2(app->focused->width, y);
+  vert[1] = v2(app->focused->gl_w, y);
   vert[2] = v2(x, 0);
-  vert[3] = v2(x, app->focused->height);
+  vert[3] = v2(x, app->focused->gl_h);
 
   gd->DisableTexture();
   Scene::Select(gd, geom.get());
@@ -302,7 +302,7 @@ void glShadertoyShader(GraphicsDevice *gd, Shader *shader, const Texture *tex) {
   shader->SetUniform1f("iGlobalTime", ToFSeconds(Now() - app->time_started).count());
   shader->SetUniform1f("iBlend", FLAGS_shadertoy_blend);
   shader->SetUniform4f("iMouse", screen->mouse.x, screen->mouse.y, app->input->MouseButton1Down(), 0);
-  shader->SetUniform3f("iResolution", XY_or_Y(scale, screen->x + screen->width), XY_or_Y(scale, screen->y + screen->height), 0);
+  shader->SetUniform3f("iResolution", XY_or_Y(scale, screen->gl_x + screen->gl_w), XY_or_Y(scale, screen->gl_y + screen->gl_h), 0);
   if (tex) {
     shader->SetUniform3f("iChannelResolution", XY_or_Y(scale, tex->width), XY_or_Y(scale, tex->height), 1);
     shader->SetUniform4f("iTargetBox", 0, 0, XY_or_Y(scale, tex->width), XY_or_Y(scale, tex->height));

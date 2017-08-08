@@ -361,7 +361,6 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
 
   - (void)viewWillAppear:(BOOL)animated { 
     [super viewWillAppear:animated];
-    [self setPaused:YES];
     uiapp = [LFUIApplication sharedAppDelegate];
   }
   
@@ -390,8 +389,8 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
     }
     bool draw_frame = (uiapp.top_controller == uiapp.root_controller || uiapp.overlay_top_controller) &&
       !uiapp.frame_disabled && uiapp.screen_width && uiapp.screen_height && screen;
-    if (draw_frame && (screen->y != uiapp.screen_y || screen->width != uiapp.screen_width || screen->height != uiapp.screen_height))
-      LFL::app->focused->Reshaped(LFL::Box(0, uiapp.screen_y, uiapp.screen_width, uiapp.screen_height));
+    if (draw_frame && (screen->gl_y != uiapp.screen_y || screen->gl_w != uiapp.screen_width || screen->gl_h != uiapp.screen_height))
+      LFL::app->focused->Reshaped(LFL::point(uiapp.screen_width, uiapp.screen_height), LFL::Box(0, uiapp.screen_y, uiapp.screen_width, uiapp.screen_height));
     LFL::app->EventDrivenFrame(true, draw_frame);
   }
 @end
@@ -590,7 +589,7 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
       s->gesture_dpad_x[dpind] = position.x;
       s->gesture_dpad_y[dpind] = position.y;
 #endif
-      int fired = LFL::app->input->MouseClick(1, 1, LFL::point(position.x, s->y + s->height - position.y));
+      int fired = LFL::app->input->MouseClick(1, 1, LFL::point(position.x, s->gl_y + s->gl_h - position.y));
       if (fired && uiapp.frame_on_mouse_input) [uiapp.glk_view setNeedsDisplay];
     }
   }
@@ -614,7 +613,7 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
     else        position = CGPointMake(uiapp.scale * position.x, uiapp.scale * position.y);
     if (auto s = LFL::app->focused) { 
       LFL::point pos = LFL::Floor(LFL::GetCGPoint(position));
-      pos.y = s->y + s->height - pos.y;
+      pos.y = s->gl_y + s->gl_h - pos.y;
       int fired = panGestureRecognizer.state == UIGestureRecognizerStateBegan ?
         LFL::app->input->MouseClick(1, 1, pos) :
         LFL::app->input->MouseMove(pos, pos - LFL::app->focused->mouse);
@@ -658,8 +657,8 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
       UIView *v = [pinch view];
       CGPoint point0 = [pinch locationOfTouch:0 inView:v];
       CGPoint point1 = [pinch locationOfTouch:1 inView:v];
-      point0.y = s->y + s->height - point0.y;
-      point1.y = s->y + s->height - point1.y;
+      point0.y = s->gl_y + s->gl_h - point0.y;
+      point1.y = s->gl_y + s->gl_h - point1.y;
       pinch_point = CGPointMake((point0.x + point1.x) / 2.0, (point0.y + point1.y) / 2.0);
       pinch_scale = 1.0;
       _pinch_occurring = true;
@@ -669,7 +668,7 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
       _pinch_occurring = false;
     }
     CGFloat p_scale = 1.0 + (pinch_scale - pinch.scale);
-    LFL::v2 p(pinch_point.x, s->y + s->height - pinch_point.y), d(p_scale, p_scale);
+    LFL::v2 p(pinch_point.x, s->gl_y + s->gl_h - pinch_point.y), d(p_scale, p_scale);
     int fired = LFL::app->input->MouseZoom(p, d, begin);
     if (fired && uiapp.frame_on_mouse_input) [uiapp.glk_view setNeedsDisplay];
     pinch_scale = pinch.scale;
@@ -708,7 +707,7 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
       s->gesture_dpad_x[dpind] = position.x;
       s->gesture_dpad_y[dpind] = position.y;
 #endif
-      LFL::point p(position.x, s->y + s->height - (int)position.y);
+      LFL::point p(position.x, s->gl_y + s->gl_h - (int)position.y);
       int fired = LFL::app->input->MouseClick(1, 1, p);
       if (fired && uiapp.frame_on_mouse_input) [self.superview setNeedsDisplay];
     }
@@ -728,7 +727,7 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
       s->gesture_dpad_x[dpind] = 0;
       s->gesture_dpad_y[dpind] = 0;
 #endif
-      LFL::point p(position.x, s->y + s->height - position.y);
+      LFL::point p(position.x, s->gl_y + s->gl_h - position.y);
       int fired = LFL::app->input->MouseClick(1, 0, p);
       if (fired && uiapp.frame_on_mouse_input) [self.superview setNeedsDisplay];
     }
@@ -997,7 +996,7 @@ struct iOSFrameworkModule : public Module {
     CGFloat scale = [uiapp getScale];
     CGRect rect = [uiapp getFrame];
     int w = rect.size.width * scale, h = rect.size.height * scale;
-    if (auto s = app->focused) Assign(&s->width, &s->height, w, h);
+    if (auto s = app->focused) Assign(&s->gl_w, &s->gl_h, w, h);
     INFOf("iOSFrameworkModule::Init %d %d vs %d %d", w, h, [uiapp glk_view].drawableWidth, [uiapp glk_view].drawableHeight);
     return 0;
   }
@@ -1141,7 +1140,7 @@ void Application::ShowSystemContextMenu(const MenuItemVec &items) {
 
   auto w = app->focused;
   float s = [uiapp getScale];
-  CGRect rect = CGRectMake(w->mouse.x / s, (w->height + w->y - w->mouse.y) / s, w->default_font->Height(), 100);
+  CGRect rect = CGRectMake(w->mouse.x / s, (w->gl_h + w->gl_y - w->mouse.y) / s, w->default_font->Height(), 100);
   [mc setTargetRect:rect inView:dynamic_cast<iOSWindow*>(w)->glkview];
   [mc setMenuVisible:![mc isMenuVisible] animated:TRUE];
 }

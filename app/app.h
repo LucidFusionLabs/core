@@ -559,12 +559,12 @@ struct Window : public ::LFAppWindow {
   virtual void SetTransparency(float v)              = 0;
   virtual bool Reshape(int w, int h)                 = 0;
 
-  LFL::Box Box()                   const { return LFL::Box(x, y, width, height); }
-  LFL::Box Box(float xs, float ys) const { return LFL::Box(width*xs, height*ys); }
+  LFL::Box Box()                   const { return LFL::Box(gl_x, gl_y, gl_w, gl_h); }
+  LFL::Box Box(float xs, float ys) const { return LFL::Box(gl_w*xs, gl_h*ys); }
   LFL::Box Box(float xp, float yp, float xs, float ys,
                float xbl=0, float ybt=0, float xbr=-INFINITY, float ybb=-INFINITY) const;
-  void SetBox(const LFL::Box &b);
-  void Reshaped(const LFL::Box&);
+  void SetBox  (const point &win_d, const LFL::Box &gl_box);
+  void Reshaped(const point &win_d, const LFL::Box &gl_box);
   void Minimized()   { minimized=1; }
   void UnMinimized() { minimized=0; }
   void ResetGL(int flag);

@@ -754,7 +754,7 @@ Window::Window() : caption(app->name), fps(128), tex_mode(2, 1, 0), grab_mode(2,
   resize_increment_x = resize_increment_y = 0;
   target_fps = FLAGS_target_fps;
   multitouch_keyboard_x = .93; 
-  SetBox(LFL::Box(0, 0, 640, 480));
+  SetBox(point(640, 480), LFL::Box(0, 0, 640, 480));
 }
 
 Window::~Window() {
@@ -773,15 +773,16 @@ void Window::ClearChildren() {
 Box Window::Box(float xp, float yp, float xs, float ys, float xbl, float ybt, float xbr, float ybb) const {
   if (isinf(xbr)) xbr = xbl;
   if (isinf(ybb)) ybb = ybt;
-  return LFL::Box(x + width  * (xp + xbl),
-                  y + height * (yp + ybb),
-                  width  * xs - width  * (xbl + xbr),
-                  height * ys - height * (ybt + ybb), false);
+  return LFL::Box(gl_x + gl_w * (xp + xbl),
+                  gl_y + gl_h * (yp + ybb),
+                  gl_w * xs - gl_w * (xbl + xbr),
+                  gl_h * ys - gl_h * (ybt + ybb), false);
 }
 
-void Window::SetBox(const LFL::Box &b) {
-  Assign(&x, &y, b.x, b.y);
-  Assign(&width, &height, b.w, b.h);
+void Window::SetBox(const point &wd, const LFL::Box &b) {
+  Assign(&w,    &h,    wd.x, wd.y);
+  Assign(&gl_x, &gl_y, b.x, b.y);
+  Assign(&gl_w, &gl_h, b.w, b.h);
 }
 
 void Window::InitConsole(const Callback &animating_cb) {
@@ -823,9 +824,9 @@ void Window::DrawDialogs() {
   }
 }
 
-void Window::Reshaped(const LFL::Box &b) {
+void Window::Reshaped(const point &wd, const LFL::Box &b) {
   INFO("Window::Reshaped(", b.DebugString(), ")");
-  SetBox(b);
+  SetBox(wd, b);
   if (!gd) return;
   gd->ViewPort(LFL::Box(b.right(), b.top()));
   gd->DrawMode(gd->default_draw_mode);
@@ -846,7 +847,7 @@ void Window::ResetGL(int flag) {
 void Window::SwapAxis() {
   FLAGS_rotate_view = FLAGS_rotate_view ? 0 : -90;
   FLAGS_swap_axis = FLAGS_rotate_view != 0;
-  Reshaped(LFL::Box(y, x, height, width));
+  Reshaped(point(w, h), LFL::Box(gl_y, gl_x, gl_h, gl_w));
 }
 
 int Window::Frame(unsigned clicks, int flag) {

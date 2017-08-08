@@ -894,6 +894,7 @@ struct GameMenuGUI : public View, public Connection::Handler {
 #endif
   unique_ptr<TableView> singleplayer, startserver, serverlist, gplusinvite, options;
   unique_ptr<AdvertisingViewInterface> ads;
+  unique_ptr<NavigationView> nav;
   Browser browser;
   MenuParticles particles;
   Entity *cam=0;
@@ -904,9 +905,9 @@ struct GameMenuGUI : public View, public Connection::Handler {
     bright_font(FontDesc(FLAGS_font,                 "", 12, Color::white)),
     glow_font  (FontDesc(StrCat(FLAGS_font, "Glow"), "", 12)),
     default_port(port),
-    tab1(&topbar, 0, "single player",   MouseController::CB([&](){ if (!Changed(&selected, 1)) Deactivate(); else LayoutTopbar(); })),
-    tab2(&topbar, 0, "multi player",    MouseController::CB([&](){ if (!Changed(&selected, 2)) Deactivate(); else LayoutTopbar(); })), 
-    tab3(&topbar, 0, "options",         MouseController::CB([&](){ if (!Changed(&selected, 3)) Deactivate(); else LayoutTopbar(); })),
+    tab1(&topbar, 0, "single player",   MouseController::CB([&](){ if (!Changed(&selected, 1)) Deactivate(); else { nav->PopAll(); nav->PushTableView(singleplayer.get()); Layout(); } })),
+    tab2(&topbar, 0, "multi player",    MouseController::CB([&](){ if (!Changed(&selected, 2)) Deactivate(); else { nav->PopAll(); nav->PushTableView(serverlist.get());   Layout(); } })), 
+    tab3(&topbar, 0, "options",         MouseController::CB([&](){ if (!Changed(&selected, 3)) Deactivate(); else { nav->PopAll(); nav->PushTableView(options.get());      Layout(); } })),
     tab4(&topbar, 0, "quit",            MouseController::CB(bind(&GameMenuGUI::MenuQuit, this))),
     tab1_server_start(this, 0, "start", MouseController::CB(bind(&GameMenuGUI::MenuServerStart, this))),
     tab2_server_join (this, 0, "join",  MouseController::CB(bind(&GameMenuGUI::MenuServerJoin,  this))),
@@ -927,20 +928,19 @@ struct GameMenuGUI : public View, public Connection::Handler {
     gplus_invite        (this, 0, "invite",     MouseController::CB([&](){ gplus->Invite(); })),
     gplus_accept        (this, 0, "accept",     MouseController::CB([&](){ gplus->Accept(); })),
 #endif
-    browser(this, box), particles("GameMenuParticles") {
+    nav(make_unique<NavigationView>(W, "", "")), browser(this, box), particles("GameMenuParticles") {
     tab1.outline_topleft = tab2.outline_topleft = tab3.outline_topleft = tab4.outline_topleft = tab1_server_start.outline_topleft = tab2_server_join.outline_topleft = sub_tab1.outline_topleft = sub_tab2.outline_topleft = sub_tab3.outline_topleft = &Color::grey80;
     tab1.outline_bottomright = tab2.outline_bottomright = tab3.outline_bottomright = tab4.outline_bottomright = tab1_server_start.outline_bottomright = tab2_server_join.outline_bottomright = sub_tab1.outline_bottomright = sub_tab2.outline_bottomright = sub_tab3.outline_bottomright = &Color::grey40;
     tab1_server_start.solid = tab2_server_join.solid = &Color::grey60;
-    tab1_options.dot_size = tab2_servers.dot_size = tab3_sensitivity.dot_size = tab3_volume.dot_size = browser.v_scrollbar.dot_size = 25;
-    Layout();
-    tab2_server_address.runcb = bind(&GameMenuGUI::MenuAddServer, this, _1);
-    tab2_server_address.UpdateCursor();
+
+#if 0
     tab3_sensitivity.increment = .1;
     tab3_sensitivity.doc_height = 10;
     tab3_sensitivity.scrolled = FLAGS_msens / 10.0;
     tab3_volume.increment = .5;
     tab3_volume.doc_height = app->GetMaxVolume();
     tab3_volume.scrolled = float(app->GetVolume()) / tab3_volume.doc_height;
+#endif
     sub_selected = 2;
     pinger.handler = this;
     app->net->Enable(&pinger);
@@ -961,7 +961,10 @@ struct GameMenuGUI : public View, public Connection::Handler {
     }
 
     {
-      TableItemVec items;
+      TableItemVec items = {
+        TableItem("", TableItem::Separator),
+        TableItem("[ add server ]", TableItem::TextInput, "", "", 0, 0, 0, Callback(), bind(&GameMenuGUI::MenuAddServer, this, _1)),
+      };
       serverlist = make_unique<TableView>(root, "Multiplayer", "", "", move(items));
     }
 
@@ -988,6 +991,8 @@ struct GameMenuGUI : public View, public Connection::Handler {
       TableItemVec items;
       gplusinvite = make_unique<TableView>(root, "GPlus", "", "", move(items));
     }
+
+    nav->PushTableView(singleplayer.get());
   }
 
   void EnableParticles(Entity *c, Texture *parts) {
@@ -998,14 +1003,13 @@ struct GameMenuGUI : public View, public Connection::Handler {
 
   bool Activate  () { active=1; topbar.active=1; selected=last_selected=0; root->shell->mouseout(vector<string>()); if (ads) ads->Show(false); return 1; }
   bool Deactivate() { active=0; topbar.active=0; UpdateSettings(); tab3_player_name.Deactivate(); if (ads) ads->Show(true); return 1; }
-  bool DecayBoxIfMatch(int l1, int l2) { if (l1 != l2) return 0; return 1; }
+
   void UpdateSettings() {
     root->shell->Run(StrCat("name ", String::ToUTF8(tab3_player_name.Text16())));
     root->shell->Run(StrCat("msens ", StrCat(tab3_sensitivity.scrolled * tab3_sensitivity.doc_height)));
   }
 
   void MenuQuit() { selected=4; app->run=0; }
-  void MenuLineClicked() { line_clicked = -RelativePosition(root->mouse).y / font->Height(); }
   void MenuServerStart() {
     if (selected != 1 && !(selected == 2 && sub_selected == 3)) return;
     Deactivate();
@@ -1027,7 +1031,8 @@ struct GameMenuGUI : public View, public Connection::Handler {
   void Refresh() { 
     if (broadcast_ip) SystemNetwork::SendTo(pinger.GetListener()->socket, broadcast_ip, default_port, "ping\n", 5);
     if (!master_get_url.empty()) HTTPClient::WGet(master_get_url, 0, bind(&GameMenuGUI::MasterGetResponseCB, this, _1, _2, _3, _4, _5));
-    master_server_list.clear(); master_server_selected=-1;
+    master_server_list.clear();
+    master_server_selected=-1;
   }
 
   int MasterGetResponseCB(Connection *c, const char *h, const string &ct, const char *cb, int cl) {
@@ -1081,6 +1086,7 @@ struct GameMenuGUI : public View, public Connection::Handler {
     menuftr1   = Box (box.x, box.y+font->Height()*4, box.w, box.h-font->Height()*5);
     menuftr2   = Box (box.x, box.y+font->Height()*4, box.w, box.h-font->Height()*6);
     LayoutTopbar();
+    LayoutMenu();
   }
 
   void LayoutTopbar() {
@@ -1136,28 +1142,10 @@ struct GameMenuGUI : public View, public Connection::Handler {
         child_view = serverlist.get();
         if (last_selected != 2 || last_sub_selected != 2) Refresh();
         {
-          Scissor s(root->gd, *menuflow.container);
-
-          menuflow.AppendText(0,   "Server List:");
-          menuflow.AppendText(.75, "Players\n");
-          for (int i = 0; i < master_server_list.size(); ++i) {
-            if (line_clicked == menuflow.out->line.size()) master_server_selected = i;
-            if (master_server_selected == i) menuflow.out->PushBack(menuflow.CurrentLineBox(), menuflow.cur_attr, Singleton<BoxOutline>::Get());
-            menuflow.AppendText(0,   master_server_list[i].name);
-            menuflow.AppendText(.75, master_server_list[i].players);
-            menuflow.AppendNewlines(1);
-          }
-
-          menuflow.AppendText("\n[ add server ]");
-          if (DecayBoxIfMatch(line_clicked, menuflow.out->line.size())) {
-            app->OpenTouchKeyboard();
-            tab2_server_address.Activate();
-          }
-
-          if (tab2_server_address.Active()) menuflow.AppendText(.37, ":");
-          menuflow.AppendRow(.4, .6, &b);
-          menuflow.AppendNewlines(1);
-          { ScissorStack ss(root->gd); tab2_server_address.Draw(b + box.TopLeft()); }
+          TableItemVec items = { TableItem("Server List:", TableItem::Label, "Players") };
+          for (int i = 0; i < master_server_list.size(); ++i)
+            items.emplace_back(master_server_list[i].name, TableItem::Label, master_server_list[i].players);
+          serverlist->ReplaceSection(0, TableItem(), 0, move(items));
         }
         tab2_server_join.LayoutBox(&menuflow, bright_font, Box(box.w*.2, -box.h*.8, box.w*.6, box.h*.1));
       } else if (sub_selected == 3) {
@@ -1166,9 +1154,8 @@ struct GameMenuGUI : public View, public Connection::Handler {
       }
     }
     if (my_selected == 1) {
-      singleplayer->LayoutBox(box);
-      singleplayer->AppendFlow(&menuflow);
-      child_box.PushBack(box, menuflow.out->attr.GetAttrId(menuflow.cur_attr), (child_view = singleplayer.get()));
+      if ((child_view = nav->AppendFlow(&menuflow)))
+        child_box.PushBack(box, menuflow.out->attr.GetAttrId(menuflow.cur_attr), child_view);
       tab1_server_start.LayoutBox(&menuflow, bright_font, Box(box.w*.2, -box.h*.8, box.w*.6, box.h*.1));
     }
     else if (my_selected == 3) {
@@ -1177,9 +1164,8 @@ struct GameMenuGUI : public View, public Connection::Handler {
 #ifdef LFL_ANDROID
       LayoutGPlusSigninButton(&menuflow, gplus->GetSignedIn());
 #endif
-      options->LayoutBox(box);
-      options->AppendFlow(&menuflow);
-      child_box.PushBack(box, menuflow.out->attr.GetAttrId(menuflow.cur_attr), (child_view = options.get()));
+      if ((child_view = nav->AppendFlow(&menuflow)))
+        child_box.PushBack(box, menuflow.out->attr.GetAttrId(menuflow.cur_attr), child_view);
 
       menuflow.AppendNewlines(1);
       if (last_selected != 3) browser.Open("http://lucidfusionlabs.com/apps.html");
@@ -1222,16 +1208,11 @@ struct GameMenuGUI : public View, public Connection::Handler {
       gc.gd->SetColor(Color::grey40); BoxBottomRightOutline().Draw(&gc, titlewin);
     }
 
-    LayoutMenu();
     {
       Scissor s(gc.gd, box);
       View::Draw();
     }
     topbar.Draw();
-    tab3_volume.Update();
-    tab3_sensitivity.Update();
-
-    if (current_scrollbar) current_scrollbar->Update();
 
     if (particles.texture) {
       particles.Update(cam, clicks, root->mouse.x, root->mouse.y, app->input->MouseButton1Down());
@@ -1340,9 +1321,9 @@ struct GameChatGUI : public TextArea {
     if (!Active() && Now() - write_last >= Seconds(5)) return;
     root->gd->EnableBlend(); 
     {
-      int h = int(root->height/1.6);
-      Scissor scissor(root->gd, Box(1, root->height-h+1, root->width, root->height*.15, false));
-      TextArea::Draw(Box(0, root->height-h, root->width, int(root->height*.15)));
+      int h = int(root->gl_h/1.6);
+      Scissor scissor(root->gd, Box(1, root->gl_h-h+1, root->gl_w, root->gl_h*.15, false));
+      TextArea::Draw(Box(0, root->gl_h-h, root->gl_w, int(root->gl_h*.15)));
     }
   }
 };

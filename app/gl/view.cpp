@@ -1158,7 +1158,7 @@ void DirectoryTree::VisitExpandedChildren(Id id, const Node::Visitor &cb, int de
 /* Console */
 
 Console::Console(Window *W, const FontRef &F, const Callback &C) : TextArea(W, F, 200, 50),
-  animating_cb(C), full_height(root->height * .4) {
+  animating_cb(C), full_height(root->gl_h * .4) {
   line_fb.wrap = write_timestamp = 1;
   line_fb.align_top_or_bot = false;
   SetToggleKey(Key::Backquote);
@@ -1187,8 +1187,8 @@ void Console::Draw() {
     if (last_animating && animating_cb) animating_cb();
     if (!active) { drawing = 0; return; }
   }
-  scissor = (animating && bottom_or_top) ? &(scissor_buf = Box(0, root->y, root->width, h)) : 0;
-  Draw(Box(0, root->y + (bottom_or_top ? 0 : root->height - h), root->width, full_height));
+  scissor = (animating && bottom_or_top) ? &(scissor_buf = Box(0, root->gl_y, root->gl_w, h)) : 0;
+  Draw(Box(0, root->gl_y + (bottom_or_top ? 0 : root->gl_h - h), root->gl_w, full_height));
 }
 
 void Console::Draw(const Box &b, int flag, Shader *shader) {

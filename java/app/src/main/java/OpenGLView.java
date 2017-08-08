@@ -27,7 +27,7 @@ public class OpenGLView extends android.view.SurfaceView implements SurfaceHolde
     public EGLDisplay egl_display;
     public Thread thread;
     public int surface_width, surface_height, egl_version;
-    public boolean have_surface, reshape_synchronized, reshape_pending;
+    public boolean paused, have_surface, reshape_synchronized, reshape_pending;
     public Object sync = new Object();
 
     public OpenGLView(MainActivity activity, Context context) {
@@ -89,6 +89,10 @@ public class OpenGLView extends android.view.SurfaceView implements SurfaceHolde
     public void onResume() {
         boolean thread_exists = thread != null;
         NativeAPI.INFO("OpenGLView.onResume() have_surface=" + have_surface + " thread_exists=" + thread_exists);
+        if (paused) {
+            paused = false;
+            if (!thread_exists) startRenderThread();
+        }
     }
 
     public void onPause() {
@@ -98,6 +102,7 @@ public class OpenGLView extends android.view.SurfaceView implements SurfaceHolde
         NativeAPI.minimize();
         try { t.join(); }
         catch(Exception e) { NativeAPI.ERROR(e.toString()); }
+        paused = true;
     }
 
     public void startRenderThread() {

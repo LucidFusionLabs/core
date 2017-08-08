@@ -160,6 +160,7 @@ struct MenuViewInterface {
 
 struct StackViewInterface {
   Callback hide_cb, show_cb;
+  virtual View *AppendFlow(Flow*) { return nullptr; }
   virtual ~StackViewInterface() {}
 };
 
@@ -226,6 +227,7 @@ struct NavigationViewInterface {
   virtual void PopToRoot() = 0;
   virtual void PopAll() = 0;
   virtual void SetTheme(const string &theme) = 0;
+  virtual View *AppendFlow(Flow*) { return nullptr; }
 };
 
 struct AdvertisingViewInterface {

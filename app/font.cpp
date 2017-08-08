@@ -465,7 +465,7 @@ Font *Fonts::Change(Font *in, int new_size, const Color &new_fg, const Color &ne
 
 int Fonts::ScaledFontSize(int pointsize) {
   if (FLAGS_scale_font_height) {
-    float ratio = float(app->focused->height) / FLAGS_scale_font_height;
+    float ratio = float(app->focused->gl_h) / FLAGS_scale_font_height;
     pointsize = RoundF(pointsize * ratio);
   }
   return pointsize + FLAGS_add_font_size;

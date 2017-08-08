@@ -463,8 +463,8 @@ extern "C" void Java_com_lucidfusionlabs_app_NativeAPI_create(JNIEnv *e, jclass 
 extern "C" void Java_com_lucidfusionlabs_app_NativeAPI_main(JNIEnv *e, jclass c, jint w, jint h, jint v) {
   CHECK(jni->env = e);
   INFOf("Main: env=%p w=%d h=%d opengles_version=%d", jni->env, w, h, v);
-  app->focused->width = w;
-  app->focused->height = h;
+  app->focused->gl_w = w;
+  app->focused->gl_h = h;
   app->opengles_version = v;
   int ret = MyAppMain();
 
@@ -497,7 +497,7 @@ extern "C" void Java_com_lucidfusionlabs_app_NativeAPI_reshaped(JNIEnv *e, jclas
   static jmethodID mid = CheckNotNull(e->GetMethodID(jni->activity_class, "viewOnSynchronizedReshape", "()V"));
   app->RunNowInMainThread([=](){
     jni->env->CallVoidMethod(jni->activity, mid);
-    app->focused->Reshaped(Box(x, y, w, h));
+    app->focused->Reshaped(point(w, h), Box(x, y, w, h));
   });
 }
 
@@ -509,10 +509,10 @@ extern "C" void Java_com_lucidfusionlabs_app_NativeAPI_keyPress(JNIEnv *e, jclas
 extern "C" void Java_com_lucidfusionlabs_app_NativeAPI_touch(JNIEnv *e, jclass c, jint action, jfloat x, jfloat y, jfloat p) {
   static float lx[2]={0,0}, ly[2]={0,0};
   auto screen = app->focused;
-  int dpind = (/*FLAGS_swap_axis*/ 0) ? y < screen->width/2 : x < screen->width/2;
+  int dpind = (/*FLAGS_swap_axis*/ 0) ? y < screen->gl_w/2 : x < screen->gl_w/2;
   if (action == AndroidEvent::ACTION_DOWN || action == AndroidEvent::ACTION_POINTER_DOWN) {
     // INFOf("%d down %f, %f", dpind, x, screen->height - y);
-    app->input->QueueMouseClick(1, 1, point(screen->x + x, screen->y + screen->height - y));
+    app->input->QueueMouseClick(1, 1, point(screen->gl_x + x, screen->gl_y + screen->gl_h - y));
     app->scheduler.Wakeup(app->focused, FrameScheduler::WakeupFlag::ContingentOnEvents);
     // screen->gesture_tap[dpind] = 1;
     // screen->gesture_dpad_x[dpind] = x;
@@ -521,13 +521,13 @@ extern "C" void Java_com_lucidfusionlabs_app_NativeAPI_touch(JNIEnv *e, jclass c
     ly[dpind] = y;
   } else if (action == AndroidEvent::ACTION_UP || action == AndroidEvent::ACTION_POINTER_UP) {
     // INFOf("%d up %f, %f", dpind, x, y);
-    app->input->QueueMouseClick(1, 0, point(screen->x + x, screen->y + screen->height - y));
+    app->input->QueueMouseClick(1, 0, point(screen->gl_x + x, screen->gl_y + screen->gl_h - y));
     app->scheduler.Wakeup(app->focused, FrameScheduler::WakeupFlag::ContingentOnEvents);
     // screen->gesture_dpad_stop[dpind] = 1;
     // screen->gesture_dpad_x[dpind] = 0;
     // screen->gesture_dpad_y[dpind] = 0;
   } else if (action == AndroidEvent::ACTION_MOVE) {
-    point p(screen->x + x, screen->y + screen->height - y);
+    point p(screen->gl_x + x, screen->gl_y + screen->gl_h - y);
     app->input->QueueMouseMovement(p, p - screen->mouse);
     app->scheduler.Wakeup(app->focused, FrameScheduler::WakeupFlag::ContingentOnEvents);
     float vx = x - lx[dpind];
@@ -546,10 +546,10 @@ extern "C" void Java_com_lucidfusionlabs_app_NativeAPI_touch(JNIEnv *e, jclass c
 
 extern "C" void Java_com_lucidfusionlabs_app_NativeAPI_fling(JNIEnv *e, jclass c, jfloat x, jfloat y, jfloat vx, jfloat vy) {
   auto screen = app->focused;
-  int dpind = y < screen->width/2;
+  int dpind = y < screen->gl_w/2;
   // screen->gesture_dpad_dx[dpind] = vx;
   // screen->gesture_dpad_dy[dpind] = vy;
-  INFOf("fling(%f, %f) = %d of (%d, %d) and vel = (%f, %f)", x, y, dpind, screen->width, screen->height, vx, vy);
+  INFOf("fling(%f, %f) = %d of (%d, %d) and vel = (%f, %f)", x, y, dpind, screen->gl_w, screen->gl_h, vx, vy);
 }
 
 extern "C" void Java_com_lucidfusionlabs_app_NativeAPI_scroll(JNIEnv *e, jclass c, jfloat x, jfloat y, jfloat vx, jfloat vy) {
@@ -561,7 +561,7 @@ extern "C" void Java_com_lucidfusionlabs_app_NativeAPI_accel(JNIEnv *e, jclass c
 
 extern "C" void Java_com_lucidfusionlabs_app_NativeAPI_scale(JNIEnv *e, jclass c, jfloat x, jfloat y, jfloat dx, jfloat dy, jboolean begin) {
   auto screen = app->focused;
-  app->input->QueueMouseZoom(v2(screen->x + x, screen->y + screen->height - y), v2(-(dx-1.0)+1.0, -(dy-1.0)+1.0), begin); 
+  app->input->QueueMouseZoom(v2(screen->gl_x + x, screen->gl_y + screen->gl_h - y), v2(-(dx-1.0)+1.0, -(dy-1.0)+1.0), begin);
   app->scheduler.Wakeup(app->focused, FrameScheduler::WakeupFlag::ContingentOnEvents);
 }
 

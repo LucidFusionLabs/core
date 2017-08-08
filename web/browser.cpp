@@ -396,14 +396,14 @@ void Browser::KeyEvent(int key, bool down) {
 }
 
 void Browser::MouseMoved(int x, int y) {
-  if (app->render_process || (!app->render_process && !app->main_process)) y -= app->focused->height+viewport.top()+VScrolled();
+  if (app->render_process || (!app->render_process && !app->main_process)) y -= app->focused->gl_h+viewport.top()+VScrolled();
   if (app->render_process) { app->RunInNetworkThread(bind(&ProcessAPIClient::MouseMove, app->render_process.get(), x, y, x-mouse.x, y-mouse.y)); mouse=point(x,y); }
   else if (auto n = doc.node->documentElement()) { mouse=point(x,y); EventNode(n, initial_displacement, Mouse::Event::Motion); }
 }
 
 void Browser::MouseButton(int b, bool d, int x, int y) {
   // doc.gui.Input(b, mouse, d, 1);
-  if (app->render_process || (!app->render_process && !app->main_process)) y -= app->focused->height+viewport.top()+VScrolled();
+  if (app->render_process || (!app->render_process && !app->main_process)) y -= app->focused->gl_h+viewport.top()+VScrolled();
   if (app->render_process) { app->RunInNetworkThread(bind(&ProcessAPIClient::MouseClick, app->render_process.get(), b, d, x, y)); mouse=point(x,y); }
   else if (auto n = doc.node->documentElement()) { mouse=point(x,y); EventNode(n, initial_displacement, Mouse::ButtonID(b)); }
 }

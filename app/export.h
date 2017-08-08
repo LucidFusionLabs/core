@@ -1,5 +1,5 @@
 /*
- * $Id: lfexport.h 1327 2014-11-03 23:26:43Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -257,7 +257,7 @@ struct LFApp {
 
 struct LFAppWindow {
   void *id;
-  int x, y, width, height, target_fps;
+  int w, h, gl_x, gl_y, gl_w, gl_h, target_fps;
   bool started, minimized, cursor_grabbed, animating;
   short resize_increment_x, resize_increment_y;
   float multitouch_keyboard_x;

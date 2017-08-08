@@ -55,9 +55,9 @@ struct TableView : public View, public TableViewInterface {
 
   void Layout();
   void Draw();
-  void AppendFlow(Flow *flow);
   void OnClick(int, point, point, int);
   void CheckExists(int section, int row);
+  View *AppendFlow(Flow*);
 
   void DelNavigationButton(int id);
   void AddNavigationButton(int id, const TableItem &item);
@@ -96,6 +96,7 @@ struct NavigationView : public View, public NavigationViewInterface {
   vector<StackViewInterface*> stack;
   NavigationView(Window *w, const string &style, const string &theme);
 
+  View *AppendFlow(Flow*);
   void Layout();
   void Draw();
 
