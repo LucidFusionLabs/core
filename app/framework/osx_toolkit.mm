@@ -518,6 +518,7 @@ struct OSXTextView : public TextViewInterface {
   OSXTextView(const string &title, const string &text) :
     view([[OSXText alloc] initWithTitle:MakeNSString(title) andText:[[[NSString alloc]
          initWithBytes:text.data() length:text.size() encoding:NSASCIIStringEncoding] autorelease]]) {}
+  void Show(bool show_or_hide) {}
 };
 
 struct OSXNavigationView : public NavigationViewInterface {

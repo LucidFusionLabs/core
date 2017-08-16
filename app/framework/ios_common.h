@@ -56,7 +56,7 @@
   @property (nonatomic, assign) UIViewController *root_controller, *top_controller;
   @property (nonatomic, assign) SCNetworkReachabilityRef reachability;
   @property BOOL overlay_top_controller, frame_disabled, frame_on_mouse_input, downscale, show_title, wifi;
-  @property int screen_y, screen_width, screen_height;
+  @property int screen_w, screen_h, gl_y, gl_w, gl_h;
   @property CGFloat scale;
   + (LFUIApplication *) sharedAppDelegate;
   + (CGSize)currentWindowSize;
@@ -146,6 +146,7 @@ struct iOSTableView : public TableViewInterface {
   void AddNavigationButton(int align, const TableItem &item);
   void SetToolbar(ToolbarViewInterface *t);
   void Show(bool show_or_hide);
+  View *AppendFlow(Flow*);
 
   string GetKey(int section, int row);
   string GetValue(int section, int row);

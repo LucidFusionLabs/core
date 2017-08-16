@@ -20,6 +20,7 @@
 #import <GLKit/GLKit.h>
 
 #include "core/app/app.h"
+#include "core/app/flow.h"
 #include "core/app/framework/apple_common.h"
 #include "core/app/framework/ios_common.h"
 
@@ -210,7 +211,7 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
 @implementation IOSTable
   {
     std::vector<LFL::TableSection<LFL::TableItem>> data;
-    bool dark_theme;
+    bool dark_theme, clear_theme;
   }
 
   - (id)initWithStyle: (UITableViewStyle)style {
@@ -229,6 +230,9 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
     if ((dark_theme = (n == "Dark"))) {
       _tableView.backgroundColor = [UIColor colorWithWhite:0.249 alpha:1.000];
       _tableView.separatorColor = [UIColor colorWithWhite:0.664 alpha:1.000];
+    } else if ((clear_theme = (n == "Clear"))) {
+      _tableView.backgroundColor = [UIColor colorWithWhite:0 alpha:0];
+      dark_theme = true;
     } else {
       _tableView.backgroundColor = _orig_bg_color;
       _tableView.separatorColor = _orig_separator_color;
@@ -435,6 +439,7 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
       cell.selectionStyle = UITableViewCellSelectionStyleNone;
       if      (ci.bg_a)                                                                               [cell setBackgroundColor:[UIColor colorWithRed:ci.bg_r/255.0 green:ci.bg_g/255.0 blue:ci.bg_b/255.0 alpha:ci.bg_a/255.0]];
       else if (is_selected_row && (hi.flag & LFL::TableSectionInterface::Flag::HighlightSelectedRow)) [cell setBackgroundColor:[UIColor lightGrayColor]];
+      else if (clear_theme)                                                                           [cell setBackgroundColor:[UIColor colorWithWhite:0 alpha:0]];
       else if (dark_theme)                                                                            [cell setBackgroundColor:[UIColor colorWithWhite:0.349 alpha:1.000]];
 
       if (dark_theme) {
@@ -984,6 +989,7 @@ struct iOSTextView : public TextViewInterface {
   iOSTextView(const string &title, const string &text) :
     view([[IOSTextView alloc] initWithTitle:MakeNSString(title) andText:[[[NSString alloc]
          initWithBytes:text.data() length:text.size() encoding:NSASCIIStringEncoding] autorelease]]) {}
+  void Show(bool show_or_hide) {}
 };
 
 struct iOSNavigationView : public NavigationViewInterface {
@@ -1130,6 +1136,19 @@ void iOSTableView::SetToolbar(ToolbarViewInterface *t) {
 void iOSTableView::Show(bool show_or_hide) {
   if (show_or_hide && show_cb) show_cb();
   [table show:show_or_hide];
+  shown = show_or_hide;
+}
+
+View *iOSTableView::AppendFlow(Flow *flow) {
+  auto uiapp = [LFUIApplication sharedAppDelegate];
+  float s = 1.0 / [uiapp getScale];
+  Box b = *flow->container;
+  b.y = uiapp.screen_h - (uiapp.gl_y + b.y + b.h);
+  b.scale(s, s);
+
+  [table.tableView setFrame: MakeCGRect(b)];
+  if (!shown) Show(true);
+  return nullptr;
 }
 
 void iOSTableView::AddRow(int section, TableItem item) { return [table addRow:section withItem:move(item)]; }

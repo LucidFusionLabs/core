@@ -118,6 +118,7 @@ template <int MP, int MH, bool PerParticleColor> struct Particles : public Parti
   GraphicsDevice *gd=0;
   Entity *cam=0;
 
+  virtual ~Particles() {}
   Particles(const string &n, bool AlwaysOn=false, float RadiusMin=10, float RadiusMax=40, float RandInitPos=5, float RandInitVel=500) :
     ParticleSystem(n), num_particles(AlwaysOn ? MaxParticles : 0), radius_min(RadiusMin), radius_max(RadiusMax), rand_initpos(RandInitPos),
     rand_initvel(RandInitVel), trails(Trails), always_on(AlwaysOn), per_particle_color(PerParticleColor) {

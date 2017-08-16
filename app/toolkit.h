@@ -160,19 +160,19 @@ struct MenuViewInterface {
 
 struct StackViewInterface {
   Callback hide_cb, show_cb;
-  virtual View *AppendFlow(Flow*) { return nullptr; }
   virtual ~StackViewInterface() {}
+  virtual void Show(bool show_or_hide) = 0;
+  virtual View *AppendFlow(Flow*) { return nullptr; }
 };
 
 struct TableViewInterface : public StackViewInterface {
-  bool changed=0;
+  bool shown=0, changed=0;
   TableViewInterface() { show_cb = [=](){ changed=0; };  }
   virtual ~TableViewInterface() {}
 
   virtual void DelNavigationButton(int id) = 0;
   virtual void AddNavigationButton(int id, const TableItem &item) = 0;
   virtual void SetToolbar(ToolbarViewInterface*) = 0;
-  virtual void Show(bool show_or_hide) = 0;
 
   virtual string GetKey(int section, int row) = 0;
   virtual string GetValue(int section, int row) = 0;

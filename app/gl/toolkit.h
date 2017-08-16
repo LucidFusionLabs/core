@@ -50,7 +50,7 @@ struct TableView : public View, public TableViewInterface {
   string title, style, theme;
   Widget::Slider scrollbar;
   DrawableBoxArray *out=0;
-  int row_height=0, decay_box_line=-1, decay_box_left=0, selected_section=-1, selected_row=-1;
+  int row_height=0, decay_box_line=-1, decay_box_left=0, selected_section=-1, selected_row=-1, scrolled=0;
   TableView(Window *w, const string &title, const string &style, const string &theme, TableItemVec items);
 
   void Layout();

@@ -584,6 +584,7 @@ struct QtTextView : public TextViewInterface {
     text->setWindowTitle(MakeQString(title));
     text->setReadOnly(true);
   }
+  void Show(bool show_or_hide) {}
 };
 
 struct QtNavigationView : public NavigationViewInterface {

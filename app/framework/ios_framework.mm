@@ -97,7 +97,6 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
 @implementation LFUIApplication
   {
     bool want_extra_scale, has_become_active;
-    int target_fps;
     LFL::Callback bg_task_cb;
     UIBackgroundTaskIdentifier bg_task;
     SCNetworkReachabilityFlags reachability_flags;
@@ -159,7 +158,7 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
     [context release];
     _glk_controller.view = _glk_view;
 
-    _controller = [[[LFViewController alloc] initWithNibName:nil bundle:nil] autorelease];
+    _controller = [[LFViewController alloc] initWithNibName:nil bundle:nil];
     _top_controller = _controller;
     _root_controller = _controller;
     _window.rootViewController = _controller;
@@ -170,19 +169,22 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
     [_controller initNotifications];
 
     // left touch view
-    CGRect lrect = CGRectMake(0, 0, wbounds.size.width, wbounds.size.height/2);
+    CGRect lrect = CGRectMake(0, 0, wbounds.size.width/2, wbounds.size.height);
     _lview = [[MyTouchView alloc] initWithFrame:lrect];
+    _lview.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight | UIViewAutoresizingFlexibleRightMargin;
     // _lview.backgroundColor = [UIColor greenColor];
     // _lview.alpha = 0.3f;
     [_glk_view addSubview:_lview];
-    
+
     // right touch view
-    CGRect rrect = CGRectMake(0, wbounds.size.height/2, wbounds.size.width, wbounds.size.height/2);
-    _rview = [[[MyTouchView alloc] initWithFrame:rrect] autorelease];
+    CGRect rrect = CGRectMake(wbounds.size.width/2, 0, wbounds.size.width/2, wbounds.size.height);
+    _rview = [[MyTouchView alloc] initWithFrame:rrect];
+    _rview.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight | UIViewAutoresizingFlexibleLeftMargin;
     // _rview.backgroundColor = [UIColor blueColor];
     // _rview.alpha = 0.3f;
     [_glk_view addSubview:_rview];
 
+    // monitor reachability
     struct sockaddr_in zeroAddress;
     bzero(&zeroAddress, sizeof(zeroAddress));
     zeroAddress.sin_len = sizeof(zeroAddress);
@@ -199,10 +201,9 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
     [[NSFileManager defaultManager] changeCurrentDirectoryPath: [[NSBundle mainBundle] resourcePath]];
     NSLog(@"iOSMain argc=%d", LFL::app->argc);
     MyAppMain();
-    INFOf("didFinishLaunchingWithOptions, views: %p, %p, %p, csf=%f", _glk_view, _lview, _rview, _scale);
 
+    INFOf("didFinishLaunchingWithOptions, views: %p, %p, %p, csf=%f", _glk_view, _lview, _rview, _scale);
     [_window makeKeyAndVisible];
-    // INFO("after window makeKeyAndVisible");
     return YES;
   }
 
@@ -265,10 +266,10 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
   - (CGFloat)getScale { return (want_extra_scale ? _scale : 1); }
   - (bool)isKeyboardFirstResponder { return [_glk_view isFirstResponder]; }
 
-  - (void)updateTargetFPS: (int)fps {
-    target_fps = fps;
-    INFOf("updateTargetFPS: %d", target_fps);
-    [_glk_controller setPaused:(!target_fps)];
+  - updateTargetFPS: (int)fps {
+    LFL::FLAGS_target_fps = fps;
+    INFOf("updateTargetFPS: %d", LFL::FLAGS_target_fps);
+    [_glk_controller setPaused:(!LFL::FLAGS_target_fps)];
   }
 
   - (int)updateScale: (bool)v { want_extra_scale=v; [self updateGLKViewScale]; return v ? _scale : 1; }
@@ -361,6 +362,7 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
 
   - (void)viewWillAppear:(BOOL)animated { 
     [super viewWillAppear:animated];
+    if (!LFL::FLAGS_target_fps) [self setPaused:YES];
     uiapp = [LFUIApplication sharedAppDelegate];
   }
   
@@ -369,10 +371,12 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
     CGRect bounds = self.view.bounds;
     bool overlap_keyboard = false;
     int kb_h = [uiapp.controller getKeyboardToolbarFrame].size.height, y = overlap_keyboard ? 0 : (s * kb_h);
-    uiapp.screen_y      = y;
-    uiapp.screen_width  = s * bounds.size.width;
-    uiapp.screen_height = s * bounds.size.height - y;
-    // INFO("LFGLKViewController viewDidLayoutSubviews kb_h=", kb_h, " y=", y, " h=", uiapp.screen_height, " bounds.h=", bounds.size.height, " scale=", float(s));
+    uiapp.gl_y = y;
+    uiapp.gl_w = s * bounds.size.width;
+    uiapp.gl_h = s * bounds.size.height - y;
+    uiapp.screen_w = s * bounds.size.width;
+    uiapp.screen_h = s * bounds.size.height;
+    // INFO("LFGLKViewController viewDidLayoutSubviews kb_h=", kb_h, " y=", y, " h=", uiapp.gl_h, " bounds.h=", bounds.size.height, " scale=", float(s));
     [self.view setNeedsDisplay];
     [super viewDidLayoutSubviews];
   }
@@ -388,9 +392,10 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
       LFL::FrameBuffer(screen->gd).Release();
     }
     bool draw_frame = (uiapp.top_controller == uiapp.root_controller || uiapp.overlay_top_controller) &&
-      !uiapp.frame_disabled && uiapp.screen_width && uiapp.screen_height && screen;
-    if (draw_frame && (screen->gl_y != uiapp.screen_y || screen->gl_w != uiapp.screen_width || screen->gl_h != uiapp.screen_height))
-      LFL::app->focused->Reshaped(LFL::point(uiapp.screen_width, uiapp.screen_height), LFL::Box(0, uiapp.screen_y, uiapp.screen_width, uiapp.screen_height));
+      !uiapp.frame_disabled && uiapp.gl_w && uiapp.gl_h && screen;
+    if (draw_frame && (screen->gl_y != uiapp.gl_y || screen->gl_w != uiapp.gl_w || screen->gl_h != uiapp.gl_h))
+      LFL::app->focused->Reshaped(LFL::point(uiapp.screen_w, uiapp.screen_h),
+                                  LFL::Box(0, uiapp.gl_y, uiapp.gl_w, uiapp.gl_h));
     LFL::app->EventDrivenFrame(true, draw_frame);
   }
 @end
@@ -582,7 +587,7 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
   - (void)tapGesture: (UITapGestureRecognizer *)tapGestureRecognizer {
     UIView *v = [tapGestureRecognizer view];
     CGPoint position = [tapGestureRecognizer locationInView:v];
-    int dpind = v.frame.origin.y == 0;
+    int dpind = v.frame.origin.x == 0;
     if (auto s = LFL::app->focused) {
 #if 0
       s->gesture_tap[dpind] = 1;
@@ -608,7 +613,7 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
     UIView *v = [panGestureRecognizer view];
     CGPoint position = [panGestureRecognizer locationOfTouch:0 inView:v];
     CGPoint velocity = [panGestureRecognizer velocityInView:v];
-    int dpind = v.frame.origin.y == 0;
+    int dpind = v.frame.origin.x == 0;
     if (!dpind) position = CGPointMake(uiapp.scale * (position.x + v.frame.origin.x), uiapp.scale * (position.y + v.frame.origin.y));
     else        position = CGPointMake(uiapp.scale * position.x, uiapp.scale * position.y);
     if (auto s = LFL::app->focused) { 
@@ -699,7 +704,7 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
     UITouch *touch = [touches anyObject];
     UIView *v = [touch view];
     CGPoint position = [touch locationInView:v];
-    int dpind = v.frame.origin.y == 0, scale = [uiapp getScale];
+    int dpind = v.frame.origin.x == 0, scale = [uiapp getScale];
     if (!dpind) position = CGPointMake(scale * (position.x + v.frame.origin.x), scale * (position.y + v.frame.origin.y));
     else        position = CGPointMake(scale * position.x, scale * position.y);
     if (auto s = LFL::app->focused) {
@@ -718,7 +723,7 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
     UITouch *touch = [touches anyObject];
     UIView *v = [touch view];
     CGPoint position = [touch locationInView:v];
-    int dpind = v.frame.origin.y == 0, scale = [uiapp getScale];
+    int dpind = v.frame.origin.x == 0, scale = [uiapp getScale];
     if (!dpind) position = CGPointMake(scale * (position.x + v.frame.origin.x), scale * (position.y + v.frame.origin.y));
     else        position = CGPointMake(scale * position.x, scale * position.y);
     if (auto s = LFL::app->focused) {
@@ -738,7 +743,7 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
     UITouch *touch = [touches anyObject];
     UIView *v = [touch view];
     CGPoint position = [touch locationInView:v];
-    int dpind = v.frame.origin.y == 0, scale = [uiapp getScale];
+    int dpind = v.frame.origin.x == 0, scale = [uiapp getScale];
     if (!dpind) position = CGPointMake(scale * (position.x + v.frame.origin.x), scale * (position.y + v.frame.origin.y));
     else        position = CGPointMake(scale * position.x, scale * position.y);
     if (auto s = LFL::app->focused) {

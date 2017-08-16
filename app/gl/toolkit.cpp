@@ -144,6 +144,10 @@ View *TableView::AppendFlow(Flow *flow) {
   LayoutBox(*flow->container);
   if (!(row_height = flow->cur_attr.font->Height())) row_height = 16;
   out = flow->out;
+
+  scrollbar.LayoutAttached(Box(0, -box.h, box.w, box.h - row_height));
+  flow->p.y += (scrolled = int(scrollbar.scrolled * scrollbar.doc_height));
+
   flow->AppendNewline();
   for (auto &s : data)
     for (auto &i : s.item) {
@@ -178,6 +182,8 @@ View *TableView::AppendFlow(Flow *flow) {
       }
       flow->AppendNewlines(1);
     }
+
+  scrollbar.SetDocHeight(flow->Height());
 #if 0
       if (tab3_volume.dirty) {
         tab3_volume.dirty = false;
@@ -197,22 +203,25 @@ void NavigationView::PushTextView (TextViewInterface  *t) { if (t->show_cb) t->s
 void NavigationView::PopView(int num) {
   for (int i=0; i<num && stack.size(); ++i) {
     StackViewInterface *t = stack.back();
+    if (!i) t->Show(false);
     if (t->hide_cb) t->hide_cb();
     stack.pop_back();
   }
 }
 
 void NavigationView::PopToRoot() { if (stack.size() > 1) stack.resize(1);
-  while (stack.size() > 1) {
+  for (int i=0; stack.size() > 1; ++i) {
     StackViewInterface *t = stack.back();
+    if (!i) t->Show(false);
     if (t->hide_cb) t->hide_cb();
     stack.pop_back();
   }
 }
 
 void NavigationView::PopAll() {
-  while (stack.size()) {
+  for (int i=0; stack.size(); ++i) {
     StackViewInterface *t = stack.back();
+    if (!i) t->Show(false);
     if (t->hide_cb) t->hide_cb();
     stack.pop_back();
   }

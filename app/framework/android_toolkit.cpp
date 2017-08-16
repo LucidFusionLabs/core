@@ -61,6 +61,7 @@ struct AndroidTextView : public TextViewInterface {
   GlobalJNIObject impl;
   AndroidTextView(const string &title, File *f) : AndroidTextView(title, f ? f->Contents() : "") {}
   AndroidTextView(const string &title, const string &text) : impl(NewTextScreenObject(title, text)) {}
+  void Show(bool show_or_hide) {}
 
   static jobject NewTextScreenObject(const string &title, const string &text) {
     static jmethodID mid = CheckNotNull

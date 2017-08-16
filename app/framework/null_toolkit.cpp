@@ -81,6 +81,7 @@ struct NullTableView : public TableViewInterface {
 };
 
 struct NullTextView : public TextViewInterface {
+  void Show(bool show_or_hide) {}
 };
 
 struct NullNavigationView : public NavigationViewInterface {

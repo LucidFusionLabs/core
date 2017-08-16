@@ -1,5 +1,5 @@
 /*
- * $Id: apple_common.h 1336 2014-12-08 09:29:59Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -51,6 +51,7 @@ inline NSData *MakeNSData(const string &x) { return [NSData dataWithBytes:x.data
 inline NSData *MakeNSData(const void *b, int l) { return [NSData dataWithBytes:b length:l]; }
 inline CGPoint MakeCGPoint(const point &p) { return CGPointMake(p.x, p.y); }
 inline CGPoint MakeCGPoint(const v2 &p) { return CGPointMake(p.x, p.y); }
+inline CGRect MakeCGRect(const Box &b) { return CGRectMake(b.x, b.y, b.w, b.h); }
 inline v2 GetCGPoint(CGPoint p) { return v2(p.x, p.y); }
 inline Box GetCGRect(CGRect r) { return Box(r.origin.x, r.origin.y, r.size.width, r.size.height); }
 NSArray *MakeNSStringArray(const vector<string>&);
