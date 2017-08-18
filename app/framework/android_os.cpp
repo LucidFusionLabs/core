@@ -327,7 +327,8 @@ bool Application::LoadKeychain(const string &k, string *v) { return false; }
 String16 Application::GetLocalizedString16(const char *key) { return String16(); }
 string Application::GetLocalizedString(const char *key) {
   static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->resources_class, "getString", "(I)Ljava/lang/String;"));
-  jfieldID fid = CheckNotNull(jni->env->GetStaticFieldID(jni->r_string_class, key, "I"));
+  jfieldID fid = jni->env->GetStaticFieldID(jni->r_string_class, key, "I");
+  if (jni->CheckForException() || !fid) return ERRORv(key, "missing fid for: ", key); 
   int resource_id = jni->env->GetStaticIntField(jni->r_string_class, fid);
   LocalJNIString str(jni->env, (jstring)jni->env->CallObjectMethod(jni->resources, mid, resource_id));
   return JNI::GetJString(jni->env, str.v);

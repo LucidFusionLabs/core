@@ -36,6 +36,8 @@ import com.lucidfusionlabs.core.NativeIntIntCB;
 
 public class TableScreen extends Screen {
     public ModelItemRecyclerViewAdapter model;
+    public boolean disable_title;
+    public int box_x, box_y, box_w, box_h;
     public native void RunHideCB();
 
     public TableScreen(final MainActivity activity, String t, ArrayList<ModelItem> m, long lsp) {
@@ -53,13 +55,13 @@ public class TableScreen extends Screen {
     }
 
     @Override public ScreenFragment createFragment() {
-        return RecyclerViewScreenFragment.newInstance(this);
+        return RecyclerViewScreenFragment.newInstance(this, box_x, box_y, box_w, box_h);
     }
 
     @Override public void show(final MainActivity activity, final boolean show_or_hide) {
         activity.runOnUiThread(new Runnable() { public void run() {
             if (show_or_hide) {
-                activity.action_bar.show();
+                if (!disable_title) activity.action_bar.show();
                 activity.getSupportFragmentManager().beginTransaction().replace(R.id.content_frame, createFragment()).commit();
             } else {
                 if (activity.disable_title) activity.action_bar.hide();
@@ -67,6 +69,14 @@ public class TableScreen extends Screen {
                 activity.getSupportFragmentManager().beginTransaction().remove(frag).commit();
             }
         }});
+    }
+
+    public void setBox(final MainActivity activity, final int x, final int y, final int w, final int h) {
+        box_x = x;
+        box_y = y;
+        box_w = w;
+        box_h = h;
+        disable_title = true; 
     }
 
     public void addNavButton(final AppCompatActivity activity, final int halign, final ModelItem row) {

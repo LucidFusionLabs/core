@@ -30,6 +30,7 @@ struct AndroidTableView : public TableViewInterface {
   void DelNavigationButton(int halign_type);
   void SetToolbar(ToolbarViewInterface *toolbar);
   void Show(bool show_or_hide);
+  View *AppendFlow(Flow *flow);
   string GetKey(int section, int row);
   string GetValue(int section, int row);
   int GetTag(int section, int row);

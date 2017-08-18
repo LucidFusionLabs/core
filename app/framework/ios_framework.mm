@@ -266,7 +266,7 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
   - (CGFloat)getScale { return (want_extra_scale ? _scale : 1); }
   - (bool)isKeyboardFirstResponder { return [_glk_view isFirstResponder]; }
 
-  - updateTargetFPS: (int)fps {
+  - (void)updateTargetFPS: (int)fps {
     LFL::FLAGS_target_fps = fps;
     INFOf("updateTargetFPS: %d", LFL::FLAGS_target_fps);
     [_glk_controller setPaused:(!LFL::FLAGS_target_fps)];

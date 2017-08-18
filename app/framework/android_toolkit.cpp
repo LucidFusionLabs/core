@@ -16,6 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "core/app/flow.h"
 #include "core/app/framework/android_toolkit.h"
 
 namespace LFL {
@@ -177,6 +178,15 @@ void AndroidTableView::Show(bool show_or_hide) {
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->tablescreen_class, "show", "(Lcom/lucidfusionlabs/app/MainActivity;Z)V"));
   jni->env->CallVoidMethod(impl.v, mid, jni->activity, show_or_hide);
+}
+
+View *AndroidTableView::AppendFlow(Flow *flow) {
+  static jmethodID mid = CheckNotNull
+    (jni->env->GetMethodID(jni->tablescreen_class, "setBox", "(Lcom/lucidfusionlabs/app/MainActivity;IIII)V"));
+  jni->env->CallVoidMethod(impl.v, mid, jni->activity, jint(flow->container->x), jint(flow->container->y),
+                           jint(flow->container->w), jint(flow->container->h));
+  if (!shown) Show(true);
+  return nullptr;
 }
 
 string AndroidTableView::GetKey(int section, int row) {

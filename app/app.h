@@ -760,6 +760,9 @@ struct Application : public ::LFApp {
   static void WriteDebugLine(const char *message, const char *file, int line);
 };
 
+inline string   LS  (const char *n) { return app->GetLocalizedString(n); }
+inline String16 LS16(const char *n) { return app->GetLocalizedString16(n); }
+
 Application *CreateApplication(int ac, const char* const* av);
 unique_ptr<Module> CreateFrameworkModule();
 unique_ptr<Module> CreateAudioModule(Audio*);

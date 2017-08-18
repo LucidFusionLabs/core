@@ -60,6 +60,7 @@ struct TableItem {
   void CheckAssign(const string &k, Callback c) { CHECK_EQ(k, key); cb=move(c); }
   void SetFGColor(const Color&);
   void SetBGColor(const Color&);
+  static string Placeholder(const string &v) { return StrCat("\x01", v); }
 };
 
 struct TableSectionInterface {
