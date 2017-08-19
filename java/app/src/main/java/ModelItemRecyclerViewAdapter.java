@@ -94,10 +94,12 @@ public class ModelItemRecyclerViewAdapter
     public int selected_section = -1, selected_row = -1;
     public int editable_section = -1, editable_start_row = -1;
     public float display_density = 1;
+    public boolean busy = false;
     public NativeIntIntCB delete_row_cb;
     public RecyclerView recyclerview;
     public com.lucidfusionlabs.core.ViewOwner toolbar, advertising;
     public ItemTouchHelper itemtouchhelper = new ItemTouchHelper(new ItemTouchHelperCallback(this));
+    public Runnable done_busy = new Runnable() { public void run() { busy = false; } };
 
     public ModelItemRecyclerViewAdapter(final TableScreen p, final ArrayList<ModelItem> d) {
         parent_screen = p;
@@ -273,8 +275,10 @@ public class ModelItemRecyclerViewAdapter
         final boolean editing = section.editing && row_id >= editable_start_row;
 
         if (holder.itemView != null) {
-            if (item.cb != null) holder.itemView.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { item.cb.run(); }});
-            else                 holder.itemView.setOnClickListener(null);
+            if (item.cb == null) holder.itemView.setOnClickListener(null);
+            else                 holder.itemView.setOnClickListener(new View.OnClickListener(){
+                public void onClick(View v) { if (busy) return; busy=true; item.cb.run(done_busy); }
+            });
         }
 
         if (holder.root != null) {
@@ -304,8 +308,9 @@ public class ModelItemRecyclerViewAdapter
         if (holder.removeIcon != null) {
             holder.removeIcon.setVisibility(editing ? View.VISIBLE : View.GONE);
             holder.removeIcon.setOnClickListener(new View.OnClickListener() { public void onClick(View v) {
+                if (busy) return;
                 final int pos = holder.getAdapterPosition();
-                if (delete_row_cb != null) delete_row_cb.run(row_id, item.tag);
+                if (delete_row_cb != null) { busy=true; delete_row_cb.run(row_id, item.tag, done_busy); }
                 data.subList(pos, pos + 1).clear();
                 moveSectionsAfterBy(section_id, -1);
                 notifyItemRemoved(pos);
@@ -338,11 +343,9 @@ public class ModelItemRecyclerViewAdapter
             holder.rightIcon.setImageResource(item.right_icon == 0 ? R.drawable.blankstrip : item.right_icon);
             holder.rightIcon.setOnTouchListener(null);
             if (item.right_cb == null) holder.rightIcon.setOnClickListener(null);
-            else {
-                holder.rightIcon.setOnClickListener(new View.OnClickListener() { public void onClick(View v) {
-                    item.right_cb.run("");
-                }});
-            }
+            else                       holder.rightIcon.setOnClickListener(new View.OnClickListener(){
+                public void onClick(View v) { if (busy) return; busy=true; item.right_cb.run("", done_busy); }
+            });
         }
 
         boolean subtext = (item.flags & ModelItem.TABLE_FLAG_SUBTEXT) != 0 && item.val.length() > 0;
@@ -385,8 +388,12 @@ public class ModelItemRecyclerViewAdapter
                 @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
                 @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
                 @Override public void afterTextChanged(android.text.Editable s) {
+                    if (busy) return;
                     parent_screen.changed = true;
-                    if (item.right_cb != null) item.right_cb.run(holder.editText.getText().toString());
+                    if (item.right_cb != null) {
+                        busy = true;
+                        item.right_cb.run(holder.editText.getText().toString(), done_busy);
+                    }
                 }};
             holder.editText.addTextChangedListener(holder.editTextListener);
         }
@@ -409,8 +416,10 @@ public class ModelItemRecyclerViewAdapter
                 if (item.right_text.length() > 0) {
                     holder.rightNav.setText(item.right_text);
                     holder.rightNav.setVisibility(View.VISIBLE);
-                    if (item.right_cb != null) holder.rightNav.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { item.right_cb.run(""); }});
-                    else                       holder.rightNav.setOnClickListener(null);
+                    if (item.right_cb != null) holder.rightNav.setOnClickListener(null);
+                    else                       holder.rightNav.setOnClickListener(new View.OnClickListener(){
+                        public void onClick(View v) { if (busy) return; busy=true; item.right_cb.run("", done_busy); }
+                    });
                 } else if (section_id == editable_section) {
                     holder.rightNav.setVisibility(View.VISIBLE);
                     holder.rightNav.setText(section.editing ? "Done" : "Edit");
@@ -426,8 +435,12 @@ public class ModelItemRecyclerViewAdapter
                 holder.toggle.setChecked(item.val.equals("1"));
                 holder.toggle.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
                     public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                        if (busy) return;
                         final ModelItem item = data.get(holder.getAdapterPosition());
-                        if (item.right_cb != null) item.right_cb.run(isChecked ? "1" : "0");
+                        if (item.right_cb != null) {
+                            busy = true;
+                            item.right_cb.run(isChecked ? "1" : "0", done_busy);
+                        }
                         parent_screen.changed = true;
                     }});
             } break;
@@ -530,10 +543,13 @@ public class ModelItemRecyclerViewAdapter
             holder.radio.setOnCheckedChangeListener(new RadioGroup.OnCheckedChangeListener() {
                 @Override
                 public void onCheckedChanged(RadioGroup group, int checkedId) {
+                    if (busy) return;
                     parent_screen.changed = true;
                     AppCompatRadioButton button = (AppCompatRadioButton)group.findViewById(checkedId);
-                    if (button != null && item.right_cb != null)
-                        item.right_cb.run(button.getText().toString());
+                    if (button != null && item.right_cb != null) {
+                        busy = true;
+                        item.right_cb.run(button.getText().toString(), done_busy);
+                    }
                 }});
         }
     }

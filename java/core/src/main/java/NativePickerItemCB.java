@@ -17,6 +17,6 @@ public final class NativePickerItemCB {
         finally { super.finalize(); }
     }
 
-    public static native void RunPickerItemCBInMainThread(long cb, long picker, ArrayList<Integer> picked);
+    public static native void RunPickerItemCBInMainThread(long cb, long picker, ArrayList<Integer> picked, Runnable done_cb);
     public static native void FreePickerItemCB(long cb);
 }

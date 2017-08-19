@@ -17,8 +17,9 @@ public final class NativeStringCB {
         finally { super.finalize(); }
     }
 
-    public void run(final String s) { RunStringCBInMainThread(cb, s); }
+    public void run(final String s) { run(s, null); }
+    public void run(final String s, Runnable done_cb) { RunStringCBInMainThread(cb, s, done_cb); }
 
-    public static native void RunStringCBInMainThread(long cb, String text);
+    public static native void RunStringCBInMainThread(long cb, String text, Runnable done_cb);
     public static native void FreeStringCB(long cb);
 }

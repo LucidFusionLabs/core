@@ -1,5 +1,5 @@
 /*
- * $Id: shell.h 1335 2014-12-02 04:13:46Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -39,6 +39,7 @@ struct Shell {
   void Run(const string &text);
 
   void quit(const vector<string>&);
+  void fatal(const vector<string>&);
   void mousein(const vector<string>&);
   void mouseout(const vector<string>&);
   void console(const vector<string>&);

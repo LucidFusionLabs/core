@@ -17,8 +17,9 @@ public final class NativeCallback implements Runnable {
         finally { super.finalize(); }
     }
 
-    @Override public void run() { RunCallbackInMainThread(cb); }
+    @Override public void run() { run(null); }
+    public void run(Runnable done_cb) { RunCallbackInMainThread(cb, done_cb); }
 
-    public static native void RunCallbackInMainThread(long cb);
+    public static native void RunCallbackInMainThread(long cb, Runnable done_cb);
     public static native void FreeCallback(long cb);
 }

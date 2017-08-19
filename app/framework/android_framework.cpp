@@ -436,6 +436,7 @@ extern "C" void Java_com_lucidfusionlabs_app_NativeAPI_create(JNIEnv *e, jclass 
   CHECK(jni->nativeintcb_class   =(jclass)e->NewGlobalRef(e->FindClass("com/lucidfusionlabs/core/NativeIntCB")));
   CHECK(jni->nativeintintcb_class=(jclass)e->NewGlobalRef(e->FindClass("com/lucidfusionlabs/core/NativeIntIntCB")));
   CHECK(jni->nativepickeritemcb_class=(jclass)e->NewGlobalRef(e->FindClass("com/lucidfusionlabs/core/NativePickerItemCB")));
+  CHECK(jni->runnable_class     = (jclass)e->NewGlobalRef(e->FindClass("java/lang/Runnable")));
   CHECK(jni->int_class          = (jclass)e->NewGlobalRef(e->FindClass("java/lang/Integer")));
   CHECK(jni->long_class         = (jclass)e->NewGlobalRef(e->FindClass("java/lang/Long")));
   CHECK(jni->arraylist_construct = e->GetMethodID(jni->arraylist_class, "<init>", "()V"));
@@ -577,20 +578,24 @@ extern "C" jboolean Java_com_lucidfusionlabs_app_NativeAPI_getFrameEnabled(JNIEn
   return !app->frame_disabled;
 }
 
-extern "C" void Java_com_lucidfusionlabs_core_NativeCallback_RunCallbackInMainThread(JNIEnv *e, jclass c, jlong cb) {
+extern "C" void Java_com_lucidfusionlabs_core_NativeCallback_RunCallbackInMainThread(JNIEnv *e, jclass c, jlong cb, jobject done_cb) {
   app->RunCallbackInMainThread(*static_cast<Callback*>(Void(cb)));
+  if (done_cb) JNI::MainThreadRunRunnableOnUiThread(new GlobalJNIObject(e, done_cb, false));
 }
 
-extern "C" void Java_com_lucidfusionlabs_core_NativeStringCB_RunStringCBInMainThread(JNIEnv *e, jclass c, jlong cb, jstring text) {
+extern "C" void Java_com_lucidfusionlabs_core_NativeStringCB_RunStringCBInMainThread(JNIEnv *e, jclass c, jlong cb, jstring text, jobject done_cb) {
   app->RunCallbackInMainThread(bind(*static_cast<StringCB*>(Void(cb)), JNI::GetJString(e, text)));
+  if (done_cb) JNI::MainThreadRunRunnableOnUiThread(new GlobalJNIObject(e, done_cb, false));
 }
 
-extern "C" void Java_com_lucidfusionlabs_core_NativeIntCB_RunIntCBInMainThread(JNIEnv *e, jclass c, jlong cb, jint x) {
+extern "C" void Java_com_lucidfusionlabs_core_NativeIntCB_RunIntCBInMainThread(JNIEnv *e, jclass c, jlong cb, jint x, jobject done_cb) {
   app->RunCallbackInMainThread(bind(*static_cast<IntCB*>(Void(cb)), x));
+  if (done_cb) JNI::MainThreadRunRunnableOnUiThread(new GlobalJNIObject(e, done_cb, false));
 }
 
-extern "C" void Java_com_lucidfusionlabs_core_NativeIntIntCB_RunIntIntCBInMainThread(JNIEnv *e, jclass c, jlong cb, jint x, jint y) {
+extern "C" void Java_com_lucidfusionlabs_core_NativeIntIntCB_RunIntIntCBInMainThread(JNIEnv *e, jclass c, jlong cb, jint x, jint y, jobject done_cb) {
   app->RunCallbackInMainThread(bind(*static_cast<IntIntCB*>(Void(cb)), x, y));
+  if (done_cb) JNI::MainThreadRunRunnableOnUiThread(new GlobalJNIObject(e, done_cb, false));
 }
 
 extern "C" void Java_com_lucidfusionlabs_core_NativeCallback_FreeCallback(JNIEnv *e, jclass c, jlong cb) {

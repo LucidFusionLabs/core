@@ -28,6 +28,7 @@ DEFINE_bool(shell_debug, false, "Print shell commands");
 Shell::Shell(Window *W) : parent(W) {
   if (!parent) return;
   command.emplace_back("quit",         bind(&Shell::quit,          this, _1));
+  command.emplace_back("fatal",        bind(&Shell::fatal,         this, _1));
   command.emplace_back("console",      bind(&Shell::console,       this, _1));
   command.emplace_back("cmds",         bind(&Shell::cmds,          this, _1));
   command.emplace_back("binds",        bind(&Shell::binds,         this, _1));
@@ -103,6 +104,7 @@ void Shell::mousein (const vector<string>&) { app->GrabMouseFocus(); }
 void Shell::mouseout(const vector<string>&) { app->ReleaseMouseFocus(); }
 
 void Shell::quit(const vector<string>&) { app->run = false; }
+void Shell::fatal(const vector<string> &a) { FATAL(Join(a, " ")); }
 void Shell::console(const vector<string>&) { if (parent->console) parent->console->ToggleActive(); }
 void Shell::showkeyboard(const vector<string>&) { app->OpenTouchKeyboard(); }
 

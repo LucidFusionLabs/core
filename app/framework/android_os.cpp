@@ -271,6 +271,24 @@ jobject JNI::ToNativePickerItemCB(JNIEnv *env, const PickerItem::CB &c) {
   return env->NewObject(jni->nativepickeritemcb_class, mid, cb);
 }
 
+void JNI::RunRunnable(JNIEnv *e, jobject runnable) {
+  static jmethodID mid = e->GetMethodID(jni->runnable_class, "run", "()V");
+  e->CallVoidMethod(runnable, mid);
+}
+
+void JNI::RunRunnableOnUiThread(JNIEnv *e, jobject runnable) {
+  static jmethodID mid = e->GetMethodID(jni->activity_class, "runOnUiThread", "(Ljava/lang/Runnable;)V");
+  e->CallVoidMethod(jni->activity, mid, runnable);
+}
+
+void JNI::MainThreadRunRunnable(GlobalJNIObject* runnable) {
+  app->RunCallbackInMainThread(bind(&JNI::RunGlobalRunnable, jni->env, runnable));
+}
+
+void JNI::MainThreadRunRunnableOnUiThread(GlobalJNIObject* runnable) {
+  app->RunCallbackInMainThread(bind(&JNI::RunGlobalRunnableOnUiThread, jni->env, runnable));
+}
+
 BufferFile *JNI::OpenAsset(const string &fn) {
   static jmethodID get_assets_mid = CheckNotNull(env->GetMethodID(activity_class, "getAssets", "()Landroid/content/res/AssetManager;"));
   static jmethodID assetmgr_open_mid = CheckNotNull(env->GetMethodID(assetmgr_class, "open", "(Ljava/lang/String;)Ljava/io/InputStream;"));
@@ -297,6 +315,11 @@ BufferFile *JNI::OpenAsset(const string &fn) {
   if (len != ret->buf.size() || CheckForException()) return nullptr;
   return ret.release();
 }
+
+template <class X> GlobalJNIType<X>::GlobalJNIType(X V) : GlobalJNIType(jni->env, V) {}
+template <class X> GlobalJNIType<X>::~GlobalJNIType() { if (v) jni->env->DeleteGlobalRef(v); }
+template struct GlobalJNIType<jobject>;
+template struct GlobalJNIType<jstring>;
 
 string Application::GetVersion() {
   static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "getVersionName", "()Ljava/lang/String;"));

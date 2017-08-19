@@ -31,6 +31,25 @@ struct Java {
   static const char *V, *I, *J, *Z, *Constructor, *String, *ArrayList, *MainActivity;
 };
 
+template <class X> struct LocalJNIType {
+  X v;
+  JNIEnv *env;
+  LocalJNIType(JNIEnv *E, X V) : v(V), env(E) {}
+  virtual ~LocalJNIType() { if (v) env->DeleteLocalRef(v); }
+};
+
+template <class X> struct GlobalJNIType {
+  X v;
+  GlobalJNIType(X V);
+  GlobalJNIType(JNIEnv *e, X V, bool rl=true) : v(X(e->NewGlobalRef(V))) { if (rl) e->DeleteLocalRef(V); }
+  virtual ~GlobalJNIType();
+};
+
+typedef LocalJNIType<jobject> LocalJNIObject;
+typedef LocalJNIType<jstring> LocalJNIString;
+typedef GlobalJNIType<jobject> GlobalJNIObject;
+typedef GlobalJNIType<jstring> GlobalJNIString;
+
 struct JNI {
   JNIEnv *env=0;
   jobject activity=0, resources=0, gplus=0, handler=0;
@@ -41,7 +60,7 @@ struct JNI {
          modelitem_class=0, modelitemchange_class=0, pickeritem_class=0, alertscreen_class=0,
          menuscreen_class=0, tablescreen_class=0, textscreen_class=0, screennavigator_class=0,
          nativecallback_class=0, nativestringcb_class=0, nativeintcb_class=0, nativeintintcb_class=0,
-         nativepickeritemcb_class=0, int_class=0, long_class=0;
+         nativepickeritemcb_class=0, runnable_class=0, int_class=0, long_class=0;
   jmethodID arraylist_construct=0, arraylist_size=0, arraylist_get=0, arraylist_add=0,
             hashmap_construct=0, hashmap_size=0, hashmap_get=0, hashmap_put=0, pair_construct=0,
             modelitem_construct=0, modelitemchange_construct=0, pickeritem_construct=0,
@@ -78,28 +97,15 @@ struct JNI {
   static jobject ToNativeIntCB(JNIEnv*, IntCB c);
   static jobject ToNativeIntIntCB(JNIEnv*, IntIntCB c);
   static jobject ToNativePickerItemCB(JNIEnv*, const PickerItem::CB &c);
+  static void RunRunnable                    (JNIEnv *e, jobject runnable);
+  static void RunRunnableOnUiThread          (JNIEnv *e, jobject runnable);
+  static void RunGlobalRunnable              (JNIEnv *e, GlobalJNIObject *runnable) { RunRunnable          (e, runnable->v); delete runnable; }
+  static void RunGlobalRunnableOnUiThread    (JNIEnv *e, GlobalJNIObject *runnable) { RunRunnableOnUiThread(e, runnable->v); delete runnable; }
+  static void MainThreadRunRunnable          (GlobalJNIObject* runnable);
+  static void MainThreadRunRunnableOnUiThread(GlobalJNIObject* runnable);
 
   BufferFile *OpenAsset(const string &fn);
 };
-
-template <class X> struct LocalJNIType {
-  X v;
-  JNIEnv *env;
-  LocalJNIType(JNIEnv *E, X V) : v(V), env(E) {}
-  virtual ~LocalJNIType() { if (v) env->DeleteLocalRef(v); }
-};
-
-template <class X> struct GlobalJNIType {
-  X v;
-  GlobalJNIType(X V) : GlobalJNIType(Singleton<JNI>::Get()->env, V) {}
-  GlobalJNIType(JNIEnv *e, X V) : v(e->NewGlobalRef(V)) { e->DeleteLocalRef(V); }
-  virtual ~GlobalJNIType() { if (v) Singleton<JNI>::Get()->env->DeleteGlobalRef(v); }
-};
-
-typedef LocalJNIType<jobject> LocalJNIObject;
-typedef LocalJNIType<jstring> LocalJNIString;
-typedef GlobalJNIType<jobject> GlobalJNIObject;
-typedef GlobalJNIType<jstring> GlobalJNIString;
 
 struct GPlus {
   GPlusServer *server=0;
