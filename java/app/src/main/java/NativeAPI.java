@@ -17,6 +17,7 @@ public class NativeAPI {
     public static native void accel(float x, float y, float z);
     public static native void scale(float x, float y, float dx, float dy, boolean begin);
     public static native void shellRun(String text);
+    public static native boolean getSuspended();
     public static native boolean getFrameEnabled();
     public static native void log(int level, String msg);
     public static void FATAL(String msg) { if (init) log(-1, msg); else Log.e("lfl", msg); }

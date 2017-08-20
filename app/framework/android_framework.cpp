@@ -574,6 +574,10 @@ extern "C" void Java_com_lucidfusionlabs_app_NativeAPI_shellRun(JNIEnv *e, jclas
   app->focused->shell->Run(jni->GetJString(e, text));
 }
 
+extern "C" jboolean Java_com_lucidfusionlabs_app_NativeAPI_getSuspended(JNIEnv *e, jclass c) {
+  return app->suspended;
+}
+
 extern "C" jboolean Java_com_lucidfusionlabs_app_NativeAPI_getFrameEnabled(JNIEnv *e, jclass c) {
   return !app->frame_disabled;
 }

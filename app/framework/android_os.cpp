@@ -272,21 +272,23 @@ jobject JNI::ToNativePickerItemCB(JNIEnv *env, const PickerItem::CB &c) {
 }
 
 void JNI::RunRunnable(JNIEnv *e, jobject runnable) {
+  if (!e) e = jni->env;
   static jmethodID mid = e->GetMethodID(jni->runnable_class, "run", "()V");
   e->CallVoidMethod(runnable, mid);
 }
 
 void JNI::RunRunnableOnUiThread(JNIEnv *e, jobject runnable) {
+  if (!e) e = jni->env;
   static jmethodID mid = e->GetMethodID(jni->activity_class, "runOnUiThread", "(Ljava/lang/Runnable;)V");
   e->CallVoidMethod(jni->activity, mid, runnable);
 }
 
 void JNI::MainThreadRunRunnable(GlobalJNIObject* runnable) {
-  app->RunCallbackInMainThread(bind(&JNI::RunGlobalRunnable, jni->env, runnable));
+  app->RunCallbackInMainThread(bind(&JNI::RunGlobalRunnable, nullptr, runnable));
 }
 
 void JNI::MainThreadRunRunnableOnUiThread(GlobalJNIObject* runnable) {
-  app->RunCallbackInMainThread(bind(&JNI::RunGlobalRunnableOnUiThread, jni->env, runnable));
+  app->RunCallbackInMainThread(bind(&JNI::RunGlobalRunnableOnUiThread, nullptr, runnable));
 }
 
 BufferFile *JNI::OpenAsset(const string &fn) {
