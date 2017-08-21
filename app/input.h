@@ -1,5 +1,5 @@
 /*
- * $Id: input.h 1335 2014-12-02 04:13:46Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -253,7 +253,7 @@ struct Input : public Module {
   int MouseZoom(const v2 &p, const v2 &d, bool begin);
   int MouseClick(int button, bool down, const point &p);
   int MouseEventDispatch(InputEvent::Id event, const point &p, const point &d, int down);
-  int MouseEventDispatchGUI(InputEvent::Id event, const point &p, const point &d, int down, View *v, int *active_guis);
+  int MouseEventDispatchView(InputEvent::Id event, const point &p, const point &d, int down, View *v, int *active_guis);
 
   static point TransformMouseCoordinate(point p);
 };

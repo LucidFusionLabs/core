@@ -1,5 +1,5 @@
 /*
- * $Id: video.cpp 1336 2014-12-08 09:29:59Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -232,7 +232,7 @@ FrameScheduler::FrameScheduler() :
 #endif
 {}
 
-bool FrameScheduler::DoMainWait() { return SDL_WaitEvent(NULL); }
+bool FrameScheduler::DoMainWait(bool only_poll) { if (only_poll) return false; return SDL_WaitEvent(NULL); }
 void FrameScheduler::UpdateWindowTargetFPS(Window *w) {}
 void FrameScheduler::Wakeup(Window *w, int) {
   if (wait_forever && w && wait_forever_thread) {

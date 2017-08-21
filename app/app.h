@@ -473,7 +473,7 @@ struct FrameScheduler {
   void Free();
   void Start();
   bool MainWait();
-  bool DoMainWait();
+  bool DoMainWait(bool poll=0);
   void Wakeup(Window*, int flag=0);
   void UpdateTargetFPS(Window*, int fps);
   void UpdateWindowTargetFPS(Window*);

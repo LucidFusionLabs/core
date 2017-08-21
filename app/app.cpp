@@ -908,12 +908,12 @@ bool FrameScheduler::MainWait() {
       wait_mutex.lock();
       frame_mutex.unlock();
     }
-    ret = DoMainWait();
+    ret = DoMainWait(false);
     if (synchronize_waits) {
       frame_mutex.lock();
       wait_mutex.unlock();
     }
-  }
+  } else DoMainWait(true);
   return ret;
 }
 

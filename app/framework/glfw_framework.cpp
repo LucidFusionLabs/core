@@ -1,5 +1,5 @@
 /*
- * $Id: video.cpp 1336 2014-12-08 09:29:59Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -175,7 +175,7 @@ FrameScheduler::FrameScheduler() :
   maxfps(&FLAGS_target_fps), wakeup_thread(&frame_mutex, &wait_mutex), rate_limit(1), wait_forever(!FLAGS_target_fps),
   wait_forever_thread(1), synchronize_waits(1), monolithic_frame(1), run_main_loop(1) {}
 
-void FrameScheduler::DoMainWait() { glfwWaitEvents(); }
+bool FrameScheduler::DoMainWait(bool only_poll) { if (only_poll) return false; glfwWaitEvents(); return true; }
 void FrameScheduler::Wakeup(Window*, int) { if (wait_forever && screen && wait_forever_thread) glfwPostEmptyEvent(); }
 void FrameScheduler::UpdateWindowTargetFPS(Window*) {}
 void FrameScheduler::AddMainWaitMouse(Window*) {}

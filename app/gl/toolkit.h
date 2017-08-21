@@ -21,12 +21,23 @@
 namespace LFL {
 
 struct ToolbarView : public View, public ToolbarViewInterface {
-  MenuItemVec data;
+  struct ToolbarViewItem : public MenuItem {
+    bool down=false;
+    unique_ptr<Widget::Button> button;
+    ToolbarViewItem(MenuItem i) : MenuItem(move(i)) {}
+    ToolbarViewItem() {}
+  };
+
+  vector<ToolbarViewItem> data;
+  DrawableBoxArray *out=0;
   string theme;
-  ToolbarView(Window *w, const string &theme, MenuItemVec items);
+  int selected=0;
+  Font *font=0, *selected_font=0;
+  ToolbarView(Window *w, const string &theme, MenuItemVec items, Font *F=0, Font *SF=0);
 
   void Layout();
   void Draw();
+  View *AppendFlow(Flow*);
 
   void Show(bool show_or_hide);
   void ToggleButton(const string &n);

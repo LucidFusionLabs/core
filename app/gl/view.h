@@ -32,16 +32,16 @@ DECLARE_FLAG(testbox, Box);
 struct View : public Drawable {
   Window *root;
   Box box;
-  DrawableBoxArray child_box;
   MouseController mouse;
-  View *child_view=0;
+  DrawableBoxArray child_box;
+  vector<View*> child_view;
   bool active=0;
 
   View(Window *R, const Box &B=Box()) : root(R), box(B), mouse(this) {}
   virtual ~View() {}
 
   DrawableBoxArray *ResetView() { ClearView(); return &child_box; }
-  void ClearView() { child_box.Clear(); mouse.Clear(); }
+  void ClearView() { child_view.clear(); child_box.Clear(); mouse.Clear(); }
   void UpdateBox(const Box &b, int draw_box_ind, int input_box_ind);
   void UpdateBoxX(int x, int draw_box_ind, int input_box_ind);
   void UpdateBoxY(int y, int draw_box_ind, int input_box_ind);
@@ -616,7 +616,7 @@ template <class D=Dialog> struct TabbedDialog : public TabbedDialogInterface {
   int TabIndex(D *t) const { for (auto b=tab_list.begin(), e=tab_list.end(), i=b; i!=e; ++i) if (*i == t) return i-b; return -1; }
   void AddTab(D *t) { tabs.insert(t); tab_list.emplace_back(t); SelectTab(t); }
   void DelTab(D *t) { tabs.erase(t); VectorEraseByValue(&tab_list, DialogTab(t)); if (top == t) SelectTab(FirstTab()); }
-  void SelectTab(D *t) { if (top) top->LoseFocus(); if ((view->child_view = top = t)) t->TakeFocus(); }
+  void SelectTab(D *t) { if (top) top->LoseFocus(); if ((top = t)) { view->child_view={t}; t->TakeFocus(); } }
   void SelectTabIndex(size_t i) { CHECK_LT(i, tab_list.size()); SelectTab(dynamic_cast<D*>(tab_list[i].dialog)); }
   void SelectNextTab() { if (top) SelectTabIndex(RingIndex::Wrap(TabIndex(top)+1, tab_list.size())); }
   void SelectPrevTab() { if (top) SelectTabIndex(RingIndex::Wrap(TabIndex(top)-1, tab_list.size())); }
@@ -662,10 +662,11 @@ template <class X> struct TextViewDialogT  : public Dialog {
   Widget::Slider v_scrollbar, h_scrollbar;
   TextViewDialogT(Window *W, const FontRef &F, float w=0.5, float h=.5, int flag=0) :
     Dialog(W, w, h, flag), view(W, F), v_scrollbar(this, Widget::Slider::Flag::AttachedNoCorner),
-    h_scrollbar(this, Widget::Slider::Flag::AttachedHorizontalNoCorner) { child_view = &view; }
+    h_scrollbar(this, Widget::Slider::Flag::AttachedHorizontalNoCorner) {}
   void Layout() {
     Dialog::Layout();
     Widget::Slider::AttachContentBox(&content, &v_scrollbar, view.Wrap() ? nullptr : &h_scrollbar);
+    child_view.push_back(&view);
   }
   void Draw() { 
     bool wrap = view.Wrap();

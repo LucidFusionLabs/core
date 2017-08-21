@@ -20,14 +20,37 @@
 #include "core/app/gl/toolkit.h"
 
 namespace LFL {
-ToolbarView::ToolbarView(Window *w, const string &t, MenuItemVec items) :
-  View(w), data(move(items)), theme(t) {}
+ToolbarView::ToolbarView(Window *w, const string &t, MenuItemVec items, Font *F, Font *SF) :
+  View(w), theme(t), font(F), selected_font(SF) {
+  for (auto &i : items) data.emplace_back(move(i));
+}
 
+void ToolbarView::Layout() { ClearView(); }
+void ToolbarView::Draw() { View::Draw(); }
 void ToolbarView::Show(bool show_or_hide) {}
-void ToolbarView::ToggleButton(const string &n) {}
 void ToolbarView::SetTheme(const string &t) { theme=t; }
-void ToolbarView::Layout() {}
-void ToolbarView::Draw() {}
+void ToolbarView::ToggleButton(const string &n) {
+  for (auto &i : data) if (i.shortcut == n) i.down = !i.down;
+}
+
+View *ToolbarView::AppendFlow(Flow *flow) {
+  LayoutBox(*flow->container);
+  out = flow->out;
+  for (int ind=0, l=data.size(); ind != l; ++ind) {
+    auto &i = data[ind];
+    if (!i.button) {
+      i.button = make_unique<Widget::Button>(this, nullptr, "", MouseControllerCallback());
+      i.button->outline_topleft     = &Color::grey80;
+      i.button->outline_bottomright = &Color::grey40;
+    }
+    i.button->text = i.shortcut;
+    i.button->cb = i.cb ? MouseController::CB(i.cb) : MouseControllerCallback();
+    i.button->solid = theme == "Clear" ? nullptr : &Color::grey60;
+    i.button->box = Box(box.w / data.size(), box.h);
+    i.button->Layout(flow, (selected_font && selected == ind) ? selected_font : (font ? font : flow->cur_attr.font));
+  }
+  return this;
+}
 
 TableView::TableView(Window *w, const string &t, const string &s, const string &th, TableItemVec items) :
   View(w), data(TableViewSection::Convert(move(items))), title(t), style(s), theme(th), scrollbar(this) { Activate(); }

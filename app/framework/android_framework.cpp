@@ -332,9 +332,9 @@ FrameScheduler::FrameScheduler() :
   maxfps(&FLAGS_target_fps), wakeup_thread(&frame_mutex, &wait_mutex), rate_limit(1), wait_forever(!FLAGS_target_fps),
   wait_forever_thread(0), synchronize_waits(0), monolithic_frame(1), run_main_loop(1) {}
 
-bool FrameScheduler::DoMainWait() {
+bool FrameScheduler::DoMainWait(bool only_poll) {
   bool ret = false;
-  main_wait_sockets.Select(-1);
+  main_wait_sockets.Select(only_poll ? 0 : -1);
   for (auto i = main_wait_sockets.socket.begin(); i != main_wait_sockets.socket.end(); /**/) {
     iter_socket = i->first;
     auto f = static_cast<function<bool()>*>(i++->second.second);

@@ -1,5 +1,5 @@
 /*
- * $Id: camera.cpp 1330 2014-11-06 03:04:15Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -298,7 +298,7 @@ FrameScheduler::FrameScheduler() :
   maxfps(&FLAGS_target_fps), wakeup_thread(&frame_mutex, &wait_mutex), rate_limit(0), wait_forever(!FLAGS_target_fps),
   wait_forever_thread(0), synchronize_waits(0), monolithic_frame(0), run_main_loop(0) {}
 
-bool FrameScheduler::DoMainWait() { return false; }
+bool FrameScheduler::DoMainWait(bool only_poll) { return false; }
 void FrameScheduler::Wakeup(Window *w, int) { if (wait_forever && w) dynamic_cast<QtWindow*>(w)->RequestRender(); }
 void FrameScheduler::UpdateWindowTargetFPS(Window *w) { /*QTTriggerFrame(w->id.value);*/ }
 void FrameScheduler::AddMainWaitMouse(Window *w) { if (w) dynamic_cast<QtWindow*>(w)->frame_on_mouse_input = true; }

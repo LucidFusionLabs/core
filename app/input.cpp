@@ -431,8 +431,8 @@ int Input::MouseEventDispatch(InputEvent::Id event, const point &p, const point 
       return events;
     }
   } else for (auto b = w->view.begin(), e = w->view.end(), i = b; i != e; ++i) {
-    if ((events = MouseEventDispatchGUI(event, p, d, down, *i, &active_guis))) {
-      InputDebug("Input::MouseEventDispatch sent GUI[%d] %s events = %d", i - b, InputEvent::Name(event), events);
+    if ((events = MouseEventDispatchView(event, p, d, down, *i, &active_guis))) {
+      InputDebug("Input::MouseEventDispatch sent View[%d] %s events = %d", i - b, InputEvent::Name(event), events);
       return events;
     }
   }
@@ -442,11 +442,12 @@ int Input::MouseEventDispatch(InputEvent::Id event, const point &p, const point 
   return fired;
 }
 
-int Input::MouseEventDispatchGUI(InputEvent::Id event, const point &p, const point &d, int down, View *v, int *active_views) {
+int Input::MouseEventDispatchView(InputEvent::Id event, const point &p, const point &d, int down, View *v, int *active_views) {
   if (v->NotActive(v->root->mouse)) return 0;
   else (*active_views)++;
   int events = v->mouse.SendMouseEvent(event, v->RelativePosition(v->root->mouse), d, down, 0);
-  if (!events && v->child_view) return MouseEventDispatchGUI(event, p, d, down, v->child_view, active_views);
+  for (auto i=v->child_view.begin(), e=v->child_view.end(); !events && i != e; ++i)
+    events += MouseEventDispatchView(event, p, d, down, *i, active_views);
   return events;
 }
 

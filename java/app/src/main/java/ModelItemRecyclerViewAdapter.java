@@ -311,6 +311,7 @@ public class ModelItemRecyclerViewAdapter
                 if (!controllerReady()) return;
                 final int pos = holder.getAdapterPosition();
                 if (delete_row_cb != null) { busy=true; delete_row_cb.run(row_id, item.tag, done_busy); }
+                onItemRemoved((ViewHolder)recyclerview.findViewHolderForAdapterPosition(pos-1));
                 data.subList(pos, pos + 1).clear();
                 moveSectionsAfterBy(section_id, -1);
                 notifyItemRemoved(pos);
@@ -388,9 +389,8 @@ public class ModelItemRecyclerViewAdapter
                 @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
                 @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
                 @Override public void afterTextChanged(android.text.Editable s) {
-                    if (!controllerReady()) return;
                     parent_screen.changed = true;
-                    if (item.right_cb != null) { busy=true; item.right_cb.run(holder.editText.getText().toString(), done_busy); }
+                    if (item.right_cb != null) item.right_cb.run(holder.editText.getText().toString());
                 }};
             holder.editText.addTextChangedListener(holder.editTextListener);
         }
@@ -556,7 +556,7 @@ public class ModelItemRecyclerViewAdapter
     @Override public ArrayList<ModelItem> getData() { return data; }
 
     @Override public int getSectionBeginRowId(final int section) { 
-      return sections.get(section).start_row;
+        return sections.get(section).start_row;
     }
 
     @Override public int getSectionEndRowId(final int section) {
@@ -595,6 +595,14 @@ public class ModelItemRecyclerViewAdapter
         notifyItemMoved(fromPosition, toPosition);
         parent_screen.changed = true;
         return true;
+    }
+
+    public void onItemRemoved(ViewHolder holder) {
+        if (holder == null) return;
+        if (holder.itemView   != null) holder.itemView  .setOnClickListener(null);
+        if (holder.rightIcon  != null) holder.rightIcon .setOnClickListener(null);
+        if (holder.rightIcon  != null) holder.rightIcon .setOnTouchListener(null);
+        if (holder.removeIcon != null) holder.removeIcon.setOnClickListener(null);
     }
 
     public void beginUpdates() {}
@@ -734,6 +742,8 @@ public class ModelItemRecyclerViewAdapter
             for (int i = 0; i < section_size; ++i)
                 if (!data.get(section_row + 1 + i).hidden) { all_hidden = false; break; }
             if (all_hidden) {
+                for (int i = 0; i < section_size; ++i) onItemRemoved
+                    ((ViewHolder)recyclerview.findViewHolderForAdapterPosition(section_row + 1 + i));
                 data.subList(section_row + 1, section_row + 1 + section_size).clear();
                 moveSectionsAfterBy(s, -section_size);
                 notifyItemRangeRemoved(section_row + 1, section_size);

@@ -1,5 +1,5 @@
 /*
- * $Id: video.cpp 1336 2014-12-08 09:29:59Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -200,7 +200,7 @@ FrameScheduler::FrameScheduler() :
   maxfps(&FLAGS_target_fps), wakeup_thread(&frame_mutex, &wait_mutex), rate_limit(0), wait_forever(!FLAGS_target_fps),
   wait_forever_thread(1), synchronize_waits(0), monolithic_frame(0), run_main_loop(0) {}
 
-void FrameScheduler::DoMainWait() {}
+void FrameScheduler::DoMainWait(bool only_poll) {}
 void FrameScheduler::Wakeup(Window *w, int) { if (wait_forever && w && wait_forever_thread) dynamic_cast<wxGLCanvas*>(w->id)->Refresh(); }
 void FrameScheduler::AddMainWaitMouse(Window*) {}
 void FrameScheduler::DelMainWaitMouse(Window*) {}

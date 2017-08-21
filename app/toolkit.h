@@ -152,6 +152,7 @@ struct ToolbarViewInterface {
   virtual void ToggleButton(const string &n) = 0;
   virtual void SetTheme(const string &theme) = 0;
   virtual string GetTheme() = 0;
+  virtual View *AppendFlow(Flow*) { return nullptr; }
 };
 
 struct MenuViewInterface {
