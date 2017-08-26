@@ -259,7 +259,7 @@ struct TextBox : public View, public TextboxController {
     bool align_top_or_bot=1, partial_last_line=1, wrap=0, only_grow=0;
     LinesFrameBuffer(GraphicsDevice *d) : RingFrameBuffer(d) {}
     LinesFrameBuffer *Attach(LinesFrameBuffer **last_fb);
-    virtual int SizeChanged(int W, int H, Font *font, const Color *bgc);
+    virtual int SizeChanged(int W, int H, Font *font, ColorDesc bgc);
     tvirtual void Clear(Line *l) { RingFrameBuffer::Clear(l, Box(w, l->Lines() * font_height), true); }
     tvirtual void Update(Line *l, int flag=0);
     tvirtual void Update(Line *l, const point &p, int flag=0) { l->p=p; Update(l, flag); }
@@ -322,7 +322,7 @@ struct TextBox : public View, public TextboxController {
   function<void(Control*)> hover_control_cb;
   Control *hover_control=0;
   const Border *clip=0;
-  const Color *bg_color=0;
+  ColorDesc bg_color=0;
 
   TextBox(Window *W, const FontRef &F=FontRef(), int LC=10);
   virtual ~TextBox() { if (root) Deactivate(); }

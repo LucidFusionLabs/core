@@ -744,8 +744,9 @@ void ProcessAPIServer::SetClearColor(const Color &c) {
 }
 
 void ProcessAPIServer::OpenSystemFont(const LFL::FontDesc &d, const OpenSystemFontIPC::CB &cb) {
-  IPC::Color fg(d.fg.R(), d.fg.G(), d.fg.B(), d.fg.A()),
-             bg(d.bg.R(), d.bg.G(), d.bg.B(), d.bg.A());
+  Color fgc(d.fg), bgc(d.bg);
+  IPC::Color fg(fgc.R(), fgc.G(), fgc.B(), fgc.A()),
+             bg(bgc.R(), bgc.G(), bgc.B(), bgc.A());
   if (!SendIPC(conn, seq++, -1, OpenSystemFontRequest, IPC::CreateFontDescription
                (fb, fb.CreateString(d.name), fb.CreateString(d.family),
                 d.size, d.flag, d.engine, &fg, &bg, d.unicode))) { cb(NULL, MultiProcessBuffer()); return; }

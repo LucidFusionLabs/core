@@ -34,18 +34,15 @@ struct GameMenuGUI : public View, public Connection::Handler {
   Texture *title;
   FontRef font, bright_font, glow_font;
   Box titlewin, menuhdr, menuftr1, menuftr2;
-  int default_port, selected=1, last_selected=0, sub_selected=0, last_sub_selected=0, master_server_selected=-1;
-  int line_clicked=-1;
-  Widget::Button tab1_server_start, tab2_server_join, sub_tab1, sub_tab2, sub_tab3;
-#ifdef LFL_ANDROID
-  GPlus *gplus;
-  Widget::Button gplus_signin_button, gplus_signout_button, gplus_quick, gplus_invite, gplus_accept;
-#endif
+  int default_port, last_selected=-1, last_sub_selected=-1, master_server_selected=-1;
   unique_ptr<ToolbarViewInterface> toplevel, sublevel, server_start, server_join;
-  unique_ptr<TableViewInterface> singleplayer, startserver, serverlist, gplusinvite, options;
+  unique_ptr<TableViewInterface> singleplayer, startserver, serverlist, options, gplus_invite;
   unique_ptr<AdvertisingViewInterface> ads;
   unique_ptr<NavigationViewInterface> nav;
-  Browser browser;
+#ifdef LFL_ANDROID
+  unique_ptr<ToolbarViewInterface> gplus_login, gplus_logout, gplus_menu;
+  GPlus *gplus=0;
+#endif
   MenuParticles particles;
   Entity *cam=0;
 
@@ -53,63 +50,50 @@ struct GameMenuGUI : public View, public Connection::Handler {
     View(W), settings(Settings), pinger(-1), master_get_url(master_url), topbar(W), title(Title),
     font       (FontDesc(FLAGS_font,                 "", 12, Color::grey80)),
     bright_font(FontDesc(FLAGS_font,                 "", 12, Color::white)),
-    glow_font  (FontDesc(StrCat(FLAGS_font, "Glow"), "", 12)),
-    default_port(port),
-    tab1_server_start(this, 0, "start", MouseController::CB(bind(&GameMenuGUI::MenuServerStart, this))),
-    tab2_server_join (this, 0, "join",  MouseController::CB(bind(&GameMenuGUI::MenuServerJoin,  this))),
-    sub_tab1(this, 0, "g+",             MouseController::CB([&]() { sub_selected=1; })),
-    sub_tab2(this, 0, "join",           MouseController::CB([&]() { sub_selected=2; })),
-    sub_tab3(this, 0, "start",          MouseController::CB([&]() { sub_selected=3; })),
-#ifdef LFL_ANDROID
-    gplus(Singleton<GPlus>::Get()),
-    gplus_signin_button (this, 0, "",           MouseController::CB([&](){ gplus->SignIn(); gplus_signin_button.decay = 10; })),
-    gplus_signout_button(this, 0, "g+ Signout", MouseController::CB([&](){ gplus->SignOut(); })),
-    gplus_quick         (this, 0, "match" ,     MouseController::CB([&](){ gplus->QuickGame(); })),
-    gplus_invite        (this, 0, "invite",     MouseController::CB([&](){ gplus->Invite(); })),
-    gplus_accept        (this, 0, "accept",     MouseController::CB([&](){ gplus->Accept(); })),
-#endif
-    nav(make_unique<NavigationView>(W, "", "")), browser(this, box), particles("GameMenuParticles") {
-    tab1_server_start.outline_topleft = tab2_server_join.outline_topleft = sub_tab1.outline_topleft = sub_tab2.outline_topleft = sub_tab3.outline_topleft = &Color::grey80;
-    tab1_server_start.outline_bottomright = tab2_server_join.outline_bottomright = sub_tab1.outline_bottomright = sub_tab2.outline_bottomright = sub_tab3.outline_bottomright = &Color::grey40;
-    tab1_server_start.solid = tab2_server_join.solid = &Color::grey60;
-#if 0
-    tab3_sensitivity.increment = .1;
-    tab3_sensitivity.doc_height = 10;
-    tab3_sensitivity.scrolled = FLAGS_msens / 10.0;
-    tab3_volume.increment = .5;
-    tab3_volume.doc_height = app->GetMaxVolume();
-    tab3_volume.scrolled = float(app->GetVolume()) / tab3_volume.doc_height;
-#endif
-    sub_selected = 2;
+    glow_font  (FontDesc(StrCat(FLAGS_font, "Glow"), "", 12)), default_port(port),
+    nav(make_unique<NavigationView>(W, "", "")), particles("GameMenuParticles") {
     pinger.handler = this;
     app->net->Enable(&pinger);
     SystemNetwork::SetSocketBroadcastEnabled(pinger.GetListener()->socket, true);
     Sniffer::GetIPAddress(&ip);
     Sniffer::GetBroadcastAddress(&broadcast_ip);
-#ifdef LFL_MOBILE
-    auto toolkit = app->toolkit;
-#else
-    auto toolkit = Singleton<Toolkit>::Get();
-#endif
 
     toplevel = make_unique<ToolbarView>(root, "Clear", MenuItemVec{
-      { "single player", "", [&](){ if (!Changed(&selected, 1)) Deactivate(); else { nav->PopAll(); nav->PushTableView(singleplayer.get()); Layout(); }} },
-      { "multi player",  "", [&](){ if (!Changed(&selected, 2)) Deactivate(); else { nav->PopAll(); nav->PushTableView(serverlist.get());   Layout(); }} }, 
-      { "options",       "", [&](){ if (!Changed(&selected, 3)) Deactivate(); else { nav->PopAll(); nav->PushTableView(options.get());      Layout(); }} },
+      { "single player", "", [=](){ if (!Changed(&toplevel->selected, 0)) Deactivate(); else { nav->PopAll(); nav->PushTableView(singleplayer.get()); Layout(); }} },
+      { "multi player",  "", [=](){ if (!Changed(&toplevel->selected, 1)) Deactivate(); else { nav->PopAll(); nav->PushTableView(serverlist.get());   Layout(); }} }, 
+      { "options",       "", [=](){ if (!Changed(&toplevel->selected, 2)) Deactivate(); else { nav->PopAll(); nav->PushTableView(options.get());      Layout(); }} },
       { "quit",          "", bind(&GameMenuGUI::MenuQuit, this) },
-    }, font, glow_font);
+      }, font, glow_font);
+    toplevel->selected = 0;
+
+    sublevel = make_unique<ToolbarView>(root, "Clear", MenuItemVec{
+      { "g+",    "", [=]() { sublevel->selected=0; }},
+      { "join",  "", [=]() { sublevel->selected=1; }},
+      { "start", "", [=]() { sublevel->selected=2; }},
+      }, font, glow_font, &Color::white);
+    sublevel->selected = 1;
+
+    server_start = app->toolkit->CreateToolbar("Light", MenuItemVec{
+      { "start", "", bind(&GameMenuGUI::MenuServerStart, this) },
+    }, 0);
+
+    server_join = app->toolkit->CreateToolbar("Light", MenuItemVec{
+      { "join", "", bind(&GameMenuGUI::MenuServerJoin, this) },
+    }, 0);
 
     TableItemVec settings_items;
     for (auto &i : settings->vec)
       settings_items.emplace_back(i.key, TableItem::Selector, Join(i.value->data, ","));
-    singleplayer = toolkit->CreateTableView("Single Player", "", "Clear", move(settings_items));
-    startserver = toolkit->CreateTableView("Start Server", "", "Clear", TableItemVec{});
-    serverlist = toolkit->CreateTableView("Multiplayer", "", "Clear", TableItemVec{
+    singleplayer = app->toolkit->CreateTableView("Single Player", "", "Clear", move(settings_items));
+    singleplayer->SetToolbar(server_start.get());
+    startserver = app->toolkit->CreateTableView("Start Server", "", "Clear", TableItemVec{});
+    serverlist = app->toolkit->CreateTableView("Multiplayer", "", "Clear", TableItemVec{
       TableItem("", TableItem::Separator),
       TableItem("[ add server ]", TableItem::TextInput, "", "", 0, 0, 0, Callback(), bind(&GameMenuGUI::MenuAddServer, this, _1)),
     });
+    serverlist->SetToolbar(server_start.get());
 
-    options = toolkit->CreateTableView("Options", "", "Clear", TableItemVec{
+    TableItemVec options_items{
       TableItem("Player Name",         TableItem::TextInput, "", "", 0, 0, 0, Callback()),
       TableItem("Control Sensitivity", TableItem::Slider,    ""),
       TableItem("Volume",              TableItem::Slider,    ""),
@@ -123,9 +107,32 @@ struct GameMenuGUI : public View, public Connection::Handler {
       TableItem("Topbar Menu:",        TableItem::Label,     "Escape"),
       TableItem("Player List:",        TableItem::Label,     "Tab"),
       TableItem("Console:",            TableItem::Label,     "~"),
-    });
+      TableItem("",                    TableItem::Separator),
+      TableItem("Promotions",          TableItem::WebView,   "http://lucidfusionlabs.com/apps.html"),
+    };
+    float max_volume = app->GetMaxVolume();
+    options_items[1].CheckAssignValues("Control Sensitivity", FLAGS_msens/10.0, 0, 10, .1);
+    options_items[2].CheckAssignValues("Volume", app->GetVolume() / max_volume, 0, max_volume, .5);
+    options = app->toolkit->CreateTableView("Options", "", "Clear", move(options_items));
 
-    gplusinvite = toolkit->CreateTableView("GPlus", "", "Clear", TableItemVec{});
+#ifdef LFL_ANDROID
+    gplus = Singleton<GPlus>::Get();
+    gplus_login = make_unique<ToolbarView>(root, "Clear", MenuItemVec{
+      { "", "", [=](){ gplus->SignIn(); /* gplus_signin_button.decay = 10; */ } },
+      }, font);
+
+    gplus_logout = make_unique<ToolbarView>(root, "Clear", MenuItemVec{
+      { "g+ Signout", "", [=](){ gplus->SignOut(); } },
+    }, font);
+
+    gplus_menu = make_unique<ToolbarView>(root, "Clear", MenuItemVec{
+      { "match",  "", [=](){ gplus->QuickGame(); } },
+      { "invite", "", [=](){ gplus->Invite(); } },
+      { "accept", "", [=](){ gplus->Accept(); } },
+    }, font);
+
+    gplus_invite = app->toolkit->CreateTableView("GPlus", "", "Clear", TableItemVec{});
+#endif
 
     nav->PushTableView(singleplayer.get());
   }
@@ -136,7 +143,7 @@ struct GameMenuGUI : public View, public Connection::Handler {
     particles.texture = parts->ID;
   }
 
-  bool Activate  () { active=1; topbar.active=1; selected=last_selected=0; root->shell->mouseout(vector<string>()); if (ads) ads->Show(false); return 1; }
+  bool Activate  () { active=1; topbar.active=1; toplevel->selected=last_selected=-1; root->shell->mouseout(vector<string>()); if (ads) ads->Show(false); return 1; }
   bool Deactivate() { active=0; topbar.active=0; UpdateSettings(); if (ads) ads->Show(true); return 1; }
 
   void UpdateSettings() {
@@ -144,15 +151,15 @@ struct GameMenuGUI : public View, public Connection::Handler {
     // root->shell->Run(StrCat("msens ", StrCat(tab3_sensitivity.scrolled * tab3_sensitivity.doc_height)));
   }
 
-  void MenuQuit() { selected=4; app->run=0; }
+  void MenuQuit() { toplevel->selected=3; app->run=0; }
   void MenuServerStart() {
-    if (selected != 1 && !(selected == 2 && sub_selected == 3)) return;
+    if (toplevel->selected != 0 && !(toplevel->selected == 1 && sublevel->selected == 2)) return;
     Deactivate();
     root->shell->Run("local_server");
   }
 
   void MenuServerJoin() {
-    if (selected != 2 || master_server_selected < 0 || master_server_selected >= master_server_list.size()) return;
+    if (toplevel->selected != 1 || master_server_selected < 0 || master_server_selected >= master_server_list.size()) return;
     Deactivate();
     root->shell->Run(StrCat("server ", master_server_list[master_server_selected].addr));
   }
@@ -217,7 +224,7 @@ struct GameMenuGUI : public View, public Connection::Handler {
     LayoutTopbar();
     LayoutMenu();
 #ifdef LFL_ANDROID
-    gplus_signin_button.EnableHover();
+    // gplus_signin_button.EnableHover();
     // mobile_font.desc = FontDesc("MobileAtlas", "", 0, Color::white);
     // CHECK(mobile_font.Load());
 #endif
@@ -233,53 +240,42 @@ struct GameMenuGUI : public View, public Connection::Handler {
     int fh = font->Height();
     Flow menuflow(&box, bright_font, ResetView());
 
-    int my_selected = selected;
-    if (my_selected == 2) {
-      sub_tab1.box = sub_tab2.box = sub_tab3.box = Box(box.w/3, fh);
-      sub_tab1.outline = (sub_selected == 1) ? 0 : &Color::white;
-      sub_tab2.outline = (sub_selected == 2) ? 0 : &Color::white;
-      sub_tab3.outline = (sub_selected == 3) ? 0 : &Color::white;
-      sub_tab1.Layout(&menuflow, (sub_selected == 1) ? glow_font : font);
-      sub_tab2.Layout(&menuflow, (sub_selected == 2) ? glow_font : font);
-      sub_tab3.Layout(&menuflow, (sub_selected == 3) ? glow_font : font);
+    int my_selected = toplevel->selected;
+    if (my_selected == 1) {
+      if (auto v = sublevel->AppendFlow(&menuflow)) child_view.push_back(v);
       menuflow.SetFont(bright_font);
       menuflow.AppendNewline();
 
-      if (sub_selected == 1) {
+      if (sublevel->selected == 0) {
 #ifdef LFL_ANDROID
-        child_view = nullptr;
-        Scissor s(root->gd, *menuflow.container);
         bool gplus_signedin = gplus->GetSignedIn();
         if (!gplus_signedin) LayoutGPlusSigninButton(&menuflow, gplus_signedin);
         else {
-          int fw = menuflow.container->w, bh = font->Height();
-          menuflow.AppendBox(0/3.0, fw/3.0, bh, &gplus_quick.box);  gplus_quick. LayoutBox(&menuflow, font, gplus_quick.box);
-          menuflow.AppendBox(1/3.0, fw/3.0, bh, &gplus_invite.box); gplus_invite.LayoutBox(&menuflow, font, gplus_invite.box);
-          menuflow.AppendBox(2/3.0, fw/3.0, bh, &gplus_accept.box); gplus_accept.LayoutBox(&menuflow, font, gplus_accept.box);
+          if (auto v = gplus_menu->AppendFlow(&menuflow)) child_view.push_back(v);
           menuflow.AppendNewlines(1);
         }
 #endif
-      } else if (sub_selected == 2) {
-        if (last_selected != 2 || last_sub_selected != 2) Refresh();
+      } else if (sublevel->selected == 1) {
+        if (last_selected != 1 || last_sub_selected != 1) Refresh();
         {
           TableItemVec items = { TableItem("Server List:", TableItem::Label, "Players") };
           for (int i = 0; i < master_server_list.size(); ++i)
             items.emplace_back(master_server_list[i].name, TableItem::Label, master_server_list[i].players);
           serverlist->ReplaceSection(0, TableItem(), 0, move(items));
         }
-        tab2_server_join.LayoutBox(&menuflow, bright_font, Box(box.w*.2, -box.h*.8, box.w*.6, box.h*.1));
-      } else if (sub_selected == 3) {
-        my_selected = 1;
+        // tab2_server_join.LayoutBox(&menuflow, bright_font, Box(box.w*.2, -box.h*.8, box.w*.6, box.h*.1));
+      } else if (sublevel->selected == 2) {
+        my_selected = 0;
       }
     }
-    if (my_selected == 1) {
+    if (my_selected == 0) {
       if (auto v = nav->AppendFlow(&menuflow)) {
         child_view.push_back(v);
         child_box.PushBack(box, menuflow.out->attr.GetAttrId(menuflow.cur_attr), v);
       }
-      tab1_server_start.LayoutBox(&menuflow, bright_font, Box(box.w*.2, -box.h*.8, box.w*.6, box.h*.1));
+      // tab1_server_start.LayoutBox(&menuflow, bright_font, Box(box.w*.2, -box.h*.8, box.w*.6, box.h*.1));
     }
-    else if (my_selected == 3) {
+    else if (my_selected == 2) {
       Scissor s(root->gd, *menuflow.container);
 #ifdef LFL_ANDROID
       LayoutGPlusSigninButton(&menuflow, gplus->GetSignedIn());
@@ -288,24 +284,20 @@ struct GameMenuGUI : public View, public Connection::Handler {
         child_view.push_back(v);
         child_box.PushBack(box, menuflow.out->attr.GetAttrId(menuflow.cur_attr), v);
       }
-
       menuflow.AppendNewlines(1);
-      if (last_selected != 3) browser.Open("http://lucidfusionlabs.com/apps.html");
-      browser.Paint(&menuflow, box.TopLeft() + point(0, 0 /*scrolled*/));
-      // browser.doc.gui.Draw();
-      browser.UpdateScrollbar();
     }
   }
 
   void LayoutGPlusSigninButton(Flow *menuflow, bool signedin) {
-#ifdef LFL_ANDROID
+#if 0
+      // def LFL_ANDROID
     int bh = menuflow->cur_attr.font->Height()*2, bw = bh * 41/9.0;
     menuflow->AppendBox((.95 - (float)bw/menuflow->container->w)/2, bw, bh, &gplus_signin_button.box);
     if (!signedin) { 
       // mobile_font->Select(root->gd);
       // gplus_signin_button.Draw(mobile_font, gplus_signin_button.decay ? 2 : (gplus_signin_button.hover ? 1 : 0));
     } else {
-      gplus_signout_button.box = gplus_signin_button.box;
+      // gplus_signout_button.box = gplus_signin_button.box;
       // gplus_signout_button.Draw(true);
     }
     menuflow->AppendNewlines(1);
@@ -317,10 +309,10 @@ struct GameMenuGUI : public View, public Connection::Handler {
     gc.gd->EnableBlend();
     vector<const Box*> bgwins;
     bgwins.push_back(&topbar.box);
-    if (selected) bgwins.push_back(&box);
+    if (toplevel->selected >= 0) bgwins.push_back(&box);
     glShadertoyShaderWindows(gc.gd, MyShader, Color(25, 60, 130, 120), bgwins);
 
-    if (title && selected) {
+    if (title && toplevel->selected >= 0) {
       gc.gd->DisableBlend();
       title->Draw(&gc, titlewin);
       gc.gd->EnableBlend();
@@ -340,14 +332,13 @@ struct GameMenuGUI : public View, public Connection::Handler {
       particles.Draw(gc.gd);
     }
 
-    if (selected) {
+    if (toplevel->selected >= 0) {
       gc.gd->SetColor(Color::grey80); BoxTopLeftOutline    ().Draw(&gc, box);
       gc.gd->SetColor(Color::grey40); BoxBottomRightOutline().Draw(&gc, box);
     }
 
-    line_clicked = -1;
-    last_selected = selected;
-    last_sub_selected = sub_selected;
+    last_selected = toplevel->selected;
+    last_sub_selected = sublevel->selected;
   }
 };
 
@@ -400,8 +391,7 @@ struct GamePlayerListGUI : public View {
     DrawableBoxArray outgeom1, outgeom2;
     Box out1(win.x, win.centerY(), win.w, fh), out2(win.x, win.y, win.w, fh);
     Flow menuflow1(&out1, font, &outgeom1), menuflow2(&out2, font, &outgeom2);
-    for (PlayerList::iterator it = playerlist.begin(); it != playerlist.end(); it++) {
-      const Player &p = (*it);
+    for (auto &p : playerlist) {
       int team = atoi(p[2]);
       bool winner = team == winning_team;
       LayoutLine(winner ? &menuflow1 : &menuflow2, PlayerName(p), PlayerScore(p), PlayerPing(p));
@@ -433,7 +423,7 @@ struct GameChatGUI : public TextArea {
     write_timestamp = deactivate_on_enter = true;
     line_fb.align_top_or_bot = false;
     SetToggleKey(key, true);
-    bg_color = &Color::clear;
+    bg_color = Color::clear;
     cursor.type = Cursor::Underline;
   }
 

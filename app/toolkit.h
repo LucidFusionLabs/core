@@ -20,6 +20,31 @@
 #define LFL_CORE_APP_TOOLKIT_H__
 namespace LFL {
 
+typedef unsigned ColorDesc;
+struct FontDesc {
+  enum { Bold=1, Italic=2, Mono=4, Outline=8, Shadow=16 };
+  struct Engine {
+    enum { Default=0, Atlas=1, FreeType=2, CoreText=3, GDI=4, FC=5, Android=6 };
+    static int Parse(const string &s);
+  };
+  struct Hasher        { size_t operator()(const FontDesc &v) const; };
+  struct ColoredHasher { size_t operator()(const FontDesc &v) const; };
+  struct Equal         { bool   operator()(const FontDesc &x, const FontDesc &y) const; };
+  struct ColoredEqual  { bool   operator()(const FontDesc &x, const FontDesc &y) const; };
+
+  string name, family;
+  int size, flag, engine;
+  ColorDesc fg, bg;
+  bool unicode;
+  FontDesc(const IPC::FontDescription&);
+  FontDesc(const string &n="", const string &fam="", int s=0,
+           ColorDesc fgc=0xffffff, ColorDesc bgc=0, int f=0, bool U=1, int E=0);
+
+  string Filename() const;
+  string DebugString() const;
+  static FontDesc Default();
+};
+
 struct MenuItem { string shortcut, name; Callback cb; int image; };
 struct AlertItem { string first, second; StringCB cb; int image; };
 struct PanelItem { string type; Box box; StringCB cb; int image; };
@@ -34,9 +59,19 @@ struct PickerItem {
   { string v; for (int i=0, l=data.size(); i!=l; ++i) StrAppend(&v, i ? " " : "", Picked(i)); return v; }
 };
 
+struct CollectionItem {
+  string key, val;
+  int type=0, tag=0, flags=0, icon, selected=0, height=0;
+  Callback cb;
+  bool hidden;
+  FontDesc font;
+  CollectionItem(const string &K="", int I=0, Callback CB=Callback()) : key(K), icon(I), cb(move(CB)) {}
+  virtual ~CollectionItem() {}
+};
+
 struct TableItem {
   enum { None=0, Label=1, Separator=2, Command=3, Button=4, Toggle=5, Selector=6, Picker=7, Slider=8,
-    TextInput=9, NumberInput=10, PasswordInput=11, FontPicker=12 }; 
+    TextInput=9, NumberInput=10, PasswordInput=11, FontPicker=12, WebView=13 }; 
   struct Flag { enum { LeftText=1, SubText=2, FixDropdown=4, HideKey=8, PlaceHolderVal=16, ColoredSubText=32,
     ColoredRightText=64, User1=128 }; };
   string key, val, right_text, dropdown_key;
@@ -45,9 +80,8 @@ struct TableItem {
   StringCB right_cb;
   PickerItem *picker;
   bool hidden;
-  unsigned char fg_r=0, fg_g=0, fg_b=0, fg_a=0;
-  unsigned char bg_r=0, bg_g=0, bg_b=0, bg_a=0;
-  float minval=0, maxval=0;
+  FontDesc font;
+  float minval=0, maxval=0, incrval=0;
   virtual ~TableItem() {}
   TableItem(string K=string(), int T=0, string V=string(), string RT=string(), int TG=0, int LI=0, int RI=0,
             Callback CB=Callback(), StringCB RC=StringCB(), int F=0, bool H=false, PickerItem *P=0, string DDK=string()) :
@@ -57,9 +91,8 @@ struct TableItem {
             bool H, PickerItem *P, string DDK, const Color &fg, const Color &bg, float MinV=0, float MaxV=0);
   bool HasPlaceholderValue() const { return val.size() && (val[0] == 1 || val[0] == 2); }
   string GetPlaceholderValue() const { return val.substr(1); }
-  void CheckAssign(const string &k, Callback c) { CHECK_EQ(k, key); cb=move(c); }
-  void SetFGColor(const Color&);
-  void SetBGColor(const Color&);
+  void CheckAssignCallback(const string &k, Callback c) { CHECK_EQ(key, k); cb=move(c); }
+  void CheckAssignValues(const string &k, float v, float minv=0, float maxv=0, float iv=0) { CHECK_EQ(key, k); val=StrCat(v); minval=minv; maxval=maxv; incrval=iv; }
   static string Placeholder(const string &v) { return StrCat("\x01", v); }
 };
 
@@ -88,6 +121,15 @@ template <class TI> struct TableSection : public TableSectionInterface {
     for (auto &i : in) {
       if (i.type == TableItem::Separator) ret.emplace_back(move(i));
       else                                ret.back().item.emplace_back(move(i));
+    }
+    return ret;
+  }
+
+  static vector<TableSection> Convert(vector<CollectionItem> in) {
+    vector<TableSection> ret;
+    ret.emplace_back();
+    for (auto &i : in) {
+      ret.back().item.emplace_back(move(i));
     }
     return ret;
   }
@@ -147,6 +189,7 @@ struct PanelViewInterface {
 
 struct ToolbarViewInterface {
   enum { BORDERLESS_BUTTONS=1 };
+  int selected=-1;
   virtual ~ToolbarViewInterface() {}
   virtual void Show(bool show_or_hide) = 0;
   virtual void ToggleButton(const string &n) = 0;
@@ -165,6 +208,14 @@ struct StackViewInterface {
   virtual ~StackViewInterface() {}
   virtual void Show(bool show_or_hide) = 0;
   virtual View *AppendFlow(Flow*) { return nullptr; }
+};
+
+struct CollectionViewInterface : public StackViewInterface {
+  int selected=-1;
+  bool shown=0, changed=0;
+  CollectionViewInterface() { show_cb = [=](){ changed=0; }; }
+  virtual void SetToolbar(ToolbarViewInterface*) = 0;
+  virtual ~CollectionViewInterface() {}
 };
 
 struct TableViewInterface : public StackViewInterface {
@@ -269,6 +320,8 @@ struct ToolkitInterface {
   virtual unique_ptr<ToolbarViewInterface> CreateToolbar(const string &theme, MenuItemVec items, int flag) = 0;
   virtual unique_ptr<MenuViewInterface> CreateMenu(const string &title, MenuItemVec items) = 0;
   virtual unique_ptr<MenuViewInterface> CreateEditMenu(MenuItemVec items) = 0;
+  virtual unique_ptr<CollectionViewInterface> CreateCollectionView
+    (const string &title, const string &style, const string &theme, vector<CollectionItem> items) = 0;
   virtual unique_ptr<TableViewInterface> CreateTableView
     (const string &title, const string &style, const string &theme, TableItemVec items) = 0;
   virtual unique_ptr<TextViewInterface> CreateTextView(const string &title, File *file) = 0;
@@ -282,6 +335,8 @@ struct SystemToolkit : public ToolkitInterface {
   unique_ptr<ToolbarViewInterface> CreateToolbar(const string &theme, MenuItemVec items, int flag);
   unique_ptr<MenuViewInterface> CreateMenu(const string &title, MenuItemVec items);
   unique_ptr<MenuViewInterface> CreateEditMenu(MenuItemVec items);
+  unique_ptr<CollectionViewInterface> CreateCollectionView
+    (const string &title, const string &style, const string &theme, vector<CollectionItem> items);
   unique_ptr<TableViewInterface> CreateTableView
     (const string &title, const string &style, const string &theme, TableItemVec items);
   unique_ptr<TextViewInterface> CreateTextView(const string &title, File *file);

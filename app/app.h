@@ -437,8 +437,8 @@ struct VAlign { enum { Bottom=1, Center=2, Top  =3 }; };
 #ifdef LFL_ANDROID
 #include "core/app/framework/android_common.h"
 #endif
-#include "core/app/audio.h"
 #include "core/app/gl.h"
+#include "core/app/audio.h"
 #include "core/app/font.h"
 #include "core/app/scene.h"
 #include "core/app/loader.h"
@@ -631,7 +631,7 @@ struct Application : public ::LFApp {
   unordered_map<const void*, Window*> windows;
   function<void(Window*)> window_init_cb, window_start_cb, window_closed_cb = [](Window *w){ delete w; };
   Window *focused=0;
-  ToolkitInterface *toolkit;
+  ToolkitInterface *system_toolkit, *toolkit;
 
   unordered_map<string, StringPiece> asset_cache;
   const Color *splash_color = &Color::black;

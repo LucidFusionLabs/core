@@ -279,6 +279,12 @@ class QtTableModel : public QStandardItemModel {
   }
 };
 
+struct QtCollectionView : public CollectionViewInterface {
+  QtCollectionView(const string &title, string sty, vector<CollectionItem> item) {}
+  void SetToolbar(ToolbarViewInterface *t) {}
+  void Show(bool show_or_hide) {}
+};
+
 class QtTableWidget : public QTableView {
   public:
   QtTableView *parent;
@@ -760,6 +766,7 @@ unique_ptr<PanelViewInterface> SystemToolkit::CreatePanel(const Box &b, const st
 unique_ptr<ToolbarViewInterface> SystemToolkit::CreateToolbar(const string &theme, MenuItemVec items, int flag) { return make_unique<QtToolbarView>(move(items)); }
 unique_ptr<MenuViewInterface> SystemToolkit::CreateMenu(const string &title, MenuItemVec items) { return make_unique<QtMenuView>(title, move(items)); }
 unique_ptr<MenuViewInterface> SystemToolkit::CreateEditMenu(MenuItemVec items) { return make_unique<QtMenuView>("Edit", move(items)); }
+unique_ptr<CollectionViewInterface> SystemToolkit::CreateCollectionView(const string &title, const string &style, const string &theme, vector<CollectionItem> items) { return make_unique<QtCollectionView>(title, style, move(items)); }
 unique_ptr<TableViewInterface> SystemToolkit::CreateTableView(const string &title, const string &style, const string &theme, TableItemVec items) { return make_unique<QtTableView>(title, style, move(items)); }
 unique_ptr<TextViewInterface> SystemToolkit::CreateTextView(const string &title, File *file) { return make_unique<QtTextView>(title, file); }
 unique_ptr<TextViewInterface> SystemToolkit::CreateTextView(const string &title, const string &text) { return make_unique<QtTextView>(title, text); }

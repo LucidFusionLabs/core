@@ -193,10 +193,61 @@ void GlyphCache::Load(const Font *f, const Glyph *g, const unsigned char *buf, i
   }
 }
 
+int FontDesc::Engine::Parse(const string &s) {
+  if      (s == "atlas")    return Atlas;
+  else if (s == "freetype") return FreeType;
+  else if (s == "coretext") return CoreText;
+  else if (s == "gdi")      return GDI;
+  return Default;
+}
+
+size_t FontDesc::Hasher::operator()(const FontDesc &v) const {
+  size_t h = fnv32(v.name  .data(), v.name  .size(), 0);
+  /**/   h = fnv32(v.family.data(), v.family.size(), h);
+  /**/   h = fnv32(&v.size,         sizeof(v.size),  h);
+  return     fnv32(&v.flag,         sizeof(v.flag),  h);
+}
+
+size_t FontDesc::ColoredHasher::operator()(const FontDesc &v) const {
+  size_t h = Hasher()(v);
+  /**/ h = fnv32(&v.fg, sizeof(v.fg), h);
+  return   fnv32(&v.bg, sizeof(v.bg), h);
+}
+
+bool FontDesc::Equal::operator()(const FontDesc &x, const FontDesc &y) const {
+  return x.name == y.name && x.family == y.family && x.size == y.size && x.flag == y.flag;
+}
+
+bool FontDesc::ColoredEqual::operator()(const FontDesc &x, const FontDesc &y) const {
+  return Equal()(x, y) && x.fg == y.fg && x.bg == y.bg;
+} 
+
 FontDesc::FontDesc(const IPC::FontDescription &d) :
   FontDesc(d.name() ? d.name()->data() : "", d.family() ? d.family()->data() : "", d.size(),
            d.fg() ? Color(d.fg()->r(), d.fg()->g(), d.fg()->b(), d.fg()->a()) : Color::white,
            d.bg() ? Color(d.bg()->r(), d.bg()->g(), d.bg()->b(), d.bg()->a()) : Color::clear, d.flag(), d.unicode(), d.engine()) {}
+  
+FontDesc::FontDesc(const string &n, const string &fam, int s,
+                   ColorDesc fgc, ColorDesc bgc, int f, bool U, int E) :
+  family(fam), size(s), flag(f == -1 ? FLAGS_font_flag : f), engine(E), fg(fgc), bg(bgc), unicode(U) {
+  string engine_proto;
+  name = ParseProtocol(n.data(), &engine_proto);
+  if (!engine_proto.empty()) engine = Engine::Parse(engine_proto);
+}
+
+string FontDesc::Filename() const {
+  Color fgc(fg);
+  return StrCat(name, ",", size, ",", fgc.R(), ",", fgc.G(), ",", fgc.B(), ",", flag);
+}
+
+string FontDesc::DebugString() const {
+  return StrCat(name, " (", family, ") ", size, " ", Color(fg).DebugString(), " ", Color(bg).DebugString(), " ", flag);
+}
+
+FontDesc FontDesc::Default() {
+  return FontDesc(FLAGS_font, FLAGS_font_family, FLAGS_font_size,
+                  Color::white, Color::clear, FLAGS_font_flag);
+}
 
 Glyph *Font::FindOrInsertGlyph(char16_t ind) {
   if (ind >= glyph->table_start) {
@@ -344,8 +395,8 @@ void Fonts::SelectFillColor(GraphicsDevice *gd) {
 
 FillColor *Fonts::GetFillColor(const Color &c) {
   bool inserted = false;
-  auto it = LFL::FindOrInsert(color_map, c.AsUnsigned(), &inserted);
-  if (inserted) it->second.internal.fillcolor.color = c.AsUnsigned();
+  auto it = LFL::FindOrInsert(color_map, ColorDesc(c), &inserted);
+  if (inserted) it->second.internal.fillcolor.color = ColorDesc(c);
   return &it->second;
 }
 
@@ -420,7 +471,7 @@ Font *Fonts::Insert(FontEngine *engine, const FontDesc &d) {
       return new_font;
     }
   }
-  ERROR(engine->Name(), " Open: ", d.name, " ", d.size, " ", d.fg.DebugString(), " ", d.flag, " failed");
+  ERROR(engine->Name(), " Open: ", d.name, " ", d.size, " ", Color(d.fg).DebugString(), " ", d.flag, " failed");
   return NULL;
 }
 

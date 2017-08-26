@@ -25,6 +25,14 @@ struct NullToolbarView : public ToolbarViewInterface {
   string GetTheme() { return theme; }
 };
 
+struct NullCollectionView : public CollectionViewInterface {
+  vector<TableSection<CollectionItem>> data;
+  NullCollectionView(const string &title, const string &style, vector<CollectionItem> items) :
+    data(TableSection<CollectionItem>::Convert(move(items))) {}
+  void SetToolbar(ToolbarViewInterface *t) {}
+  void Show(bool show_or_hide) {}
+};
+
 struct NullTableView : public TableViewInterface {
   vector<TableSection<TableItem>> data;
   NullTableView(const string &title, const string &style, TableItemVec items) :
@@ -65,7 +73,7 @@ struct NullTableView : public TableViewInterface {
     if (section == data.size()) data.emplace_back();
     CHECK_LT(section, data.size());
     CHECK_EQ(item.size(), data[section].item.size());
-    for (int i=0, l=data[section].item.size(); i != l; ++i) data[section].item[i].SetFGColor(item[i]);
+    for (int i=0, l=data[section].item.size(); i != l; ++i) data[section].item[i].font.fg = item[i];
   }
 
   void SetHeader(int section, TableItem) {}
@@ -100,6 +108,7 @@ void Application::UpdateSystemImage(int n, Texture&) {}
 void Application::UnloadSystemImage(int n) {}
 
 unique_ptr<ToolbarViewInterface> SystemToolkit::CreateToolbar(const string &theme, MenuItemVec items, int flag) { return make_unique<NullToolbarView>(); }
+unique_ptr<CollectionViewInterface> SystemToolkit::CreateCollectionView(const string &title, const string &style, const string &theme, vector<CollectionItem> items) { return make_unique<NullCollectionView>(title, style, move(items)); }
 unique_ptr<TableViewInterface> SystemToolkit::CreateTableView(const string &title, const string &style, const string &theme, TableItemVec items) { return make_unique<NullTableView>(title, style, move(items)); }
 unique_ptr<TextViewInterface> SystemToolkit::CreateTextView(const string &title, File *file) { return make_unique<NullTextView>(); }
 unique_ptr<TextViewInterface> SystemToolkit::CreateTextView(const string &title, const string &text) { return make_unique<NullTextView>(); }

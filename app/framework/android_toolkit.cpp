@@ -72,6 +72,13 @@ struct AndroidTextView : public TextViewInterface {
   }
 };
 
+struct AndroidCollectionView : public CollectionViewInterface {
+  string theme;
+  AndroidCollectionView(const string &title, const string &style, vector<CollectionItem> items) {}
+  void SetToolbar(ToolbarViewInterface *toolbar) {}
+  void Show(bool) {}
+};
+
 struct AndroidNavigationView : public NavigationViewInterface {
   bool overlay;
   GlobalJNIObject impl;
@@ -309,7 +316,7 @@ void AndroidTableView::SetSectionColors(int section, const vector<Color> &in) {
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->tablescreen_class,
                            "setSectionColors", "(Landroid/support/v7/app/AppCompatActivity;ILjava/util/ArrayList;)V"));
-  vector<int> colors = VectorConvert<Color, int>(in, [](const Color &x){ return int(x.AsUnsigned()); });
+  vector<int> colors = VectorConvert<Color, int>(in, [](const Color &x){ return ColorDesc(x); });
   LocalJNIObject v(jni->env, JNI::ToIntegerArrayList(jni->env, colors));
   jni->env->CallVoidMethod(impl.v, mid, jni->activity, jint(section), v.v);
 }
@@ -353,7 +360,7 @@ void AndroidTableView::SetColor(int section, int row, const Color &val) {
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->tablescreen_class,
                            "setColor", "(Landroid/support/v7/app/AppCompatActivity;I)V"));
-  jni->env->CallVoidMethod(impl.v, mid, jni->activity, jint(val.AsUnsigned()));
+  jni->env->CallVoidMethod(impl.v, mid, jni->activity, jint(val));
 }
 
 void AndroidTableView::SetTitle(const string &title) {
@@ -404,6 +411,7 @@ void Application::UnloadSystemImage(int n) {
 }
 
 unique_ptr<ToolbarViewInterface> SystemToolkit::CreateToolbar(const string &theme, MenuItemVec items, int flag) { return make_unique<AndroidToolbarView>(theme, move(items), flag); }
+unique_ptr<CollectionViewInterface> SystemToolkit::CreateCollectionView(const string &title, const string &style, const string &theme, vector<CollectionItem> items) { return make_unique<AndroidCollectionView>(title, style, move(items)); }
 unique_ptr<TableViewInterface> SystemToolkit::CreateTableView(const string &title, const string &style, const string &theme, TableItemVec items) { return make_unique<AndroidTableView>(title, style, move(items)); }
 unique_ptr<TextViewInterface> SystemToolkit::CreateTextView(const string &title, File *file) { return make_unique<AndroidTextView>(title, file); }
 unique_ptr<TextViewInterface> SystemToolkit::CreateTextView(const string &title, const string &text) { return make_unique<AndroidTextView>(title, text); }

@@ -37,7 +37,7 @@ void AtlasFontEngine::SetDefault() {
 bool AtlasFontEngine::Init(const FontDesc &d) {
   if (Font *f = OpenAtlas(d)) {
     ScopedReentryGuard scoped(&in_init);
-    font_map[d.name][d.fg.AsUnsigned()][d.flag][d.size] = f;
+    font_map[d.name][d.fg][d.flag][d.size] = f;
     FontDesc de = d;
     de.engine = FontDesc::Engine::Atlas;
     Font *ret = app->fonts->GetByDesc(de);
@@ -55,15 +55,15 @@ unique_ptr<Font> AtlasFontEngine::Open(const FontDesc &d) {
   int max_ci = 2 - is_fg_white;
   for (int ci = 0; ci < max_ci; ++ci) {
     bool last_ci = ci == (max_ci - 1);
-    const Color *c = ci ? &Color::white : &d.fg;
+    ColorDesc c = ci ? ColorDesc(Color::white) : d.fg;
     FontColorMap::iterator i;
     FontFlagMap::iterator j;
     FontSizeMap::iterator k;
     FontSizeMap::reverse_iterator l;
     Font *f = 0;
 
-    if ((i = fi->second.find(c->AsUnsigned())) == fi->second.end() || !i->second.size()) continue;
-    if ((j = i->second.find(d.flag))           ==  i->second.end() || !j->second.size()) continue;
+    if ((i = fi->second.find(c))     == fi->second.end() || !i->second.size()) continue;
+    if ((j = i->second.find(d.flag)) ==  i->second.end() || !j->second.size()) continue;
 
     if      ((k = j->second.lower_bound(d.size)) != j->second.end())  f = k->second;
     else if ((l = j->second.rbegin())            != j->second.rend()) f = l->second;
@@ -104,7 +104,7 @@ Font *AtlasFontEngine::OpenAtlas(const FontDesc &d) {
   Resource *resource = new Resource();
   Font *ret = new Font(app->fonts->atlas_engine.get(), d, shared_ptr<FontEngine::Resource>(resource));
   ret->glyph = make_shared<GlyphMap>(make_shared<GlyphCache>(tex.ID, tex.width, tex.height));
-  ret->mix_fg = d.bg.a() != 1.0;
+  ret->mix_fg = Color(d.bg).a() != 1.0;
   GlyphCache *cache = ret->glyph->cache.get();
   resource->primary = ret;
 

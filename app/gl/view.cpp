@@ -429,7 +429,7 @@ TextBox::LinesFrameBuffer *TextBox::LinesFrameBuffer::Attach(TextBox::LinesFrame
   return *last_fb = this;
 }
 
-int TextBox::LinesFrameBuffer::SizeChanged(int W, int H, Font *font, const Color *bgc) {
+int TextBox::LinesFrameBuffer::SizeChanged(int W, int H, Font *font, ColorDesc bgc) {
   lines = max(only_grow ? lines : 0,
               partial_last_line ? RoundUp(float(H) / font->Height()) : (H / font->Height()));
   return RingFrameBuffer::SizeChanged(max(only_grow ? w : 0, W),
@@ -477,7 +477,7 @@ point TextBox::LinesFrameBuffer::Paint(TextBox::Line *l, point lp, const Box &b,
     GraphicsContext gc(p->root->gd);
     Box sb(lp.x, lp.y - b.h, b.w, b.h);
     app->fonts->SelectFillColor(gc.gd);
-    app->fonts->GetFillColor(p->bg_color ? *p->bg_color : Color::black)->Draw(&gc, sb);
+    app->fonts->GetFillColor(!Color::IsTransparent(p->bg_color) ? Color(p->bg_color) : Color::black)->Draw(&gc, sb);
     l->Draw(lp + b.Position(), -1, offset, len, &sb);
   } else p->needs_redraw = true;
   return point(lp.x, lp.y-b.h);
@@ -518,7 +518,8 @@ void TextBox::Enter() {
 void TextBox::SetColors(Colors *C) {
   style.colors = C;
   default_attr = style.colors->SetDefaultAttr(default_attr);
-  bg_color = style.colors->GetColor(style.colors->background_index);
+  if (auto bgc = style.colors->GetColor(style.colors->background_index)) bg_color = *bgc;
+  else                                                                   bg_color = 0;
 }
 
 void TextBox::UpdateLineFB(Line *L, LinesFrameBuffer *fb, int flag) {
@@ -670,7 +671,7 @@ void TextArea::Write(const StringPiece &s, bool update_fb, bool release_fb) {
   bool wrap = Wrap();
   int update_flag = LineFBPushBack(), sl;
   LinesFrameBuffer *fb = GetFrameBuffer();
-  ScopedClearColor scc(fb->fb.gd, update_fb ? bg_color : NULL);
+  ScopedClearColor scc(fb->fb.gd, update_fb ? bg_color : 0);
   ScopedDrawMode drawmode(fb->fb.gd, update_fb ? DrawMode::_2D : DrawMode::NullOp);
   if (update_fb && fb->lines) fb->fb.Attach();
   StringLineIter add_lines(s, StringLineIter::Flag::BlankLines);
@@ -1033,7 +1034,7 @@ PropertyView::PropertyView(Window *W, const FontRef &F) : TextView(W, F),
   cursor_enabled = 0;
   cmd_color = Color(Color::black, .5);
   selection_cb = bind(&PropertyView::SelectionCB, this, _1);
-  if (F->desc->bg.A()) bg_color = &F->desc->bg;
+  bg_color = F->desc->bg;
   Activate();
 }
 
@@ -1162,7 +1163,7 @@ Console::Console(Window *W, const FontRef &F, const Callback &C) : TextArea(W, F
   line_fb.wrap = write_timestamp = 1;
   line_fb.align_top_or_bot = false;
   SetToggleKey(Key::Backquote);
-  bg_color = &Color::clear;
+  bg_color = Color::clear;
   cursor.type = Cursor::Underline;
 }
 

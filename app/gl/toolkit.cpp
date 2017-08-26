@@ -18,10 +18,11 @@
 
 #include "core/app/gl/view.h"
 #include "core/app/gl/toolkit.h"
+#include "core/web/browser.h"
 
 namespace LFL {
-ToolbarView::ToolbarView(Window *w, const string &t, MenuItemVec items, Font *F, Font *SF) :
-  View(w), theme(t), font(F), selected_font(SF) {
+ToolbarView::ToolbarView(Window *w, const string &t, MenuItemVec items, Font *F, Font *SF, Color *SO) :
+  View(w), theme(t), font(F), selected_font(SF), selected_outline(SO) {
   for (auto &i : items) data.emplace_back(move(i));
 }
 
@@ -43,14 +44,103 @@ View *ToolbarView::AppendFlow(Flow *flow) {
       i.button->outline_topleft     = &Color::grey80;
       i.button->outline_bottomright = &Color::grey40;
     }
+    i.button->box = Box(box.w / data.size(), box.h);
     i.button->text = i.shortcut;
     i.button->cb = i.cb ? MouseController::CB(i.cb) : MouseControllerCallback();
     i.button->solid = theme == "Clear" ? nullptr : &Color::grey60;
-    i.button->box = Box(box.w / data.size(), box.h);
+    i.button->outline = (selected_outline && selected == ind) ? selected_outline : nullptr;
     i.button->Layout(flow, (selected_font && selected == ind) ? selected_font : (font ? font : flow->cur_attr.font));
   }
   return this;
 }
+
+CollectionView::CollectionView(Window *w, const string &t, const string &s, const string &th, vector<CollectionItem> items) :
+  View(w), data(CollectionViewSection::Convert(move(items))), title(t), style(s), theme(th), scrollbar(this) { Activate(); }
+  
+void CollectionView::Layout() {
+  ClearView();
+  mouse.AddClickBox(Box(0, -box.h, box.w - scrollbar.dot_size, box.h),
+                    MouseController::CoordCB(bind(&CollectionView::OnClick, this, _1, _2, _3, _4)));
+}
+
+void CollectionView::CheckExists(int section, int row) {
+  CHECK_RANGE(section, 0, data.size());
+  CHECK_RANGE(row, 0, data[section].item.size());
+}
+
+void CollectionView::OnClick(int but, point p, point d, int down) {
+  if (!down) return;
+  int line_clicked = -RelativePosition(root->mouse).y / row_height, section_id = -1, row = -1;
+  if (line_clicked < 0) return;
+  decay_box_line = line_clicked;
+  decay_box_left = 10;
+  CollectionViewSection::FindSectionOffset(data, line_clicked, &section_id, &row);
+  if (section_id < 0 || section_id >= data.size() || row < 0 || row >= data[section_id].item.size()) return;
+  CollectionViewSection &section = data[section_id];
+  CollectionViewItem &item = section.item[row];
+}
+
+void CollectionView::Draw() {
+  View::Draw();
+  if (out && decay_box_line >= 0 && decay_box_line < out->line.size() && decay_box_left > 0) {
+      BoxOutline().DrawGD(root->gd, out->line[decay_box_line] + box.TopLeft());
+      decay_box_left--;
+  }
+  if (0) { /* border */
+    // gc.gd->SetColor(Color::grey80); BoxTopLeftOutline    ().Draw(&gc, box);
+    // gc.gd->SetColor(Color::grey40); BoxBottomRightOutline().Draw(&gc, box);
+  }
+  if (selected) {
+    // gc.gd->SetColor(Color::grey20); BoxTopLeftOutline    ().Draw(&gc, team_buttons[home_team].GetHitBoxBox());
+    // gc.gd->SetColor(Color::grey60); BoxBottomRightOutline().Draw(&gc, team_buttons[home_team].GetHitBoxBox());
+  }
+}
+
+View *CollectionView::AppendFlow(Flow *flow) {
+  LayoutBox(*flow->container);
+  if (!(row_height = flow->cur_attr.font->Height())) row_height = 16;
+  out = flow->out;
+
+  scrollbar.LayoutAttached(Box(0, -box.h, box.w, box.h - row_height));
+  flow->p.y += (scrolled = int(scrollbar.scrolled * scrollbar.doc_height));
+
+  flow->AppendNewline();
+  for (auto &s : data)
+    for (auto &i : s.item) {
+      if (!i.button) {
+        i.button = make_unique<Widget::Button>(this, nullptr, "", MouseControllerCallback());
+        i.button->outline_w           = 1;
+        i.button->outline_topleft     = &Color::grey60;
+        i.button->outline_bottomright = &Color::grey20;
+      }
+      flow->AppendNewlines(1);
+    }
+
+  /*
+    slider.LayoutAttached(Box(0, -box.h, box.w, box.h));
+    flow.AppendNewlines(1);
+    flow.p.x += px;
+    for (int i = 0; i < team_buttons.size(); i++) {
+      team_buttons[i].v_align = VAlign::Bottom;
+      team_buttons[i].box = Box(bw, bh);
+      team_buttons[i].Layout(&flow, home_team == i ? glow_font : font);
+      flow.p.x += sx;
+
+      if ((i+1) % 4 != 0) continue;
+      flow.AppendNewlines(2);
+      if (i+1 < team_buttons.size()) flow.p.x += px;
+    }
+    flow.layout.align_center = 1;
+    start_button.box = root->Box(.4, .05);
+    start_button.Layout(&flow, bright_font);
+   */
+
+  scrollbar.SetDocHeight(flow->Height());
+  return this;
+}
+
+void CollectionView::SetToolbar(ToolbarViewInterface *tb) { toolbar = tb;}
+void CollectionView::Show(bool show_or_hide) {}
 
 TableView::TableView(Window *w, const string &t, const string &s, const string &th, TableItemVec items) :
   View(w), data(TableViewSection::Convert(move(items))), title(t), style(s), theme(th), scrollbar(this) { Activate(); }
@@ -124,7 +214,7 @@ void TableView::SetTag     (int s, int r, int val)           { CheckExists(s, r)
 void TableView::SetValue   (int s, int r, const string &val) { CheckExists(s, r); data[s].item[r].val = val; }
 void TableView::SetSelected(int s, int r, int selected)      { CheckExists(s, r); data[s].item[r].selected = selected; }
 void TableView::SetHidden  (int s, int r, int val)           { CheckExists(s, r); data[s].item[r].hidden = val; }
-void TableView::SetColor   (int s, int r, const Color &val)  { CheckExists(s, r); data[s].item[r].SetFGColor(val); }
+void TableView::SetColor   (int s, int r, const Color &val)  { CheckExists(s, r); data[s].item[r].font.fg = val; }
 void TableView::SetTitle(const string &t) { title = t; }
 void TableView::SetTheme(const string &t) { theme = t; }
 
@@ -161,6 +251,9 @@ void TableView::Draw() {
       BoxOutline().DrawGD(root->gd, out->line[decay_box_line] + box.TopLeft());
       decay_box_left--;
   }
+  // browser.Paint(&menuflow, box.TopLeft() + point(0, 0 /*scrolled*/));
+  // // browser.doc.gui.Draw();
+  // browser.UpdateScrollbar();
 }
 
 View *TableView::AppendFlow(Flow *flow) {
@@ -181,7 +274,7 @@ View *TableView::AppendFlow(Flow *flow) {
             i.textbox = make_unique<TextBox>(root);
             i.textbox->style.font = flow->cur_attr.font;
             i.textbox->cursor.type = TextBox::Cursor::Underline;
-            i.textbox->bg_color = &Color::clear;
+            i.textbox->bg_color = Color::clear;
             i.textbox->deactivate_on_enter = true;
             i.textbox->cmd_prefix.clear();
             i.textbox->SetToggleKey(0, true);
@@ -197,6 +290,11 @@ View *TableView::AppendFlow(Flow *flow) {
           flow->AppendRow(.6, .35, &i.val_box);
           i.slider->LayoutFixed(i.val_box);
           i.slider->Update();
+        }; break;
+
+        case TableItem::WebView: {
+          if (!i.browser) i.browser = make_unique<Browser>(this, box);
+          // i.browser->Open(i.val);
         }; break;
 
         default: {
@@ -260,6 +358,7 @@ unique_ptr<PanelViewInterface> Toolkit::CreatePanel(const Box &b, const string &
 unique_ptr<MenuViewInterface> Toolkit::CreateMenu(const string &title, MenuItemVec items) { return Singleton<SystemToolkit>::Get()->CreateMenu(title, move(items)); }
 unique_ptr<MenuViewInterface> Toolkit::CreateEditMenu(MenuItemVec items) { return Singleton<SystemToolkit>::Get()->CreateEditMenu(move(items)); }
 unique_ptr<ToolbarViewInterface> Toolkit::CreateToolbar(const string &theme, MenuItemVec items, int flag) { return make_unique<ToolbarView>(app->focused, theme, move(items)); }
+unique_ptr<CollectionViewInterface> Toolkit::CreateCollectionView(const string &title, const string &style, const string &theme, vector<CollectionItem> items) { return make_unique<CollectionView>(app->focused, title, style, theme, move(items)); }
 unique_ptr<TableViewInterface> Toolkit::CreateTableView(const string &title, const string &style, const string &theme, TableItemVec items) { return make_unique<TableView>(app->focused, title, style, theme, move(items)); }
 unique_ptr<TextViewInterface> Toolkit::CreateTextView(const string &title, File *file) { return nullptr; }
 unique_ptr<TextViewInterface> Toolkit::CreateTextView(const string &title, const string &text) { return nullptr; }

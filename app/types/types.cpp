@@ -159,12 +159,9 @@ TableItem::TableItem(string K, int T, string V, string RT, int TG, int LI, int R
   : TableItem(move(K), T, move(V), move(RT), TG, LI, RI, move(CB), move(RC), F, H, P, DDK) {
   minval = MinV;
   maxval = MaxV;
-  SetFGColor(fg);
-  SetBGColor(bg);
+  font.fg = fg;
+  font.bg = bg;
 }
-
-void TableItem::SetFGColor(const Color &c) { fg_r=c.R(); fg_g=c.G(); fg_b=c.B(); fg_a=c.A(); }
-void TableItem::SetBGColor(const Color &c) { bg_r=c.R(); bg_g=c.G(); bg_b=c.B(); bg_a=c.A(); }
 
 void TableViewInterface::ApplyChangeSet(const string &v, const TableSectionInterface::ChangeSet &changes) {
   auto it = changes.find(v);

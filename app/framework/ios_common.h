@@ -137,6 +137,13 @@ struct iOSWindow : public Window {
   bool Reshape(int w, int h);
 };
 
+struct iOSCollectionView : public CollectionViewInterface {
+  iOSCollectionView(const string &title, const string &style, const string &theme, vector<CollectionItem> items);
+  View *AppendFlow(Flow*);
+  void Show(bool show_or_hide);
+  void SetToolbar(ToolbarViewInterface *t);
+};
+
 struct iOSTableView : public TableViewInterface {
   IOSTable *table;
   ~iOSTableView();

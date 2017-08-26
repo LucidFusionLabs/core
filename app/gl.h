@@ -69,7 +69,7 @@ struct Color {
   Color(double R, double G, double B, double A) { r()=R; g()=G; b()=B; a()=A; }
   Color(int R, int G, int B) { r()=R/255.0; g()=G/255.0; b()=B/255.0; a()=1.0; }
   Color(int R, int G, int B, int A) { r()=R/255.0; g()=G/255.0; b()=B/255.0; a()=A/255.0; }
-  Color(unsigned v, bool has_alpha=true) { r()=((v>>16)&0xff)/255.0; g()=((v>>8)&0xff)/255.0; b()=(v&0xff)/255.0; a()=(has_alpha ? ((v>>24)&0xff)/255.0 : 1.0); };
+  Color(ColorDesc v, bool has_alpha=true) { r()=((v>>16)&0xff)/255.0; g()=((v>>8)&0xff)/255.0; b()=(v&0xff)/255.0; a()=(has_alpha ? ((v>>24)&0xff)/255.0 : 1.0); };
   Color(const StringPiece &hs) { *this = Color(strtoul(hs.data(), 0, 16), false); }
   Color(const Color &c, double A) { *this = c; a() = A; }
   Color operator+(const Color &y) const { Color ret = *this; for (int i=0;i<4;i++) ret.x[i] += y.x[i]; return ret; }
@@ -77,11 +77,11 @@ struct Color {
   bool operator< (const Color &y) const { SortImpl4(x[0], y.x[0], x[1], y.x[1], x[2], y.x[2], x[3], y.x[3]); }
   bool operator==(const Color &y) const { return R()==y.R() && G()==y.G() && B()==y.B() && A()==y.A(); }
   bool operator!=(const Color &y) const { return !(*this == y); }
+  operator ColorDesc() const { return uint8_t(A())<<24 | uint8_t(R())<<16 | uint8_t(G())<<8 | uint8_t(B()); }
   bool Transparent() const { return a() == 0; }
   string IntString() const { return StrCat("Color(", A(), ",", R(), ",", G(), ",", B(), ")"); }
   string HexString() const { return StringPrintf("%02X%02X%02X", R(), G(), B()); }
   string DebugString() const { return StringPrintf("%02X%02X%02X%02X", A(), R(), G(), B()); }
-  unsigned AsUnsigned() const { return uint8_t(A())<<24 | uint8_t(R())<<16 | uint8_t(G())<<8 | uint8_t(B()); }
   const float &r() const { return x[0]; }
   const float &g() const { return x[1]; }
   const float &b() const { return x[2]; }     
@@ -109,6 +109,7 @@ struct Color {
   static Color Interpolate(Color l, Color r, float mix) { l.scale(mix); r.scale(1-mix); return add(l,r); }
   static Color add(const Color &l, const Color &r) { return Color(Clamp(l.r()+r.r(), 0.0f, 1.0f), Clamp(l.g()+r.g(), 0.0f, 1.0f), Clamp(l.b()+r.b(), 0.0f, 1.0f), Clamp(l.a()+r.a(), 0.0f, 1.0f)); }
   static Color white, black, red, green, blue, cyan, yellow, magenta, grey90, grey80, grey70, grey60, grey50, grey40, grey30, grey20, grey10, clear;
+  static bool IsTransparent(ColorDesc x) { return !(x >> 24); }
 };
 
 struct Material {

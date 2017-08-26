@@ -1175,7 +1175,7 @@ FrameScheduler::FrameScheduler() :
   maxfps(&FLAGS_target_fps), wakeup_thread(&frame_mutex, &wait_mutex), rate_limit(0), wait_forever(!FLAGS_target_fps),
   wait_forever_thread(0), synchronize_waits(0), monolithic_frame(0), run_main_loop(0) {}
 
-bool FrameScheduler::DoMainWait() { return false; }
+bool FrameScheduler::DoMainWait(bool poll_only) { return false; }
 void FrameScheduler::Wakeup(Window *w, int) {
   dispatch_async(dispatch_get_main_queue(), ^{ [dynamic_cast<iOSWindow*>(w)->glkview setNeedsDisplay]; });
 }

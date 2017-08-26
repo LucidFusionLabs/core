@@ -207,8 +207,6 @@ jobject JNI::ToModelItem(JNIEnv *env, MenuItem item) {
 }
 
 jobject JNI::ToModelItem(JNIEnv *env, TableItem item) {
-  jint fg = (item.fg_a << 24) | (item.fg_r << 16) | (item.fg_g << 8) | item.fg_b;
-  jint bg = (item.bg_a << 24) | (item.bg_r << 16) | (item.bg_g << 8) | item.bg_b;
   LocalJNIObject k(env, ToJString(env, item.key)), v(env, ToJString(env, item.val)), rt(env, ToJString(env, item.right_text)),
           ddk(env, ToJString(env, item.dropdown_key)), picker(env, ToPickerItem(env, item.picker));
   LocalJNIObject cb(env, item.cb ? ToNativeCallback(env, move(item.cb)) : nullptr);
@@ -216,7 +214,7 @@ jobject JNI::ToModelItem(JNIEnv *env, TableItem item) {
   return env->NewObject(jni->modelitem_class, jni->modelitem_construct, k.v, v.v, rt.v, ddk.v, jint(item.type),
                         jint(item.tag), jint(item.flags), jint(item.left_icon), jint(item.right_icon),
                         jint(item.selected), jint(item.height), cb.v, rcb.v, picker.v, jboolean(item.hidden),
-                        fg, bg);
+                        jint(item.font.fg), jint(item.font.bg));
 }
 
 jobject JNI::ToModelItemChange(JNIEnv *env, const TableSectionInterface::Change &item) {

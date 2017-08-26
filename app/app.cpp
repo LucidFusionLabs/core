@@ -17,6 +17,8 @@
  */
 
 #include "core/app/gl/view.h"
+#include "core/web/browser.h"
+#include "core/app/gl/toolkit.h"
 #include "core/app/ipc.h"
 
 #include <time.h>
@@ -289,13 +291,18 @@ bool FrameWakeupTimer::WakeupIn(Time interval) {
 /* Application */
 
 Application::Application(int ac, const char* const* av) :
-  argc(ac), argv(av), toolkit(Singleton<SystemToolkit>::Get()) {
+  argc(ac), argv(av), system_toolkit(Singleton<SystemToolkit>::Get()) {
   run = 1;
   initialized = suspended = log_pid = frame_disabled = 0;
   main_thread_id = 0; 
   frames_ran = 0;
   memzero(log_time); 
   fonts = make_unique<Fonts>();
+#ifdef LFL_MOBILE
+  toolkit = system_toolkit;
+#else
+  toolkit = Singleton<Toolkit>::Get();
+#endif
 }
 
 void Application::Log(int level, const char *file, int line, const char *message) {

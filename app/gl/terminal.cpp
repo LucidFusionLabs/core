@@ -243,7 +243,7 @@ void Terminal::Draw(const Box &b, int flag, Shader *shader) {
   }
   if (flag & DrawFlag::DrawCursor) TextBox::DrawCursor(b.Position() + GetCursorPosition());
   if (extra_height && !shader) {
-    ScopedFillColor c(gc.gd, *bg_color);
+    ScopedFillColor c(gc.gd, bg_color);
     gc.DrawTexturedBox(Box(b.x, b.y + (line_fb.align_top_or_bot ? 0 : line_fb.h), b.w, extra_height));
   }
   if (selection.changing) DrawSelection();

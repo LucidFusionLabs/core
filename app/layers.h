@@ -1,5 +1,5 @@
 /*
- * $Id: assets.h 1336 2014-12-08 09:29:59Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -31,7 +31,7 @@ template <class Line> struct RingFrameBuffer {
 
   void ResetGL(int flag) { fb.ResetGL(flag); }
   virtual void SizeChangedDone() { fb.gd->PopScissorStack(); fb.Release(); scroll=v2(); p=point(); }
-  virtual int SizeChanged(int W, int H, Font *font, const Color *bgc) {
+  virtual int SizeChanged(int W, int H, Font *font, ColorDesc bgc) {
     if (fb.ID && W == w && H == h && font->size == font_size) return 0;
     int orig_font_size = font_size;
     SetDimensions(W, H, font);
@@ -39,7 +39,7 @@ template <class Line> struct RingFrameBuffer {
     return 1 + (orig_font_size && font_size != orig_font_size);
   }
 
-  void BeginSizeChange(const Color *bgc) {
+  void BeginSizeChange(ColorDesc bgc) {
     fb.Resize(w, h, FrameBuffer::Flag::CreateGL | FrameBuffer::Flag::CreateTexture);
     ScopedClearColor scc(fb.gd, bgc);
     fb.gd->PushScissorStack();

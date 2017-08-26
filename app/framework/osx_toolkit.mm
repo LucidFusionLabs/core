@@ -279,7 +279,7 @@ static LFL::FreeListVector<NSImage*> app_images;
   - (void)setColor:(int)section row:(int)r val:(const LFL::Color&)v {
     [self checkExists:section row:r];
     auto &ci = data[section].item[r];
-    ci.SetFGColor(v);
+    ci.font.fg = v;
   }
 
   - (void)setSectionValues:(int)section items:(const LFL::StringVec&)item {
@@ -459,6 +459,12 @@ struct OSXToolbarView : public ToolbarViewInterface {
   string GetTheme() { return theme; }
 };
 
+struct OSXCollectionView : public CollectionViewInterface {
+  OSXCollectionView(const string &title, const string &style, vector<CollectionItem> items) {}
+  void SetToolbar(ToolbarViewInterface *t) {}
+  void Show(bool show_or_hide) {}
+};
+
 struct OSXTableView : public TableViewInterface {
   OSXTable *table;
   ~OSXTableView() { [table release]; }
@@ -581,6 +587,7 @@ void Application::UnloadSystemImage(int n) {
 }
 
 unique_ptr<ToolbarViewInterface> SystemToolkit::CreateToolbar(const string &theme, MenuItemVec items, int flag) { return make_unique<OSXToolbarView>(move(items)); }
+unique_ptr<CollectionViewInterface> SystemToolkit::CreateCollectionView(const string &title, const string &style, const string &theme, vector<CollectionItem> items) { return make_unique<OSXCollectionView>(title, style, move(items)); }
 unique_ptr<TableViewInterface> SystemToolkit::CreateTableView(const string &title, const string &style, const string &theme, TableItemVec items) { return make_unique<OSXTableView>(title, style, move(items)); }
 unique_ptr<TextViewInterface> SystemToolkit::CreateTextView(const string &title, File *file) { return make_unique<OSXTextView>(title, file); }
 unique_ptr<TextViewInterface> SystemToolkit::CreateTextView(const string &title, const string &text) { return make_unique<OSXTextView>(title, text); }

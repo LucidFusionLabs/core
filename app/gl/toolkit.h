@@ -31,9 +31,9 @@ struct ToolbarView : public View, public ToolbarViewInterface {
   vector<ToolbarViewItem> data;
   DrawableBoxArray *out=0;
   string theme;
-  int selected=0;
   Font *font=0, *selected_font=0;
-  ToolbarView(Window *w, const string &theme, MenuItemVec items, Font *F=0, Font *SF=0);
+  Color *selected_outline=0;
+  ToolbarView(Window *w, const string &theme, MenuItemVec items, Font *F=0, Font *SF=0, Color *SO=0);
 
   void Layout();
   void Draw();
@@ -45,11 +45,38 @@ struct ToolbarView : public View, public ToolbarViewInterface {
   string GetTheme() { return theme; }
 };
 
+struct CollectionView : public View, public CollectionViewInterface {
+  struct CollectionViewItem : public CollectionItem {
+    Box val_box;
+    unique_ptr<Widget::Button> button;
+    CollectionViewItem(CollectionItem i) : CollectionItem(move(i)) {}
+    CollectionViewItem() {}
+  };
+  typedef TableSection<CollectionViewItem> CollectionViewSection;
+
+  vector<CollectionViewSection> data;
+  ToolbarViewInterface *toolbar;
+  string title, style, theme;
+  Widget::Slider scrollbar;
+  DrawableBoxArray *out=0;
+  int row_height=0, decay_box_line=-1, decay_box_left=0, selected_section=-1, selected_row=-1, scrolled=0;
+  CollectionView(Window *w, const string &title, const string &style, const string &theme, vector<CollectionItem> items);
+
+  void Layout();
+  void Draw();
+  void OnClick(int, point, point, int);
+  void CheckExists(int section, int row);
+  View *AppendFlow(Flow*);
+  void Show(bool show_or_hide);
+  void SetToolbar(ToolbarViewInterface*);
+};
+
 struct TableView : public View, public TableViewInterface {
   struct TableViewItem : public TableItem {
     Box val_box;
     unique_ptr<TextBox> textbox;
     unique_ptr<Widget::Slider> slider;
+    unique_ptr<Browser> browser;
     TableViewItem(TableItem i) : TableItem(move(i)) {}
     TableViewItem() {}
   };
@@ -127,6 +154,8 @@ struct Toolkit : public ToolkitInterface {
   unique_ptr<ToolbarViewInterface> CreateToolbar(const string &theme, MenuItemVec items, int flag);
   unique_ptr<MenuViewInterface> CreateMenu(const string &title, MenuItemVec items);
   unique_ptr<MenuViewInterface> CreateEditMenu(MenuItemVec items);
+  unique_ptr<CollectionViewInterface> CreateCollectionView
+    (const string &title, const string &style, const string &theme, vector<CollectionItem> items);
   unique_ptr<TableViewInterface> CreateTableView
     (const string &title, const string &style, const string &theme, TableItemVec items);
   unique_ptr<TextViewInterface> CreateTextView(const string &title, File *file);

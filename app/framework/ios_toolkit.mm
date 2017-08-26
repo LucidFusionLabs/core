@@ -338,7 +338,7 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
   - (void)setColor:(int)section row:(int)r val:(const LFL::Color&)v {
     [self checkExists:section row:r];
     auto &ci = data[section].item[r];
-    ci.SetFGColor(v);
+    ci.font.fg = v;
   }
 
   - (void)replaceRow:(int)section row:(int)r val:(LFL::TableItem)v {
@@ -406,7 +406,7 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
   }
 
   - (void)loadNavigationButton:(const LFL::TableItem&)item withAlign:(int)align {
-    if (item.key == "Edit") {
+    if (item.key == LFL::LS("edit")) {
       self.navigationItem.rightBarButtonItem = [self editButtonItem];
     } else {
       IOSBarButtonItem *button = [[IOSBarButtonItem alloc] init];
@@ -437,7 +437,7 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
       cell = [[UITableViewCell alloc] initWithStyle: (subtext ? UITableViewCellStyleSubtitle : UITableViewCellStyleDefault)
         reuseIdentifier: nil];
       cell.selectionStyle = UITableViewCellSelectionStyleNone;
-      if      (ci.bg_a)                                                                               [cell setBackgroundColor:[UIColor colorWithRed:ci.bg_r/255.0 green:ci.bg_g/255.0 blue:ci.bg_b/255.0 alpha:ci.bg_a/255.0]];
+      if      (!LFL::Color::IsTransparent(ci.font.bg)) { LFL::Color c(ci.font.bg);                    [cell setBackgroundColor:[UIColor colorWithRed:c.r() green:c.g() blue:c.b() alpha:c.a()]]; }
       else if (is_selected_row && (hi.flag & LFL::TableSectionInterface::Flag::HighlightSelectedRow)) [cell setBackgroundColor:[UIColor lightGrayColor]];
       else if (clear_theme)                                                                           [cell setBackgroundColor:[UIColor colorWithWhite:0 alpha:0]];
       else if (dark_theme)                                                                            [cell setBackgroundColor:[UIColor colorWithWhite:0.349 alpha:1.000]];
@@ -564,7 +564,7 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
           [cell.contentView addSubview:button];
           [button release];
         } else {
-          if (ci.bg_a) [cell.textLabel setFont:[UIFont boldSystemFontOfSize:[UIFont labelFontSize]]];
+          if (!LFL::Color::IsTransparent(ci.font.bg)) [cell.textLabel setFont:[UIFont boldSystemFontOfSize:[UIFont labelFontSize]]];
           cell.textLabel.text = LFL::MakeNSString(ci.key);
           cell.textLabel.textAlignment = NSTextAlignmentCenter;
           [cell.textLabel sizeToFit];
@@ -631,8 +631,10 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
             cell.detailTextLabel.lineBreakMode = NSLineBreakByWordWrapping;
             cell.detailTextLabel.numberOfLines = 0;
           }
-          if (ci.fg_a && (ci.flags & LFL::TableItem::Flag::ColoredSubText))
-            cell.detailTextLabel.textColor = [UIColor colorWithRed:ci.fg_r/255.0 green:ci.fg_g/255.0 blue:ci.fg_b/255.0 alpha:ci.fg_a/255.0];
+          if (!LFL::Color::IsTransparent(ci.font.fg) && (ci.flags & LFL::TableItem::Flag::ColoredSubText)) {
+            LFL::Color c(ci.font.fg);
+            cell.detailTextLabel.textColor = [UIColor colorWithRed:c.r() green:c.g() blue:c.b() alpha:c.a()];
+          }
         }
       }
 
@@ -655,9 +657,10 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
       } else if (ci.right_text.size()) {
         UIView *addView = 0;
         UILabel *label = [[UILabel alloc] init];
-        if (ci.fg_a && (ci.flags & LFL::TableItem::Flag::ColoredRightText))
-          label.textColor = [UIColor colorWithRed:ci.fg_r/255.0 green:ci.fg_g/255.0 blue:ci.fg_b/255.0 alpha:ci.fg_a/255.0];
-        else label.textColor = self.view.tintColor;
+        if (!LFL::Color::IsTransparent(ci.font.fg) && (ci.flags & LFL::TableItem::Flag::ColoredRightText)) {
+          LFL::Color c(ci.font.fg);
+          label.textColor = [UIColor colorWithRed:c.r() green:c.g() blue:c.b() alpha:c.a()];
+        } else label.textColor = self.view.tintColor;
         label.text = LFL::MakeNSString(ci.right_text);
         [label sizeToFit];
         if (ci.right_cb) {
@@ -760,7 +763,7 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
     if (edit_button || hi.header.right_text.size()) {
       IOSButton *button = [IOSButton buttonWithType:UIButtonTypeSystem];
       if (edit_button) {
-        [button setTitle:@"Edit" forState:UIControlStateNormal];
+        [button setTitle:LFL::MakeNSString(LFL::LS("edit")) forState:UIControlStateNormal];
         [button addTarget:self action:@selector(toggleEditMode:) forControlEvents:UIControlEventTouchUpInside];
       } else {
         button.showsTouchWhenHighlighted = TRUE;
@@ -779,8 +782,8 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
 
   - (void)toggleEditMode:(UIButton*)button {
     [self.tableView setEditing:!self.tableView.editing animated:YES];
-    if (self.tableView.editing) [button setTitle:@"Done" forState:UIControlStateNormal];
-    else                        [button setTitle:@"Edit" forState:UIControlStateNormal];
+    if (self.tableView.editing) [button setTitle:LFL::MakeNSString(LFL::LS("done")) forState:UIControlStateNormal];
+    else                        [button setTitle:LFL::MakeNSString(LFL::LS("edit")) forState:UIControlStateNormal];
     [button sizeToFit];
     [button setFrame:CGRectMake(self.tableView.frame.size.width - button.frame.size.width - 11, 11, button.frame.size.width, 21)];
   }
@@ -1105,6 +1108,11 @@ void Application::UnloadSystemImage(int n) {
   app_images.Erase(n-1);
 }
 
+iOSCollectionView::iOSCollectionView(const string &title, const string &style, const string &theme, vector<CollectionItem> items) {}
+void iOSCollectionView::SetToolbar(ToolbarViewInterface *t) {}
+void iOSCollectionView::Show(bool show_or_hide) {}
+View *iOSCollectionView::AppendFlow(Flow*) { return nullptr; }
+
 iOSTableView::~iOSTableView() { [table release]; }
 iOSTableView::iOSTableView(const string &title, const string &style, const string &theme, TableItemVec items) :
   table([[IOSTable alloc] initWithStyle: UITableViewStyleGrouped]) {
@@ -1186,6 +1194,7 @@ void iOSTableView::ReplaceSection(int section, TableItem h, int flag, TableItemV
 
 unique_ptr<ToolbarViewInterface> SystemToolkit::CreateToolbar(const string &theme, MenuItemVec items, int flag) { return make_unique<iOSToolbarView>(theme, move(items)); }
 unique_ptr<TableViewInterface> SystemToolkit::CreateTableView(const string &title, const string &style, const string &theme, TableItemVec items) { return make_unique<iOSTableView>(title, style, theme, move(items)); }
+unique_ptr<CollectionViewInterface> SystemToolkit::CreateCollectionView(const string &title, const string &style, const string &theme, vector<CollectionItem> items) { return make_unique<iOSCollectionView>(title, style, theme, move(items)); }
 unique_ptr<TextViewInterface> SystemToolkit::CreateTextView(const string &title, File *file) { return make_unique<iOSTextView>(title, file); }
 unique_ptr<TextViewInterface> SystemToolkit::CreateTextView(const string &title, const string &text) { return make_unique<iOSTextView>(title, text); }
 unique_ptr<NavigationViewInterface> SystemToolkit::CreateNavigationView(const string &style, const string &theme) { return make_unique<iOSNavigationView>(style, theme); }
