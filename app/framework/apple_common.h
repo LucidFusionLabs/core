@@ -80,7 +80,7 @@ struct NSURLSessionStreamConnection : public Connection {
   string buf;
 
   virtual ~NSURLSessionStreamConnection();
-  NSURLSessionStreamConnection(const string &hostport, int default_port, Connection::CB s_cb);
+  NSURLSessionStreamConnection(SocketService*, const string &hostport, int default_port, Connection::CB s_cb);
 
   void AddToMainWait(Window*, function<bool()> r_cb) override { readable_cb = move(r_cb); }
   void RemoveFromMainWait(Window*)                   override { readable_cb = function<bool()>(); }

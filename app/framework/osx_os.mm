@@ -1,5 +1,5 @@
 /*
- * $Id: video.cpp 1336 2014-12-08 09:29:59Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -22,19 +22,19 @@
 #include "core/app/framework/osx_common.h"
 
 namespace LFL {
-void Application::OpenSystemBrowser(const string &url_text) {
+void SystemBrowser::OpenSystemBrowser(const string &url_text) {
   CFURLRef url = CFURLCreateWithBytes(0, MakeUnsigned(url_text.c_str()), url_text.size(), kCFStringEncodingASCII, 0);
   if (url) { LSOpenCFURLRef(url, 0); CFRelease(url); }
 }
 
-string Application::GetSystemDeviceName() {
+string ApplicationInfo::GetSystemDeviceName() {
   string ret(1024, 0);
   if (gethostname(&ret[0], ret.size())) return "";
   ret.resize(strlen(ret.c_str()));
   return ret;
 }
 
-string Application::GetSystemDeviceId() {
+string ApplicationInfo::GetSystemDeviceId() {
   mach_port_t master_port;
   kern_return_t kernResult = IOMasterPort(MACH_PORT_NULL, &master_port);
   if (kernResult != KERN_SUCCESS) return ERRORv("", "IOMasterPort");
@@ -65,14 +65,16 @@ string Application::GetSystemDeviceId() {
   return ret;
 }
 
-Connection *Application::ConnectTCP(const string &hostport, int default_port, Connection::CB *connected_cb, bool background_services) {
+Connection *Networking::ConnectTCP(const string &hostport, int default_port, Connection::CB *connected_cb, bool background_services) {
 #if 0
-  INFO("Application::ConnectTCP ", hostport, " (default_port = ", default_port, ") background_services = ", background_services);
-  if (background_services) return new NSURLSessionStreamConnection(hostport, default_port, connected_cb ? move(*connected_cb) : Connection::CB());
-  else return app->net->tcp_client->Connect(hostport, default_port, connected_cb);
+  INFO("Networking::ConnectTCP ", hostport, " (default_port = ", default_port, ") background_services = ", background_services);
+  if (background_services) {
+    static SocketService svc(net.get(), "SystemNetworking");
+    return new NSURLSessionStreamConnection(&svc, hostport, default_port, connected_cb ? move(*connected_cb) : Connection::CB());
+  } else return net->tcp_client->Connect(hostport, default_port, connected_cb);
 #else
-  INFO("Application::ConnectTCP ", hostport, " (default_port = ", default_port, ") background_services = false"); 
-  return app->net->tcp_client->Connect(hostport, default_port, connected_cb);
+  INFO("Networking::ConnectTCP ", hostport, " (default_port = ", default_port, ") background_services = false"); 
+  return net->tcp_client->Connect(hostport, default_port, connected_cb);
 #endif
 }
 

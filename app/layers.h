@@ -26,11 +26,11 @@ template <class Line> struct RingFrameBuffer {
   v2 scroll;
   point p;
   int w=0, h=0, font_size=0, font_height=0;
-  RingFrameBuffer(GraphicsDevice *d) : fb(d) {}
+  RingFrameBuffer(GraphicsDeviceHolder *p) : fb(p) {}
   virtual ~RingFrameBuffer() {}
 
   void ResetGL(int flag) { fb.ResetGL(flag); }
-  virtual void SizeChangedDone() { fb.gd->PopScissorStack(); fb.Release(); scroll=v2(); p=point(); }
+  virtual void SizeChangedDone() { fb.parent->GD()->PopScissorStack(); fb.Release(); scroll=v2(); p=point(); }
   virtual int SizeChanged(int W, int H, Font *font, ColorDesc bgc) {
     if (fb.ID && W == w && H == h && font->size == font_size) return 0;
     int orig_font_size = font_size;
@@ -40,24 +40,27 @@ template <class Line> struct RingFrameBuffer {
   }
 
   void BeginSizeChange(ColorDesc bgc) {
+    auto gd = fb.parent->GD();
     fb.Resize(w, h, FrameBuffer::Flag::CreateGL | FrameBuffer::Flag::CreateTexture);
-    ScopedClearColor scc(fb.gd, bgc);
-    fb.gd->PushScissorStack();
-    fb.gd->Clear();
-    fb.gd->DrawMode(DrawMode::_2D, false);
+    ScopedClearColor scc(gd, bgc);
+    gd->PushScissorStack();
+    gd->Clear();
+    gd->DrawMode(DrawMode::_2D, false);
   }
 
   virtual void Draw(point pos, point adjust, bool scissor=true) {
+    auto gd = fb.parent->GD();
     Box box(pos.x, pos.y, w, h);
-    if (scissor) fb.gd->PushScissor(box);
+    if (scissor) gd->PushScissor(box);
     fb.tex.Bind();
-    GraphicsContext::DrawCrimpedBox1(fb.gd, (box + adjust), fb.tex.coord, 0, 0, scroll.y);
-    if (scissor) fb.gd->PopScissor();
+    GraphicsContext::DrawCrimpedBox1(gd, (box + adjust), fb.tex.coord, 0, 0, scroll.y);
+    if (scissor) gd->PopScissor();
   }
 
   void Clear(Line *l, const Box &b, bool vwrap=true) {
-    if (1)                         { Scissor s(fb.gd, 0, l->p.y - b.h, b.w, b.h); fb.gd->Clear(); }
-    if (l->p.y - b.h < 0 && vwrap) { Scissor s(fb.gd, 0, l->p.y + h,   b.w, b.h); fb.gd->Clear(); }
+    auto gd = fb.parent->GD();
+    if (1)                         { Scissor s(gd, 0, l->p.y - b.h, b.w, b.h); gd->Clear(); }
+    if (l->p.y - b.h < 0 && vwrap) { Scissor s(gd, 0, l->p.y + h,   b.w, b.h); gd->Clear(); }
   }
 
   void Update(Line *l, const Box &b, const PaintCB &paint, bool vwrap=true) {
@@ -94,6 +97,8 @@ template <class Line> struct RingFrameBuffer {
 
 struct TilesInterface {
   struct RunFlag { enum { DontClear=1, ClearEmpty=2 }; };
+  GraphicsDeviceHolder *gd;
+  TilesInterface(GraphicsDeviceHolder *G) : gd(G) {}
   virtual ~TilesInterface() {}
   virtual void AddDrawableBoxArray(const DrawableBoxArray &box, point p);
   virtual void SetAttr            (const Drawable::Attr *a)                       = 0;
@@ -114,7 +119,9 @@ struct LayersInterface {
   vector<Node> node;
   vector<Child> child;
   vector<unique_ptr<TilesInterface>> layer;
-  LayersInterface() { ClearLayerNodes(); }
+  ThreadDispatcher *dispatch;
+  GraphicsDeviceHolder *gd;
+  LayersInterface(ThreadDispatcher *D, GraphicsDeviceHolder *G) : dispatch(D), gd(G) { ClearLayerNodes(); }
   virtual ~LayersInterface() {}
 
   void ClearLayerNodes() { child.clear(); node.clear(); node.push_back({ Box(), point(), 0, 0 }); }
@@ -134,22 +141,25 @@ struct LayersInterface {
 
   virtual void Update();
   virtual void Draw(const Box &b, const point &p);
-  virtual void Init(GraphicsDevice *D, int N=1) = 0;
+  virtual void Init(ProcessAPI *A, ThreadDispatcher *D, GraphicsDeviceHolder *G, int N=1) = 0;
 };
 
 #define TilesMatrixIter(m) MatrixIter(m) if (Tile *tile = static_cast<Tile*>((m)->row(i)[j]))
-template<class CB, class CBL, class CBLI> struct TilesT : public TilesInterface {
+template<class CB, class CBL, class CBLI, class CBLCA> struct TilesT : public TilesInterface {
   struct Tile {
     CBL cb;
     unsigned id=0, prepend_depth=0;
     bool dirty=0;
+    Tile(CBLCA ca) : cb(ca) {}
   };
   int layer, W, H, context_depth=-1;
   vector<Tile*> prepend, append;
   matrix<Tile*> mat;
   FrameBuffer fb;
   Box current_tile;
-  TilesT(GraphicsDevice *d, int l, int w=256, int h=256) : layer(l), W(w), H(h), mat(1,1), fb(d) { CHECK(IsPowerOfTwo(W)); CHECK(IsPowerOfTwo(H)); }
+  CBLCA ca;
+  TilesT(GraphicsDeviceHolder *p, CBLCA c, int l, int w=256, int h=256) : 
+    TilesInterface(p), layer(l), W(w), H(h), mat(1,1), fb(p), ca(c) { CHECK(IsPowerOfTwo(W)); CHECK(IsPowerOfTwo(H)); }
   ~TilesT() { TilesMatrixIter(&mat) delete tile; for (auto t : prepend) delete t; for (auto t : append) delete t; }
   
   template <class... Args> void PreAdd(Args&&... args) { prepend[context_depth]->cb.Add(forward<Args>(args)...); }
@@ -163,7 +173,7 @@ template<class CB, class CBL, class CBLI> struct TilesT : public TilesInterface 
     if (!added) ERROR("AddCallback zero ", box->DebugString(), " = ", x1, " ", y1, " ", x2, " ", y2);
   }
 
-  void PushScissor(const Box &w) const { fb.gd->PushScissorOffset(current_tile, w); }
+  void PushScissor(const Box &w) const { fb.parent->GD()->PushScissorOffset(current_tile, w); }
   void GetSpaceCoords(int i, int j, int *xo, int *yo) const { *xo =  j * W; *yo = (-i-1) * H; }
   void GetTileCoords (int x, int y, int *xo, int *yo) const { *xo =  x / W; *yo = -y     / H; }
   void GetTileCoords(const Box &box, int *x1, int *y1, int *x2, int *y2) const {
@@ -178,7 +188,7 @@ template<class CB, class CBL, class CBLI> struct TilesT : public TilesInterface 
     if ((add = x - mat.N + 1) > 0) mat.AddCols(add);
     if ((add = y - mat.M + 1) > 0) mat.AddRows(add);
     Tile **ret = reinterpret_cast<Tile**>(&mat.row(y)[x]);
-    if (!*ret) *ret = new Tile();
+    if (!*ret) *ret = new Tile(ca);
     if (!(*ret)->cb.dirty) {
       for (int i = (*ret)->prepend_depth; i <= context_depth; i++) (*ret)->cb.AddList(prepend[i]->cb);
       (*ret)->prepend_depth = context_depth + 1;
@@ -189,7 +199,7 @@ template<class CB, class CBL, class CBLI> struct TilesT : public TilesInterface 
   void ContextOpen() {
     TilesMatrixIter(&mat) { if (tile->cb.dirty) tile->dirty = 1; tile->cb.dirty = 0; }
     if (++context_depth < prepend.size()) { prepend[context_depth]->cb.Clear(); append[context_depth]->cb.Clear(); }
-    else { prepend.push_back(new Tile()); append.push_back(new Tile()); CHECK_LT(context_depth, prepend.size()); }
+    else { prepend.push_back(new Tile(ca)); append.push_back(new Tile(ca)); CHECK_LT(context_depth, prepend.size()); }
   }
 
   void ContextClose() {
@@ -217,52 +227,55 @@ template<class CB, class CBL, class CBLI> struct TilesT : public TilesInterface 
   }
 
   void Select() {
+    auto gd = fb.parent->GD();
     bool init = !fb.ID;
     if (init) fb.Create(W, H);
     current_tile = Box(0, 0, W, H);
-    fb.gd->DrawMode(DrawMode::_2D);
-    fb.gd->ViewPort(current_tile);
-    fb.gd->EnableLayering();
+    gd->DrawMode(DrawMode::_2D);
+    gd->ViewPort(current_tile);
+    gd->EnableLayering();
   }
 
   void RunTile(int i, int j, int flag, Tile *tile, const CBLI &tile_cb) {
+    auto gd = fb.parent->GD();
     GetSpaceCoords(i, j, &current_tile.x, &current_tile.y);
     if (!tile->id) fb.AllocTexture(&tile->id);
     fb.Attach(tile->id, false);
-    fb.gd->MatrixProjection();
-    if (!(flag & RunFlag::DontClear)) fb.gd->Clear();
-    fb.gd->LoadIdentity();
-    fb.gd->Ortho(current_tile.x, current_tile.x + W, current_tile.y, current_tile.y + H, 0, 100);
-    fb.gd->MatrixModelview();
-    tile_cb.Run(current_tile);
+    gd->MatrixProjection();
+    if (!(flag & RunFlag::DontClear)) gd->Clear();
+    gd->LoadIdentity();
+    gd->Ortho(current_tile.x, current_tile.x + W, current_tile.y, current_tile.y + H, 0, 100);
+    gd->MatrixModelview();
+    tile_cb.Run(gd, current_tile);
   }
 
   void Release() { fb.Release(); }
 
   void Draw(const Box &viewport, const point &docp) {
+    auto gd = fb.parent->GD();
     int x1, x2, y1, y2, sx, sy;
     point doc_to_view = docp - viewport.Position();
     GetTileCoords(Box(docp.x, docp.y, viewport.w, viewport.h), &x1, &y1, &x2, &y2);
 
-    Scissor scissor(fb.gd, viewport);
-    fb.gd->DisableBlend();
-    fb.gd->SetColor(Color::white);
+    Scissor scissor(gd, viewport);
+    gd->DisableBlend();
+    gd->SetColor(Color::white);
     for (int y = max(y1, 0); y <= y2; y++) {
       for (int x = max(x1, 0); x <= x2; x++) {
         Tile *tile = GetTile(x, y);
         if (!tile || !tile->id) continue;
         GetSpaceCoords(y, x, &sx, &sy);
-        fb.gd->BindTexture(GraphicsDevice::Texture2D, tile->id);
+        gd->BindTexture(GraphicsDevice::Texture2D, tile->id);
         GraphicsContext::DrawTexturedBox1
-          (fb.gd, Box(sx - doc_to_view.x, sy - doc_to_view.y, W, H), Texture::unit_texcoord);
+          (gd, Box(sx - doc_to_view.x, sy - doc_to_view.y, W, H), Texture::unit_texcoord);
       }
     }
   }
 };
 
-struct Tiles : public TilesT<Callback, CallbackList, CallbackList> {
+struct Tiles : public TilesT<Callback, CallbackList, CallbackList, Void> {
   const Drawable::Attr *attr=0;
-  Tiles(GraphicsDevice *d, int l, int w=256, int h=256) : TilesT(d, l, w, h) {}
+  Tiles(ProcessAPI*, ThreadDispatcher*, GraphicsDeviceHolder *d, int l, int w=256, int h=256) : TilesT(d, nullptr, l, w, h) {}
   void SetAttr           (const Drawable::Attr *a) { attr=a; }
   void InitDrawBox       (const point&);
   void InitDrawBackground(const point&);
@@ -272,9 +285,10 @@ struct Tiles : public TilesT<Callback, CallbackList, CallbackList> {
 };
 
 template <class X> struct LayersT : public LayersInterface {
-  void Init(GraphicsDevice *D, int N=1) {
+  using LayersInterface::LayersInterface;
+  void Init(ProcessAPI *A, ThreadDispatcher *D, GraphicsDeviceHolder *G, int N=1) {
     CHECK_EQ(this->layer.size(), 0);
-    for (int i=0; i<N; i++) this->layer.emplace_back(make_unique<X>(D, i));
+    for (int i=0; i<N; i++) this->layer.emplace_back(make_unique<X>(A, D, G, i));
   }
 };
 

@@ -177,7 +177,7 @@ Resolver::Nameserver *Resolver::Connect(const vector<IPV4::Addr> &addrs, bool ra
 Resolver::Nameserver *Resolver::Connect(IPV4::Addr addr) {
   unique_ptr<Nameserver> nameserver = make_unique<Nameserver>();
   Nameserver *ns = nameserver.get();
-  ns->c = app->net->udp_client->PersistentConnection
+  ns->c = net->udp_client->PersistentConnection
     (IPV4::Text(addr, 53),
      [=](Connection *c, const char *cb, int cl) { HandleResponse(ns, reinterpret_cast<const DNS::Header*>(cb), cl); },
      [=](Connection *c)                         { Heartbeat(ns); }, 53);
@@ -352,7 +352,7 @@ bool RecursiveResolver::StartResolveRequest(Request *req) {
   if (cached) {
     IPV4::Addr addr = cached->A.size() ? cached->A[Rand<int>(0, cached->A.size()-1)].addr : -1;
     INFO("RecursiveResolver found ", req->query, " = ", IPV4::Text(addr), " in cache=", node->authority_domain);
-    app->RunInMainThread(bind(&RecursiveResolver::Complete, this, req, addr, cached));
+    dispatch->RunInMainThread(bind(&RecursiveResolver::Complete, this, req, addr, cached));
     return true;
   }
 
@@ -376,7 +376,7 @@ RecursiveResolver::AuthorityTreeNode *RecursiveResolver::GetAuthorityTreeNode(co
     if (it != node->child.end()) { node = it->second.get(); continue; }
     if (!create) break;
 
-    unique_ptr<AuthorityTreeNode> add = make_unique<AuthorityTreeNode>();
+    unique_ptr<AuthorityTreeNode> add = make_unique<AuthorityTreeNode>(net);
     add->authority_domain = Join(q, ".", i, q.size()) + ".";
     add->depth = node->depth + 1;
     node = (node->child[q[i]] = move(add)).get();

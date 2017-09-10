@@ -50,11 +50,12 @@ string CMakeDaemon::Proto::MakeCodeComplete(const string &f, int y, int x, const
                 JSONEscape(content), "\"}", footer);
 }
 
-void CMakeDaemon::Start(const string &bin, const string &builddir) {
+void CMakeDaemon::Start(ApplicationInfo *appinfo, SocketServices *net,
+                        const string &bin, const string &builddir) {
   if (process.in) return;
   vector<const char*> argv{ bin.c_str(), "-E", "daemon", builddir.c_str(), nullptr };
-  CHECK(!process.Open(argv.data(), app->startdir.c_str()));
-  app->RunInNetworkThread([=](){ app->net->unix_client->AddConnectedSocket
+  CHECK(!process.Open(argv.data(), appinfo->startdir.c_str()));
+  dispatch->RunInNetworkThread([=](){ net->unix_client->AddConnectedSocket
                           (fileno(process.in), new Connection::CallbackHandler
                            (bind(&CMakeDaemon::HandleRead, this, _1),
                             bind(&CMakeDaemon::HandleClose, this, _1))); });
@@ -127,7 +128,7 @@ void CMakeDaemon::HandleRead(Connection *c) {
 
 bool CMakeDaemon::GetTargetInfo(const string &target, TargetInfoCB &&cb) {
   if (!Contains(targets, target)) return false;
-  app->RunInNetworkThread([=](){
+  dispatch->RunInNetworkThread([=](){
     CHECK(FWriteSuccess(process.out, Proto::MakeTargetInfo(target, ""))); 
     //CHECK(FWriteSuccess(process.out, Proto::MakeFileInfo("lterm", "/Users/p/lfl/core/app/app.h", ""))); 
     target_info_cb.emplace_back(target, cb);
@@ -138,7 +139,7 @@ bool CMakeDaemon::GetTargetInfo(const string &target, TargetInfoCB &&cb) {
 unique_ptr<CodeCompletions> CMakeDaemon::CompleteCode(const string &fn, int y, int x, const string &content) {
   Semaphore done;
   unique_ptr<CodeCompletions> ret;
-  app->RunInNetworkThread([&](){
+  dispatch->RunInNetworkThread([&](){
     CHECK_EQ(nullptr, code_completions_done);
     CHECK_EQ(nullptr, code_completions_out);
     CHECK(FWriteSuccess(process.out, Proto::MakeCodeComplete(fn, y, x, content))); 

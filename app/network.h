@@ -1,5 +1,5 @@
 /*
- * $Id: network.h 1335 2014-12-02 04:13:46Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -168,13 +168,13 @@ struct SSLSocket {
   SSLPtr ssl = 0;
   BIOPtr bio = 0;
   string buf;
-  ~SSLSocket();
+  virtual ~SSLSocket();
   string ErrorString() const;
   ptrdiff_t Read(char *buf, int readlen);
   ptrdiff_t Write(const StringPiece &b);
   Socket Connect(CTXPtr sslctx, const string &hostport);
   Socket Connect(CTXPtr sslctx, IPV4::Addr addr, int port);
-  Socket Listen(int port, bool reuse);
+  Socket Listen(CTXPtr sslctx, int port, bool reuse);
   Socket Accept(SSLSocket *out);
   static CTXPtr Init();
   static void Free();
@@ -275,16 +275,19 @@ typedef EPollSocketSet<65536 * 6> LFLSocketSet;
 typedef SelectSocketSet LFLSocketSet;
 #endif
 
-/// SocketWakeupThread waits on SocketSet and calls app->scheduler.Wakeup() on event
+/// SocketWakeupThread waits on SocketSet and calls window->focused->Wakeup() on event
 struct SocketWakeupThread : public SocketSet {
+  WindowHolder *window;
+  ThreadDispatcher *dispatch;
   mutex *frame_mutex, *wait_mutex;
   SelectSocketSet sockets;
   mutex sockets_mutex;
   Thread thread;
   Socket pipe[2];
   ~SocketWakeupThread();
-  SocketWakeupThread(mutex *FM=0, mutex *WM=0) : frame_mutex(FM), wait_mutex(WM),
-  thread(bind(&SocketWakeupThread::ThreadProc, this)) { pipe[0] = pipe[1] = -1; }
+  SocketWakeupThread(WindowHolder *W, ThreadDispatcher *D, mutex *FM=0, mutex *WM=0) :
+    window(W), dispatch(D), frame_mutex(FM), wait_mutex(WM),
+    thread(bind(&SocketWakeupThread::ThreadProc, this)) { pipe[0] = pipe[1] = -1; }
 
   void Add(Socket s, int f, void *v) { { ScopedMutex m(sockets_mutex); sockets.Add(s, f, v); } Wakeup(); }
   void Set(Socket s, int f, void *v) { { ScopedMutex m(sockets_mutex); sockets.Set(s, f, v); } Wakeup(); }
@@ -405,6 +408,7 @@ struct SocketListener {
 };
 
 struct SocketService {
+  SocketServices *net;
   string name;
   int protocol, reconnect=0;
   bool initialized=0, heartbeats=0, endpoint_read_autoconnect=0;
@@ -414,7 +418,7 @@ struct SocketService {
   map<string, unique_ptr<SocketConnection>> endpoint;
   IPV4EndpointSource *connect_src_pool=0;
   SocketConnection fake;
-  SocketService(const string &n, int prot=Protocol::TCP) : name(n), protocol(prot), fake(this, Connection::Connected, 0) {}
+  SocketService(SocketServices *N, const string &n, int prot=Protocol::TCP) : net(N), name(n), protocol(prot), fake(this, Connection::Connected, 0) {}
 
   void QueueListen(IPV4::Addr addr, int port, bool SSL=false) { QueueListen(IPV4Endpoint(addr,port).ToString(), SSL); }
   void QueueListen(const string &n, bool SSL=false) { listen[n] = make_unique<SocketListener>(this, SSL); }
@@ -454,8 +458,8 @@ struct SocketServiceEndpointEraseList {
   }
 };
 
-struct UnixClient : public SocketService { UnixClient() : SocketService("UnixClient", Protocol::UNIX) {} };
-struct UnixServer : public SocketService { UnixServer(const string &n) : SocketService("UnixServer", Protocol::UNIX) { QueueListen(n); } };
+struct UnixClient : public SocketService { UnixClient(SocketServices *N)                  : SocketService(N, "UnixClient", Protocol::UNIX) {} };
+struct UnixServer : public SocketService { UnixServer(SocketServices *N, const string &n) : SocketService(N, "UnixServer", Protocol::UNIX) { QueueListen(n); } };
 
 struct UDPClient : public SocketService {
   static const int MTU = 1500;
@@ -470,7 +474,7 @@ struct UDPClient : public SocketService {
     void Close(Connection *c) { if (responseCB) responseCB(c, 0, 0); }
     int Read(Connection *c);
   };
-  UDPClient() : SocketService("UDPClient", Protocol::UDP) { heartbeats=true; }
+  UDPClient(SocketServices *N) : SocketService(N, "UDPClient", Protocol::UDP) { heartbeats=true; }
   SocketConnection *PersistentConnection(const string &url, const ResponseCB& cb, int default_port) { return PersistentConnection(url, cb, HeartbeatCB(), default_port); }
   SocketConnection *PersistentConnection(const string &url, const ResponseCB&, const HeartbeatCB&, int default_port);
 };
@@ -478,15 +482,15 @@ struct UDPClient : public SocketService {
 struct UDPServer : public SocketService {
   virtual ~UDPServer() {}
   Connection::Handler *handler=0;
-  UDPServer(int port) : SocketService("UDPServer", Protocol::UDP) { QueueListen(0, port); }
+  UDPServer(SocketServices *N, int port) : SocketService(N, "UDPServer", Protocol::UDP) { QueueListen(0, port); }
   int Connected(SocketConnection *c) override { c->handler = unique_ptr<Connection::Handler>(handler); return 0; }
   void Close(SocketConnection *c) override { c->handler.release(); SocketService::Close(c); }
 };
 
-struct TCPClient : public SocketService { TCPClient() : SocketService("TCPClient") {} };
+struct TCPClient : public SocketService { TCPClient(SocketServices *N) : SocketService(N, "TCPClient") {} };
 struct TCPServer : public SocketService {
   Connection::Handler *handler=0;
-  TCPServer(int port) : SocketService("TCPServer") { QueueListen(0, port); }
+  TCPServer(SocketServices *N, int port) : SocketService(N, "TCPServer") { QueueListen(0, port); }
   int Connected(SocketConnection *c) override { c->handler = unique_ptr<Connection::Handler>(handler); return 0; }
   void Close(SocketConnection *c) override { c->handler.release(); SocketService::Close(c); }
 };
@@ -494,14 +498,14 @@ struct TCPServer : public SocketService {
 struct GPlusClient : public SocketService {
   static const int MTU = 1500;
   enum { Write=1, Sendto=2 };
-  GPlusClient() : SocketService("GPlusClient", Protocol::GPLUS) { heartbeats=true; }
+  GPlusClient(SocketServices *N) : SocketService(N, "GPlusClient", Protocol::GPLUS) { heartbeats=true; }
   SocketConnection *PersistentConnection(const string &name, UDPClient::ResponseCB cb, UDPClient::HeartbeatCB HCB);
 };
 
 struct GPlusServer : public SocketService {
   virtual ~GPlusServer() {}
   Connection::Handler *handler=0;
-  GPlusServer() : SocketService("GPlusServer", Protocol::GPLUS) { endpoint_read_autoconnect=1; }
+  GPlusServer(SocketServices *N) : SocketService(N, "GPlusServer", Protocol::GPLUS) { endpoint_read_autoconnect=1; }
   int Connected(SocketConnection *c) override { c->handler = unique_ptr<Connection::Handler>(handler); return 0; }
   void Close(SocketConnection *c) override { c->handler.release(); SocketService::Close(c); }
 };
@@ -510,7 +514,7 @@ struct InProcessServer : public SocketService {
   Connection::Handler *handler=0;
   int next_id=1;
   virtual ~InProcessServer() {}
-  InProcessServer() : SocketService("InProcessServer", Protocol::InProcess) { endpoint_read_autoconnect=1; }
+  InProcessServer(SocketServices *N) : SocketService(N, "InProcessServer", Protocol::InProcess) { endpoint_read_autoconnect=1; }
   int Connected(SocketConnection *c) override { c->handler = unique_ptr<Connection::Handler>(handler); return 0; }
   void Close(SocketConnection *c) override { c->handler.release(); SocketService::Close(c); }
 };
@@ -518,13 +522,15 @@ struct InProcessServer : public SocketService {
 struct InProcessClient : public SocketService {
   int next_id=1;
   virtual ~InProcessClient() {}
-  InProcessClient() : SocketService("InProcessClient", Protocol::InProcess) {}
+  InProcessClient(SocketServices *N) : SocketService(N, "InProcessClient", Protocol::InProcess) {}
   SocketConnection *PersistentConnection(InProcessServer*, UDPClient::ResponseCB cb, UDPClient::HeartbeatCB HCB);
 };
 
 struct SocketServices : public Module {
   int select_time=0;
   LFLSocketSet active;
+  ThreadDispatcher *dispatcher;
+  WakeupHandle *wakeup;
   vector<SocketService*> service_table;
   unique_ptr<UDPClient> udp_client;
   unique_ptr<TCPClient> tcp_client;
@@ -534,7 +540,7 @@ struct SocketServices : public Module {
   LazyInitializedPtr<InProcessClient> inprocess_client;
   LazyInitializedPtr<GPlusClient> gplus_client;
   SSLSocket::CTXPtr ssl;
-  SocketServices();
+  SocketServices(ThreadDispatcher*, WakeupHandle*);
   virtual ~SocketServices();
 
   int Init();
@@ -580,11 +586,12 @@ struct SocketServicesThread {
 
 struct Sniffer {
   typedef function<void(const char*, int, int)> CB;
+  ThreadDispatcher *dispatch;
   Thread thread;
   CB cb;
   int ip, mask;
   void *handle;
-  Sniffer(void *H, int I, int M, CB C) : cb(C), ip(I), mask(M), handle(H) {}
+  Sniffer(ThreadDispatcher *D, void *H, int I, int M, CB C) : dispatch(D), cb(C), ip(I), mask(M), handle(H) {}
   ~Sniffer() { thread.Wait(); }
   void Threadproc();
   static unique_ptr<Sniffer> Open(const string &dev, const string &filter, int snaplen, CB cb);
@@ -601,11 +608,11 @@ struct GeoResolution {
   static unique_ptr<GeoResolution> Open(const string &db);
 };
 
-int NBRead(Socket fd, char *buf, int size, int timeout=0);
-int NBRead(Socket fd, string *buf, int timeout=0);
-bool NBReadable(Socket fd, int timeout=0);
-bool NBFGets(FILE*, char *buf, int size, int timeout=0);
-bool FGets(char *buf, int size);
+int NBRead(Socket fd, char *buf, int size, ApplicationLifetime *life=0, int timeout=0);
+int NBRead(Socket fd, string *buf, ApplicationLifetime *life=0, int timeout=0);
+bool NBReadable(Socket fd, ApplicationLifetime *life=0, int timeout=0);
+bool NBFGets(FILE*, char *buf, int size, ApplicationLifetime *life=0, int timeout=0);
+bool FGets(char *buf, int size, ApplicationLifetime *life=0);
 int FWrite(FILE *f, const string &s);
 bool FWriteSuccess(FILE *f, const string &s);
 string PromptFGets(const string &p, int s=32);

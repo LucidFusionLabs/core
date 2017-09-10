@@ -78,7 +78,7 @@ Terminal::Terminal(ByteSink *O, Window *W, const FontRef &F, const point &dim) :
   line.SetAttrSource(&style);
   line_fb.align_top_or_bot = cmd_fb.align_top_or_bot = false;
   line_fb.partial_last_line = cmd_fb.partial_last_line = false;
-  SetColors(Singleton<SolarizedDarkColors>::Get());
+  SetColors(Singleton<SolarizedDarkColors>::Set());
   cursor.attr = default_attr;
   token_processing = 1;
   cmd_prefix = "";
@@ -167,7 +167,7 @@ void Terminal::SetScrollRegion(int b, int e, bool release_fb) {
 void Terminal::SetTerminalDimension(int w, int h) {
   term_width  = max(line_fb.only_grow ? term_width  : 0, w);
   term_height = max(line_fb.only_grow ? term_height : 0, h);
-  ScopedClearColor scc(line_fb.fb.gd, bg_color);
+  ScopedClearColor scc(line_fb.fb.parent->GD(), bg_color);
   if (!line.Size()) TextArea::Write(string(term_height, '\n'), 0);
 }
 
@@ -250,10 +250,10 @@ void Terminal::Draw(const Box &b, int flag, Shader *shader) {
 }
 
 void Terminal::Write(const StringPiece &s, bool update_fb, bool release_fb) {
-  if (!app->MainThread()) return app->RunInMainThread(bind(&Terminal::WriteCB, this, s.str(), update_fb, release_fb));
+  if (!root->parent->MainThread()) return root->parent->RunInMainThread(bind(&Terminal::WriteCB, this, s.str(), update_fb, release_fb));
   TerminalTrace("Terminal: Write('%s', %zd)", CHexEscapeNonAscii(s.str()).c_str(), s.size());
-  line_fb.fb.gd->DrawMode(DrawMode::_2D, 0);
-  ScopedClearColor scc(line_fb.fb.gd, bg_color);
+  line_fb.fb.parent->GD()->DrawMode(DrawMode::_2D, 0);
+  ScopedClearColor scc(line_fb.fb.parent->GD(), bg_color);
   last_fb = 0;
   for (int i = 0; i < s.len; i++) {
     const unsigned char c = *(s.begin() + i);

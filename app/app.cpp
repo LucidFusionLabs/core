@@ -16,6 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "core/app/shell.h"
 #include "core/app/gl/view.h"
 #include "core/web/browser.h"
 #include "core/app/gl/toolkit.h"
@@ -42,32 +43,8 @@
 #include <android/log.h>
 #endif
 
-extern "C" LFApp*       GetLFApp()                 { return LFL::app; }
-extern "C" LFAppWindow* GetLFAppWindow()           { return LFL::app->focused; }
-extern "C" const char*  GetLFAppSaveDir()          { return LFL::app->savedir.c_str(); }
-extern "C" int          LFAppMain()                { return LFL::app->Main(); }
-extern "C" int          LFAppMainLoop()            { return LFL::app->MainLoop(); }
-extern "C" int          LFAppFrame(bool handle_ev) { return LFL::app->EventDrivenFrame(handle_ev, true); }
-extern "C" void         LFAppTimerDrivenFrame()    { LFL::app->TimerDrivenFrame(true); }
-extern "C" void         LFAppWakeup()              { return LFL::app->scheduler.Wakeup(LFL::app->focused); }
-extern "C" void         LFAppResetGL()             { return LFL::app->ResetGL(LFL::ResetGLFlag::Reload); }
-extern "C" void         LFAppAtExit()              { delete LFL::app; }
-extern "C" void         LFAppShutdown()            { LFL::app->run=0; LFAppWakeup(); }
-extern "C" void         BreakHook()                {}
-
-extern "C" LFAppWindow *SetLFAppWindowByID(void *id) { return SetLFAppWindow(LFL::FindOrNull(LFL::app->windows, id)); }
-extern "C" LFAppWindow *SetLFAppWindow(LFAppWindow *W) {
-  CHECK(W);
-  if (W == LFL::app->focused) return W;
-  LFL::app->MakeCurrentWindow((LFL::app->focused = static_cast<LFL::Window*>(W)));
-  return W;
-}
-
-extern "C" void SetLFAppMainThread() {
-  LFL::Thread::id_t id = LFL::Thread::GetId();
-  if (LFL::app->main_thread_id != id) INFOf("LFApp->main_thread_id changed from %llx to %llx", LFL::app->main_thread_id, id);
-  LFL::app->main_thread_id = id; 
-}
+extern "C" void BreakHook() {}
+extern "C" void LFAppAtExit() { /*delete LFL::app;*/ }
 
 extern "C" unsigned LFAppNextRandSeed() {
   static LFL::mutex m;
@@ -77,31 +54,23 @@ extern "C" unsigned LFAppNextRandSeed() {
 
 extern "C" void LFAppFatal() {
   ERROR("LFAppFatal");
-  LFL::app->run = 0;
   if (bool suicide=true) *reinterpret_cast<volatile int*>(0) = 0;
   throw std::runtime_error("LFAppFatal");
 }
 
-#ifndef LFL_WINDOWS
-extern "C" void HandleSigInt(int sig) { INFO("interrupt"); LFAppShutdown(); }
-#else
-extern "C" BOOL WINAPI HandleCtrlC(DWORD sig) { INFO("interrupt"); LFAppShutdown(); return TRUE; }
-extern "C" void OpenSystemConsole(const char *title) {
-  LFL::FLAGS_open_console=1;
-  AllocConsole();
-  SetConsoleTitle(title);
-  freopen("CONOUT$", "wb", stdout);
-  freopen("CONIN$", "rb", stdin);
-  SetConsoleCtrlHandler(HandleCtrlC, 1);
-}
-extern "C" void CloseSystemConsole() {
-  fclose(stdin);
-  fclose(stdout);
-  FreeConsole();
-}
-#endif
-
 namespace LFL {
+class SignalHandler {
+  public:
+    static void Set(ApplicationShutdown *s) { shutdown=s; }
+#ifndef LFL_WINDOWS
+    static void HandleSigInt(int sig) { INFO("interrupt"); shutdown->Shutdown(); }
+#else
+    static BOOL WINAPI HandleCtrlC(DWORD sig) { INFO("interrupt"); shutdown->Shutdown(); return TRUE; }
+#endif
+  private:
+    static ApplicationShutdown *shutdown;
+};
+
 #ifdef LFL_DEBUG
 const bool DEBUG = true;
 #else
@@ -123,8 +92,9 @@ const bool ANDROIDOS = true;
 const bool ANDROIDOS = false;
 #endif
 
-Application *app = nullptr;
-const char *not_implemented = "not implemented";
+ApplicationShutdown *SignalHandler::shutdown=0;
+ApplicationInfo *Logger::appinfo=0;
+Logging *Logger::log=0;
 
 DEFINE_int(loglevel, DEBUG ? 7 : 0, "Log level: [Fatal=-1, Error=0, Info=3, Debug=7]");
 DEFINE_string(logfile, "", "Log file name");
@@ -144,11 +114,6 @@ DEFINE_bool(open_console, 0, "Open console on win32");
 DEFINE_bool(cursor_grabbed, false, "Center cursor every frame");
 DEFINE_bool(frame_debug, false, "Print each frame");
 DEFINE_bool(rcon_debug, false, "Print game protocol commands");
-
-void Log(int level, const char *file, int line, const string &m) {
-  if (app) app->Log(level, file, line, m.c_str());
-  else Application::WriteLogLine("", m.c_str(), file, line);
-}
 
 #ifdef LFL_APPLE
 void NSLogString(const string&);
@@ -175,6 +140,55 @@ Allocator *ThreadLocalStorage::GetAllocator(bool reset_allocator) {
   if (!tls->alloc) tls->alloc = make_unique<FixedAllocator<1024*1024>>();
   if (reset_allocator) tls->alloc->Reset();
   return tls->alloc.get();
+}
+
+/* Logger */
+
+void Logger::Set(Logging *l, ApplicationInfo *i) { 
+  log = l;
+  appinfo = i;
+}
+
+void Logger::Log(int level, const char *file, int line, const string &m) {
+  if (log) log->Log(level, file, line, m.c_str());
+  else WriteLogLine("", m.c_str(), file, line);
+}
+
+void Logger::WriteLogLine(const char *tbuf, const char *message, const char *file, int line) {
+  if (log) {
+    if (log->logout) {
+      if (file) fprintf(log->logout, "%s %s (%s:%d)\r\n", tbuf, message, file, line);
+      else      fprintf(log->logout, "%s %s\r\n",         tbuf, message);
+      fflush(log->logout);
+    }
+    if (log->logfile) {
+      if (file) fprintf(log->logfile, "%s %s (%s:%d)\r\n", tbuf, message, file, line);
+      else      fprintf(log->logfile, "%s %s\r\n",         tbuf, message);
+      fflush(log->logfile);
+    }
+  }
+#ifdef LFL_IOS
+  NSLogString(StringPrintf("%s (%s:%d)", message, file, line));
+#endif
+#ifdef LFL_ANDROID
+  __android_log_print(ANDROID_LOG_INFO, appinfo ? appinfo->name.c_str() : "lfl", "%s (%s:%d)", message, file, line);
+#endif
+}
+
+void Logger::WriteDebugLine(const char *message, const char *file, int line) {
+  bool write_to_logfile = false;
+  if (log && log->logerr) fprintf(log->logerr, "%s (%s:%d)\n", message, file, line);
+#ifdef LFL_IOS
+  write_to_logfile = true;
+  NSLogString(StringPrintf("%s (%s:%d)", message, file, line));
+#endif
+#ifdef LFL_ANDROID
+  __android_log_print(ANDROID_LOG_INFO, appinfo ? appinfo->name.c_str() : "", "%s (%s:%d)", message, file, line);
+#endif
+  if (write_to_logfile && log && log->logfile) {
+    fprintf(log->logfile, "%s (%s:%d)\r\n", message, file, line);
+    fflush(log->logfile);
+  }
 }
 
 /* FlagMap */
@@ -278,8 +292,9 @@ void RateLimiter::Limit() {
   if (sleep != Time(0)) { MSleep(sleep.count()); sleep_bias.Add((timer.GetTime(true) - sleep).count()); }
 }
 
-FrameWakeupTimer::FrameWakeupTimer(Window *w) : root(w), timer(SystemToolkit::CreateTimer([=](){
-  needs_frame=1; app->scheduler.Wakeup(root, FrameScheduler::WakeupFlag::InMainThread);
+FrameWakeupTimer::FrameWakeupTimer(WakeupHandle *w) : wakeup(w), timer(SystemToolkit::CreateTimer([=](){
+  needs_frame = 1;
+  w->Wakeup(Window::WakeupFlag::InMainThread);
 })) {}
 
 void FrameWakeupTimer::ClearWakeupIn() { needs_frame=false; timer->Clear(); }
@@ -288,21 +303,49 @@ bool FrameWakeupTimer::WakeupIn(Time interval) {
   else                                 { timer->Run(interval); return true;  }
 }
 
+ThreadDispatcher::ThreadDispatcher(WindowHolder *w) : wakeup(w), scheduler(w) {}
+ThreadDispatcher::~ThreadDispatcher() {}
+void ThreadDispatcher::SetMainThread() {
+  Thread::id_t id = Thread::GetId();
+  if (main_thread_id != id) INFOf("main_thread_id changed from %llx to %llx", main_thread_id, id);
+  main_thread_id = id; 
+}
+
+Window *WindowHolder::SetFocusedWindowByID(void *id) { return SetFocusedWindow(FindOrNull(windows, id)); }
+Window *WindowHolder::SetFocusedWindow(Window *W) {
+  CHECK(W);
+  if (W == focused) return W;
+  MakeCurrentWindow((focused = static_cast<Window*>(W)));
+  return W;
+}
+
+Clipboard::Clipboard() {
+#ifdef LFL_APPLE
+  paste_bind = Bind('v', Key::Modifier::Cmd);
+#else
+  paste_bind = Bind('v', Key::Modifier::Ctrl);
+#endif
+}
+
 /* Application */
 
 Application::Application(int ac, const char* const* av) :
-  argc(ac), argv(av), system_toolkit(Singleton<SystemToolkit>::Get()) {
-  run = 1;
-  initialized = suspended = log_pid = frame_disabled = 0;
-  main_thread_id = 0; 
+  ThreadDispatcher(this), AssetLoading(this, this), MouseFocus(this),
+  system_toolkit(Singleton<SystemToolkit>::Set()) {
+  initialized = 0;
+  pid = 0;
+  argc = ac;
+  argv = av;
   frames_ran = 0;
   memzero(log_time); 
-  fonts = make_unique<Fonts>();
+  fonts = make_unique<Fonts>(this, this, this);
 #ifdef LFL_MOBILE
   toolkit = system_toolkit;
 #else
-  toolkit = Singleton<Toolkit>::Get();
+  toolkit = Singleton<Toolkit>::Set();
 #endif
+  SignalHandler::Set(this);
+  Logger::Set(this, this);
 }
 
 void Application::Log(int level, const char *file, int line, const char *message) {
@@ -312,55 +355,18 @@ void Application::Log(int level, const char *file, int line, const char *message
     tm last_log_time = log_time;
     logtime(tbuf, sizeof(tbuf), &log_time);
     if (DayChanged(log_time, last_log_time)) 
-      WriteLogLine(tbuf, StrCat("Date changed to ", logfileday(log_time)).c_str(), __FILE__, __LINE__);
-    WriteLogLine(log_pid ? StrCat("[", pid, "] ", tbuf).c_str() : tbuf, message, file, line);
+      Logger::WriteLogLine(tbuf, StrCat("Date changed to ", logfileday(log_time)).c_str(), __FILE__, __LINE__);
+    Logger::WriteLogLine(log_pid ? StrCat("[", pid, "] ", tbuf).c_str() : tbuf, message, file, line);
   }
   if (level == LFApp::Log::Fatal) LFAppFatal();
   if (run && FLAGS_enable_video && focused && focused->console && MainThread()) focused->console->Write(message);
 }
 
-void Application::WriteLogLine(const char *tbuf, const char *message, const char *file, int line) {
-  if (app) {
-    if (app->logout) {
-      if (file) fprintf(app->logout, "%s %s (%s:%d)\r\n", tbuf, message, file, line);
-      else      fprintf(app->logout, "%s %s\r\n",         tbuf, message);
-      fflush(app->logout);
-    }
-    if (app->logfile) {
-      if (file) fprintf(app->logfile, "%s %s (%s:%d)\r\n", tbuf, message, file, line);
-      else      fprintf(app->logfile, "%s %s\r\n",         tbuf, message);
-      fflush(app->logfile);
-    }
-  }
-#ifdef LFL_IOS
-  NSLogString(StringPrintf("%s (%s:%d)", message, file, line));
-#endif
-#ifdef LFL_ANDROID
-  __android_log_print(ANDROID_LOG_INFO, app ? app->name.c_str() : "lfl", "%s (%s:%d)", message, file, line);
-#endif
-}
-
-void Application::WriteDebugLine(const char *message, const char *file, int line) {
-  bool write_to_logfile = false;
-  if (app && app->logerr) fprintf(app->logerr, "%s (%s:%d)\n", message, file, line);
-#ifdef LFL_IOS
-  write_to_logfile = true;
-  NSLogString(StringPrintf("%s (%s:%d)", message, file, line));
-#endif
-#ifdef LFL_ANDROID
-  __android_log_print(ANDROID_LOG_INFO, app ? app->name.c_str() : "", "%s (%s:%d)", message, file, line);
-#endif
-  if (write_to_logfile && app && app->logfile) {
-    fprintf(app->logfile, "%s (%s:%d)\r\n", message, file, line);
-    fflush(app->logfile);
-  }
-}
-
 void Application::CreateNewWindow() {
-  Window *orig_window = focused, *new_window = Window::Create();
+  Window *orig_window = focused, *new_window = CreateWindow(this);
   if (window_init_cb) window_init_cb(new_window);
-  new_window->gd = CreateGraphicsDevice(new_window, opengles_version).release();
-  CHECK(Video::CreateWindow(new_window));
+  new_window->gd = CreateGraphicsDevice(new_window, shaders.get(), 2).release();
+  CHECK(Video::CreateWindow(this, new_window));
   if (!new_window->started && (new_window->started = true)) {
     MakeCurrentWindow(new_window);
     StartNewWindow(new_window);
@@ -370,8 +376,8 @@ void Application::CreateNewWindow() {
 
 void Application::StartNewWindow(Window *new_window) {
   if (new_window->gd) {
-    if (!new_window->gd->done_init) new_window->gd->Init(new_window->Box());
-    new_window->default_font.Load();
+    if (!new_window->gd->done_init) new_window->gd->Init(this, new_window->Box());
+    new_window->default_font.Load(new_window);
   }
   if (window_start_cb) window_start_cb(new_window);
   Video::StartWindow(new_window);
@@ -436,7 +442,7 @@ int Application::Create(const char *source_filename) {
 #ifdef LFL_GLOG
   google::InstallFailureSignalHandler();
 #endif
-  SetLFAppMainThread();
+  SetMainThread();
   time_started = Now();
   progname = argv[0];
   startdir = LocalFile::CurrentDirectory();
@@ -457,7 +463,7 @@ int Application::Create(const char *source_filename) {
   bindir = LocalFile::JoinPath(startdir, progname.substr(0, DirNameLen(progname, true)));
 
   /* handle SIGINT */
-  signal(SIGINT, HandleSigInt);
+  signal(SIGINT, SignalHandler::HandleSigInt);
 
   { /* ignore SIGPIPE */
     struct sigaction sa;
@@ -484,7 +490,7 @@ int Application::Create(const char *source_filename) {
 #endif
   }
 
-  if (Singleton<FlagMap>::Get()->getopt(argc, argv, source_filename) < 0) return -1;
+  if (Singleton<FlagMap>::Set()->getopt(argc, argv, source_filename) < 0) return -1;
   if (!FLAGS_rand_seed) FLAGS_rand_seed = fnv32(&pid, sizeof(int), time(0));
   unsigned init_rand_seed = FLAGS_rand_seed;
   srand(init_rand_seed);
@@ -567,7 +573,7 @@ int Application::Create(const char *source_filename) {
 
   if (FLAGS_daemonize) {
     Daemonize("", progname.c_str());
-    SetLFAppMainThread();
+    SetMainThread();
   }
 
   if (FLAGS_enable_video && FLAGS_font.empty())
@@ -577,7 +583,7 @@ int Application::Create(const char *source_filename) {
 }
 
 int Application::Init() {
-  if (LoadModule((framework = unique_ptr<Module>(CreateFrameworkModule())).get()))
+  if (LoadModule((framework = unique_ptr<Module>(CreateFrameworkModule(this))).get()))
     return ERRORv(-1, "platform init failed");
 
   thread_pool.Open(X_or_1(FLAGS_threadpool_size));
@@ -585,9 +591,9 @@ int Application::Init() {
 
   if (focused) {
     if (FLAGS_enable_video) {
-      if (!focused->gd) focused->gd = CreateGraphicsDevice(focused, opengles_version).release();
-      shaders = make_unique<Shaders>();
-      focused->gd->Init(focused->Box());
+      shaders = make_unique<Shaders>(this);
+      if (!focused->gd) focused->gd = CreateGraphicsDevice(focused, shaders.get(), 2).release();
+      focused->gd->Init(this, focused->Box());
 #ifdef LFL_WINDOWS
       if (splash_color) DrawSplash(*splash_color);
 #endif
@@ -595,25 +601,25 @@ int Application::Init() {
   }
 
   if (FLAGS_enable_audio) {
-    if (LoadModule((audio = make_unique<Audio>()).get())) return ERRORv(-1, "audio init failed");
+    if (LoadModule((audio = make_unique<Audio>(this, this)).get())) return ERRORv(-1, "audio init failed");
   }
   else { FLAGS_chans_in=FLAGS_chans_out=1; }
 
   if (FLAGS_enable_audio || FLAGS_enable_video) {
-    if ((asset_loader = make_unique<AssetLoader>())->Init()) return ERRORv(-1, "asset loader init failed");
+    if ((asset_loader = make_unique<AssetLoader>(this))->Init()) return ERRORv(-1, "asset loader init failed");
   }
 
   if (focused) {
     if (FLAGS_enable_video) fonts->LoadDefaultFonts();
-    focused->default_font = FontRef(FontDesc::Default(), false);
+    focused->default_font = FontRef(nullptr, FontDesc::Default());
   }
 
   if (FLAGS_enable_input) {
-    if (LoadModule((input = make_unique<Input>()).get())) return ERRORv(-1, "input init failed");
+    if (LoadModule((input = make_unique<Input>(this, this, this)).get())) return ERRORv(-1, "input init failed");
   }
 
   if (FLAGS_enable_network) {
-    if (LoadModule((net = make_unique<SocketServices>()).get())) return ERRORv(-1, "network init failed");
+    if (LoadModule((net = make_unique<SocketServices>(this, this)).get())) return ERRORv(-1, "network init failed");
   }
 
   if (FLAGS_enable_camera) {
@@ -702,8 +708,8 @@ int Application::MainLoop() {
   while (run) {
     bool got_wakeup = scheduler.MainWait();
     TimerDrivenFrame(got_wakeup);
-    if (app->suspended) return Suspended();
-    if (scheduler.rate_limit && app->run && FLAGS_target_fps) scheduler.maxfps.Limit();
+    if (suspended) return Suspended();
+    if (scheduler.rate_limit && run && FLAGS_target_fps) scheduler.maxfps.Limit();
     MSleep(1);
   }
   INFO("MainLoop: End, run=", run);
@@ -714,14 +720,14 @@ void Application::DrawSplash(const Color &c) {
   focused->gd->ClearColor(c);
   focused->gd->Clear();
   focused->gd->Flush();
-  Video::Swap();
+  Video::Swap(focused);
   focused->gd->ClearColor(focused->gd->clear_color);
 }
 
 void Application::ResetGL(int flag) {
   bool reload = flag & ResetGLFlag::Reload, forget = (flag & ResetGLFlag::Delete) == 0;
   INFO("Application::ResetGL forget=", forget, " reload=", reload);
-  fonts->ResetGL(flag);
+  fonts->ResetGL(this, flag);
   for (auto &a : asset.vec) a.ResetGL(flag);
   for (auto &w : windows) w.second->ResetGL(flag);
 }
@@ -752,10 +758,26 @@ Application::~Application() {
 #endif
 }
 
+#ifdef LFL_WINDOWS
+void Application::OpenSystemConsole(const char *title) {
+  LFL::FLAGS_open_console=1;
+  AllocConsole();
+  SetConsoleTitle(title);
+  freopen("CONOUT$", "wb", stdout);
+  freopen("CONIN$", "rb", stdin);
+  SetConsoleCtrlHandler(SignalHandler::HandleCtrlC, 1);
+}
+void Application::CloseSystemConsole() {
+  fclose(stdin);
+  fclose(stdout);
+  FreeConsole();
+}
+#endif
+
 /* Window */
 
-Window::Window() : caption(app->name), fps(128), tex_mode(2, 1, 0), grab_mode(2, 0, 1),
-  fill_mode(3, GraphicsDevice::Fill, GraphicsDevice::Line, GraphicsDevice::Point) {
+Window::Window(Application *A) : parent(A), caption(A->name), fps(128), default_font(nullptr, FontDesc::Default()),
+  tex_mode(2, 1, 0), grab_mode(2, 0, 1), fill_mode(3, GraphicsDevice::Fill, GraphicsDevice::Line, GraphicsDevice::Point) {
   id = 0;
   started = minimized = cursor_grabbed = animating = 0;
   resize_increment_x = resize_increment_y = 0;
@@ -766,7 +788,7 @@ Window::Window() : caption(app->name), fps(128), tex_mode(2, 1, 0), grab_mode(2,
 
 Window::~Window() {
   ClearChildren();
-  if (console) console->WriteHistory(app->savedir, StrCat(app->name, "_console"), "");
+  if (console) console->WriteHistory(parent->savedir, StrCat(parent->name, "_console"), "");
   console.reset();
   delete gd;
 }
@@ -794,7 +816,7 @@ void Window::SetBox(const point &wd, const LFL::Box &b) {
 
 void Window::InitConsole(const Callback &animating_cb) {
   view.push_back((console = make_unique<Console>(this, animating_cb)).get());
-  console->ReadHistory(app->savedir, StrCat(app->name, "_console"));
+  console->ReadHistory(parent->savedir, StrCat(parent->name, "_console"));
   console->Write(StrCat(caption, " started"));
   console->Write("Try console commands 'cmds' and 'flags'");
 }
@@ -827,7 +849,7 @@ void Window::DrawDialogs() {
   if (FLAGS_draw_grid) {
     Color c(.7, .7, .7);
     glIntersect(gd, mouse.x, mouse.y, &c);
-    default_font->Draw(StrCat("draw_grid ", mouse.x, " , ", mouse.y), point(0,0));
+    default_font->Draw(gd, StrCat("draw_grid ", mouse.x, " , ", mouse.y), point(0,0));
   }
 }
 
@@ -845,10 +867,10 @@ void Window::ResetGL(int flag) {
   bool reload = flag & ResetGLFlag::Reload, forget = (flag & ResetGLFlag::Delete) == 0;
   INFO("Window::ResetGL forget=", forget, " reload=", reload);
   if (forget) for (auto b : gd->buffers) *b = -1;
-  if (forget && reload) gd->Init(Box());
+  if (forget && reload) gd->Init(parent, Box());
   for (auto &v : view   ) v->ResetGL(flag);
   for (auto &v : dialogs) v->ResetGL(flag);
-  FrameBuffer(gd).Release();
+  FrameBuffer(parent).Release();
 }
 
 void Window::SwapAxis() {
@@ -858,7 +880,7 @@ void Window::SwapAxis() {
 }
 
 int Window::Frame(unsigned clicks, int flag) {
-  if (app->focused != this) app->MakeCurrentWindow(this);
+  if (parent->focused != this) parent->MakeCurrentWindow(this);
 
   if (FLAGS_enable_video) {
     gd->DrawMode(gd->default_draw_mode);
@@ -874,7 +896,7 @@ int Window::Frame(unsigned clicks, int flag) {
   fps.Add(clicks);
 
   if (FLAGS_enable_video) {
-    Video::Swap();
+    Video::Swap(this);
   }
   return ret;
 }
@@ -893,19 +915,19 @@ void Window::RenderToFrameBuffer(FrameBuffer *fb) {
 /* FrameScheduler */
 
 void FrameScheduler::Init() { 
-  if (app->focused) app->focused->target_fps = FLAGS_target_fps;
+  if (window->focused) window->focused->target_fps = FLAGS_target_fps;
   maxfps.timer.GetTime(true);
   if (wait_forever && synchronize_waits) frame_mutex.lock();
 }
 
 void FrameScheduler::Free() { 
   if (wait_forever && synchronize_waits) frame_mutex.unlock();
-  if (wait_forever && wait_forever_thread) wakeup_thread.Wait();
+  if (wait_forever && wait_forever_thread) wakeup_thread->Wait();
 }
 
 void FrameScheduler::Start() {
   if (!wait_forever) return;
-  if (wait_forever_thread) wakeup_thread.Start();
+  if (wait_forever_thread) wakeup_thread->Start();
 }
 
 bool FrameScheduler::MainWait() {
@@ -928,7 +950,7 @@ void FrameScheduler::UpdateTargetFPS(Window *w, int fps) {
   w->target_fps = fps;
   if (monolithic_frame) {
     int next_target_fps = 0;
-    for (const auto &wi : app->windows) Max(&next_target_fps, wi.second->target_fps);
+    for (const auto &wi : window->windows) Max(&next_target_fps, wi.second->target_fps);
     FLAGS_target_fps = next_target_fps;
   }
   CHECK(w->id);
@@ -940,7 +962,7 @@ void FrameScheduler::SetAnimating(Window *w, bool is_animating) {
   int target_fps = is_animating ? FLAGS_peak_fps : 0;
   if (target_fps != w->target_fps) {
     UpdateTargetFPS(w, target_fps);
-    Wakeup(w);
+    w->Wakeup();
   }
 }
 

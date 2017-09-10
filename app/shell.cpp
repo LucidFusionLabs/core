@@ -21,11 +21,17 @@
 #include "core/app/ipc.h"
 #include "core/web/browser.h"
 #include "core/web/document.h"
+#include "core/app/network.h"
+#include "core/app/shell.h"
 
 namespace LFL {
 DEFINE_bool(shell_debug, false, "Print shell commands");
 
-Shell::Shell(Window *W) : parent(W) {
+Shell::Shell(Window *W, ApplicationInfo *A, ApplicationShutdown *SA, ThreadDispatcher *D, GraphicsDeviceHolder *G, Clipboard *C,
+             SocketServices *N, AssetStore *AS, AssetLoading *AL, Audio *S, MouseFocus *MF, TouchKeyboard *TK, Fonts *F) :
+  parent(W), app_info(A), app_shutdown(SA), dispatch(D), gd(G), clipboard(C), net(N), assets(AS), loading(AL), audio(S), mouse_focus(MF),
+  touch_keyboard(TK), fonts(F) {
+
   if (!parent) return;
   command.emplace_back("quit",         bind(&Shell::quit,          this, _1));
   command.emplace_back("fatal",        bind(&Shell::fatal,         this, _1));
@@ -35,7 +41,7 @@ Shell::Shell(Window *W) : parent(W) {
   command.emplace_back("flags",        bind(&Shell::flags,         this, _1));
   command.emplace_back("constants",    bind(&Shell::constants,     this, _1));
   command.emplace_back("conscolor",    bind(&Shell::consolecolor,  this, _1));
-  command.emplace_back("clipboard",    bind(&Shell::clipboard,     this, _1));
+  command.emplace_back("clipboard",    bind(&Shell::ClipBoard,     this, _1));
   command.emplace_back("savedir",      bind(&Shell::savedir,       this, _1));
   command.emplace_back("savesettings", bind(&Shell::savesettings,  this, _1));
   command.emplace_back("screenshot",   bind(&Shell::screenshot,    this, _1));
@@ -72,7 +78,7 @@ bool Shell::FGets() {
 }
 
 void Shell::Run(const string &text) {
-  if (!app->MainThread()) return app->RunInMainThread(bind(&Shell::Run, this, string(text)));
+  if (!dispatch->MainThread()) return dispatch->RunInMainThread(bind(&Shell::Run, this, string(text)));
   if (FLAGS_shell_debug) INFO("Shell::Run(", text, ")");
 
   string cmd;
@@ -88,7 +94,7 @@ void Shell::Run(const string &text) {
     }
   }
 
-  FlagMap *flags = Singleton<FlagMap>::Get();
+  FlagMap *flags = Singleton<FlagMap>::Set();
   for (auto i = flags->flagmap.begin(); i != flags->flagmap.end(); ++i) {
     Flag *flag = (*i).second;
     if (StringEquals(flag->name, cmd)) {
@@ -100,34 +106,34 @@ void Shell::Run(const string &text) {
   INFO("unkown cmd '", cmd, "'");
 }
 
-void Shell::mousein (const vector<string>&) { app->GrabMouseFocus(); }
-void Shell::mouseout(const vector<string>&) { app->ReleaseMouseFocus(); }
+void Shell::mousein (const vector<string>&) { mouse_focus->GrabMouseFocus(); }
+void Shell::mouseout(const vector<string>&) { mouse_focus->ReleaseMouseFocus(); }
 
-void Shell::quit(const vector<string>&) { app->run = false; }
+void Shell::quit(const vector<string>&) { app_shutdown->Shutdown(); }
 void Shell::fatal(const vector<string> &a) { FATAL(Join(a, " ")); }
 void Shell::console(const vector<string>&) { if (parent->console) parent->console->ToggleActive(); }
-void Shell::showkeyboard(const vector<string>&) { app->OpenTouchKeyboard(); }
+void Shell::showkeyboard(const vector<string>&) { touch_keyboard->OpenTouchKeyboard(); }
 
-void Shell::clipboard(const vector<string> &a) {
-  if (a.empty()) INFO(app->GetClipboardText());
-  else app->SetClipboardText(Join(a, " "));
+void Shell::ClipBoard(const vector<string> &a) {
+  if (a.empty()) INFO(clipboard->GetClipboardText());
+  else clipboard->SetClipboardText(Join(a, " "));
 }
 
 void Shell::consolecolor(const vector<string>&) {
   if (!parent->console) return;
-  parent->console->style.font.SetFont(app->fonts->Get(FLAGS_font, "", 9, Color::black));
+  parent->console->style.font.SetFont(fonts->Get(parent->gl_h, FLAGS_font, "", 9, Color::black));
 }
 
-void Shell::savedir(const vector<string>&) { INFO(GetLFAppSaveDir()); }
+void Shell::savedir(const vector<string>&) { INFO(app_info->savedir); }
 
 void Shell::savesettings(const vector<string> &a) {
   if (a.empty()) return INFO("usage: savesettings <fields>");
-  SettingsFile::Save(a);
+  SettingsFile::Save(app_info, a);
 }
 
 void Shell::screenshot(const vector<string> &a) {
   if (a.empty()) return INFO("usage: screenshot <file> [tex_id]");
-  Texture tex;
+  Texture tex(gd);
   if (a.size() == 1) parent->gd->Screenshot(&tex);
   else               parent->gd->DumpTexture(&tex, atoi(a[1]));
   LocalFile lf(a[0], "w");
@@ -141,7 +147,7 @@ void Shell::testcrash(const StringVec&) {
 
 void Shell::fillmode(const vector<string>&) {
 #ifndef LFL_MOBILE
-  // glPolygonMode(GL_FRONT_AND_BACK, app->fillMode.next());
+  // glPolygonMode(GL_FRONT_AND_BACK, parent->fillMode.next());
 #endif
 }
 
@@ -150,31 +156,31 @@ void Shell::texmode(const vector<string>&) { if (parent->tex_mode.Next()) parent
 void Shell::swapaxis(const vector<string>&) { parent->SwapAxis(); }
 
 void Shell::snap(const vector<string> &arg) {
-  Asset      *a  = app->asset     (arg.size() ? arg[0] : "snap"); 
-  SoundAsset *sa = app->soundasset(arg.size() ? arg[0] : "snap");
+  Asset      *a  = assets->asset     (arg.size() ? arg[0] : "snap"); 
+  SoundAsset *sa = assets->soundasset(arg.size() ? arg[0] : "snap");
   if (a && sa) {
-    app->audio->Snapshot(sa);
+    audio->Snapshot(sa);
     RingSampler::Handle H(sa->wav.get());
     glSpectogram(parent->gd, &H, &a->tex);
   }
 }
 
 void Shell::play(const vector<string> &arg) {
-  SoundAsset *sa     = arg.size() > 0 ? app->soundasset(arg[0]) : app->soundasset("snap");
+  SoundAsset *sa     = arg.size() > 0 ? assets->soundasset(arg[0]) : assets->soundasset("snap");
   int         offset = arg.size() > 1 ?            atoi(arg[1]) : -1;
   int         len    = arg.size() > 2 ?            atoi(arg[2]) : -1;
-  if (sa) app->audio->QueueMix(sa, MixFlag::Reset, offset, len);
+  if (sa) audio->QueueMix(sa, MixFlag::Reset, offset, len);
 }
 
 void Shell::playmovie(const vector<string> &arg) {
-  MovieAsset *ma = arg.size() ? app->movieasset(arg[0]) : 0;
+  MovieAsset *ma = arg.size() ? assets->movieasset(arg[0]) : 0;
   if (ma) ma->Play(0);
 }
 
 void Shell::loadsound(const vector<string> &arg) {
   static int id = 1;
   if (arg.empty()) return;
-  SoundAsset *a = new SoundAsset();
+  SoundAsset *a = new SoundAsset(loading);
   a->filename = arg[0];
   a->name = StrCat("sa", id++);
   a->Load();
@@ -184,7 +190,7 @@ void Shell::loadsound(const vector<string> &arg) {
 void Shell::loadmovie(const vector<string> &arg) {
   static int id = 1;
   if (arg.empty()) return;
-  MovieAsset *ma = new MovieAsset();
+  MovieAsset *ma = new MovieAsset(loading);
   SoundAsset *a = &ma->audio;
   ma->audio.name = ma->video.name = StrCat("ma", id++);
   ma->Load(arg[0].c_str());
@@ -194,8 +200,8 @@ void Shell::loadmovie(const vector<string> &arg) {
 
 void Shell::copy(const vector<string> &arg) {
   SoundAsset *src = 0, *dst = 0;
-  if (!(src = app->soundasset(arg.size() > 0 ? arg[0] : "")) ||
-      !(dst = app->soundasset(arg.size() > 1 ? arg[1] : ""))) { INFO("copy <src> <dst>"); return; }
+  if (!(src = assets->soundasset(arg.size() > 0 ? arg[0] : "")) ||
+      !(dst = assets->soundasset(arg.size() > 1 ? arg[1] : ""))) { INFO("copy <src> <dst>"); return; }
 
   INFOf("copy %s %d %d %d %s %d %d %d",
         src->name.c_str(), src->sample_rate, src->channels, src->seconds,
@@ -205,12 +211,12 @@ void Shell::copy(const vector<string> &arg) {
   dsth.CopyFrom(&srch);
 }
 
-void shell_filter(const vector<string> &arg, bool FFTfilter, int taps, int hop=0) {
+void shell_filter(AssetStore *assets, Audio *audio, const vector<string> &arg, bool FFTfilter, int taps, int hop=0) {
   vector<double> filter;
   SoundAsset *sa=0;
   double cutoff=0;
 
-  if (arg.size() > 0) sa     = app->soundasset(arg[0]);
+  if (arg.size() > 0) sa     = assets->soundasset(arg[0]);
   if (arg.size() > 2) cutoff = atof(arg[2]);
   if (arg.size() > 1) {
     filter.resize(taps);
@@ -251,16 +257,16 @@ void shell_filter(const vector<string> &arg, bool FFTfilter, int taps, int hop=0
     INFO(b);
   }
 
-  app->audio->QueueMixBuf(&O);
+  audio->QueueMixBuf(&O);
 }
 
-void Shell::filter   (const vector<string> &arg) { shell_filter(arg, false, 16); }
-void Shell::fftfilter(const vector<string> &arg) { shell_filter(arg, true, 512, 256); }
+void Shell::filter   (const vector<string> &arg) { shell_filter(assets, audio, arg, false, 16); }
+void Shell::fftfilter(const vector<string> &arg) { shell_filter(assets, audio, arg, true, 512, 256); }
 
 void Shell::f0(const vector<string> &arg) {
   SoundAsset *sa=0; int offset=0; int method=F0EstmMethod::Default;
 
-  if (arg.size() > 0) sa = app->soundasset(arg[0]);
+  if (arg.size() > 0) sa = assets->soundasset(arg[0]);
   if (arg.size() > 1) offset = atoi(arg[1]);
   if (arg.size() > 2) method = atoi(arg[2]);
 
@@ -288,13 +294,13 @@ void Shell::f0(const vector<string> &arg) {
 void Shell::sinth(const vector<string> &a) { 
   int hz[3] = { 440, 0, 0};
   for (int i=0; i<sizeofarray(hz) && i<a.size(); i++) hz[i] = atof(a[i]);
-  Sinthesize(app->audio.get(), hz[0], hz[1], hz[2]);
+  Sinthesize(audio, hz[0], hz[1], hz[2]);
 }
 
 void Shell::writesnap(const vector<string> &a) {
-  SoundAsset *sa = app->soundasset(a.size() ? a[0] : "snap");
+  SoundAsset *sa = assets->soundasset(a.size() ? a[0] : "snap");
   if (sa) {
-    string filename = StrCat(app->savedir, "snap.wav"); 
+    string filename = StrCat(app_info->savedir, "snap.wav"); 
     RingSampler::Handle B(sa->wav.get());
     LocalFile lf(filename, "r");
     WavWriter w(&lf);
@@ -307,19 +313,19 @@ void Shell::FPS(const vector<string>&) { INFO("FPS ", parent->fps.FPS()); }
 
 void Shell::WGet(const vector<string> &a) {
   if (a.empty()) return;
-  HTTPClient::WGet(a[0]);
+  HTTPClient::WGet(net, app_info, a[0]);
 }
 
 void Shell::NetworkStats(const vector<string> &a) {
-  if (!app->net) return;
-  for (int svc_i = 0, svc_l = app->net->service_table.size(); svc_i < svc_l; ++svc_i) {
-    auto svc = app->net->service_table[svc_i];
+  if (!net) return;
+  for (int svc_i = 0, svc_l = net->service_table.size(); svc_i < svc_l; ++svc_i) {
+    auto svc = net->service_table[svc_i];
     INFO("svc[", svc_i, "] ", svc->name, ": conns=", svc->conn.size(), ", endpoints=", svc->endpoint.size());
   }
 }
 
-void Shell::MessageBox(const vector<string> &a) { Dialog::MessageBox(Join(a, " ")); }
-void Shell::TextureBox(const vector<string> &a) { Dialog::TextureBox(a.size() ? a[0] : ""); }
+void Shell::MessageBox(const vector<string> &a) { Dialog::MessageBox(parent, Join(a, " ")); }
+void Shell::TextureBox(const vector<string> &a) { Dialog::TextureBox(parent, a.size() ? a[0] : ""); }
 
 void Shell::Slider(const vector<string> &a) {
   if (a.empty()) { INFO("slider <flag_name> [total] [inc]"); return; }
@@ -330,13 +336,14 @@ void Shell::Slider(const vector<string> &a) {
 }
 
 void Shell::Edit(const vector<string> &a) {
-  string s = Asset::FileContents("default.vert");
+  string s = loading->FileContents("default.vert");
   if (s.empty()) INFO("missing file default.vert");
-  parent->AddDialog(make_unique<EditorDialog>(parent, FontDesc::Default(), new BufferFile(s, "default.vert")));
+  parent->AddDialog(make_unique<EditorDialog>(parent, FontRef(parent, FontDesc::Default()),
+                                              new BufferFile(s, "default.vert")));
 }
 
 void Shell::ClearDialogs(const vector<string>&) {
-  for (auto &i : app->focused->dialogs) i->deleted_cb();
+  for (auto &i : parent->dialogs) i->deleted_cb();
 }
 
 void Shell::cmds(const vector<string>&) {

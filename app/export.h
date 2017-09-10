@@ -146,6 +146,9 @@ struct AlertViewInterface;
 struct Allocator;
 struct Application;
 struct Asset;
+struct AssetStore;
+struct AssetLoader;
+struct AssetLoading;
 struct Atlas;
 struct Audio;
 struct Bind;
@@ -155,6 +158,7 @@ struct Browser;
 struct BrowserInterface;
 struct BufferFile;
 struct ClangTranslationUnit;
+struct Clipboard;
 struct Color;
 struct Connection;
 struct Console;
@@ -168,6 +172,7 @@ struct File;
 struct FloatContainer;
 struct Flow;
 struct Font;
+struct Fonts;
 struct GameServer;
 struct Geometry;
 struct Glyph;
@@ -186,6 +191,7 @@ struct MultiProcessFileResource;
 struct MultiProcessPaintResource;
 struct MultiProcessTextureResource;
 struct NavigationViewInterface;
+struct ProcessAPI;
 struct ProcessAPIClient;
 struct ProcessAPIServer;
 struct RecursiveResolver;
@@ -194,6 +200,7 @@ struct Shell;
 struct SocketConnection;
 struct SocketListener;
 struct SocketService;
+struct SocketServices;
 struct SocketServicesThread;
 struct SocketServiceEndpointEraseList;
 struct SoundAsset;
@@ -207,12 +214,14 @@ struct ToolkitInterface;
 struct TextBox;
 struct Texture;
 struct Terminal;
+struct ThreadDispatcher;
 struct TiledTextBox;
 struct TilesInterface;
 struct TranslationUnit;
 struct VideoAssetLoader;
 struct View;
 struct Window;
+struct WindowHolder;
 namespace DOM { struct Node; };
 namespace IPC { struct ResourceHandle; struct FontDescription; struct OpenSystemFontResponse; }
 
@@ -250,8 +259,9 @@ struct const_void_ptr { const void *v; };
 struct LFApp {
   struct Log { enum { Fatal=-1, Error=0, Info=3, Debug=7 }; int unused; };
   struct Frame { enum { DontSkip=8 }; int unused; };
-  bool run, initialized, suspended, log_pid, frame_disabled;
-  size_t main_thread_id;
+  bool initialized;
+  int pid, argc;
+  const char* const* argv;
   long long frames_ran;
 };
 
@@ -270,28 +280,14 @@ struct CameraState {
   unsigned long long frames_read, last_frames_read, image_timestamp_us;
 };
 
-void MyAppCreate(int argc, const char* const* argv);
+LFApp *MyAppCreate(int argc, const char* const* argv);
 int MyAppMain();
 
-LFAppWindow *GetLFAppWindow();
-LFAppWindow *SetLFAppWindow(LFAppWindow*);
-LFAppWindow *SetLFAppWindowByID(void*);
-LFApp *GetLFApp();
-
-int LFAppMain();
-int LFAppMainLoop();
-int LFAppFrame(bool handle_events);
-void LFAppTimerDrivenFrame();
+unsigned LFAppNextRandSeed();
 void LFAppLog(int level, const char *file, int line, const char *fmt, ...);
 void LFAppDebug(const char *file, int line, const char *fmt, ...);
-void LFAppWakeup();
 void LFAppFatal();
-void LFAppResetGL();
-void LFAppShutdown();
 void LFAppAtExit();
-void SetLFAppMainThread();
-unsigned LFAppNextRandSeed();
-const char *GetLFAppSaveDir();
 void BreakHook();
 
 #ifdef __cplusplus

@@ -115,6 +115,8 @@ struct KeyboardController {
 };
 
 struct TextboxController : public KeyboardController {
+  Clipboard *clipboard;
+  TextboxController(Clipboard *C=0) : clipboard(C) {}
   int HandleSpecialKey(InputEvent::Id event);
   virtual int SendKeyEvent(InputEvent::Id event, bool down);
   virtual void InputString(const string &s) { for (int i=0; i<s.size(); i++) Input(s[i]); }
@@ -149,14 +151,14 @@ struct MouseControllerCallback {
   };
 
   FunctionPointer cb;
-  bool run_from_message_loop=false;
+  ThreadDispatcher *run_from_message_loop=nullptr;
 
   ~MouseControllerCallback() { Destruct(); }
-  MouseControllerCallback()                                 : type(NONE) {}
-  MouseControllerCallback(const CB       &c, bool mt=false) : type(CB_VOID)  { new (&cb.cb_void)  CB     (c); run_from_message_loop=mt; }
-  MouseControllerCallback(const BoolCB   &c, bool mt=false) : type(CB_BOOL)  { new (&cb.cb_bool)  BoolCB (c); run_from_message_loop=mt; }
-  MouseControllerCallback(const CoordCB  &c, bool mt=false) : type(CB_COORD) { new (&cb.cb_coord) CoordCB(c); run_from_message_loop=mt; }
-  MouseControllerCallback(const ScaleCB  &c, bool mt=false) : type(CB_SCALE) { new (&cb.cb_scale) ScaleCB(c); run_from_message_loop=mt; }
+  MouseControllerCallback()                                          : type(NONE) {}
+  MouseControllerCallback(const CB       &c, ThreadDispatcher *mt=0) : type(CB_VOID)  { new (&cb.cb_void)  CB     (c); run_from_message_loop=mt; }
+  MouseControllerCallback(const BoolCB   &c, ThreadDispatcher *mt=0) : type(CB_BOOL)  { new (&cb.cb_bool)  BoolCB (c); run_from_message_loop=mt; }
+  MouseControllerCallback(const CoordCB  &c, ThreadDispatcher *mt=0) : type(CB_COORD) { new (&cb.cb_coord) CoordCB(c); run_from_message_loop=mt; }
+  MouseControllerCallback(const ScaleCB  &c, ThreadDispatcher *mt=0) : type(CB_SCALE) { new (&cb.cb_scale) ScaleCB(c); run_from_message_loop=mt; }
   MouseControllerCallback(const MouseControllerCallback &c) { Assign(c); }
   MouseControllerCallback &operator=(const MouseControllerCallback &c) { Destruct(); Assign(c); return *this; }
 
@@ -221,11 +223,14 @@ struct Input : public Module {
     InputCB(int T, float X, float Y, float A, float B, bool b, bool round) : type(T), begin(b) { data.fv.x=X; data.fv.y=Y; data.fv.a=A; data.fv.b=B; }
   };
 
+  Clipboard *clipboard;
+  WindowHolder *window;
+  ThreadDispatcher *dispatcher;
   bool left_shift_down = 0, right_shift_down = 0, left_ctrl_down = 0, right_ctrl_down = 0;
   bool left_cmd_down = 0, right_cmd_down = 0, mouse_but1_down = 0, mouse_but2_down = 0;
   vector<InputCB> queued_input;
   mutex queued_input_mutex;
-  Bind paste_bind;
+  Input(Clipboard *C, WindowHolder *W, ThreadDispatcher *D) : clipboard(C), window(W), dispatcher(D) {}
 
   void QueueKeyPress(int key, int mod, bool down);
   void QueueMouseClick(int button, bool down, const point &p);
@@ -255,7 +260,7 @@ struct Input : public Module {
   int MouseEventDispatch(InputEvent::Id event, const point &p, const point &d, int down);
   int MouseEventDispatchView(InputEvent::Id event, const point &p, const point &d, int down, View *v, int *active_guis);
 
-  static point TransformMouseCoordinate(point p);
+  static point TransformMouseCoordinate(Window*, point p);
 };
 
 }; // namespace LFL

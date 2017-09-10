@@ -54,9 +54,9 @@ struct MultiProcessBuffer {
   MultiProcessBuffer(const IPC::ResourceHandle *h, Socket socket);
   virtual ~MultiProcessBuffer();
   virtual void Close();
-  virtual bool Open();
-  bool Create(int s) { len=s; return Open(); }
-  bool Create(const SerializableProto &s) { bool ret; if ((ret = Create(Size(s)))) s.ToString(buf, len, 0); return ret; }
+  virtual bool Open(ApplicationInfo*);
+  bool Create(ApplicationInfo *a, int s) { len=s; return Open(a); }
+  bool Create(ApplicationInfo *a, const SerializableProto &s) { bool ret; if ((ret = Create(a, Size(s)))) s.ToString(buf, len, 0); return ret; }
   bool Copy(const SerializableProto &s) { bool ret; if ((ret = (len >= Size(s)))) s.ToString(buf, len, 0); return ret; }
   static int Size(const SerializableProto &s) { return SerializableProto::Header::size + s.Size(); }
 };
@@ -68,8 +68,8 @@ struct MultiProcessResource {
 struct MultiProcessFileResource : public SerializableProto {
   static const int Type = 1<<11 | 1;
   StringPiece buf, name, type;
-  MultiProcessFileResource() : SerializableProto(Type) {}
-  MultiProcessFileResource(const string &b, const string &n, const string &t) :
+  MultiProcessFileResource(ProcessAPI*) : SerializableProto(Type) {}
+  MultiProcessFileResource(ProcessAPI*, const string &b, const string &n, const string &t) :
     SerializableProto(Type), buf(b), name(n), type(t) {}
 
   int HeaderSize() const { return sizeof(int) * 3; }
@@ -90,10 +90,11 @@ struct MultiProcessTextureResource : public SerializableProto {
   static const int Type = 1<<11 | 2;
   int width=0, height=0, pf=0, linesize=0;
   StringPiece buf;
-  MultiProcessTextureResource() : SerializableProto(Type) {}
-  MultiProcessTextureResource(const LFL::Texture &t) :
+  ProcessAPI *parent;
+  MultiProcessTextureResource(ProcessAPI *p) : SerializableProto(Type), parent(p) {}
+  MultiProcessTextureResource(ProcessAPI *p, const LFL::Texture &t) :
     SerializableProto(Type), width(t.width), height(t.height), pf(t.pf), linesize(t.LineSize()),
-    buf(MakeSigned(t.buf), t.BufferSize()) {}
+    buf(MakeSigned(t.buf), t.BufferSize()), parent(p) {}
 
   int HeaderSize() const { return sizeof(int) * 4; }
   int Size() const { return HeaderSize() + buf.size(); }
@@ -141,12 +142,14 @@ struct MultiProcessPaintResource : public SerializableProto {
 
   StringBuffer data;
   mutable Drawable::Attr attr;
-  MultiProcessPaintResource() : SerializableProto(Type) {}
+  ProcessAPI *parent;
+  MultiProcessPaintResource(ProcessAPI *p) : SerializableProto(Type), parent(p) {}
+
   void Out(Serializable::Stream *o) const { o->BString(data.buf); }
   int In(const Serializable::Stream *i) { i->ReadString(&data.buf); return i->Result(); }
   int Size() const { return HeaderSize() + data.buf.size(); }
   int HeaderSize() const { return sizeof(int); }
-  int Run(const Box&) const;
+  int Run(GraphicsDevice*, const Box&) const;
 
   static int CmdSize(int n) {
     switch(n) {
@@ -164,7 +167,8 @@ struct MultiProcessPaintResource : public SerializableProto {
 
 struct MultiProcessPaintResourceBuilder : public MultiProcessPaintResource {
   int count=0; bool dirty=0;
-  MultiProcessPaintResourceBuilder(int S=32768) { data.Resize(S); }
+  MultiProcessPaintResourceBuilder(ProcessAPI *p, int S=32768) :
+    MultiProcessPaintResource(p) { data.Resize(S); }
 
   int Count() const { return count; }
   void Clear() { data.Clear(); count=0; dirty=0; }
@@ -177,8 +181,8 @@ struct MultiProcessLayerTree : public SerializableProto {
   static const int Type = 1<<11 | 4;
   ArrayPiece<LayersInterface::Node>  node_data;
   ArrayPiece<LayersInterface::Child> child_data;
-  MultiProcessLayerTree() : SerializableProto(Type) {}
-  MultiProcessLayerTree(const vector<LayersInterface::Node> &n, const vector<LayersInterface::Child> &c) :
+  MultiProcessLayerTree(ProcessAPI*) : SerializableProto(Type) {}
+  MultiProcessLayerTree(ProcessAPI*, const vector<LayersInterface::Node> &n, const vector<LayersInterface::Child> &c) :
     SerializableProto(Type), node_data(&n[0], n.size()), child_data(&c[0], c.size()) {}
 
   void Out(Serializable::Stream *o) const { o->AString(node_data); o->AString(child_data); }
@@ -192,9 +196,11 @@ struct MultiProcessLayerTree : public SerializableProto {
   }
 };
 
-struct TilesIPC : public TilesT<MultiProcessPaintResource::Cmd, MultiProcessPaintResourceBuilder, MultiProcessPaintResource> {
+struct TilesIPC : public TilesT<MultiProcessPaintResource::Cmd, MultiProcessPaintResourceBuilder, MultiProcessPaintResource, ProcessAPI*> {
   const Drawable::Attr *attr=0;
-  TilesIPC(GraphicsDevice *d, int l, int w=256, int h=256) : TilesT(d, l, w, h) {}
+  ThreadDispatcher *dispatch;
+  TilesIPC(ProcessAPI *P, ThreadDispatcher *D, GraphicsDeviceHolder *d, int l, int w=256, int h=256) :
+    TilesT(d, P, l, w, h), dispatch(D) {}
   void SetAttr           (const Drawable::Attr*);
   void InitDrawBox       (const point&);
   void InitDrawBackground(const point&);
@@ -285,7 +291,7 @@ struct ExecuteScriptResponse { struct String { string str() { return ""; } }; St
 #endif // LFL_IPC
 
 struct ProcessAPI : public InterProcessComm {
-  ProcessAPI(const string &n) : InterProcessComm(n) {}
+  using InterProcessComm::InterProcessComm;
   struct Protocol {
     IPC_PROTO_ENTRY( 1, AllocateBufferRequest,  Void,                        "bytes=", x->bytes());
     IPC_PROTO_ENTRY( 2, AllocateBufferResponse, MultiProcessBuffer,          "mpb_id=", x->mpb_id(), ", mpb_len=", mpv.len, ", b=", mpv.buf!=0);
@@ -331,8 +337,12 @@ struct ProcessAPIClient : public ProcessAPI {
   vector<Drawable*> drawable;
   vector<Font*> font_table;
   vector<unique_ptr<Texture>> texture;
+  WindowHolder *window;
+  Fonts *fonts;
   Browser *browser=0;
-  ProcessAPIClient() : ProcessAPI("ProcessAPIClient") {}
+  ProcessAPIClient(ApplicationInfo *A, ThreadDispatcher *D, SocketServices *N,
+                   WindowHolder *W, Fonts *F) :
+    ProcessAPI(A, D, N, "ProcessAPIClient"), window(W), fonts(F) {}
 
   IPC_TABLE_BEGIN(ProcessAPIClient);
   IPC_TABLE_CLIENT_QIRC(LoadAsset, MultiProcessTextureResource, mpb_id);
@@ -369,7 +379,7 @@ struct ProcessAPIClient : public ProcessAPI {
   IPC_CLIENT_CALL(ExecuteScript,  Void, const string&, const StringCB&) {
     StringCB cb;
     ExecuteScriptQuery(Parent *P, IPC::Seq S, const StringCB &c) : ExecuteScriptIPC(P,S,bind(&ExecuteScriptQuery::Response, this, _1, _2)), cb(c) {}
-    int Response(const IPC::ExecuteScriptResponse *res, Void) { app->RunInMainThread(bind(&ExecuteScriptQuery::RunCB, cb, (res && res->text()) ? res->text()->str() : string())); return IPC::Done; }
+    int Response(const IPC::ExecuteScriptResponse *res, Void) { parent->dispatcher->RunInMainThread(bind(&ExecuteScriptQuery::RunCB, cb, (res && res->text()) ? res->text()->str() : string())); return IPC::Done; }
     static void RunCB(const StringCB &cb, const string &s) { cb(s); }
   };
   IPC_SERVER_CALL(AllocateBuffer, Void) {};
@@ -401,8 +411,11 @@ struct ProcessAPIClient : public ProcessAPI {
 };
 
 struct ProcessAPIServer : public ProcessAPI {
+  Input *input;
   Browser *browser=0;
-  ProcessAPIServer() : ProcessAPI("ProcessAPIServer") {}
+  AssetLoading *loader;
+  ProcessAPIServer(ApplicationInfo *A, ThreadDispatcher *D, Input *I, SocketServices *N, AssetLoading *L) :
+    ProcessAPI(A, D, N, "ProcessAPIServer"), input(I), loader(L) {}
 
   IPC_TABLE_BEGIN(ProcessAPIServer);
   IPC_TABLE_CLIENT_QXBC(AllocateBuffer, mpb);
@@ -439,13 +452,13 @@ struct ProcessAPIServer : public ProcessAPI {
     point tile;
     MultiProcessPaintResourceBuilder paint_list;
     PaintQuery(Parent *P, int L, const point &X, int F, MultiProcessPaintResourceBuilder &list) :
-      PaintIPC(P,0), layer(L), flag(F), tile(X) { swap(paint_list, list); }
+      PaintIPC(P,0), layer(L), flag(F), tile(X), paint_list(P) { swap(paint_list, list); }
     int AllocateBufferResponse(const IPC::AllocateBufferResponse*, MultiProcessBuffer&);
   };
   IPC_CLIENT_CALL(SwapTree, Void, int id, const LayersInterface *layers) {
     int id;
     MultiProcessLayerTree tree;
-    SwapTreeQuery(Parent *P, int I, const LayersInterface *L) : SwapTreeIPC(P,0), id(I), tree(L->node, L->child) {}
+    SwapTreeQuery(Parent *P, int I, const LayersInterface *L) : SwapTreeIPC(P,0), id(I), tree(P, L->node, L->child) {}
     int AllocateBufferResponse(const IPC::AllocateBufferResponse*, MultiProcessBuffer&);
   };
   IPC_CLIENT_CALL(WGet, const MultiProcessBuffer&, const string&, const HTTPClient::ResponseCB&, const StringCB&) {

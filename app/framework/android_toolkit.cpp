@@ -80,9 +80,10 @@ struct AndroidCollectionView : public CollectionViewInterface {
 };
 
 struct AndroidNavigationView : public NavigationViewInterface {
+  WindowHolder *win;
   bool overlay;
   GlobalJNIObject impl;
-  AndroidNavigationView(const string &style, const string &t) :
+  AndroidNavigationView(WindowHolder *w, const string &style, const string &t) : win(w),
     overlay(style == "overlay"), impl(NewScreenNavigatorObject(style, t)) {}
 
   static jobject NewScreenNavigatorObject(const string &style, const string &t) {
@@ -106,8 +107,8 @@ struct AndroidNavigationView : public NavigationViewInterface {
     if ((shown = show_or_hide)) {
       auto back = Back();
       if (back && back->show_cb) back->show_cb();
-      if (!overlay) app->SetAppFrameEnabled(false);
-    } else app->SetAppFrameEnabled(true);  
+      if (!overlay) win->SetAppFrameEnabled(false);
+    } else win->SetAppFrameEnabled(true);  
   }
 
   void PushTableView(TableViewInterface *t) {
@@ -410,11 +411,11 @@ void Application::UnloadSystemImage(int n) {
   jni->env->CallVoidMethod(jni->activity, mid, jint(n));
 }
 
-unique_ptr<ToolbarViewInterface> SystemToolkit::CreateToolbar(const string &theme, MenuItemVec items, int flag) { return make_unique<AndroidToolbarView>(theme, move(items), flag); }
-unique_ptr<CollectionViewInterface> SystemToolkit::CreateCollectionView(const string &title, const string &style, const string &theme, vector<CollectionItem> items) { return make_unique<AndroidCollectionView>(title, style, move(items)); }
-unique_ptr<TableViewInterface> SystemToolkit::CreateTableView(const string &title, const string &style, const string &theme, TableItemVec items) { return make_unique<AndroidTableView>(title, style, move(items)); }
-unique_ptr<TextViewInterface> SystemToolkit::CreateTextView(const string &title, File *file) { return make_unique<AndroidTextView>(title, file); }
-unique_ptr<TextViewInterface> SystemToolkit::CreateTextView(const string &title, const string &text) { return make_unique<AndroidTextView>(title, text); }
-unique_ptr<NavigationViewInterface> SystemToolkit::CreateNavigationView(const string &style, const string &theme) { return make_unique<AndroidNavigationView>(style, theme); }
+unique_ptr<ToolbarViewInterface> SystemToolkit::CreateToolbar(Window*, const string &theme, MenuItemVec items, int flag) { return make_unique<AndroidToolbarView>(theme, move(items), flag); }
+unique_ptr<CollectionViewInterface> SystemToolkit::CreateCollectionView(Window*, const string &title, const string &style, const string &theme, vector<CollectionItem> items) { return make_unique<AndroidCollectionView>(title, style, move(items)); }
+unique_ptr<TableViewInterface> SystemToolkit::CreateTableView(Window*, const string &title, const string &style, const string &theme, TableItemVec items) { return make_unique<AndroidTableView>(title, style, move(items)); }
+unique_ptr<TextViewInterface> SystemToolkit::CreateTextView(Window*, const string &title, File *file) { return make_unique<AndroidTextView>(title, file); }
+unique_ptr<TextViewInterface> SystemToolkit::CreateTextView(Window*, const string &title, const string &text) { return make_unique<AndroidTextView>(title, text); }
+unique_ptr<NavigationViewInterface> SystemToolkit::CreateNavigationView(Window *w, const string &style, const string &theme) { return make_unique<AndroidNavigationView>(w->parent, style, theme); }
 
 }; // namespace LFL

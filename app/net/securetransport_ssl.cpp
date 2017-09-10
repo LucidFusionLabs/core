@@ -1,5 +1,5 @@
 /*
- * $Id: crypto.cpp 1335 2014-12-02 04:13:46Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -111,7 +111,7 @@ Socket SSLSocket::Connect(CTXPtr sslctx, IPV4::Addr addr, int port) {
   return socket;
 }
 
-Socket SSLSocket::Listen(int port, bool reuse) {
+Socket SSLSocket::Listen(CTXPtr, int port, bool reuse) {
   return (socket = SystemNetwork::Listen(Protocol::TCP, 0, port, 32, false));
 }
 

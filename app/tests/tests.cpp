@@ -18,21 +18,24 @@
 
 #include "gtest/gtest.h"
 
-extern "C" void MyAppCreate(int argc, const char* const* argv) {
-  LFL::FLAGS_enable_video = true;
-  LFL::FLAGS_font = LFL::FakeFontEngine::Filename();
-  LFL::app = new LFL::Application(argc, argv);
-  LFL::app->focused = LFL::Window::Create();
+namespace LFL {
+Application *app = nullptr;
+
+extern "C" LFApp *MyAppCreate(int argc, const char* const* argv) {
+  FLAGS_enable_video = true;
+  FLAGS_font = FakeFontEngine::Filename();
+  app = new Application(argc, argv);
+  app->focused = CreateWindow(app);
   testing::InitGoogleTest(&argc, const_cast<char**>(argv));
+  return app;
 }
 
 extern "C" int MyAppMain() {
-  CHECK_EQ(0, LFL::app->Create(__FILE__));
-  CHECK_EQ(0, LFL::app->Init());
+  CHECK_EQ(0, app->Create(__FILE__));
+  CHECK_EQ(0, app->Init());
   return RUN_ALL_TESTS();
 }
 
-namespace LFL {
 class MyEnvironment : public ::testing::Environment {
   public:
     virtual ~MyEnvironment() {}

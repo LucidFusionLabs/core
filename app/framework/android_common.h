@@ -52,6 +52,7 @@ typedef GlobalJNIType<jstring> GlobalJNIString;
 
 struct JNI {
   JNIEnv *env=0;
+  Application *app=0;
   jobject activity=0, resources=0, gplus=0, handler=0;
   jclass activity_class=0, resources_class=0, throwable_class=0, string_class=0, arraylist_class=0,
          pair_class=0, hashmap_class=0, frame_class=0, assetmgr_class=0, 

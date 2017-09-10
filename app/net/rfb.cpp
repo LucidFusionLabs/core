@@ -1,5 +1,5 @@
 /*
- * $Id: crypto.cpp 1335 2014-12-02 04:13:46Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -691,9 +691,9 @@ struct RFBClientConnection : public Connection::Handler {
   }
 };
 
-Connection *RFBClient::Open(Params p, RFBClient::LoadPasswordCB pcb, RFBClient::UpdateCB ucb,
+Connection *RFBClient::Open(Networking *net, Params p, RFBClient::LoadPasswordCB pcb, RFBClient::UpdateCB ucb,
                             RFBClient::CopyCB ccb, Connection::CB *detach, Callback *success) { 
-  Connection *c = app->ConnectTCP(p.hostport, 5900, detach, p.background_services);
+  Connection *c = net->ConnectTCP(p.hostport, 5900, detach, p.background_services);
   if (!c) return 0;
   c->handler = make_unique<RFBClientConnection>(move(p), move(pcb), move(ucb), move(ccb),
                                                 success ? move(*success) : Callback());

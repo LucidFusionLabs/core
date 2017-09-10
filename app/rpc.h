@@ -40,18 +40,18 @@ namespace LFL {
 #define IPC_BUILDER_CLOSE_MPB if (mpb.len) mpb.Close()
 #define IPC_BUILDER_OPEN_MPB_BY_XFD(name, mpv) \
   MultiProcessBuffer mpb(req->mpv(), xfer_fd); \
-  if (mpb.len) mpb.Open();
+  if (mpb.len) mpb.Open(app_info);
 
 #define IPC_BUILDER_CLOSE_MPT mpb.Close()
 #define IPC_BUILDER_OPEN_MPT_BY_XFD(name, mpt, mpv) \
   MultiProcessBuffer mpb(req->mpv(), xfer_fd); \
-  mpt mpf; \
-  if (req->mpv()->type() != mpt::Type || !mpb.Open() || !MultiProcessResource::Read(mpb, req->mpv()->type(), &mpf)) \
+  mpt mpf(this); \
+  if (req->mpv()->type() != mpt::Type || !mpb.Open(app_info) || !MultiProcessResource::Read(mpb, req->mpv()->type(), &mpf)) \
   { ERROR(#name " load " #mpt "=", req->mpv()->url()->c_str(), " failed"); break; }
 
 #define IPC_BUILDER_OPEN_MPT_BY_ID(name, mpt, mpv) \
   MultiProcessBuffer *mpb = FindOrNull(ipc_buffer, req->mpv()); \
-  mpt mpf; \
+  mpt mpf(this); \
   if (!mpb || !mpb->buf || !MultiProcessResource::Read(*mpb, mpt::Type, &mpf)) \
   { ERROR(#name " load " #mpt "_id=", req->mpv(), " failed"); break; }
 
@@ -145,7 +145,7 @@ namespace LFL {
     typedef IPC::name Type; \
     static const int Id = id; \
     static const char *Name() { return #name; } \
-    static string DebugString(const IPC::name *x, const mpt &mpv=mpt()) { return StrCat("{", __VA_ARGS__, "}"); } \
+    static string DebugString(const IPC::name *x, const mpt &mpv) { return StrCat("{", __VA_ARGS__, "}"); } \
   };
 
 #else /* LFL_IPC */
@@ -163,8 +163,9 @@ namespace LFL {
 #define IPC_CLIENT_CALL(name, mpt, ...) \
   struct name ## Query; \
   struct name ## IPC { \
+    Parent *parent; \
     typedef function<int(const IPC::name ## Response*, mpt)> CB; \
-    name ## IPC(Parent *P=0, IPC::Seq S=0, const CB &C=CB()) {} \
+    name ## IPC(Parent *P=0, IPC::Seq S=0, const CB &C=CB()) : parent(P) {} \
     virtual ~name ## IPC() {} \
   }; \
   unordered_map<IPC::Seq, void*> name ## _map; \
@@ -179,7 +180,7 @@ namespace LFL {
     typedef IPC::name Type; \
     static const int Id = id; \
     static const char *Name() { return #name; } \
-    static string DebugString(const void *x, const mpt &mpv=mpt()) { return ""; } \
+    static string DebugString(const void *x, const mpt &mpv=mpt(nullptr)) { return ""; } \
   };
 #endif
 
@@ -238,6 +239,9 @@ struct InterProcessComm {
     } 
   };
 
+  ApplicationInfo *app_info;
+  ThreadDispatcher *dispatcher;
+  SocketServices *net;
   string ipc_name;
   deque<int> ipc_done;
   unordered_map<int, MultiProcessBuffer*> ipc_buffer;
@@ -247,7 +251,7 @@ struct InterProcessComm {
   IPC::Seq seq=0;
   bool in_handle_ipc=0;
 
-  InterProcessComm(const string &n) : ipc_name(n) {}
+  InterProcessComm(ApplicationInfo *A, ThreadDispatcher *D, SocketServices *N, const string &n) : app_info(A), dispatcher(D), net(N), ipc_name(n) {}
   virtual ~InterProcessComm() {}
 
   bool StartServerProcess(const string &server_program, const vector<string> &arg=vector<string>());
@@ -256,9 +260,9 @@ struct InterProcessComm {
   virtual void HandleIPC(Connection *c, int filter_msg=0);
   virtual void HandleIPCMessage(const IPC::Header&, const StringPiece&, int) = 0;
 
-  void HandleMessagesLoop() { while (app->run) if (!HandleMessages()) break; }
+  void HandleMessagesLoop() { while (dispatcher->run) if (!HandleMessages()) break; }
   bool HandleMessages(int filter_msg=0) {
-    if (!NBReadable(conn->socket, -1)) return true;
+    if (!NBReadable(conn->socket, dispatcher, -1)) return true;
     if (conn->Reads() <= 0) return ERRORv(false, conn->Name(), ": read ");
     HandleIPC(conn, filter_msg);
     return true;

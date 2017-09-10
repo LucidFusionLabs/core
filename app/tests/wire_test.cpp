@@ -20,11 +20,12 @@
 #include "core/app/ipc.h"
 
 namespace LFL {
+extern Application *app;
 const int MultiProcessPaintResource::DrawBox::Type;
 const int MultiProcessPaintResource::DrawBackground::Type;
 
 TEST(WireTest, MultiProcessPaintResource) {
-  MultiProcessPaintResourceBuilder builder;
+  MultiProcessPaintResourceBuilder builder(app->main_process.get());
   builder.Add(MultiProcessPaintResource::DrawBox(       Box(3, 9,  11, 33), 17));
   builder.Add(MultiProcessPaintResource::DrawBackground(Box(4, 10, 12, 34)));
 

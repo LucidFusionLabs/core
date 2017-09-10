@@ -107,11 +107,11 @@ int Application::LoadSystemImage(const string &n) { static int ret=0; return ++r
 void Application::UpdateSystemImage(int n, Texture&) {}
 void Application::UnloadSystemImage(int n) {}
 
-unique_ptr<ToolbarViewInterface> SystemToolkit::CreateToolbar(const string &theme, MenuItemVec items, int flag) { return make_unique<NullToolbarView>(); }
-unique_ptr<CollectionViewInterface> SystemToolkit::CreateCollectionView(const string &title, const string &style, const string &theme, vector<CollectionItem> items) { return make_unique<NullCollectionView>(title, style, move(items)); }
-unique_ptr<TableViewInterface> SystemToolkit::CreateTableView(const string &title, const string &style, const string &theme, TableItemVec items) { return make_unique<NullTableView>(title, style, move(items)); }
-unique_ptr<TextViewInterface> SystemToolkit::CreateTextView(const string &title, File *file) { return make_unique<NullTextView>(); }
-unique_ptr<TextViewInterface> SystemToolkit::CreateTextView(const string &title, const string &text) { return make_unique<NullTextView>(); }
-unique_ptr<NavigationViewInterface> SystemToolkit::CreateNavigationView(const string &style, const string &theme) { return make_unique<NullNavigationView>(); }
+unique_ptr<ToolbarViewInterface> SystemToolkit::CreateToolbar(Window*, const string &theme, MenuItemVec items, int flag) { return make_unique<NullToolbarView>(); }
+unique_ptr<CollectionViewInterface> SystemToolkit::CreateCollectionView(Window*, const string &title, const string &style, const string &theme, vector<CollectionItem> items) { return make_unique<NullCollectionView>(title, style, move(items)); }
+unique_ptr<TableViewInterface> SystemToolkit::CreateTableView(Window*, const string &title, const string &style, const string &theme, TableItemVec items) { return make_unique<NullTableView>(title, style, move(items)); }
+unique_ptr<TextViewInterface> SystemToolkit::CreateTextView(Window*, const string &title, File *file) { return make_unique<NullTextView>(); }
+unique_ptr<TextViewInterface> SystemToolkit::CreateTextView(Window*, const string &title, const string &text) { return make_unique<NullTextView>(); }
+unique_ptr<NavigationViewInterface> SystemToolkit::CreateNavigationView(Window*, const string &style, const string &theme) { return make_unique<NullNavigationView>(); }
 
 }; // namespace LFL

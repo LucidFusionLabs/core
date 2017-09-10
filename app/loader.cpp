@@ -308,9 +308,9 @@ string Geometry::ExportOBJ(const Geometry *geom, const set<int> *prim_filter, bo
   return StrCat(verts, "\n", faces);
 }
 
-SimpleAssetLoader::SimpleAssetLoader() { INFO("SimpleAssetLoader"); }
+SimpleAssetLoader::SimpleAssetLoader(AssetLoading *p) : parent(p) { INFO("SimpleAssetLoader"); }
 void *SimpleAssetLoader::LoadFileNamed(const string &filename) {
-  unique_ptr<File> f(Asset::OpenFile(filename));
+  unique_ptr<File> f(parent->OpenFile(filename));
   if (!f || !f->Opened()) return ERRORv(nullptr, "open: ", filename);
   return f.release();
 }
@@ -406,7 +406,7 @@ int SimpleAssetLoader::RefillAudio(SoundAsset *a, int reset) {
 void SimpleAssetLoader::LoadMovie(void *h, MovieAsset *a) {}
 int SimpleAssetLoader::PlayMovie(MovieAsset *a, int seek) { return 0; }
 
-unique_ptr<AssetLoaderInterface> CreateSimpleAssetLoader() { return make_unique<SimpleAssetLoader>(); }
+unique_ptr<AssetLoaderInterface> CreateSimpleAssetLoader(AssetLoading *p) { return make_unique<SimpleAssetLoader>(p); }
 
 void SimpleVideoResampler::RGB2BGRCopyPixels(unsigned char *dst, const unsigned char *src, int l, int bpp) {
   for (int k = 0; k < l; k++) for (int i = 0; i < bpp; i++) dst[k*bpp+(!i?2:(i==2?0:i))] = src[k*bpp+i];
@@ -546,11 +546,11 @@ void SimpleVideoResampler::CopyMatrixToColorChannels(const Matrix *M, int w, int
   }
 }
 
-AssetLoader::AssetLoader() {}
+AssetLoader::AssetLoader(AssetLoading *l) : loading(l) {}
 AssetLoader::~AssetLoader() {}
 
 int AssetLoader::Init() {
-  default_loader = CreateAssetLoader();
+  default_loader = CreateAssetLoader(loading);
   default_audio_loader = default_loader.get();
   default_video_loader = default_loader.get();
   default_movie_loader = default_loader.get();

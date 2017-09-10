@@ -17,6 +17,7 @@
  */
 
 #include "core/app/gl/view.h"
+#include "core/app/shell.h"
 
 namespace LFL {
 #ifdef LFL_MOBILE
@@ -75,22 +76,22 @@ void Widget::Button::LayoutComplete(Flow *flow, Font *f, const Box &b) {
   if (solid) {
     flow->SetFont(0);
     flow->SetFGColor(solid);
-    flow->out->PushBack(box, flow->cur_attr, Singleton<BoxFilled>::Get());
+    flow->out->PushBack(box, flow->cur_attr, Singleton<BoxFilled>::Set());
   }
   if (outline) {
     flow->SetFont(0);
     flow->SetFGColor(outline);
-    flow->out->PushBack(box, flow->cur_attr, Singleton<BoxOutline>::Get());
+    flow->out->PushBack(box, flow->cur_attr, Singleton<BoxOutline>::Set());
   } else if (outline_topleft || outline_bottomright) {
     flow->SetFont(0);
     flow->cur_attr.line_width = outline_w;
     if (outline_topleft) {
       flow->SetFGColor(outline_topleft);
-      flow->out->PushBack(box, flow->cur_attr, Singleton<BoxTopLeftOutline>::Get());
+      flow->out->PushBack(box, flow->cur_attr, Singleton<BoxTopLeftOutline>::Set());
     }
     if (outline_bottomright) {
       flow->SetFGColor(outline_bottomright);
-      flow->out->PushBack(box, flow->cur_attr, Singleton<BoxBottomRightOutline>::Get());
+      flow->out->PushBack(box, flow->cur_attr, Singleton<BoxBottomRightOutline>::Set());
     }
     flow->cur_attr.line_width=0;
   }
@@ -109,8 +110,7 @@ void Widget::Button::LayoutComplete(Flow *flow, Font *f, const Box &b) {
   }
 }
 
-Widget::Slider::Slider(View *V, int f) : Interface(V), flag(f),
-  menuicon(app->fonts->Get("MenuAtlas", "", 0, Color::white, Color::clear, 0)) {}
+Widget::Slider::Slider(View *V, int f) : Interface(V), flag(f) {}
 
 void Widget::Slider::LayoutAttached(const Box &w) {
   track = w;
@@ -129,9 +129,9 @@ void Widget::Slider::Layout(int, int, bool flip) {
   if (outline_topleft && outline_bottomright) {
     track.DelBorder(Border(outline_w, 0, 0, outline_w));
     int attr_id = view->child_box.attr.GetAttrId(Drawable::Attr(NullPointer<Font>(), outline_topleft, nullptr, false, true, outline_w));
-    view->child_box.PushBack(track, attr_id, Singleton<BoxTopLeftOutline>::Get());
+    view->child_box.PushBack(track, attr_id, Singleton<BoxTopLeftOutline>::Set());
     attr_id = view->child_box.attr.GetAttrId(Drawable::Attr(NullPointer<Font>(), outline_bottomright, nullptr, false, true, outline_w));
-    view->child_box.PushBack(track, attr_id, Singleton<BoxBottomRightOutline>::Get());
+    view->child_box.PushBack(track, attr_id, Singleton<BoxBottomRightOutline>::Set());
     track.DelBorder(Border(0, outline_w, outline_w, 0));
   }
 
@@ -144,10 +144,11 @@ void Widget::Slider::Layout(int, int, bool flip) {
   else      { arrow_up.h = track.w; track.h -= 2*track.w; arrow_up.y += track.h; }
 
   if (1) {
+    if (!menuicon) menuicon.Load(view->root, FontDesc("MenuAtlas", "", 0, Color::white, Color::clear, 0));
     int attr_id = view->child_box.attr.GetAttrId(Drawable::Attr(menuicon, &Color::white, nullptr, false, true));
-    if (arrows) view->child_box.PushBack(arrow_up,   attr_id, menuicon ? menuicon->FindGlyph(flip ? 2 : 4) : 0);
-    if (arrows) view->child_box.PushBack(arrow_down, attr_id, menuicon ? menuicon->FindGlyph(flip ? 3 : 1) : 0);
-    if (1)      view->child_box.PushBack(scroll_dot, attr_id, menuicon ? menuicon->FindGlyph(           5) : 0, &drawbox_ind);
+    if (arrows) view->child_box.PushBack(arrow_up,   attr_id, menuicon->FindGlyph(flip ? 2 : 4));
+    if (arrows) view->child_box.PushBack(arrow_down, attr_id, menuicon->FindGlyph(flip ? 3 : 1));
+    if (1)      view->child_box.PushBack(scroll_dot, attr_id, menuicon->FindGlyph(           5), &drawbox_ind);
 
     if (1)      AddDragBox (scroll_dot, MouseController::CB(bind(&Slider::DragScrollDot, this)));
     if (arrows) AddClickBox(arrow_up,   MouseController::CB(bind(flip ? &Slider::ScrollDown : &Slider::ScrollUp,   this)));
@@ -157,7 +158,8 @@ void Widget::Slider::Layout(int, int, bool flip) {
 }
 
 void Widget::Slider::Update(bool force) {
-  if (!app->input || !app->input->MouseButton1Down()) dragging = false;
+  Input *input = view->root->parent->input.get();
+  if (!input || !input->MouseButton1Down()) dragging = false;
   if (!dragging && !dirty && !force) return;
   bool flip = flag & Flag::Horizontal;
   if (dragging) {
@@ -246,7 +248,7 @@ const Drawable::Attr *TextBox::Style::GetAttr(int attr) const {
     const Color *fg = colors->GetColor(italic ? colors->background_index : ((bold && fg_index == colors->normal_index) ? colors->bold_index : fg_index));
     const Color *bg = colors->GetColor(italic ? colors->normal_index     : bg_index);
     if (attr & Reverse) swap(fg, bg);
-    last_attr.font = app->fonts->Change(font, font->size, *fg, *bg, font->flag);
+    last_attr.font = font->engine->parent->Change(font, font->size, *fg, *bg, font->flag);
     last_attr.bg = bg == colors->GetColor(colors->background_index) ? 0 : bg; // &font->bg;
   }
   last_attr.underline = attr & Underline;
@@ -473,11 +475,12 @@ void TextBox::LinesFrameBuffer::PushBackAndUpdateOffset(TextBox::Line *l, int lo
 
 point TextBox::LinesFrameBuffer::Paint(TextBox::Line *l, point lp, const Box &b, int offset, int len) {
   auto p = l->parent;
-  if (!app->suspended) {
+  auto a = p->root->parent;
+  if (!a->suspended) {
     GraphicsContext gc(p->root->gd);
     Box sb(lp.x, lp.y - b.h, b.w, b.h);
-    app->fonts->SelectFillColor(gc.gd);
-    app->fonts->GetFillColor(!Color::IsTransparent(p->bg_color) ? Color(p->bg_color) : Color::black)->Draw(&gc, sb);
+    a->fonts->SelectFillColor(gc.gd);
+    a->fonts->GetFillColor(!Color::IsTransparent(p->bg_color) ? Color(p->bg_color) : Color::black)->Draw(&gc, sb);
     l->Draw(lp + b.Position(), -1, offset, len, &sb);
   } else p->needs_redraw = true;
   return point(lp.x, lp.y-b.h);
@@ -494,8 +497,8 @@ TextBox::LineUpdate::~LineUpdate() {
   else fb->Update(v);
 }
 
-TextBox::TextBox(Window *W, const FontRef &F, int LC) : View(W), style(F), cmd_fb(W?W->gd:0), cmd_last(LC) {
-  if (style.font.Load()) cmd_line.GetAttrId(Drawable::Attr(style.font));
+TextBox::TextBox(Window *W, const FontRef &F, int LC) : View(W), style(F), cmd_fb(W?W->parent:0), cmd_last(LC) {
+  if (style.font.Load(W)) cmd_line.GetAttrId(Drawable::Attr(style.font));
   layout.pad_wide_chars = 1;
   cmd_line.Init(this, 0);
 }
@@ -523,9 +526,10 @@ void TextBox::SetColors(Colors *C) {
 }
 
 void TextBox::UpdateLineFB(Line *L, LinesFrameBuffer *fb, int flag) {
+  auto gd = fb->fb.parent->GD();
   fb->fb.Attach();
-  ScopedClearColor scc(fb->fb.gd, bg_color);
-  ScopedDrawMode drawmode(fb->fb.gd, DrawMode::_2D);
+  ScopedClearColor scc(gd, bg_color);
+  ScopedDrawMode drawmode(gd, DrawMode::_2D);
   fb->OverwriteUpdate(L, 0, 0, 0, flag);
   fb->fb.Release();
 }
@@ -560,7 +564,7 @@ void TextBox::DrawCursor(point p, Shader *shader) {
       if (elapsed > cursor.blink_time * 2) cursor.blink_begin = now;
       else blinking = true;
     }
-    if (blinking) style.font->Draw("_", (p - point(0, style.font->Height())) * scale);
+    if (blinking) style.font->Draw(root->gd, "_", (p - point(0, style.font->Height())) * scale);
   }
 }
 
@@ -582,7 +586,7 @@ void TextBox::UpdateLongToken(Line *BL, int beg_offset, Line *EL, int end_offset
     if (update_type < 0) BL->data->controls.erase(beg_offset);
     else {
       string url = offset ? textp.str() : text;
-      auto control = AddUrlBox(BL, beg_offset, EL, end_offset, url, [=](){ app->OpenSystemBrowser(url); });
+      auto control = AddUrlBox(BL, beg_offset, EL, end_offset, url, [=](){ root->parent->OpenSystemBrowser(url); });
       if (new_link_cb) new_link_cb(control);
     }
   }
@@ -638,7 +642,7 @@ int TextBox::WriteHistory(const string &dir, const string &name, const string &h
 /* TextArea */
 
 TextArea::TextArea(Window *W, const FontRef &F, int S, int LC) :
-  TextBox(W, F, LC), line(this, S), line_fb(W->gd) {
+  TextBox(W, F, LC), line(this, S), line_fb(W->parent) {
   InitSelection();
 #ifdef LFL_MOBILE
   drag_cb = [=](int, point p, point d, int down){
@@ -646,7 +650,7 @@ TextArea::TextArea(Window *W, const FontRef &F, int S, int LC) :
     if (selection.Update(p, down)) selection.beg_click_time = Now();
     else if (!down && abs(selection.beg_click.y - selection.end_click.y) < 12
              && (Now() - selection.beg_click_time).count() > 200) {
-      app->ShowSystemContextMenu
+      root->parent->ShowSystemContextMenu
         (MenuItemVec{ 
          MenuItem{"", "Copy", [=](){ selection.explicitly_initiated = true; } },
          MenuItem{"", "Paste" }, MenuItem{"", "Keyboard" } });
@@ -657,7 +661,7 @@ TextArea::TextArea(Window *W, const FontRef &F, int S, int LC) :
       float sl = float(d.y) / style.font->Height();
       v_scrolled = Clamp(v_scrolled + sl * PercentOfLines(1), 0.0f, 1.0f);
       UpdateScrolled();
-      if (!W->target_fps) app->scheduler.Wakeup(root);
+      if (!W->target_fps) root->parent->scheduler.Wakeup(root);
     }
 #endif
     return true;
@@ -666,13 +670,15 @@ TextArea::TextArea(Window *W, const FontRef &F, int S, int LC) :
 }
 
 void TextArea::Write(const StringPiece &s, bool update_fb, bool release_fb) {
-  if (!app->MainThread()) return app->RunInMainThread(bind(&TextArea::WriteCB, this, s.str(), update_fb, release_fb));
+  auto a = root->parent;
+  if (!a->MainThread()) return a->RunInMainThread(bind(&TextArea::WriteCB, this, s.str(), update_fb, release_fb));
   write_last = Now();
   bool wrap = Wrap();
   int update_flag = LineFBPushBack(), sl;
   LinesFrameBuffer *fb = GetFrameBuffer();
-  ScopedClearColor scc(fb->fb.gd, update_fb ? bg_color : 0);
-  ScopedDrawMode drawmode(fb->fb.gd, update_fb ? DrawMode::_2D : DrawMode::NullOp);
+  auto gd = fb->fb.parent->GD();
+  ScopedClearColor scc(gd, update_fb ? bg_color : 0);
+  ScopedDrawMode drawmode(gd, update_fb ? DrawMode::_2D : DrawMode::NullOp);
   if (update_fb && fb->lines) fb->fb.Attach();
   StringLineIter add_lines(s, StringLineIter::Flag::BlankLines);
   for (const char *add_line = add_lines.Next(); add_line; add_line = add_lines.Next()) {
@@ -717,8 +723,9 @@ void TextArea::CheckResized(const Box &b) {
 
 void TextArea::Redraw(bool attach, bool relayout) {
   LinesFrameBuffer *fb = GetFrameBuffer();
-  ScopedClearColor scc(fb->fb.gd, bg_color);
-  ScopedDrawMode drawmode(fb->fb.gd, DrawMode::_2D);
+  auto gd = fb->fb.parent->GD();
+  ScopedClearColor scc(gd, bg_color);
+  ScopedDrawMode drawmode(gd, DrawMode::_2D);
   int fb_flag = LinesFrameBuffer::Flag::NoVWrap | (relayout ? LinesFrameBuffer::Flag::Flush : 0);
   int lines = start_line_adjust + skip_last_lines, font_height = style.font->Height();
   int (LinesFrameBuffer::*update_cb)(Line*, int, int, int, int) =
@@ -726,7 +733,7 @@ void TextArea::Redraw(bool attach, bool relayout) {
                     : &LinesFrameBuffer::PushFrontAndUpdate;
   fb->p = reverse_line_fb ? point(0, fb->h - start_line_adjust * font_height) 
                           : point(0, start_line_adjust * font_height);
-  if (attach) { fb->fb.Attach(); fb->fb.gd->Clear(); }
+  if (attach) { fb->fb.Attach(); gd->Clear(); }
   for (int i=start_line; i<line.ring.count && lines < fb->lines; i++) {
     Line *L = &line[-i-1];
     int py = L->p.y;
@@ -787,8 +794,9 @@ void TextArea::UpdateVScrolled(int dist, bool up, int ind, int first_offset, int
     bool front = up == reverse_line_fb, decr = front != reverse_line_fb;
     int wl = 0, (LinesFrameBuffer::*update_cb)(Line*, int, int, int, int) =
       front ? &LinesFrameBuffer::PushFrontAndUpdate : &LinesFrameBuffer::PushBackAndUpdate;
-    ScopedDrawMode drawmode(fb->fb.gd, DrawMode::_2D);
-    ScopedClearColor scc(fb->fb.gd, bg_color);
+    auto gd = fb->fb.parent->GD();
+    ScopedDrawMode drawmode(gd, DrawMode::_2D);
+    ScopedClearColor scc(gd, bg_color);
     fb->fb.Attach();
     if (first_len)  wl += (fb->*update_cb)(&line[ind], -line_left, first_offset, min(dist, first_len), 0); 
     while (wl<dist) wl += (fb->*update_cb)(&line[decr ? --ind : ++ind], -line_left, 0, dist-wl, 0);
@@ -921,7 +929,7 @@ void TextArea::DragCB(int b, point p, point d, int down) {
 
 void TextArea::CopyText(const Selection::Point &beg, const Selection::Point &end) {
   string copy_text = CopyText(beg.line_ind, beg.char_ind, end.line_ind, end.char_ind, true);
-  if (!copy_text.empty()) app->SetClipboardText(copy_text);
+  if (!copy_text.empty()) root->parent->SetClipboardText(copy_text);
 }
 
 string TextArea::CopyText(int beg_line_ind, int beg_char_ind, int end_line_ind, int end_char_ind, bool add_nl) {
@@ -1029,8 +1037,8 @@ int TextView::UpdateLines(float vs, int *first_ind, int *first_offset, int *firs
 
 PropertyView::PropertyView(Window *W, const FontRef &F) : TextView(W, F),
   property_line(&NodeIndex::GetLines, &NodeIndex::GetString),
-  menuicon_white(FontDesc("MenuAtlas", "", 0, Color::white, Color::clear, 0, 0, FontDesc::Engine::Atlas)),
-  menuicon_black(FontDesc("MenuAtlas", "", 0, Color::black, Color::clear, 0, 0, FontDesc::Engine::Atlas)) {
+  menuicon_white(W, FontDesc("MenuAtlas", "", 0, Color::white, Color::clear, 0, 0, FontDesc::Engine::Atlas)),
+  menuicon_black(W, FontDesc("MenuAtlas", "", 0, Color::black, Color::clear, 0, 0, FontDesc::Engine::Atlas)) {
   cursor_enabled = 0;
   cmd_color = Color(Color::black, .5);
   selection_cb = bind(&PropertyView::SelectionCB, this, _1);
@@ -1092,7 +1100,7 @@ void PropertyView::LayoutLine(Line *L, const NodeIndex &ni, const point &p) {
     flow->out->PushBack(control, control_attr_id, menuicon_black->FindGlyph(n->expanded ? 11 : 12));
     auto i = Insert(L->data->controls, 0, make_shared<Control>
                     (L, this, control + p, "", MouseControllerCallback(MouseController::CoordCB
-                      (bind(&PropertyView::HandleNodeControlClicked, this, ni.id, _1, _2, _3, _4)), true)));
+                      (bind(&PropertyView::HandleNodeControlClicked, this, ni.id, _1, _2, _3, _4)), root->parent)));
   }
 
   if (n->icon) {
@@ -1167,6 +1175,7 @@ Console::Console(Window *W, const FontRef &F, const Callback &C) : TextArea(W, F
   cursor.type = Cursor::Underline;
 }
 
+void Console::Run(const string &in) { root->shell->Run(in); }
 void Console::StartAnimating() {
   bool last_animating = animating;
   Time now = Now(), elapsed = now - anim_begin;
@@ -1209,8 +1218,8 @@ void Console::Draw(const Box &b, int flag, Shader *shader) {
 
 Dialog::Dialog(Window *W, float w, float h, int flag) : View(W),
   color(85,85,85,220), title_gradient{Color(127,0,0), Color(0,0,127), Color(0,0,178), Color(208,0,127)},
-  font(FontDesc(FLAGS_font, "", 14, Color(Color::white,.8), Color::clear, FLAGS_font_flag)),
-  menuicon(FontDesc("MenuAtlas", "", 0, Color::white, Color::clear, 0)), deleted_cb([=]{ deleted=true; })
+  font    (W, FontDesc(FLAGS_font, "", 14, Color(Color::white,.8), Color::clear, FLAGS_font_flag)),
+  menuicon(W, FontDesc("MenuAtlas", "", 0, Color::white, Color::clear, 0)), deleted_cb([=]{ deleted=true; })
 {
   box = root->Box().center(root->Box(w, h));
   fullscreen = flag & Flag::Fullscreen;
@@ -1265,7 +1274,7 @@ bool Dialog::HandleReshape(Box *outline) {
   if (resizing_left)   MinusPlus(&outline->x, &outline->w, max(-outline->w + min_width,  int(mouse_start.x - root->mouse.x)));
   if (resizing_bottom) MinusPlus(&outline->y, &outline->h, max(-outline->h + min_height, int(mouse_start.y - root->mouse.y)));
   if (resizing_right)  outline->w += max(-outline->w + min_width, int(root->mouse.x - mouse_start.x));
-  if (!app->input->MouseButton1Down()) {
+  if (!root->parent->input->MouseButton1Down()) {
     if (resizing) { box = *outline; Layout(); }
     moving = resizing_left = resizing_right = resizing_bottom = 0;
   }
@@ -1343,16 +1352,16 @@ SliderDialog::SliderDialog(Window *w, const string &t, const SliderDialog::Updat
 
 FlagSliderDialog::FlagSliderDialog(Window *w, const string &fn, float total, float inc) :
   SliderDialog(w, fn, bind(&FlagSliderDialog::Updated, this, _1), atof(Singleton<FlagMap>::Get()->Get(fn)) / total, total, inc),
-  flag_name(fn), flag_map(Singleton<FlagMap>::Get()) {}
+  flag_name(fn), flag_map(Singleton<FlagMap>::Set()) {}
 
-void Dialog::MessageBox(const string &n) {
-  app->ReleaseMouseFocus();
-  app->focused->AddDialog(make_unique<MessageBoxDialog>(app->focused, n));
+void Dialog::MessageBox(Window *w, const string &n) {
+  w->parent->ReleaseMouseFocus();
+  w->AddDialog(make_unique<MessageBoxDialog>(w, n));
 }
 
-void Dialog::TextureBox(const string &n) {
-  app->ReleaseMouseFocus();
-  app->focused->AddDialog(make_unique<TextureBoxDialog>(app->focused, n));
+void Dialog::TextureBox(Window *w, const string &n) {
+  w->parent->ReleaseMouseFocus();
+  w->AddDialog(make_unique<TextureBoxDialog>(w, n));
 }
 
 #ifdef LFL_BOOST
@@ -1447,7 +1456,7 @@ void HelperView::Draw() {
                      point(i->target_center.x, i->target_center.y), &font->fg);
     gc.gd->FillColor(Color::black);
     gc.DrawTexturedBox(Box::AddBorder(i->label, 4, 0));
-    font->Draw(i->description, point(i->label.x, i->label.y));
+    font->Draw(root->gd, i->description, point(i->label.x, i->label.y));
   }
 }
 

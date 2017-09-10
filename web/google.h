@@ -1,5 +1,5 @@
 /*
- * $Id: google.h 1306 2014-09-04 07:13:16Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -35,7 +35,8 @@ struct GoogleApi : public Crawler, public DebugHTMLParser {
 
   Results results;
   Result builder;
-  GoogleApi() {}
+  ApplicationShutdown *shutdown;
+  GoogleApi(ApplicationShutdown *s) : shutdown(s) {}
 
   void Clear() { results.clear(); builder.Clear(); }
 
@@ -59,7 +60,7 @@ struct GoogleApi : public Crawler, public DebugHTMLParser {
     if (strstr(entry->content().c_str(), "computer virus or spyware application") ||
         strstr(entry->content().c_str(), "entire network is affected") ||
         strstr(entry->content().c_str(), "http://www.download.com/Antivirus"))
-    { ERROR("the world's biggest scraper is upset about being scraped, shutting down, content='", entry->content().c_str(), "'"); app->run=0; return true; }
+    { ERROR("the world's biggest scraper is upset about being scraped, shutting down, content='", entry->content().c_str(), "'"); shutdown->Shutdown(); return true; }
 
     Clear();
     HTMLParser::Parse(entry->content().data(), entry->content().size());

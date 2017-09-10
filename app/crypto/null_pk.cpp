@@ -1,5 +1,5 @@
 /*
- * $Id: camera.cpp 1330 2014-11-06 03:04:15Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -20,11 +20,11 @@
 #include "core/app/crypto.h"
 
 namespace LFL {
-void FreeECPoint(ECPoint p) { FATAL(not_implemented); }
-void FreeECPair(ECPair p) { FATAL(not_implemented); }
-int ECPointDataSize(const ECGroup g, const ECPoint p, BigNumContext x) { FATAL(not_implemented); }
-void ECPointGetData(const ECGroup g, const ECPoint p, char *out, int len, BigNumContext x) { FATAL(not_implemented) }
-void ECPointSetData(const ECGroup g, ECPoint v, const StringPiece &data) { FATAL(not_implemented); }
+void FreeECPoint(ECPoint p) { FATAL("not implemented"); }
+void FreeECPair(ECPair p) { FATAL("not implemented"); }
+int ECPointDataSize(const ECGroup g, const ECPoint p, BigNumContext x) { FATAL("not implemented"); }
+void ECPointGetData(const ECGroup g, const ECPoint p, char *out, int len, BigNumContext x) { FATAL("not implemented") }
+void ECPointSetData(const ECGroup g, ECPoint v, const StringPiece &data) { FATAL("not implemented"); }
 
 RSAKey NewRSAPubKey() { return nullptr; }
 DSAKey NewDSAPubKey() { return nullptr; }
@@ -40,10 +40,10 @@ BigNum GetDSASigR(DSASig k) { return nullptr; }
 BigNum GetDSASigS(DSASig k) { return nullptr; }
 BigNum GetECDSASigR(ECDSASig k) { return nullptr; }
 BigNum GetECDSASigS(ECDSASig k) { return nullptr; }
-void RSAKeyFree(RSAKey k) { FATAL(not_implemented); }
-void DSAKeyFree(DSAKey k) { FATAL(not_implemented); }
-void DSASigFree(DSASig s) { FATAL(not_implemented); }
-void ECDSASigFree(ECDSASig s) { FATAL(not_implemented); }
+void RSAKeyFree(RSAKey k) { FATAL("not implemented"); }
+void DSAKeyFree(DSAKey k) { FATAL("not implemented"); }
+void DSASigFree(DSASig s) { FATAL("not implemented"); }
+void ECDSASigFree(ECDSASig s) { FATAL("not implemented"); }
 
 int RSAGeneratePair(RSAKey rsa_key, int bits) { return 0; }
 int RSAGeneratePair(RSAKey key, int bits, BigNum e) { return 0; }

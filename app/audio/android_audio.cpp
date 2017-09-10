@@ -1,5 +1,5 @@
 /*
- * $Id: camera.cpp 1330 2014-11-06 03:04:15Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -17,33 +17,33 @@
  */
 
 namespace LFL {
-int Application::GetMaxVolume() {
+int Audio::GetMaxVolume() {
   JNI *jni = Singleton<LFL::JNI>::Get();
   static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "maxVolume", "()I"));
   return jni->env->CallIntMethod(jni->activity, mid);
 }
 
-int Application::GetVolume() {
+int Audio::GetVolume() {
   JNI *jni = Singleton<LFL::JNI>::Get();
   static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "getVolume", "()I"));
   return jni->env->CallIntMethod(jni->activity, mid);
 }
 
-void Application::SetVolume(int v) {
+void Audio::SetVolume(int v) {
   JNI *jni = Singleton<LFL::JNI>::Get();
   static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "setVolume", "(I)V"));
   jint jv = v;
   return jni->env->CallVoidMethod(jni->activity, mid, jv);
 }
 
-void Application::PlaySoundEffect(SoundAsset *sa, const v3&, const v3&) {
+void Audio::PlaySoundEffect(SoundAsset *sa, const v3&, const v3&) {
   JNI *jni = Singleton<LFL::JNI>::Get();
   static jmethodID jni_activity_method_play_music =
     CheckNotNull(jni->env->GetMethodID(jni->activity_class, "playMusic", "(Landroid/media/MediaPlayer;)V"));
   jni->env->CallVoidMethod(jni->activity, jni_activity_method_play_music, jobject(sa->handle));
 }
 
-void Application::PlayBackgroundMusic(SoundAsset *sa) {
+void Audio::PlayBackgroundMusic(SoundAsset *sa) {
   JNI *jni = Singleton<LFL::JNI>::Get();
   static jmethodID jni_activity_method_play_background_music =
     CheckNotNull(jni->env->GetMethodID(jni->activity_class, "playBackgroundMusic", "(Landroid/media/MediaPlayer;)V"));

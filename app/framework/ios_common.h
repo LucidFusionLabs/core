@@ -55,6 +55,7 @@
   @property (nonatomic, retain) NSMutableDictionary *main_wait_fh;
   @property (nonatomic, assign) UIViewController *root_controller, *top_controller;
   @property (nonatomic, assign) SCNetworkReachabilityRef reachability;
+  @property (nonatomic, assign) LFL::Application *app;
   @property BOOL overlay_top_controller, frame_disabled, frame_on_mouse_input, downscale, show_title, wifi;
   @property int screen_w, screen_h, gl_y, gl_w, gl_h;
   @property CGFloat scale;
@@ -130,6 +131,7 @@
 namespace LFL {
 struct iOSWindow : public Window {
   GLKView *glkview=0;
+  iOSWindow(Application *a) : Window(a) {}
   ~iOSWindow() { ClearChildren(); }
   void SetCaption(const string &c);
   void SetResizeIncrements(float x, float y);
@@ -147,7 +149,7 @@ struct iOSCollectionView : public CollectionViewInterface {
 struct iOSTableView : public TableViewInterface {
   IOSTable *table;
   ~iOSTableView();
-  iOSTableView(const string &title, const string &style, const string &theme, TableItemVec items);
+  iOSTableView(Localization*, const string &title, const string &style, const string &theme, TableItemVec items);
 
   void DelNavigationButton(int align);
   void AddNavigationButton(int align, const TableItem &item);

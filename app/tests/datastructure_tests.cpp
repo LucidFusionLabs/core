@@ -18,19 +18,22 @@
 
 #include "gtest/gtest.h"
 
-extern "C" void MyAppCreate(int argc, const char* const* argv) {
-  LFL::FLAGS_font = LFL::FakeFontEngine::Filename();
-  LFL::app = new LFL::Application(argc, argv);
-  LFL::app->focused = LFL::Window::Create();
+namespace LFL {
+Application *app=0;
+
+extern "C" LFApp *MyAppCreate(int argc, const char* const* argv) {
+  FLAGS_font = FakeFontEngine::Filename();
+  app = new Application(argc, argv);
+  app->focused = CreateWindow(app);
   testing::InitGoogleTest(&argc, const_cast<char**>(argv));
+  return app;
 }
 
 extern "C" int MyAppMain() {
-  CHECK_EQ(0, LFL::app->Create(__FILE__));
+  CHECK_EQ(0, app->Create(__FILE__));
   return RUN_ALL_TESTS();
 }
 
-namespace LFL {
 DEFINE_int(size,         1024*1024, "Test size"); 
 DEFINE_int(rand_key_min, 0,         "Min key");
 DEFINE_int(rand_key_max, 10000000,  "Max key");
@@ -385,7 +388,7 @@ struct PrefixSumKeyedAVLTree : public AVLFingerTree<K,V,Node,Finger> {
 };
 
 TEST(DatastructureTest, StdMultiMap) {
-  PerformanceTimers *timers = Singleton<PerformanceTimers>::Get();
+  PerformanceTimers *timers = Singleton<PerformanceTimers>::Set();
   int dup_val[] = { 5, 2, 1 }, sum_dup_val = 8, j;
   for (auto i : my_env->db) {
     auto &db = *i.second, &sorted_db = *i.third;
@@ -415,7 +418,7 @@ TEST(DatastructureTest, StdMultiMap) {
 }
 
 TEST(DatastructureTest, StdUnorderedMap) {
-  PerformanceTimers *timers = Singleton<PerformanceTimers>::Get();
+  PerformanceTimers *timers = Singleton<PerformanceTimers>::Set();
   for (auto i : my_env->db) {
     auto &db = *i.second, &sorted_db = *i.third;
     unordered_map<int, int> m;
@@ -444,7 +447,7 @@ TEST(DatastructureTest, StdUnorderedMap) {
 }
 
 TEST(DatastructureTest, StdMap) {
-  PerformanceTimers *timers = Singleton<PerformanceTimers>::Get();
+  PerformanceTimers *timers = Singleton<PerformanceTimers>::Set();
   for (auto i : my_env->db) {
     auto &db = *i.second, &sorted_db = *i.third;
     map<int, int> m;
@@ -502,7 +505,7 @@ TEST(DatastructureTest, JudyArray) {
 #endif
 
 TEST(DatastructureTest, SkipList) {
-  PerformanceTimers *timers = Singleton<PerformanceTimers>::Get();
+  PerformanceTimers *timers = Singleton<PerformanceTimers>::Set();
   for (auto i : my_env->db) {
     auto &db = *i.second;
     SkipList<int, int> t;
@@ -528,7 +531,7 @@ TEST(DatastructureTest, SkipList) {
 }
 
 TEST(DatastructureTest, AVLTree) {
-  PerformanceTimers *timers = Singleton<PerformanceTimers>::Get();
+  PerformanceTimers *timers = Singleton<PerformanceTimers>::Set();
   for (auto i : my_env->db) {
     auto &db = *i.second;
     AVLTree<int, int> t;
@@ -554,7 +557,7 @@ TEST(DatastructureTest, AVLTree) {
 }
 
 TEST(DatastructureTest, PrefixSumKeyedAVLTree) {
-  PerformanceTimers *timers = Singleton<PerformanceTimers>::Get();
+  PerformanceTimers *timers = Singleton<PerformanceTimers>::Set();
   for (auto i : my_env->db) {
     auto &db = *i.second;
     if (i.first != "incr") continue;
@@ -588,7 +591,7 @@ TEST(DatastructureTest, PrefixSumKeyedAVLTree) {
 }
 
 TEST(DatastructureTest, RedBlackTree) {
-  PerformanceTimers *timers = Singleton<PerformanceTimers>::Get();
+  PerformanceTimers *timers = Singleton<PerformanceTimers>::Set();
   for (auto i : my_env->db) {
     auto &db = *i.second, &sorted_db = *i.third;
     RedBlackTree<int, int> t;
@@ -633,7 +636,7 @@ TEST(DatastructureTest, RedBlackTree) {
 }
 
 TEST(DatastructureTest, PrefixSumKeyedRedBlackTree) {
-  PerformanceTimers *timers = Singleton<PerformanceTimers>::Get();
+  PerformanceTimers *timers = Singleton<PerformanceTimers>::Set();
   for (auto i : my_env->db) {
     auto &db = *i.second;
     if (i.first != "incr") continue;

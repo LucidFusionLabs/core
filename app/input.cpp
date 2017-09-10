@@ -113,7 +113,7 @@ struct KeyRepeater {
     if      ( down && !key_down[key]) { keys_down.insert(key); key_down[key]=1; key_delay[key]=0; key_down_repeat[key]=Now(); }
     else if (!down &&  key_down[key]) { keys_down.erase (key); key_down[key]=0;                                               }
   }
-  void Repeat(unsigned clicks) {
+  void Repeat(Input *input, unsigned clicks) {
     Time now = Now();
     for (auto i = keys_down.begin(); i != keys_down.end(); ++i) {
       int elapsed = now - key_down_repeat[*i], delay = key_delay[*i];
@@ -122,7 +122,7 @@ struct KeyRepeater {
       for (int j=0, max_repeat=10; elapsed >= FLAGS_keyboard_repeat; ++j) {
         if (!delay) { delay=1; key_delay[*i]=true; elapsed -= FLAGS_keyboard_delay; }
         else        {                              elapsed -= FLAGS_keyboard_repeat; }
-        if (j < max_repeat) app->input->KeyEventDispatch(*i, true);
+        if (j < max_repeat) input->KeyEventDispatch(*i, true);
       }
       key_down_repeat[*i] = now - elapsed;
     }
@@ -196,7 +196,7 @@ int TextboxController::SendKeyEvent(InputEvent::Id event, bool down) {
 
   if (toggle_bind.key == event && !toggle_once) return 0;
 
-  if (event == app->input->paste_bind.key) { InputString(app->GetClipboardText()); return 1; }
+  if (clipboard && event == clipboard->paste_bind.key) { InputString(clipboard->GetClipboardText()); return 1; }
   if (HandleSpecialKey(event)) return 1;
 
   if (cmd_down) return 0;
@@ -247,13 +247,13 @@ void Input::QueueMouseZoom(const v2 &p, const v2 &d, bool begin) {
   queued_input.emplace_back(InputCB::MouseZoom, p.x, p.y, d.x, d.y, begin, false);
 }
 
-point Input::TransformMouseCoordinate(point p) {
-  if (FLAGS_swap_axis) p = point(app->focused->gl_w - p.y, p.x);
-  return point(p.x, app->focused->gl_h - p.y);
+point Input::TransformMouseCoordinate(Window *w, point p) {
+  if (FLAGS_swap_axis) p = point(w->gl_w - p.y, p.x);
+  return point(p.x, w->gl_h - p.y);
 }
 
 void Input::ClearButtonsDown() {
-  Window *screen = app->focused;
+  Window *screen = window->focused;
   if (left_shift_down)  { KeyPress(Key::LeftShift,  0, 0); left_shift_down = 0; }
   if (right_shift_down) { KeyPress(Key::RightShift, 0, 0); left_shift_down = 0; }
   if (left_ctrl_down)   { KeyPress(Key::LeftCtrl,   0, 0); left_ctrl_down  = 0; }
@@ -266,11 +266,6 @@ void Input::ClearButtonsDown() {
 
 int Input::Init() {
   INFO("Input::Init()");
-#ifdef LFL_APPLE
-  paste_bind = Bind('v', Key::Modifier::Cmd);
-#else
-  paste_bind = Bind('v', Key::Modifier::Ctrl);
-#endif
   return 0;
 }
 
@@ -304,9 +299,9 @@ int Input::DispatchQueuedInput(bool event_on_keyboard_input, bool event_on_mouse
 }
 
 int Input::KeyPress(int key, int mod, bool down) {
-  if (!app->run) return 0;
+  if (!dispatcher->run) return 0;
 #ifdef LFL_DEBUG
-  if (!app->MainThread()) ERROR("Input::KeyPress() called from thread ", Thread::GetId());
+  if (!dispatcher->MainThread()) ERROR("Input::KeyPress() called from thread ", Thread::GetId());
 #endif
 
   if      (key == Key::LeftShift)   left_shift_down = down;
@@ -327,7 +322,7 @@ int Input::KeyPress(int key, int mod, bool down) {
   int fired = KeyEventDispatch(event, down);
   if (fired) return fired;
 
-  Window *screen = app->focused;
+  Window *screen = window->focused;
   for (auto &g : screen->input)
     if (g->active) g->Button(event, down); 
 
@@ -335,14 +330,14 @@ int Input::KeyPress(int key, int mod, bool down) {
 }
 
 int Input::KeyEventDispatch(InputEvent::Id event, bool down) {
-  KeyboardController *g = app->focused ? app->focused->active_textbox : 0;
+  KeyboardController *g = window->focused ? window->focused->active_textbox : 0;
   if (!g || (!down && g->keydown_events_only)) return 0;
   return g->SendKeyEvent(event, down);
 }
 
 int Input::MouseMove(const point &p, const point &d) {
-  if (!app->run) return 0;
-  Window *screen = app->focused;
+  if (!dispatcher->run) return 0;
+  Window *screen = window->focused;
   int fired = MouseEventDispatch(Mouse::Event::Motion, p, d, MouseButton1Down());
   if (!screen->grab_mode.Enabled()) return fired;
 
@@ -354,8 +349,8 @@ int Input::MouseMove(const point &p, const point &d) {
 
 int Input::MouseSwipe(const point &p, const point &d) {
   int events = 0;
-  if (!app->run || !app->focused) return events;
-  if (auto mc = app->focused->active_controller) {
+  if (!dispatcher->run || !window->focused) return events;
+  if (auto mc = window->focused->active_controller) {
     if ((events = mc->SendWheelEvent(Mouse::Event::Swipe, v2(p.x, p.y), v2(d.x, d.y), 0))) { 
       InputDebug("Input::MouseWheel sent MouseController[%p] events = %d", mc, events);
       return events;
@@ -366,8 +361,8 @@ int Input::MouseSwipe(const point &p, const point &d) {
 
 int Input::MouseWheel(const v2 &p, const v2 &d) {
   int events = 0;
-  if (!app->run || !app->focused) return events;
-  if (auto mc = app->focused->active_controller) {
+  if (!dispatcher->run || !window->focused) return events;
+  if (auto mc = window->focused->active_controller) {
     if ((events = mc->SendWheelEvent(Mouse::Event::Wheel, p, d, 0))) { 
       InputDebug("Input::MouseWheel sent MouseController[%p] events = %d", mc, events);
       return events;
@@ -378,8 +373,8 @@ int Input::MouseWheel(const v2 &p, const v2 &d) {
 
 int Input::MouseZoom(const v2 &p, const v2 &d, bool begin) {
   int events = 0;
-  if (!app->run || !app->focused) return events;
-  if (auto mc = app->focused->active_controller) {
+  if (!dispatcher->run || !window->focused) return events;
+  if (auto mc = window->focused->active_controller) {
     if ((events = mc->SendWheelEvent(Mouse::Event::Zoom, p, d, begin))) { 
       InputDebug("Input::MouseZoom sent MouseController[%p] events = %d", mc, events);
       return events;
@@ -389,7 +384,7 @@ int Input::MouseZoom(const v2 &p, const v2 &d, bool begin) {
 }
 
 int Input::MouseClick(int button, bool down, const point &p) {
-  if (!app->run) return 0;
+  if (!dispatcher->run) return 0;
   InputEvent::Id event = Mouse::ButtonID(button);
   if      (event == Mouse::Button::_1) mouse_but1_down = down;
   else if (event == Mouse::Button::_2) mouse_but2_down = down;
@@ -398,7 +393,7 @@ int Input::MouseClick(int button, bool down, const point &p) {
   int fired = MouseEventDispatch(event, p, point(), down);
   if (fired) return fired;
 
-  Window *screen = app->focused;
+  Window *screen = window->focused;
   for (auto i = screen->input.begin(), e = screen->input.end(); i != e; ++i)
     if ((*i)->active) (*i)->Button(event, down);
 
@@ -406,8 +401,8 @@ int Input::MouseClick(int button, bool down, const point &p) {
 }
 
 int Input::MouseEventDispatch(InputEvent::Id event, const point &p, const point &d, int down) {
-  Window *w = app->focused;
-  if      (event == paste_bind.key)      return KeyEventDispatch(event, down);
+  Window *w = window->focused;
+  if      (event == clipboard->paste_bind.key) return KeyEventDispatch(event, down);
   else if (event == Mouse::Event::Wheel) w->mouse_wheel = p;
   else                                   w->mouse       = p;
   InputDebug("Input::MouseEventDispatch %s %s down=%d",
@@ -473,7 +468,7 @@ void MouseControllerCallback::Assign(const MouseControllerCallback &c) {
 }
 
 template <class X> bool MouseControllerCallback::Run(X p, X d, int button, int down, bool wrote) {
-  if (run_from_message_loop && !wrote) { app->RunInMainThread([=]{ Run(p, d, button, down, true); }); return false; }
+  if (run_from_message_loop && !wrote) { run_from_message_loop->RunInMainThread([=]{ Run(p, d, button, down, true); }); return false; }
   bool ret = 1;
   switch (type) {
     case CB_VOID:  cb.cb_void();                                                              break;

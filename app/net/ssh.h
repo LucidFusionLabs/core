@@ -1,5 +1,5 @@
 /*
- * $Id: network.h 1335 2014-12-02 04:13:46Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -215,7 +215,7 @@ struct SSHClient {
     virtual ~Handler() {}
   };
 
-  static Connection *Open(Params params, const ResponseCB &cb, Connection::CB *detach=0, Callback *success=0);
+  static Connection *Open(Networking*, Params params, const ResponseCB &cb, Connection::CB *detach=0, Callback *success=0);
   static Connection *CreateSSHHandler(Connection *c, Params p, const ResponseCB &cb, Callback *success=0);
   static void SetCredentialCB(Connection *c, FingerprintCB, LoadIdentityCB, LoadPasswordCB);
   static void SetRemoteForwardCB(Connection *c, RemoteForwardCB F);

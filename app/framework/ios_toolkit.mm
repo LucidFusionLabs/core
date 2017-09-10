@@ -212,9 +212,10 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
   {
     std::vector<LFL::TableSection<LFL::TableItem>> data;
     bool dark_theme, clear_theme;
+    LFL::Localization *localization;
   }
 
-  - (id)initWithStyle: (UITableViewStyle)style {
+  - (id)initWithStyle:(UITableViewStyle)style andLocalization:(LFL::Localization*)loc {
     self = [super initWithNibName:nil bundle:nil];
     _tableView = [[UITableView alloc] initWithFrame: [LFUIApplication sharedAppDelegate].controller.view.frame style:style];
     _tableView.autoresizingMask = UIViewAutoresizingFlexibleHeight | UIViewAutoresizingFlexibleWidth;
@@ -222,6 +223,7 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
     _tableView.dataSource = self;
     _orig_bg_color = _tableView.backgroundColor;
     _orig_separator_color = _tableView.separatorColor;
+    localization = loc;
     [self.view addSubview: _tableView];
     return self;
   }
@@ -406,7 +408,7 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
   }
 
   - (void)loadNavigationButton:(const LFL::TableItem&)item withAlign:(int)align {
-    if (item.key == LFL::LS("edit")) {
+    if (item.key == localization->GetLocalizedString("edit")) {
       self.navigationItem.rightBarButtonItem = [self editButtonItem];
     } else {
       IOSBarButtonItem *button = [[IOSBarButtonItem alloc] init];
@@ -763,7 +765,7 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
     if (edit_button || hi.header.right_text.size()) {
       IOSButton *button = [IOSButton buttonWithType:UIButtonTypeSystem];
       if (edit_button) {
-        [button setTitle:LFL::MakeNSString(LFL::LS("edit")) forState:UIControlStateNormal];
+        [button setTitle:LFL::MakeNSString(localization->GetLocalizedString("edit")) forState:UIControlStateNormal];
         [button addTarget:self action:@selector(toggleEditMode:) forControlEvents:UIControlEventTouchUpInside];
       } else {
         button.showsTouchWhenHighlighted = TRUE;
@@ -782,8 +784,8 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
 
   - (void)toggleEditMode:(UIButton*)button {
     [self.tableView setEditing:!self.tableView.editing animated:YES];
-    if (self.tableView.editing) [button setTitle:LFL::MakeNSString(LFL::LS("done")) forState:UIControlStateNormal];
-    else                        [button setTitle:LFL::MakeNSString(LFL::LS("edit")) forState:UIControlStateNormal];
+    if (self.tableView.editing) [button setTitle:LFL::MakeNSString(localization->GetLocalizedString("done")) forState:UIControlStateNormal];
+    else                        [button setTitle:LFL::MakeNSString(localization->GetLocalizedString("edit")) forState:UIControlStateNormal];
     [button sizeToFit];
     [button setFrame:CGRectMake(self.tableView.frame.size.width - button.frame.size.width - 11, 11, button.frame.size.width, 21)];
   }
@@ -1114,8 +1116,8 @@ void iOSCollectionView::Show(bool show_or_hide) {}
 View *iOSCollectionView::AppendFlow(Flow*) { return nullptr; }
 
 iOSTableView::~iOSTableView() { [table release]; }
-iOSTableView::iOSTableView(const string &title, const string &style, const string &theme, TableItemVec items) :
-  table([[IOSTable alloc] initWithStyle: UITableViewStyleGrouped]) {
+iOSTableView::iOSTableView(Localization *l, const string &title, const string &style, const string &theme, TableItemVec items) :
+  table([[IOSTable alloc] initWithStyle: UITableViewStyleGrouped andLocalization: l]) {
     // INFOf("iOSTableView %s IOSTable: %p", title.c_str(), table);
     [table load:this withTitle:title withStyle:style items:TableSection<TableItem>::Convert(move(items))];
     [table setTheme: theme];
@@ -1192,11 +1194,11 @@ void iOSTableView::ReplaceRow(int section, int row, TableItem h) { [table replac
 void iOSTableView::ReplaceSection(int section, TableItem h, int flag, TableItemVec item)
 { [table replaceSection:section items:move(item) header:move(h) flag:flag]; }
 
-unique_ptr<ToolbarViewInterface> SystemToolkit::CreateToolbar(const string &theme, MenuItemVec items, int flag) { return make_unique<iOSToolbarView>(theme, move(items)); }
-unique_ptr<TableViewInterface> SystemToolkit::CreateTableView(const string &title, const string &style, const string &theme, TableItemVec items) { return make_unique<iOSTableView>(title, style, theme, move(items)); }
-unique_ptr<CollectionViewInterface> SystemToolkit::CreateCollectionView(const string &title, const string &style, const string &theme, vector<CollectionItem> items) { return make_unique<iOSCollectionView>(title, style, theme, move(items)); }
-unique_ptr<TextViewInterface> SystemToolkit::CreateTextView(const string &title, File *file) { return make_unique<iOSTextView>(title, file); }
-unique_ptr<TextViewInterface> SystemToolkit::CreateTextView(const string &title, const string &text) { return make_unique<iOSTextView>(title, text); }
-unique_ptr<NavigationViewInterface> SystemToolkit::CreateNavigationView(const string &style, const string &theme) { return make_unique<iOSNavigationView>(style, theme); }
+unique_ptr<ToolbarViewInterface> SystemToolkit::CreateToolbar(Window*, const string &theme, MenuItemVec items, int flag) { return make_unique<iOSToolbarView>(theme, move(items)); }
+unique_ptr<TableViewInterface> SystemToolkit::CreateTableView(Window *w, const string &title, const string &style, const string &theme, TableItemVec items) { return make_unique<iOSTableView>(w->parent, title, style, theme, move(items)); }
+unique_ptr<CollectionViewInterface> SystemToolkit::CreateCollectionView(Window*, const string &title, const string &style, const string &theme, vector<CollectionItem> items) { return make_unique<iOSCollectionView>(title, style, theme, move(items)); }
+unique_ptr<TextViewInterface> SystemToolkit::CreateTextView(Window*, const string &title, File *file) { return make_unique<iOSTextView>(title, file); }
+unique_ptr<TextViewInterface> SystemToolkit::CreateTextView(Window*, const string &title, const string &text) { return make_unique<iOSTextView>(title, text); }
+unique_ptr<NavigationViewInterface> SystemToolkit::CreateNavigationView(Window*, const string &style, const string &theme) { return make_unique<iOSNavigationView>(style, theme); }
 
 }; // namespace LFL

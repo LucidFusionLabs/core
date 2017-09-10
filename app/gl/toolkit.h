@@ -84,7 +84,7 @@ struct TableView : public View, public TableViewInterface {
 
   vector<TableViewSection> data;
   TableViewItem nav_left, nav_right;
-  ToolbarViewInterface *toolbar;
+  ToolbarViewInterface *toolbar=0;
   string title, style, theme;
   Widget::Slider scrollbar;
   DrawableBoxArray *out=0;
@@ -149,18 +149,18 @@ struct NavigationView : public View, public NavigationViewInterface {
 };
 
 struct Toolkit : public ToolkitInterface {
-  unique_ptr<AlertViewInterface> CreateAlert(AlertItemVec items);
-  unique_ptr<PanelViewInterface> CreatePanel(const Box&, const string &title, PanelItemVec);
-  unique_ptr<ToolbarViewInterface> CreateToolbar(const string &theme, MenuItemVec items, int flag);
-  unique_ptr<MenuViewInterface> CreateMenu(const string &title, MenuItemVec items);
-  unique_ptr<MenuViewInterface> CreateEditMenu(MenuItemVec items);
+  unique_ptr<AlertViewInterface> CreateAlert(Window*, AlertItemVec items);
+  unique_ptr<PanelViewInterface> CreatePanel(Window*, const Box&, const string &title, PanelItemVec);
+  unique_ptr<ToolbarViewInterface> CreateToolbar(Window*, const string &theme, MenuItemVec items, int flag);
+  unique_ptr<MenuViewInterface> CreateMenu(Window*, const string &title, MenuItemVec items);
+  unique_ptr<MenuViewInterface> CreateEditMenu(Window*, MenuItemVec items);
   unique_ptr<CollectionViewInterface> CreateCollectionView
-    (const string &title, const string &style, const string &theme, vector<CollectionItem> items);
+    (Window*, const string &title, const string &style, const string &theme, vector<CollectionItem> items);
   unique_ptr<TableViewInterface> CreateTableView
-    (const string &title, const string &style, const string &theme, TableItemVec items);
-  unique_ptr<TextViewInterface> CreateTextView(const string &title, File *file);
-  unique_ptr<TextViewInterface> CreateTextView(const string &title, const string &text);
-  unique_ptr<NavigationViewInterface> CreateNavigationView(const string &style, const string &theme);
+    (Window*, const string &title, const string &style, const string &theme, TableItemVec items);
+  unique_ptr<TextViewInterface> CreateTextView(Window*, const string &title, File *file);
+  unique_ptr<TextViewInterface> CreateTextView(Window*, const string &title, const string &text);
+  unique_ptr<NavigationViewInterface> CreateNavigationView(Window*, const string &style, const string &theme);
 };
 
 }; // namespace LFL

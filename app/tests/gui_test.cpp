@@ -23,6 +23,8 @@
 #include "core/app/ipc.h"
 
 namespace LFL {
+extern Application *app;
+
 struct LinesFrameBufferTest : public TextBox::LinesFrameBuffer {
   struct LineOp {
     point p; String16 text; int xo, wlo, wll;
@@ -36,7 +38,7 @@ struct LinesFrameBufferTest : public TextBox::LinesFrameBuffer {
   };
   static vector<LineOp> front, back;
   static vector<PaintOp> paint;
-  LinesFrameBufferTest(GraphicsDevice *D) :
+  LinesFrameBufferTest(GraphicsDeviceHolder *D) :
     TextBox::LinesFrameBuffer(D) { paint_cb = &LinesFrameBufferTest::PaintTest; }
   virtual void Clear(TextBox::Line *l)                              override { EXPECT_EQ(0, 1); }
   virtual void Update(TextBox::Line *l, int flag=0)                 override { EXPECT_EQ(0, 1); }
@@ -59,7 +61,7 @@ struct TextAreaTest : public TextArea {
   };
   vector<UpdateTokenOp> token;
   LinesFrameBufferTest line_fb_test;
-  TextAreaTest(Window *W, const FontRef &F, int S=200) : TextArea(W, F, S, 0), line_fb_test(W->gd) {}
+  TextAreaTest(Window *W, const FontRef &F, int S=200) : TextArea(W, F, S, 0), line_fb_test(W) {}
   virtual LinesFrameBuffer *GetFrameBuffer() override { return &line_fb_test; }
   virtual void UpdateToken(Line *l, int wo, int wl, int t, const TokenProcessor<DrawableBox>*) override {
     token.emplace_back(l, DrawableBoxRun(&l->data->glyphs[wo], wl).Text16(), t);
@@ -69,7 +71,7 @@ struct TextAreaTest : public TextArea {
 struct EditorTest : public Editor {
   LinesFrameBufferTest line_fb_test;
   EditorTest(Window *W, const FontRef &F, File *I, bool Wrap=0) :
-    Editor(W, F, I), line_fb_test(W->gd) { line_fb.wrap=line_fb_test.wrap=Wrap; }
+    Editor(W, F, I), line_fb_test(W) { line_fb.wrap=line_fb_test.wrap=Wrap; }
   virtual LinesFrameBuffer *GetFrameBuffer() override { return &line_fb_test; }
 };
 

@@ -1,5 +1,5 @@
 /*
- * $Id: camera.cpp 1330 2014-11-06 03:04:15Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -134,7 +134,7 @@ unique_ptr<Font> GDIFontEngine::Open(const FontDesc &d) {
   GetTextMetrics(hdc, &tm);
 
   unique_ptr<Font> ret = make_unique<Font>(this, d, ri->second);
-  ret->glyph = make_shared<GlyphMap>();
+  ret->glyph = make_shared<GlyphMap>(parent->parent);
   ret->ascender = tm.tmAscent + tm.tmDescent;
   ret->descender = 0;
   int count = InitGlyphs(ret.get(), &ret->glyph->table[0], ret->glyph->table.size()); 
@@ -144,7 +144,7 @@ unique_ptr<Font> GDIFontEngine::Open(const FontDesc &d) {
   bool new_cache = false, pre_load = false;
   ret->glyph->cache =
     (!new_cache ? app->fonts->GetGlyphCache() :
-     make_shared<GlyphCache>(0, AtlasFontEngine::Dimension(ret->max_width, ret->Height(), count)));
+     make_shared<GlyphCache>(parent->parent, 0, AtlasFontEngine::Dimension(ret->max_width, ret->Height(), count)));
   GlyphCache *cache = ret->glyph->cache.get();
 
   if (new_cache) {

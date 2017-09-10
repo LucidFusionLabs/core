@@ -1,5 +1,5 @@
 /*
- * $Id: crypto.cpp 1335 2014-12-02 04:13:46Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -18,6 +18,7 @@
 
 #include "core/app/network.h"
 #include "core/app/net/resolver.h"
+#include "core/app/shell.h"
 
 namespace LFL {
 void HTTP::SplitHostAndPort(const string &in, int default_port, string *host, int *port) {
@@ -329,7 +330,7 @@ struct HTTPClientHandler {
     }
 
     void ResolveHost() {
-      app->net->system_resolver->NSLookup
+      svc->net->system_resolver->NSLookup
         (host, bind(&HTTPClientHandler::WGet::ResolverResponseCB, this, _1, _2));
     }
 
@@ -337,7 +338,7 @@ struct HTTPClientHandler {
       Connection *c = 0;
       if (ipv4_addr != IPV4::Addr(-1)) {
         c = ssl ?
-          svc->SSLConnect(app->net->ssl, ipv4_addr, port) :
+          svc->SSLConnect(svc->net->ssl, ipv4_addr, port) :
           svc->Connect(ipv4_addr, port);
       }
       if (!c) { if (cb) cb(0, 0, string(), 0, 0); delete this; }
@@ -385,9 +386,9 @@ int HTTPClient::WriteRequest(Connection *c, int method, const char *host, const 
   return c->Write(postdata, postlen);
 }
 
-bool HTTPClient::WGet(const string &url, File *out, const ResponseCB &cb, const StringCB &redirect_cb) {
+bool HTTPClient::WGet(SocketServices *net, ApplicationInfo *appinfo, const string &url, File *out, const ResponseCB &cb, const StringCB &redirect_cb) {
   unique_ptr<HTTPClientHandler::WGet> handler = make_unique<HTTPClientHandler::WGet>
-    (app->net->tcp_client.get(), 0, "", 0, "", out, cb, redirect_cb);
+    (net->tcp_client.get(), 0, "", 0, "", out, cb, redirect_cb);
 
   string prot;
   if (!handler->LoadURL(url, &prot)) {
@@ -400,9 +401,10 @@ bool HTTPClient::WGet(const string &url, File *out, const ResponseCB &cb, const 
   }
 
   if (!out && !cb) {
+    if (!appinfo) return ERRORv(false, "unknown savedir");
     string fn = BaseName(handler->path);
     if (fn.empty()) fn = "index.html";
-    unique_ptr<LocalFile> f = make_unique<LocalFile>(StrCat(app->savedir, fn), "w");
+    unique_ptr<LocalFile> f = make_unique<LocalFile>(StrCat(appinfo->savedir, fn), "w");
     if (!f->Opened()) return ERRORv(false, "open file");
     handler->out = f.release();
   }
@@ -411,28 +413,28 @@ bool HTTPClient::WGet(const string &url, File *out, const ResponseCB &cb, const 
   return true;
 }
 
-bool HTTPClient::WPost(const string &url, const string &mimetype, const char *postdata, int postlen, ResponseCB cb) {
+bool HTTPClient::WPost(SocketServices *net, const string &url, const string &mimetype, const char *postdata, int postlen, ResponseCB cb) {
   bool ssl;
   int tcp_port;
   string host, path;
   if (!HTTP::ResolveURL(url.c_str(), &ssl, 0, &tcp_port, &host, &path)) return 0;
 
   HTTPClientHandler::WPost *handler = new HTTPClientHandler::WPost
-    (app->net->tcp_client.get(), ssl, host, tcp_port, path, mimetype, postdata, postlen, cb);
+    (net->tcp_client.get(), ssl, host, tcp_port, path, mimetype, postdata, postlen, cb);
 
-  if (!app->net->system_resolver->QueueResolveRequest
+  if (!net->system_resolver->QueueResolveRequest
       (Resolver::Request(host, DNS::Type::A, bind(&HTTPClientHandler::WGet::ResolverResponseCB, handler, _1, _2))))
   { ERROR("resolver: ", url); delete handler; return 0; }
   return true;
 }
 
-Connection *HTTPClient::PersistentConnection(const string &url, string *host, string *path, ResponseCB responseCB) {
+Connection *HTTPClient::PersistentConnection(SocketServices *net, const string &url, string *host, string *path, ResponseCB responseCB) {
   bool ssl; IPV4::Addr ipv4_addr; int tcp_port;
   if (!HTTP::ResolveURL(url.c_str(), &ssl, &ipv4_addr, &tcp_port, host, path)) return 0;
 
   Connection *c = ssl ?
-    app->net->tcp_client->SSLConnect(app->net->ssl, ipv4_addr, tcp_port) : 
-    app->net->tcp_client->Connect(ipv4_addr, tcp_port);
+    net->tcp_client->SSLConnect(net->ssl, ipv4_addr, tcp_port) : 
+    net->tcp_client->Connect(ipv4_addr, tcp_port);
 
   if (!c) return 0;
 
@@ -637,7 +639,7 @@ void HTTPServer::SessionResource::ConnectionClosedCB(Connection *c) {
 HTTPServer::Response HTTPServer::ConsoleResource::Request(Connection *c, int method, const char *url, const char *args, const char *headers, const char *postdata, int postlen) {
   StringPiece v;
   if (args) HTTP::GrepURLArgs(args, 0, 1, "v", &v);
-  app->focused->shell->Run(v.str());
+  shell->Run(v.str());
   string response = StrCat("<html>Shell::run('", v.str(), "')<br/></html>\n");
   return HTTPServer::Response("text/html; charset=UTF-8", &response);
 }

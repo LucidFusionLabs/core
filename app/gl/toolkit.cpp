@@ -24,6 +24,7 @@ namespace LFL {
 ToolbarView::ToolbarView(Window *w, const string &t, MenuItemVec items, Font *F, Font *SF, Color *SO) :
   View(w), theme(t), font(F), selected_font(SF), selected_outline(SO) {
   for (auto &i : items) data.emplace_back(move(i));
+  Activate();
 }
 
 void ToolbarView::Layout() { ClearView(); }
@@ -240,7 +241,7 @@ void TableView::OnClick(int but, point p, point d, int down) {
   TableViewSection &section = data[section_id];
   TableViewItem &item = section.item[row];
   if (item.type == TableItem::TextInput) {
-    app->OpenTouchKeyboard();
+    // app->OpenTouchKeyboard();
     if (item.textbox) item.textbox->Activate();
   }
 }
@@ -293,7 +294,7 @@ View *TableView::AppendFlow(Flow *flow) {
         }; break;
 
         case TableItem::WebView: {
-          if (!i.browser) i.browser = make_unique<Browser>(this, box);
+          // if (!i.browser) i.browser = make_unique<Browser>(nullptr, nullptr, nullptr, nullptr, nullptr, this, box);
           // i.browser->Open(i.val);
         }; break;
 
@@ -305,6 +306,12 @@ View *TableView::AppendFlow(Flow *flow) {
     }
 
   scrollbar.SetDocHeight(flow->Height());
+  if (toolbar) {
+    Box b(box.x, box.h, box.w, row_height);
+    Flow toolbarflow(&b, flow->cur_attr.font, out);
+    if (auto v = toolbar->AppendFlow(&toolbarflow)) child_view.push_back(v);
+  }
+
 #if 0
       if (tab3_volume.dirty) {
         tab3_volume.dirty = false;
@@ -353,15 +360,15 @@ void NavigationView::Layout() {}
 void NavigationView::Draw() {}
 View *NavigationView::AppendFlow(Flow *flow) { return stack.size() ? stack.back()->AppendFlow(flow) : nullptr; }
 
-unique_ptr<AlertViewInterface> Toolkit::CreateAlert(AlertItemVec items) { return Singleton<SystemToolkit>::Get()->CreateAlert(move(items)); }
-unique_ptr<PanelViewInterface> Toolkit::CreatePanel(const Box &b, const string &title, PanelItemVec items) { return Singleton<SystemToolkit>::Get()->CreatePanel(b, title, move(items)); }
-unique_ptr<MenuViewInterface> Toolkit::CreateMenu(const string &title, MenuItemVec items) { return Singleton<SystemToolkit>::Get()->CreateMenu(title, move(items)); }
-unique_ptr<MenuViewInterface> Toolkit::CreateEditMenu(MenuItemVec items) { return Singleton<SystemToolkit>::Get()->CreateEditMenu(move(items)); }
-unique_ptr<ToolbarViewInterface> Toolkit::CreateToolbar(const string &theme, MenuItemVec items, int flag) { return make_unique<ToolbarView>(app->focused, theme, move(items)); }
-unique_ptr<CollectionViewInterface> Toolkit::CreateCollectionView(const string &title, const string &style, const string &theme, vector<CollectionItem> items) { return make_unique<CollectionView>(app->focused, title, style, theme, move(items)); }
-unique_ptr<TableViewInterface> Toolkit::CreateTableView(const string &title, const string &style, const string &theme, TableItemVec items) { return make_unique<TableView>(app->focused, title, style, theme, move(items)); }
-unique_ptr<TextViewInterface> Toolkit::CreateTextView(const string &title, File *file) { return nullptr; }
-unique_ptr<TextViewInterface> Toolkit::CreateTextView(const string &title, const string &text) { return nullptr; }
-unique_ptr<NavigationViewInterface> Toolkit::CreateNavigationView(const string &style, const string &theme) { return make_unique<NavigationView>(app->focused, style, theme); }
+unique_ptr<AlertViewInterface> Toolkit::CreateAlert(Window *w, AlertItemVec items) { return Singleton<SystemToolkit>::Set()->CreateAlert(w, move(items)); }
+unique_ptr<PanelViewInterface> Toolkit::CreatePanel(Window *w, const Box &b, const string &title, PanelItemVec items) { return Singleton<SystemToolkit>::Set()->CreatePanel(w, b, title, move(items)); }
+unique_ptr<MenuViewInterface> Toolkit::CreateMenu(Window *w, const string &title, MenuItemVec items) { return Singleton<SystemToolkit>::Set()->CreateMenu(w, title, move(items)); }
+unique_ptr<MenuViewInterface> Toolkit::CreateEditMenu(Window *w, MenuItemVec items) { return Singleton<SystemToolkit>::Set()->CreateEditMenu(w, move(items)); }
+unique_ptr<ToolbarViewInterface> Toolkit::CreateToolbar(Window *w, const string &theme, MenuItemVec items, int flag) { return make_unique<ToolbarView>(w, theme, move(items)); }
+unique_ptr<CollectionViewInterface> Toolkit::CreateCollectionView(Window *w, const string &title, const string &style, const string &theme, vector<CollectionItem> items) { return make_unique<CollectionView>(w, title, style, theme, move(items)); }
+unique_ptr<TableViewInterface> Toolkit::CreateTableView(Window *w, const string &title, const string &style, const string &theme, TableItemVec items) { return make_unique<TableView>(w, title, style, theme, move(items)); }
+unique_ptr<TextViewInterface> Toolkit::CreateTextView(Window *w, const string &title, File *file) { return nullptr; }
+unique_ptr<TextViewInterface> Toolkit::CreateTextView(Window *w, const string &title, const string &text) { return nullptr; }
+unique_ptr<NavigationViewInterface> Toolkit::CreateNavigationView(Window *w, const string &style, const string &theme) { return make_unique<NavigationView>(w, style, theme); }
 
 }; // namespace LFL

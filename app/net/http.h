@@ -1,5 +1,5 @@
 /*
- * $Id: network.h 1335 2014-12-02 04:13:46Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -45,9 +45,9 @@ struct HTTP {
 
 struct HTTPClient {
   typedef function<int(Connection*, const char*, const string&, const char*, int)> ResponseCB;
-  static bool WGet(const string &url, File *out=0, const ResponseCB &responseCB=ResponseCB(), const StringCB &redirectCB=StringCB());
-  static bool WPost(const string &url, const string &mimetype, const char *postdata, int postlen, ResponseCB=ResponseCB());
-  static Connection *PersistentConnection(const string &url, string *hostOut, string *pathOut, ResponseCB responseCB);
+  static bool WGet(SocketServices*, ApplicationInfo*, const string &url, File *out=0, const ResponseCB &responseCB=ResponseCB(), const StringCB &redirectCB=StringCB());
+  static bool WPost(SocketServices*, const string &url, const string &mimetype, const char *postdata, int postlen, ResponseCB=ResponseCB());
+  static Connection *PersistentConnection(SocketServices*, const string &url, string *hostOut, string *pathOut, ResponseCB responseCB);
   static int WriteRequest(Connection *c, int method, const char *host, const char *path, const char *postmime, const char *postdata, int postlen, bool persist);
 };
 
@@ -80,8 +80,8 @@ struct HTTPServer : public SocketService {
   };
 
   map<string, Resource*> urlmap;
-  HTTPServer(IPV4::Addr addr, int port, bool SSL) : SocketService("HTTPServer", Protocol::TCP) { QueueListen(addr, port, SSL); }
-  HTTPServer(                 int port, bool SSL) : SocketService("HTTPServer", Protocol::TCP) { QueueListen(0,    port, SSL); }
+  HTTPServer(SocketServices *N, IPV4::Addr addr, int port, bool SSL) : SocketService(N, "HTTPServer", Protocol::TCP) { QueueListen(addr, port, SSL); }
+  HTTPServer(SocketServices *N,                  int port, bool SSL) : SocketService(N, "HTTPServer", Protocol::TCP) { QueueListen(0,    port, SSL); }
   virtual ~HTTPServer() { ClearURL(); }
 
   int Connected(Connection *c);
@@ -122,6 +122,8 @@ struct HTTPServer : public SocketService {
   };
 
   struct ConsoleResource : public Resource {
+    Shell *shell;
+    ConsoleResource(Shell *s) : shell(s) {}
     HTTPServer::Response Request(Connection *c, int method, const char *url, const char *args, const char *headers, const char *postdata, int postlen);
   };
 

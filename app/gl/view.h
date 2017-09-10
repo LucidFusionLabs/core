@@ -115,7 +115,7 @@ struct Widget {
     int flag=0, doc_height=200, dot_size=15, outline_w=1;
     float scrolled=0, last_scrolled=0, increment=20;
     Color color=Color(15, 15, 15, 55), *outline_topleft=&Color::grey80, *outline_bottomright=&Color::grey50;
-    Font *menuicon=0;
+    FontRef menuicon;
     bool dragging=0, dirty=0, arrows=1;
     virtual ~Slider() {}
     Slider(View *V, int f=Flag::Attached);
@@ -257,7 +257,7 @@ struct TextBox : public View, public TextboxController {
     PaintCB paint_cb = &LinesFrameBuffer::PaintCB;
     int lines=0;
     bool align_top_or_bot=1, partial_last_line=1, wrap=0, only_grow=0;
-    LinesFrameBuffer(GraphicsDevice *d) : RingFrameBuffer(d) {}
+    LinesFrameBuffer(GraphicsDeviceHolder *d) : RingFrameBuffer(d) {}
     LinesFrameBuffer *Attach(LinesFrameBuffer **last_fb);
     virtual int SizeChanged(int W, int H, Font *font, ColorDesc bgc);
     tvirtual void Clear(Line *l) { RingFrameBuffer::Clear(l, Box(w, l->Lines() * font_height), true); }
@@ -370,14 +370,14 @@ struct TextBox : public View, public TextboxController {
 };
 
 struct UnbackedTextBox : public TextBox {
-  UnbackedTextBox(const FontRef &F=FontRef()) : TextBox(0, F) {}
+  UnbackedTextBox(Window *W, const FontRef &F=FontRef()) : TextBox(W, F) {}
   virtual void UpdateCommandFB() {}
 };
 
 struct TiledTextBox : public TextBox {
   point offset;
   TilesInterface *tiles=0;
-  TiledTextBox(const FontRef &F=FontRef()) : TextBox(0, F) { cmd_fb.paint_cb = bind(&TiledTextBox::PaintCB, this, _1, _2, _3); }
+  TiledTextBox(Window *W, const FontRef &F=FontRef()) : TextBox(W, F) { cmd_fb.paint_cb = bind(&TiledTextBox::PaintCB, this, _1, _2, _3); }
   void AssignTarget(TilesInterface *T, const point &p) { tiles=T; offset=p; }
   point PaintCB(Line *l, point lp, const Box &b);
 };
@@ -542,12 +542,12 @@ struct Console : public TextArea {
 
   Console(Window *W, const FontRef &F, const Callback &C=Callback());
   Console(Window *W, const Callback &C=Callback()) :
-    Console(W, FontDesc(A_or_B(FLAGS_console_font, FLAGS_font), "", 9, Color::white,
-                        Color::clear, FLAGS_console_font_flag), C) {}
+    Console(W, FontRef(W, FontDesc(A_or_B(FLAGS_console_font, FLAGS_font), "", 9, Color::white,
+                                   Color::clear, FLAGS_console_font_flag)), C) {}
 
   virtual ~Console() {}
   virtual int CommandLines() const { return cmd_line.Lines(); }
-  virtual void Run(const string &in) { root->shell->Run(in); }
+  virtual void Run(const string &in);
   virtual void PageUp  () { TextArea::PageDown(); }
   virtual void PageDown() { TextArea::PageUp(); }
   virtual bool Activate()   { bool ret = TextBox::Activate();   StartAnimating(); return ret; }
@@ -584,8 +584,8 @@ struct Dialog : public View {
   void Reshape(bool *down) { mouse_start = root->mouse; win_start = point(box.x, box.y); *down = 1; }
 
   static bool LessThan(const unique_ptr<Dialog> &l, const unique_ptr<Dialog> &r) { return l->zsort < r->zsort; }
-  static void MessageBox(const string &text);
-  static void TextureBox(const string &text);
+  static void MessageBox(Window*, const string &text);
+  static void TextureBox(Window*, const string &text);
 };
 
 struct DialogTab {
@@ -635,7 +635,7 @@ struct MessageBoxDialog : public Dialog {
 struct TextureBoxDialog : public Dialog {
   Texture tex;
   TextureBoxDialog(Window *w, const string &m) :
-    Dialog(w, .33, .33) { tex.ID = ::atoi(m.c_str()); tex.owner = false; }
+    Dialog(w, .33, .33), tex(w->parent) { tex.ID = ::atoi(m.c_str()); tex.owner = false; }
   void Draw() { Dialog::Draw(); tex.DrawGD(root->gd, content + box.TopLeft()); }
 };
 
@@ -693,7 +693,7 @@ struct DirectoryTreeDialog : public TextViewDialogT<DirectoryTree> {
 
 struct HelperView : public View {
   FontRef font;
-  HelperView(Window *W) : View(W), font(FontDesc(FLAGS_font, "", 9, Color::white)) {}
+  HelperView(Window *W) : View(W), font(W, FontDesc(FLAGS_font, "", 9, Color::white)) {}
   struct Hint { enum { UP, UPLEFT, UPRIGHT, DOWN, DOWNLEFT, DOWNRIGHT }; };
   struct Label {
     Box target, label;

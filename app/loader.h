@@ -135,16 +135,18 @@ struct AssetLoader : public Module {
   VideoAssetLoader *default_video_loader=0;
   MovieAssetLoader *default_movie_loader=0;
   MovieAsset       *movie_playing=0;
-  AssetLoader();
+  AssetLoading     *loading;
+  AssetLoader(AssetLoading*);
   ~AssetLoader();
   int Init();
 };
 
-unique_ptr<AssetLoaderInterface> CreateAssetLoader();
-unique_ptr<AssetLoaderInterface> CreateSimpleAssetLoader();
+unique_ptr<AssetLoaderInterface> CreateAssetLoader(AssetLoading*);
+unique_ptr<AssetLoaderInterface> CreateSimpleAssetLoader(AssetLoading*);
 
 struct SimpleAssetLoader : public AssetLoaderInterface {
-  SimpleAssetLoader();
+  AssetLoading *parent;
+  SimpleAssetLoader(AssetLoading*);
   virtual void *LoadFile(File*);
   virtual void *LoadFileNamed(const string &filename);
   virtual void UnloadFile(void *h);

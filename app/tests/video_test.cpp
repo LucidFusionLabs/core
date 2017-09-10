@@ -19,6 +19,7 @@
 #include "gtest/gtest.h"
 
 namespace LFL {
+extern Application *app;
 
 TEST(VideoTest, Color) {
   float h, s, v;

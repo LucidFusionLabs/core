@@ -1,5 +1,5 @@
 /*
- * $Id: lftypes.h 1335 2014-12-02 04:13:46Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -60,8 +60,8 @@ struct ConstVoidPtr : public const_void_ptr {
 
 template <class X> struct LazyInitializedPtr {
   unique_ptr<X> ptr;
-  X *get() { if (!ptr) ptr = make_unique<X>(); return ptr.get(); }
-  X *get() const { return ptr.get(); }
+  template <class... Args> X *get(Args&&... args) { if (!ptr) ptr = make_unique<X>(forward<Args>(args)...); return ptr.get(); }
+  template <class... Args> X *get(Args&&... args) const { return ptr.get(forward<Args>(args)...); }
 };
 
 struct RefCounter {
@@ -192,14 +192,14 @@ template <typename X> typename X::mapped_type FindOrDefault(const X &m, const ty
 
 template <typename X> typename X::mapped_type FindOrDie(const char *file, int line, const X &m, const typename X::key_type &k) {
   typename X::const_iterator iter = m.find(k);
-  if (iter == m.end()) Log(LFApp::Log::Fatal, file, line, StrCat("FindOrDie(", k, ")"));
+  if (iter == m.end()) Logger::Log(LFApp::Log::Fatal, file, line, StrCat("FindOrDie(", k, ")"));
   return iter->second;
 }
 #define FindOrDie(m, k) FindOrDie(__FILE__, __LINE__, m, k)
 
 template <typename X> const typename X::mapped_type& FindRefOrDie(const char *file, int line, const X &m, const typename X::key_type &k) {
   typename X::const_iterator iter = m.find(k);
-  if (iter == m.end()) Log(LFApp::Log::Fatal, file, line, StrCat("FindRefOrDie(", k, ")"));
+  if (iter == m.end()) Logger::Log(LFApp::Log::Fatal, file, line, StrCat("FindRefOrDie(", k, ")"));
   return iter->second;
 }
 #define FindRefOrDie(m, k) FindRefOrDie(__FILE__, __LINE__, m, k)
@@ -754,17 +754,18 @@ struct CallbackQueue : public MessageQueue<Callback*> {
   void HandleMessage(Callback *cb) { if (*cb) (*cb)(); delete cb; }
   int  HandleMessages() { int n=0; Callback *cb=0; for (; NBRead(&cb); n++) HandleMessage(cb); return n; }
   void HandleMessagesWhile(const bool *cond) { for (use_cv=1; *cond; ) HandleMessage(Read()); }
-  void HandleMessagesLoop() { HandleMessagesWhile(&GetLFApp()->run); } 
+  void HandleMessagesLoop(ApplicationLifetime *l) { HandleMessagesWhile(&l->run); } 
 };
 
 struct CallbackList {
   bool dirty=0;
   vector<Callback> data;
+  CallbackList(Void unused=nullptr) {}
   int Count() const { return data.size(); }
   void Clear() { dirty=0; data.clear(); }
   void AddList(const CallbackList &cb) { data.insert(data.end(), cb.data.begin(), cb.data.end()); dirty=1; }
   void Run() const { for (auto i = data.begin(); i != data.end(); ++i) (*i)(); }
-  template <class X> int Run(const X&) const { int count = Count(); Run(); return count; }
+  template <class X> int Run(GraphicsDevice*, const X&) const { int count = Count(); Run(); return count; }
   template <class... Args> void Add(Args&&... args) { data.emplace_back(forward<Args>(args)...); dirty=1; }
 };
 

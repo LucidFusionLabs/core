@@ -1,5 +1,5 @@
 /*
- * $Id: camera.cpp 1330 2014-11-06 03:04:15Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -47,9 +47,10 @@ struct FFBIOFile {
 };
 
 struct FFMpegAssetLoader : public AssetLoaderInterface {
+  AssetLoading *loader;
   unique_ptr<AssetLoaderInterface> simple_loader;
-  FFMpegAssetLoader() {
-    simple_loader = CreateSimpleAssetLoader();
+  FFMpegAssetLoader(AssetLoading *l) : loader(l) {
+    simple_loader = CreateSimpleAssetLoader(loader);
     INFO("FFMpegAssetLoader (with simple backup = ", bool(simple_loader), ")");
   }
 
@@ -88,7 +89,7 @@ struct FFMpegAssetLoader : public AssetLoaderInterface {
   AVFormatContext *LoadFileNamed(const string &fn, AVIOContext **pbOut) {
 #ifndef LFL_MOBILE
     AVFormatContext *fctx = 0;
-    string filename = Asset::FileName(fn);
+    string filename = loader->FileName(fn);
     if (avformat_open_input(&fctx, filename.c_str(), 0, 0)) return ERRORv(nullptr, "avformat_open_input: ", filename);
     CHECK_EQ(0, fctx->opaque);
     return fctx;
@@ -292,7 +293,7 @@ struct FFMpegAssetLoader : public AssetLoaderInterface {
           char errstr[128]; av_strerror(ret, errstr, sizeof(errstr));
           ERROR("avcodec_decode_video2 ", ret, ": ", errstr);
         } else {
-          app->focused->gd->BindTexture(GraphicsDevice::Texture2D, va->tex.ID);
+          va->parent->window->GD()->BindTexture(GraphicsDevice::Texture2D, va->tex.ID);
           va->tex.UpdateBuffer(*frame->data, point(avctx->width, avctx->height), PixelFromFFMpegId(avctx->pix_fmt), 
                                frame->linesize[0], Texture::Flag::Resample);
           va->tex.UpdateGL();
@@ -307,12 +308,12 @@ struct FFMpegAssetLoader : public AssetLoaderInterface {
   }
 };
 
-unique_ptr<AssetLoaderInterface> CreateAssetLoader() { 
+unique_ptr<AssetLoaderInterface> CreateAssetLoader(AssetLoading *loader) { 
   ONCE({ INFO("FFMpegInit()");
          // av_log_set_level(AV_LOG_DEBUG);
          av_register_all(); });
 
-  return make_unique<FFMpegAssetLoader>();
+  return make_unique<FFMpegAssetLoader>(loader);
 }
 
 }; // namespace LFL

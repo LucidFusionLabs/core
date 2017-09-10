@@ -1,5 +1,5 @@
 /*
- * $Id: android_billing.cpp 1336 2014-12-08 09:29:59Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -100,7 +100,7 @@ struct AndroidPurchases : public PurchasesInterface {
 extern "C" void Java_com_lucidfusionlabs_billing_NativeProductCB_RunProductCBInMainThread(JNIEnv *e, jclass c, jlong cb, jstring id, jstring name, jstring desc, jstring price) {
   auto product = new AndroidProduct(JNI::GetJString(e, id), JNI::GetJString(e, name),
                                     JNI::GetJString(e, desc), JNI::GetJString(e, price));
-  app->RunCallbackInMainThread([=](){
+  jni->app->RunCallbackInMainThread([=](){
     (*static_cast<PurchasesInterface::ProductCB*>(Void(cb)))(unique_ptr<ProductInterface>(product));
   });
 }
@@ -109,5 +109,5 @@ extern "C" void Java_com_lucidfusionlabs_billing_NativeProductCB_FreeProductCB(J
   delete static_cast<PurchasesInterface::ProductCB*>(Void(cb));
 }
 
-unique_ptr<PurchasesInterface> SystemToolkit::CreatePurchases(string pubkey) { return make_unique<AndroidPurchases>(move(pubkey)); }
+unique_ptr<PurchasesInterface> SystemToolkit::CreatePurchases(ApplicationInfo*, string pubkey) { return make_unique<AndroidPurchases>(move(pubkey)); }
 }; // namespace LFL

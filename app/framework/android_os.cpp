@@ -282,11 +282,11 @@ void JNI::RunRunnableOnUiThread(JNIEnv *e, jobject runnable) {
 }
 
 void JNI::MainThreadRunRunnable(GlobalJNIObject* runnable) {
-  app->RunCallbackInMainThread(bind(&JNI::RunGlobalRunnable, nullptr, runnable));
+  jni->app->RunCallbackInMainThread(bind(&JNI::RunGlobalRunnable, nullptr, runnable));
 }
 
 void JNI::MainThreadRunRunnableOnUiThread(GlobalJNIObject* runnable) {
-  app->RunCallbackInMainThread(bind(&JNI::RunGlobalRunnableOnUiThread, nullptr, runnable));
+  jni->app->RunCallbackInMainThread(bind(&JNI::RunGlobalRunnableOnUiThread, nullptr, runnable));
 }
 
 BufferFile *JNI::OpenAsset(const string &fn) {
@@ -321,19 +321,19 @@ template <class X> GlobalJNIType<X>::~GlobalJNIType() { if (v) jni->env->DeleteG
 template struct GlobalJNIType<jobject>;
 template struct GlobalJNIType<jstring>;
 
-string Application::GetVersion() {
+string ApplicationInfo::GetVersion() {
   static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "getVersionName", "()Ljava/lang/String;"));
   LocalJNIString str(jni->env, (jstring)jni->env->CallObjectMethod(jni->activity, mid));
   return JNI::GetJString(jni->env, str.v);
 }
 
-void Application::OpenSystemBrowser(const string &url_text) {
+void SystemBrowser::OpenSystemBrowser(const string &url_text) {
   static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "openBrowser", "(Ljava/lang/String;)V"));
   LocalJNIString jurl(jni->env, JNI::ToJString(jni->env, url_text));
   jni->env->CallVoidMethod(jni->activity, mid, jurl.v);
 }
 
-string Application::GetSystemDeviceName() {
+string ApplicationInfo::GetSystemDeviceName() {
   static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "getModelName", "()Ljava/lang/String;"));
   LocalJNIString str(jni->env, (jstring)jni->env->CallObjectMethod(jni->activity, mid));
   return JNI::GetJString(jni->env, str.v);
@@ -347,8 +347,8 @@ bool Application::OpenSystemAppPreferences() {
 void Application::SaveKeychain(const string &k, const string &v) {}
 bool Application::LoadKeychain(const string &k, string *v) { return false; }
 
-String16 Application::GetLocalizedString16(const char *key) { return String16(); }
-string Application::GetLocalizedString(const char *key) {
+String16 Localization::GetLocalizedString16(const char *key) { return String16(); }
+string Localization::GetLocalizedString(const char *key) {
   static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->resources_class, "getString", "(I)Ljava/lang/String;"));
   jfieldID fid = jni->env->GetStaticFieldID(jni->r_string_class, key, "I");
   if (jni->CheckForException() || !fid) return ERRORv(key, "missing fid for: ", key); 
@@ -357,8 +357,8 @@ string Application::GetLocalizedString(const char *key) {
   return JNI::GetJString(jni->env, str.v);
 }
 
-String16 Application::GetLocalizedInteger16(int number) { return String16(); }
-string Application::GetLocalizedInteger(int number) {
+String16 Localization::GetLocalizedInteger16(int number) { return String16(); }
+string Localization::GetLocalizedInteger(int number) {
   return StrCat(number);
 }
 
@@ -381,9 +381,9 @@ void Application::SaveSettings(const StringPairVec &v) {
   jni->env->CallVoidMethod(jni->activity, mid, prefs.v);
 }
 
-Connection *Application::ConnectTCP(const string &hostport, int default_port, Connection::CB *connected_cb, bool background_services) {
+Connection *Networking::ConnectTCP(const string &hostport, int default_port, Connection::CB *connected_cb, bool background_services) {
   INFO("Application::ConnectTCP ", hostport, " (default_port = ", default_port, ") background_services = false"); 
-  return app->net->tcp_client->Connect(hostport, default_port, connected_cb);
+  return net->tcp_client->Connect(hostport, default_port, connected_cb);
 }
 
 void GPlus::SignIn() {

@@ -1,5 +1,5 @@
 /*
- * $Id: camera.cpp 1330 2014-11-06 03:04:15Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -107,7 +107,7 @@ struct OpenALAudioModule : public Module {
           IR.Write(samples[i+1] / 32678.0);
         }
       }
-      app->audio->samples_read += num_samples;
+      audio->samples_read += num_samples;
     }
     if (!out_dev) return 0;
 
@@ -178,18 +178,18 @@ struct OpenALAudioModule : public Module {
   }
 };
 
-int Application::GetMaxVolume() { return 0; }
-int Application::GetVolume() { return 0; }
-void Application::SetVolume(int v) {}
+int Audio::GetMaxVolume() { return 0; }
+int Audio::GetVolume() { return 0; }
+void Audio::SetVolume(int v) {}
 
-void Application::PlayBackgroundMusic(SoundAsset *music) {
-  audio->QueueMix(music);
-  audio->loop = music;
-  audio->Out.resize(max(audio->Out.size(), SoundAsset::Size(music)));
+void Audio::PlayBackgroundMusic(SoundAsset *music) {
+  QueueMix(music);
+  loop = music;
+  Out.resize(max(Out.size(), SoundAsset::Size(music)));
 }
 
-void Application::PlaySoundEffect(SoundAsset *sa, const v3 &pos, const v3 &vel) {
-  dynamic_cast<OpenALAudioModule*>(audio->impl.get())->PlaySoundEffect(sa, pos, vel);
+void Audio::PlaySoundEffect(SoundAsset *sa, const v3 &pos, const v3 &vel) {
+  dynamic_cast<OpenALAudioModule*>(impl.get())->PlaySoundEffect(sa, pos, vel);
 }
  
 unique_ptr<Module> CreateAudioModule(Audio *a) { return make_unique<OpenALAudioModule>(a); }

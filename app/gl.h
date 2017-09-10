@@ -181,16 +181,16 @@ struct DrawableNop : public Drawable {
 
 struct Texture : public Drawable {
   static const int preferred_pf, updatesystemimage_pf;
-  GraphicsDevice *gd;
+  GraphicsDeviceHolder *parent;
   unsigned ID;
   unsigned char *buf;
   bool owner, buf_owner;
   int width, height, pf, cubemap;
   float coord[4] = { unit_texcoord[0], unit_texcoord[1], unit_texcoord[2], unit_texcoord[3] };
 
-  Texture(GraphicsDevice *D=0, int w=0, int h=0, int PF=preferred_pf, unsigned id=0) : gd(D), ID(id), buf(0), owner(1), buf_owner(1), width(w), height(h), pf(PF), cubemap(0) {}
-  Texture(                     int w,   int h,   int PF,           unsigned char *B) : gd(0), ID(0),  buf(B), owner(1), buf_owner(0), width(w), height(h), pf(PF), cubemap(0) {}
-  Texture(const Texture &t) : gd(t.gd), ID(t.ID), buf(t.buf), owner(ID?0:1), buf_owner(buf?0:1), width(t.width), height(t.height), pf(t.pf), cubemap(t.cubemap) { memcpy(&coord, t.coord, sizeof(coord)); }
+  Texture(GraphicsDeviceHolder *P, int w=0, int h=0, int PF=preferred_pf, unsigned id=0) : parent(P), ID(id), buf(0), owner(1), buf_owner(1), width(w), height(h), pf(PF), cubemap(0) {}
+  Texture(GraphicsDeviceHolder *P, int w,   int h,   int PF,           unsigned char *B) : parent(P), ID(0),  buf(B), owner(1), buf_owner(0), width(w), height(h), pf(PF), cubemap(0) {}
+  Texture(const Texture &t) : parent(t.parent), ID(t.ID), buf(t.buf), owner(ID?0:1), buf_owner(buf?0:1), width(t.width), height(t.height), pf(t.pf), cubemap(t.cubemap) { memcpy(&coord, t.coord, sizeof(coord)); }
   virtual ~Texture() { Clear(); }
 
   void Bind() const;
@@ -229,7 +229,7 @@ struct Texture : public Drawable {
   void LoadBuffer  (const unsigned char *B, const point &dim, int PF, int linesize, int flag=0);
   void UpdateBuffer(const unsigned char *B, const point &dim, int PF, int linesize, int flag=0);
   void UpdateBuffer(const unsigned char *B, const ::LFL::Box &box, int PF, int linesize, int blit_flag=0);
-  void FlipBufferY() { Texture t; t.LoadBuffer(buf, Dimension(), pf, LineSize(), Flag::FlipY); ClearBuffer(); swap(buf, t.buf); }
+  void FlipBufferY() { Texture t(parent); t.LoadBuffer(buf, Dimension(), pf, LineSize(), Flag::FlipY); ClearBuffer(); swap(buf, t.buf); }
 
   void LoadGL  (const MultiProcessTextureResource&);
   void LoadGL  (const unsigned char *B, const point &dim, int PF, int linesize, int flag=0);
@@ -264,13 +264,13 @@ struct TextureArray {
 };
 
 struct DepthTexture {
-  GraphicsDevice *gd;
+  GraphicsDeviceHolder *parent;
   unsigned ID;
   int width, height, df;
   bool owner=true;
-  DepthTexture(GraphicsDevice *D=0, int w=0, int h=0, int DF=Depth::_16, unsigned id=0) :
-    gd(D), ID(id), width(w), height(h), df(DF) {}
-  ~DepthTexture() { if (owner) ClearGL(); }
+  DepthTexture(GraphicsDeviceHolder *p, int w=0, int h=0, int DF=Depth::_16, unsigned id=0) :
+    parent(p), ID(id), width(w), height(h), df(DF) {}
+  virtual ~DepthTexture() { if (owner) ClearGL(); }
 
   struct Flag { enum { CreateGL=1 }; };
   void Create(int W, int H, int DF=0) { Resize(W, H, DF, Flag::CreateGL); }
@@ -280,15 +280,15 @@ struct DepthTexture {
 };
 
 struct FrameBuffer {
-  GraphicsDevice *gd;
+  GraphicsDeviceHolder *parent;
   unsigned ID;
   int width, height;
   Texture tex;
   DepthTexture depth;
   bool owner=true;
 
-  FrameBuffer(GraphicsDevice *d, int w=0, int h=0, unsigned id=0) : gd(d), ID(id), width(w), height(h) {}
-  ~FrameBuffer() { if (owner) ClearGL(); }
+  FrameBuffer(GraphicsDeviceHolder *p, int w=0, int h=0, unsigned id=0) : parent(p), ID(id), width(w), height(h), tex(p), depth(p) {}
+  virtual ~FrameBuffer() { if (owner) ClearGL(); }
 
   struct Flag { enum { CreateGL=1, CreateTexture=2, CreateDepthTexture=4, ReleaseFB=8, RepeatGL=16 }; };
   void Create(int W, int H, int flag=0) { Resize(W, H, Flag::CreateGL | flag); }
@@ -318,6 +318,7 @@ struct ShaderDefines {
 
 struct Shader {
   static const int MaxVertexAttrib = 4;
+  GraphicsDeviceHolder *parent;
   string name;
   float scale=0;
   int unused_attrib_slot[MaxVertexAttrib];
@@ -328,11 +329,11 @@ struct Shader {
     uniform_colordefault=-1, uniform_material_ambient=-1, uniform_material_diffuse=-1, uniform_material_specular=-1,
     uniform_material_emission=-1, uniform_light0_pos=-1, uniform_light0_ambient=-1, uniform_light0_diffuse=-1,
     uniform_light0_specular=-1;
-  Shader() { memzeros(dirty_light_pos); memzeros(dirty_light_color); }
-  ~Shader() { if (owner) ClearGL(); }
+  Shader(GraphicsDeviceHolder *P) : parent(P) { memzeros(dirty_light_pos); memzeros(dirty_light_color); }
+  virtual ~Shader() { if (owner) ClearGL(); }
 
-  static int Create(const string &name, const string &vertex_shader, const string &fragment_shader, const ShaderDefines&, Shader *out);
-  static int CreateShaderToy(const string &name, const string &fragment_shader, Shader *out);
+  static int Create(GraphicsDeviceHolder*, const string &name, const string &vertex_shader, const string &fragment_shader, const ShaderDefines&, Shader *out);
+  static int CreateShaderToy(GraphicsDeviceHolder*, const string &name, const string &fragment_shader, Shader *out);
   int GetUniformIndex(const string &name);
   void SetUniform1i(const string &name, float v);
   void SetUniform1f(const string &name, float v);
@@ -342,9 +343,13 @@ struct Shader {
   void SetUniform3fv(const string &name, const float *v);
   void SetUniform3fv(const string &name, int n, const float *v);
   void ClearGL();
+};
 
-  static void SetGlobalUniform1f(const string &name, float v);
-  static void SetGlobalUniform2f(const string &name, float v1, float v2);
+struct Shaders {
+  Shader shader_default, shader_normals, shader_cubemap, shader_cubenorm;
+  Shaders(GraphicsDeviceHolder*);
+  void SetGlobalUniform1f(GraphicsDevice*, const string &name, float v);
+  void SetGlobalUniform2f(GraphicsDevice*, const string &name, float v1, float v2);
 };
 
 struct GraphicsDevice {
@@ -358,7 +363,7 @@ struct GraphicsDevice {
   static const int Fill, Line, Point, GLPreferredBuffer, GLInternalFormat;
 
   Window *parent;
-  int default_draw_mode = DrawMode::_2D, draw_mode = 0, default_framebuffer = 0;
+  int version, default_draw_mode = DrawMode::_2D, draw_mode = 0, default_framebuffer = 0;
   bool done_init = 0, have_framebuffer = 1, have_cubemap = 1, have_npot_textures = 1;
   bool blend_enabled = 0, invert_view_matrix = 0, track_model_matrix = 0, dont_clear_deferred = 0;
   string vertex_shader, pixel_shader;
@@ -371,9 +376,9 @@ struct GraphicsDevice {
   vector<int*> buffers;
   FrameBuffer *attached_framebuffer = 0;
 
-  GraphicsDevice(Window *W) : parent(W), scissor_stack(1) {}
+  GraphicsDevice(Window *W, int V) : parent(W), version(V), scissor_stack(1) {}
   virtual ~GraphicsDevice() {}
-  virtual void Init(const Box&) = 0;
+  virtual void Init(AssetLoading*, const Box&) = 0;
   virtual bool ShaderSupport() const = 0;
   virtual void MarkDirty() = 0;
   virtual bool GetEnabled(int) = 0;
@@ -553,10 +558,6 @@ struct ScopedDontClearDeferred {
   bool previous_dont_clear_deferred;
   ~ScopedDontClearDeferred()                                                                                { if (!previous_dont_clear_deferred) gd->SetDontClearDeferred(false); }
   ScopedDontClearDeferred(GraphicsDevice *d) : gd(d), previous_dont_clear_deferred(gd->dont_clear_deferred) { if (!previous_dont_clear_deferred) gd->SetDontClearDeferred(true);  }
-};
-
-struct Shaders {
-  Shader shader_default, shader_normals, shader_cubemap, shader_cubenorm;
 };
 
 }; // namespace LFL

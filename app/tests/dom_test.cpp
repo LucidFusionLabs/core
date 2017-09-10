@@ -29,6 +29,7 @@ extern "C" {
 #endif
 
 namespace LFL {
+extern Application *app;
 
 TEST(DOMTest, DOMNode) {
   LFL::DOM::FixedObjectAlloc<65536> alloc;
@@ -86,7 +87,8 @@ TEST(DOMTest, DOMNode) {
 
 TEST(DOMTest, DOMTree) {
   View sb_view(app->focused);
-  Browser sb(&sb_view, app->focused->Box());
+  Browser sb(app, app->focused, app, app->fonts.get(), app->net.get(), nullptr, app,
+             &sb_view, app->focused->Box());
   sb.doc.parser->OpenHTML("<html>\n"
                           "<head><style> h1 { background-color: #123456; } </style></head>\n"
                           "<body style=\"background-color: #654321\">\n"

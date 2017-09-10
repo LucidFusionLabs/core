@@ -123,14 +123,14 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
     _scale = [[UIScreen mainScreen] scale];
     CGRect wbounds = [[UIScreen mainScreen] bounds];
 
-    MyAppCreate(LFL::ios_argc, LFL::ios_argv);
+    _app = static_cast<LFL::Application*>(MyAppCreate(LFL::ios_argc, LFL::ios_argv));
     _window = [[LFUIWindow alloc] initWithFrame:wbounds];
 
     if (_show_title) {
       _title_bar = [[UINavigationBar alloc] initWithFrame:CGRectMake(0, 0, CGRectGetWidth(wbounds), 44)];
       [_title_bar setTintColor:[UIColor whiteColor]];
       UINavigationItem *item = [[UINavigationItem alloc] init];
-      item.title = LFL::MakeNSString(LFL::app->focused ? LFL::app->focused->caption : LFL::app->name);
+      item.title = LFL::MakeNSString(_app->focused ? _app->focused->caption : _app->name);
       [_title_bar setItems:@[item]];
       [_window addSubview: _title_bar];
 
@@ -199,7 +199,7 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
     else ReachabilityCallback(_reachability, reachability_flags, reachable_context.info);
 
     [[NSFileManager defaultManager] changeCurrentDirectoryPath: [[NSBundle mainBundle] resourcePath]];
-    NSLog(@"iOSMain argc=%d", LFL::app->argc);
+    NSLog(@"iOSMain argc=%d", _app->argc);
     MyAppMain();
 
     INFOf("didFinishLaunchingWithOptions, views: %p, %p, %p, csf=%f", _glk_view, _lview, _rview, _scale);
@@ -210,7 +210,7 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
   - (BOOL)application:(UIApplication *)application openURL:(NSURL *)url sourceApplication:(NSString *)sourceApplication annotation:(id)annotation {
     LFL::string urltext = LFL::GetNSString([url absoluteString]);
     INFO("openURL ", urltext);
-    if (LFL::app->open_url_cb) LFL::app->open_url_cb(urltext);
+    if (_app->open_url_cb) _app->open_url_cb(urltext);
     return YES;
   }
 
@@ -227,10 +227,10 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
   }
 
   - (void)applicationDidEnterBackground:(UIApplication *)application {
-    LFL::app->suspended = true;
-    if (LFL::app->focused->unfocused_cb) LFL::app->focused->unfocused_cb();
-    while (LFL::app->message_queue.HandleMessages()) {}
-    LFL::app->ResetGL(LFL::ResetGLFlag::Delete);
+    _app->suspended = true;
+    if (_app->focused->unfocused_cb) _app->focused->unfocused_cb();
+    while (_app->message_queue.HandleMessages()) {}
+    _app->ResetGL(LFL::ResetGLFlag::Delete);
     glFinish();
 
     if (bg_task_cb) {
@@ -247,14 +247,14 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
   }
 
   - (void)applicationWillEnterForeground:(UIApplication *)application{
-    LFL::app->suspended = false;
+    _app->suspended = false;
     if (bg_task != UIBackgroundTaskInvalid) {
       [application endBackgroundTask:bg_task];
       bg_task = UIBackgroundTaskInvalid;
     }
-    LFL::app->focused->gd->default_framebuffer = 0;
+    _app->focused->gd->default_framebuffer = 0;
     _glk_controller.needs_gl_reset = true;
-    if (LFL::app->focused->focused_cb) LFL::app->focused->focused_cb();
+    if (_app->focused->focused_cb) _app->focused->focused_cb();
     [_glk_view setNeedsDisplay];
   }
 
@@ -327,6 +327,10 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
 @end
 
 @implementation LFGLKView
+  {
+    LFUIApplication *uiapp;
+  }
+
   - (BOOL)hasText { return YES; }
   - (BOOL)canBecomeFirstResponder { return YES; }
   - (UITextAutocorrectionType)autocorrectionType { return UITextAutocorrectionTypeNo; }
@@ -341,8 +345,8 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
 
   - (void)handleKey: (int)k {
     int fired = 0;
-    fired += LFL::app->input->KeyPress(k, 0, 1);
-    fired += LFL::app->input->KeyPress(k, 0, 0);
+    fired += uiapp.app->input->KeyPress(k, 0, 1);
+    fired += uiapp.app->input->KeyPress(k, 0, 0);
     if (fired && _frame_on_keyboard_input) [self setNeedsDisplay];
   }
 
@@ -352,7 +356,7 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
 
   - (void)copy:(id)sender { if (_copy_cb) _copy_cb(); }
   - (void)paste:(id)sender { [self insertText: [UIPasteboard generalPasteboard].string]; }
-  - (void)toggleKeyboard:(id)sender { LFL::app->ToggleTouchKeyboard(); }
+  - (void)toggleKeyboard:(id)sender { uiapp.app->ToggleTouchKeyboard(); }
 @end
 
 @implementation LFGLKViewController
@@ -384,19 +388,19 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
   - (void)glkViewControllerUpdate:(GLKViewController *)controller {}
 
   - (void)glkView:(GLKView *)v drawInRect:(CGRect)rect {
-    LFL::Window *screen = LFL::app->focused;
+    LFL::Window *screen = uiapp.app->focused;
     if (!screen->gd->default_framebuffer)
       screen->gd->GetIntegerv(LFL::GraphicsDevice::FramebufferBinding, &screen->gd->default_framebuffer);
     if (_needs_gl_reset && !(_needs_gl_reset = false)) {
-      LFL::app->ResetGL(LFL::ResetGLFlag::Delete | LFL::ResetGLFlag::Reload);
-      LFL::FrameBuffer(screen->gd).Release();
+      uiapp.app->ResetGL(LFL::ResetGLFlag::Delete | LFL::ResetGLFlag::Reload);
+      LFL::FrameBuffer(screen).Release();
     }
     bool draw_frame = (uiapp.top_controller == uiapp.root_controller || uiapp.overlay_top_controller) &&
       !uiapp.frame_disabled && uiapp.gl_w && uiapp.gl_h && screen;
     if (draw_frame && (screen->gl_y != uiapp.gl_y || screen->gl_w != uiapp.gl_w || screen->gl_h != uiapp.gl_h))
-      LFL::app->focused->Reshaped(LFL::point(uiapp.screen_w, uiapp.screen_h),
-                                  LFL::Box(0, uiapp.gl_y, uiapp.gl_w, uiapp.gl_h));
-    LFL::app->EventDrivenFrame(true, draw_frame);
+      screen->Reshaped(LFL::point(uiapp.screen_w, uiapp.screen_h),
+                       LFL::Box(0, uiapp.gl_y, uiapp.gl_w, uiapp.gl_h));
+    uiapp.app->EventDrivenFrame(true, draw_frame);
   }
 @end
 
@@ -581,20 +585,20 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
   - (void)swipeLeft:  (UISwipeGestureRecognizer*)sender { [self swipe:LFL::point(-1, 0) withSender:sender]; }
   - (void)swipeRight: (UISwipeGestureRecognizer*)sender { [self swipe:LFL::point( 1, 0) withSender:sender]; }
   - (void)swipe:(LFL::point)p withSender:(UISwipeGestureRecognizer*)sender {
-    if (LFL::app->input->MouseSwipe(p, p) && uiapp.frame_on_mouse_input) [uiapp.glk_view setNeedsDisplay];
+    if (uiapp.app->input->MouseSwipe(p, p) && uiapp.frame_on_mouse_input) [uiapp.glk_view setNeedsDisplay];
   }
 
   - (void)tapGesture: (UITapGestureRecognizer *)tapGestureRecognizer {
     UIView *v = [tapGestureRecognizer view];
     CGPoint position = [tapGestureRecognizer locationInView:v];
     int dpind = v.frame.origin.x == 0;
-    if (auto s = LFL::app->focused) {
+    if (auto s = uiapp.app->focused) {
 #if 0
       s->gesture_tap[dpind] = 1;
       s->gesture_dpad_x[dpind] = position.x;
       s->gesture_dpad_y[dpind] = position.y;
 #endif
-      int fired = LFL::app->input->MouseClick(1, 1, LFL::point(position.x, s->gl_y + s->gl_h - position.y));
+      int fired = uiapp.app->input->MouseClick(1, 1, LFL::point(position.x, s->gl_y + s->gl_h - position.y));
       if (fired && uiapp.frame_on_mouse_input) [uiapp.glk_view setNeedsDisplay];
     }
   }
@@ -603,8 +607,8 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
     if (panGestureRecognizer.state == UIGestureRecognizerStateEnded ||
         panGestureRecognizer.state == UIGestureRecognizerStateFailed ||
         panGestureRecognizer.state == UIGestureRecognizerStateCancelled) {
-      if (auto s = LFL::app->focused) { 
-        int fired = LFL::app->input->MouseClick(1, 0, s->mouse);
+      if (auto s = uiapp.app->focused) {
+        int fired = uiapp.app->input->MouseClick(1, 0, s->mouse);
         if (fired && uiapp.frame_on_mouse_input) [uiapp.glk_view setNeedsDisplay];
       }
       return;
@@ -616,17 +620,17 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
     int dpind = v.frame.origin.x == 0;
     if (!dpind) position = CGPointMake(uiapp.scale * (position.x + v.frame.origin.x), uiapp.scale * (position.y + v.frame.origin.y));
     else        position = CGPointMake(uiapp.scale * position.x, uiapp.scale * position.y);
-    if (auto s = LFL::app->focused) { 
+    if (auto s = uiapp.app->focused) {
       LFL::point pos = LFL::Floor(LFL::GetCGPoint(position));
       pos.y = s->gl_y + s->gl_h - pos.y;
       int fired = panGestureRecognizer.state == UIGestureRecognizerStateBegan ?
-        LFL::app->input->MouseClick(1, 1, pos) :
-        LFL::app->input->MouseMove(pos, pos - LFL::app->focused->mouse);
+        uiapp.app->input->MouseClick(1, 1, pos) :
+        uiapp.app->input->MouseMove(pos, pos - uiapp.app->focused->mouse);
       if (fired && uiapp.frame_on_mouse_input) [uiapp.glk_view setNeedsDisplay];
     }
   }
     #if 0
-    if (auto s = LFL::app->focused) {
+    if (auto s = _app->focused) {
       if (panGestureRecognizer.state == UIGestureRecognizerStateChanged) {
         // CGPoint velocity = [panGestureRecognizer translationInView:v];
         if (fabs(velocity.x) > 15 || fabs(velocity.y) > 15) {
@@ -655,7 +659,7 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
   #endif
 
   - (void)pinchGesture: (UIPinchGestureRecognizer*)pinch {
-    auto s = LFL::app->focused;
+    auto s = uiapp.app->focused;
     if (!s || [pinch numberOfTouches] < 2) return;
     bool begin = pinch.state == UIGestureRecognizerStateBegan;
     if (begin) {
@@ -674,7 +678,7 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
     }
     CGFloat p_scale = 1.0 + (pinch_scale - pinch.scale);
     LFL::v2 p(pinch_point.x, s->gl_y + s->gl_h - pinch_point.y), d(p_scale, p_scale);
-    int fired = LFL::app->input->MouseZoom(p, d, begin);
+    int fired = uiapp.app->input->MouseZoom(p, d, begin);
     if (fired && uiapp.frame_on_mouse_input) [uiapp.glk_view setNeedsDisplay];
     pinch_scale = pinch.scale;
   }
@@ -685,7 +689,7 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
 
   - (void)copy:(id)sender { if (uiapp.glk_view.copy_cb) uiapp.glk_view.copy_cb(); }
   - (void)paste:(id)sender { [uiapp.glk_view paste: sender]; }
-  - (void)toggleKeyboard:(id)sender { LFL::app->ToggleTouchKeyboard(); }
+  - (void)toggleKeyboard:(id)sender { uiapp.app->ToggleTouchKeyboard(); }
 @end
 
 @implementation MyTouchView
@@ -707,13 +711,13 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
     int dpind = v.frame.origin.x == 0, scale = [uiapp getScale];
     if (!dpind) position = CGPointMake(scale * (position.x + v.frame.origin.x), scale * (position.y + v.frame.origin.y));
     else        position = CGPointMake(scale * position.x, scale * position.y);
-    if (auto s = LFL::app->focused) {
+    if (auto s = uiapp.app->focused) {
 #if 0
       s->gesture_dpad_x[dpind] = position.x;
       s->gesture_dpad_y[dpind] = position.y;
 #endif
       LFL::point p(position.x, s->gl_y + s->gl_h - (int)position.y);
-      int fired = LFL::app->input->MouseClick(1, 1, p);
+      int fired = uiapp.app->input->MouseClick(1, 1, p);
       if (fired && uiapp.frame_on_mouse_input) [self.superview setNeedsDisplay];
     }
   }
@@ -726,14 +730,14 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
     int dpind = v.frame.origin.x == 0, scale = [uiapp getScale];
     if (!dpind) position = CGPointMake(scale * (position.x + v.frame.origin.x), scale * (position.y + v.frame.origin.y));
     else        position = CGPointMake(scale * position.x, scale * position.y);
-    if (auto s = LFL::app->focused) {
+    if (auto s = uiapp.app->focused) {
 #if 0
       s->gesture_dpad_stop[dpind] = 1;
       s->gesture_dpad_x[dpind] = 0;
       s->gesture_dpad_y[dpind] = 0;
 #endif
       LFL::point p(position.x, s->gl_y + s->gl_h - position.y);
-      int fired = LFL::app->input->MouseClick(1, 0, p);
+      int fired = uiapp.app->input->MouseClick(1, 0, p);
       if (fired && uiapp.frame_on_mouse_input) [self.superview setNeedsDisplay];
     }
   }
@@ -746,14 +750,14 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
     int dpind = v.frame.origin.x == 0, scale = [uiapp getScale];
     if (!dpind) position = CGPointMake(scale * (position.x + v.frame.origin.x), scale * (position.y + v.frame.origin.y));
     else        position = CGPointMake(scale * position.x, scale * position.y);
-    if (auto s = LFL::app->focused) {
+    if (auto s = _app->focused) {
 #if 0
       s->gesture_dpad_x[dpind] = position.x;
       s->gesture_dpad_y[dpind] = position.y;
 #endif
       LFL::point pos = LFL::Floor(LFL::GetCGPoint(position));
       pos.y = s->y + s->height - pos.y;
-      int fired = LFL::app->input->MouseMove(pos, LFL::app->focused ? (pos - LFL::app->focused->mouse) : pos);
+      int fired = _app->input->MouseMove(pos, _app->focused ? (pos - _app->focused->mouse) : pos);
       if (fired && uiapp.frame_on_mouse_input) [self.superview setNeedsDisplay];
     }
   }
@@ -989,30 +993,34 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
 
 namespace LFL {
 struct iOSFrameworkModule : public Module {
+  WindowHolder *win;
+  iOSFrameworkModule(WindowHolder *w) : win(w) {}
+
   int Init() {
     INFO("iOSFrameworkModule::Init()");
-    if (auto s = dynamic_cast<iOSWindow*>(app->focused)) {
+    if (auto s = dynamic_cast<iOSWindow*>(win->focused)) {
       CHECK(!s->id);
       s->id = (s->glkview = [[LFUIApplication sharedAppDelegate] glk_view]);
       CHECK(s->id);
-      app->windows[s->id] = s;
+      win->windows[s->id] = s;
     }
     LFUIApplication *uiapp = [LFUIApplication sharedAppDelegate];
     CGFloat scale = [uiapp getScale];
     CGRect rect = [uiapp getFrame];
     int w = rect.size.width * scale, h = rect.size.height * scale;
-    if (auto s = app->focused) Assign(&s->gl_w, &s->gl_h, w, h);
+    if (auto s = win->focused) Assign(&s->gl_w, &s->gl_h, w, h);
     INFOf("iOSFrameworkModule::Init %d %d vs %d %d", w, h, [uiapp glk_view].drawableWidth, [uiapp glk_view].drawableHeight);
     return 0;
   }
 };
 
 struct iOSAssetLoader : public SimpleAssetLoader {
+  iOSAssetLoader(AssetLoading *p) : SimpleAssetLoader(p) {}
   virtual void UnloadAudioFile(void *h) {}
   virtual void *LoadAudioFile(File*) { return 0; }
   virtual void *LoadAudioFileNamed(const string &asset_fn) {
     NSError *error;
-    NSString *fn = [NSString stringWithCString:Asset::FileName(asset_fn).c_str() encoding:NSASCIIStringEncoding];
+    NSString *fn = [NSString stringWithCString:parent->FileName(asset_fn).c_str() encoding:NSASCIIStringEncoding];
     NSURL *url = [NSURL fileURLWithPath: fn];
     AVAudioPlayer *audio_player = [[AVAudioPlayer alloc] initWithContentsOfURL:url error:&error];
     if (audio_player == nil) ERRORf("iOS Asset Load %s: %s", [fn UTF8String], [[error description] UTF8String]);
@@ -1076,38 +1084,38 @@ struct iOSNag : public NagInterface {
 };
 
 int Application::Suspended() { return 0; }
-void Application::RunCallbackInMainThread(Callback cb) {
+void ThreadDispatcher::RunCallbackInMainThread(Callback cb) {
 #if 0
   ObjcCallback *ocb = [[ObjcCallback alloc] initWithCB: move(cb)];
   [ocb performSelectorOnMainThread:@selector(runAndRelease) withObject:nil waitUntilDone:NO];
 #else
   message_queue.Write(new Callback(move(cb)));
-  if (!FLAGS_target_fps && !app->suspended) scheduler.Wakeup(focused);
+  if (!FLAGS_target_fps && !suspended) wakeup->Wakeup();
 #endif
 }
 
-void Application::MakeCurrentWindow(Window *W) {}
+void WindowHolder::MakeCurrentWindow(Window *W) {}
 void Application::CloseWindow(Window *W) {}
 
-void Application::GrabMouseFocus() {}
-void Application::ReleaseMouseFocus() {}
+void MouseFocus::GrabMouseFocus() {}
+void MouseFocus::ReleaseMouseFocus() {}
 
-string Application::GetClipboardText() { return GetNSString([UIPasteboard generalPasteboard].string); }
-void Application::SetClipboardText(const string &s) {
+string Clipboard::GetClipboardText() { return GetNSString([UIPasteboard generalPasteboard].string); }
+void Clipboard::SetClipboardText(const string &s) {
   if (auto ns = MakeNSString(s)) [UIPasteboard generalPasteboard].string = ns;
 }
 
-void Application::OpenTouchKeyboard() { [[LFUIApplication sharedAppDelegate] showKeyboard]; }
-void Application::CloseTouchKeyboard() { [[LFUIApplication sharedAppDelegate] hideKeyboard]; }
-void Application::CloseTouchKeyboardAfterReturn(bool v) { [LFUIApplication sharedAppDelegate].glk_view.resign_textfield_on_return = v; }
-void Application::SetTouchKeyboardTiled(bool v) { [[LFUIApplication sharedAppDelegate].controller setOverlapKeyboard: !v]; }
-void Application::ToggleTouchKeyboard() {
+void TouchKeyboard::OpenTouchKeyboard() { [[LFUIApplication sharedAppDelegate] showKeyboard]; }
+void TouchKeyboard::CloseTouchKeyboard() { [[LFUIApplication sharedAppDelegate] hideKeyboard]; }
+void TouchKeyboard::CloseTouchKeyboardAfterReturn(bool v) { [LFUIApplication sharedAppDelegate].glk_view.resign_textfield_on_return = v; }
+void TouchKeyboard::SetTouchKeyboardTiled(bool v) { [[LFUIApplication sharedAppDelegate].controller setOverlapKeyboard: !v]; }
+void TouchKeyboard::ToggleTouchKeyboard() {
   if ([[LFUIApplication sharedAppDelegate] isKeyboardFirstResponder]) CloseTouchKeyboard();
   else OpenTouchKeyboard();
 }
 
-bool Application::GetAppFrameEnabled() { return ![LFUIApplication sharedAppDelegate].frame_disabled; }
-void Application::SetAppFrameEnabled(bool v) { [LFUIApplication sharedAppDelegate].frame_disabled = !v; INFO("frame enabled = ", v); }
+bool WindowHolder::GetAppFrameEnabled() { return ![LFUIApplication sharedAppDelegate].frame_disabled; }
+void WindowHolder::SetAppFrameEnabled(bool v) { [LFUIApplication sharedAppDelegate].frame_disabled = !v; INFO("frame enabled = ", v); }
 void Application::SetAutoRotateOrientation(bool v) {}
 int Application::SetMultisample(bool v) { return [[LFUIApplication sharedAppDelegate] updateGLKMultisample:v]; }
 int Application::SetExtraScale(bool v) { return [[LFUIApplication sharedAppDelegate] updateScale:v]; }
@@ -1143,7 +1151,7 @@ void Application::ShowSystemContextMenu(const MenuItemVec &items) {
   if (menuitems.size())
     mc.menuItems = [NSArray arrayWithObjects:&menuitems[0] count:menuitems.size()];
 
-  auto w = app->focused;
+  auto w = focused;
   float s = [uiapp getScale];
   CGRect rect = CGRectMake(w->mouse.x / s, (w->gl_h + w->gl_y - w->mouse.y) / s, w->default_font->Height(), 100);
   [mc setTargetRect:rect inView:dynamic_cast<iOSWindow*>(w)->glkview];
@@ -1160,24 +1168,24 @@ void iOSWindow::SetCaption(const string &v) {
   newItem.title = MakeNSString(v);
 }
 
-bool Video::CreateWindow(Window *w) { return false; }
+bool Video::CreateWindow(WindowHolder*, Window *w) { return false; }
 void Video::StartWindow(Window *w) {
   [[LFUIApplication sharedAppDelegate] updateTargetFPS: w->target_fps];
 }
 
-int Video::Swap() {
-  app->focused->gd->Flush();
-  app->focused->gd->CheckForError(__FILE__, __LINE__);
+int Video::Swap(Window *w) {
+  w->gd->Flush();
+  w->gd->CheckForError(__FILE__, __LINE__);
   return 0;
 }
 
-FrameScheduler::FrameScheduler() :
-  maxfps(&FLAGS_target_fps), wakeup_thread(&frame_mutex, &wait_mutex), rate_limit(0), wait_forever(!FLAGS_target_fps),
+FrameScheduler::FrameScheduler(WindowHolder *w) :
+  window(w), maxfps(&FLAGS_target_fps), rate_limit(0), wait_forever(!FLAGS_target_fps),
   wait_forever_thread(0), synchronize_waits(0), monolithic_frame(0), run_main_loop(0) {}
 
 bool FrameScheduler::DoMainWait(bool poll_only) { return false; }
-void FrameScheduler::Wakeup(Window *w, int) {
-  dispatch_async(dispatch_get_main_queue(), ^{ [dynamic_cast<iOSWindow*>(w)->glkview setNeedsDisplay]; });
+void Window::Wakeup(int) {
+  dispatch_async(dispatch_get_main_queue(), ^{ [dynamic_cast<iOSWindow*>(this)->glkview setNeedsDisplay]; });
 }
 
 void FrameScheduler::UpdateWindowTargetFPS(Window *w) {
@@ -1213,15 +1221,15 @@ void FrameScheduler::DelMainWaitSocket(Window *w, Socket fd) {
   [[LFUIApplication sharedAppDelegate] delMainWaitSocket: fd];
 }
 
-Window *Window::Create() { return new iOSWindow(); }
+Window *CreateWindow(Application *a) { return new iOSWindow(a); }
 Application *CreateApplication(int ac, const char* const* av) { return new Application(ac, av); }
-unique_ptr<Module> CreateFrameworkModule() { return make_unique<iOSFrameworkModule>(); }
-unique_ptr<AssetLoaderInterface> CreateAssetLoader() { return make_unique<iOSAssetLoader>(); }
+unique_ptr<Module> CreateFrameworkModule(Application *a) { return make_unique<iOSFrameworkModule>(a); }
+unique_ptr<AssetLoaderInterface> CreateAssetLoader(AssetLoading *p) { return make_unique<iOSAssetLoader>(p); }
 unique_ptr<TimerInterface> SystemToolkit::CreateTimer(Callback cb) { return make_unique<AppleTimer>(move(cb)); }
-unique_ptr<AlertViewInterface> SystemToolkit::CreateAlert(AlertItemVec items) { return make_unique<iOSAlertView>(move(items)); }
-unique_ptr<PanelViewInterface> SystemToolkit::CreatePanel(const Box &b, const string &title, PanelItemVec items) { return nullptr; }
-unique_ptr<MenuViewInterface> SystemToolkit::CreateMenu(const string &title, MenuItemVec items) { return make_unique<iOSMenuView>(title, move(items)); }
-unique_ptr<MenuViewInterface> SystemToolkit::CreateEditMenu(vector<MenuItem> items) { return nullptr; }
+unique_ptr<AlertViewInterface> SystemToolkit::CreateAlert(Window*, AlertItemVec items) { return make_unique<iOSAlertView>(move(items)); }
+unique_ptr<PanelViewInterface> SystemToolkit::CreatePanel(Window*, const Box &b, const string &title, PanelItemVec items) { return nullptr; }
+unique_ptr<MenuViewInterface> SystemToolkit::CreateMenu(Window*, const string &title, MenuItemVec items) { return make_unique<iOSMenuView>(title, move(items)); }
+unique_ptr<MenuViewInterface> SystemToolkit::CreateEditMenu(Window*, vector<MenuItem> items) { return nullptr; }
 unique_ptr<NagInterface> SystemToolkit::CreateNag(const string &id, int min_days, int min_uses, int min_events, int remind_days) { return make_unique<iOSNag>(id, min_days, min_uses, min_events, remind_days); }
 
 extern "C" int main(int ac, const char* const* av) {

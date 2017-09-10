@@ -61,7 +61,8 @@ struct DocumentParser {
 
   struct HTMLParser : public ::LFL::HTMLParser, public StyleParser {
     vector<DOM::Node*> target;
-    HTMLParser(DocumentParser *p, const string &url, DOM::Node *t) : StyleParser(p, url, "") { target.push_back(t); }
+    HTMLParser(DocumentParser *p, const string &url, DOM::Node *t) : 
+      ::LFL::HTMLParser(p->doc->dispatch), StyleParser(p, url, "") { target.push_back(t); }
 
     void ParseChunkCB(const char *content, int content_len) { if (auto html = parent->doc->DocElement()) html->SetLayoutDirty(); }
     void WGetContentBegin(Connection *c, const char *h, const string &ct) { parent->doc->content_type=ct; }
@@ -166,15 +167,16 @@ struct DocumentParser {
         else if (MIMEType::Png(content_type) && !FileSuffix::Png(fn)) fn += ".png";
         else if (PrefixMatch(content_type, "text/html")) INFO("ImageParser content='", content, "'");
 
-        if (app->render_process) {
-          app->render_process->LoadAsset(content, fn, loadasset_cb);
+        auto dispatch = parent->doc->dispatch;
+        if (dispatch->render_process) {
+          dispatch->render_process->LoadAsset(content, fn, loadasset_cb);
           return;
-        } else if (app->main_process) {
-          Asset::LoadTexture(content.data(), fn.c_str(), content.size(), target.get(), 0);
-          app->main_process->LoadTexture(target.get(), loadtex_cb);
+        } else if (dispatch->main_process) {
+          parent->doc->loader->LoadTexture(content.data(), fn.c_str(), content.size(), target.get(), 0);
+          dispatch->main_process->LoadTexture(target.get(), loadtex_cb);
           return;
         } else {
-          Asset::LoadTexture(content.data(), fn.c_str(), content.size(), target.get());
+          parent->doc->loader->LoadTexture(content.data(), fn.c_str(), content.size(), target.get());
           INFO("ImageParser ", content_type, ": ", url, " ", fn, " ", content.size(), " ", target->width, " ", target->height);
         }
       }
@@ -183,7 +185,7 @@ struct DocumentParser {
 
     void LoadAssetResponseCB(const MultiProcessTextureResource &tex) {
       if (tex.width && tex.height) { target->LoadGL(tex); target->owner = true; }
-      app->RunInNetworkThread([=]() { Parser::Complete(this); });
+      parent->doc->dispatch->RunInNetworkThread([=]() { Parser::Complete(this); });
     }
 
     int LoadTextureResponseCB(const IPC::LoadTextureResponse *res, Void) {
@@ -198,7 +200,10 @@ struct DocumentParser {
   int requested=0, completed=0;
   unordered_set<void*> outstanding;
   LRUCache<string, shared_ptr<Texture> > image_cache;
-  DocumentParser(Browser::Document *D) : doc(D), image_cache(64) {}
+  GraphicsDeviceHolder *gd;
+  SocketServices *net;
+  DocumentParser(GraphicsDeviceHolder *G, SocketServices *N, Browser::Document *D) :
+    doc(D), image_cache(64), gd(G), net(N) {}
 
   bool Running(void *h) const { return outstanding.find(h) != outstanding.end(); }
   void Clear() { requested=completed=0; outstanding.clear(); doc->Clear(); }
@@ -244,7 +249,7 @@ struct DocumentParser {
     if (image_tex) {
       CHECK_EQ(image_tex->get(), 0);
       if (shared_ptr<Texture> *cached = image_cache.Get(url)) { *image_tex = *cached; return; }
-      *image_tex = make_shared<Texture>();
+      *image_tex = make_shared<Texture>(gd);
       image_cache.EvictUnique();
       image_cache.Insert(url, *image_tex);
     }
@@ -256,8 +261,8 @@ struct DocumentParser {
         if (PrefixMatch(mimetype, "image/") && image_tex) {
           string fn = toconvert(mimetype, tochar<'/', '.'>);
           if (encoding == "base64") {
-            string content = Singleton<Base64>::Get()->Decode(url.c_str()+comma+1, url.size()-comma-1);
-            Asset::LoadTexture(content.data(), fn.c_str(), content.size(), image_tex->get());
+            string content = Singleton<Base64>::Set()->Decode(url.c_str()+comma+1, url.size()-comma-1);
+            doc->loader->LoadTexture(content.data(), fn.c_str(), content.size(), image_tex->get());
           } else INFO("unhandled: data:url encoding ", encoding);
         } else INFO("unhandled data:url mimetype ", mimetype);
       } else INFO("unhandled data:url ", input_url);
@@ -273,8 +278,9 @@ struct DocumentParser {
       requested++;
       outstanding.insert(handler);
       bool root = target == doc->node;
-      if (app->main_process) app->main_process->WGet(url,    callback, root ? redirect_cb : StringCB());
-      else                          HTTPClient::WGet(url, 0, callback, root ? redirect_cb : StringCB());
+      auto dispatch = doc->dispatch;
+      if (dispatch->main_process) dispatch->main_process->WGet(        url, callback, root ? redirect_cb : StringCB());
+      else                                    HTTPClient::WGet(net, 0, url, 0, callback, root ? redirect_cb : StringCB());
     } else {
       ERROR("unknown mimetype for url ", url);
     }

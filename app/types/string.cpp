@@ -39,13 +39,13 @@
 extern "C" void LFAppLog(int level, const char *file, int line, const char *fmt, ...) {
   LFL::string message;
   StringPrintfImpl(&message, fmt, vsnprintf, 0);
-  LFL::app->Log(level, file, line, message.c_str());
+  LFL::Logger::Log(level, file, line, message);
 }
 
 extern "C" void LFAppDebug(const char *file, int line, const char *fmt, ...) {
   LFL::string message;
   StringPrintfImpl(&message, fmt, vsnprintf, 0);
-  LFL::Application::WriteDebugLine(message.c_str(), file, line);
+  LFL::Logger::WriteDebugLine(message.c_str(), file, line);
 }
 
 namespace LFL {

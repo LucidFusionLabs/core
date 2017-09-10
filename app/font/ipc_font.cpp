@@ -23,10 +23,10 @@
 namespace LFL {
 unique_ptr<Font> IPCClientFontEngine::Open(const FontDesc &d) {
   unique_ptr<Font> ret = make_unique<Font>(this, d, make_shared<Resource>());
-  ret->glyph = make_shared<GlyphMap>();
-  ret->glyph->cache = app->fonts->GetGlyphCache();
-  app->main_process->OpenSystemFont(d, bind(&IPCClientFontEngine::OpenSystemFontResponse, this, ret.get(), _1, _2));
-  if (1 && app->main_process->browser) app->main_process->WaitAllOpenSystemFontResponse();
+  ret->glyph = make_shared<GlyphMap>(parent->parent);
+  ret->glyph->cache = parent->GetGlyphCache();
+  dispatch->main_process->OpenSystemFont(d, bind(&IPCClientFontEngine::OpenSystemFontResponse, this, ret.get(), _1, _2));
+  if (1 && dispatch->main_process->browser) dispatch->main_process->WaitAllOpenSystemFontResponse();
   return ret;
 }
 
@@ -36,10 +36,11 @@ int IPCClientFontEngine::OpenSystemFontResponse(Font *f, const IPC::OpenSystemFo
   f->SetMetrics(res->ascender(), res->descender(), res->max_width(), res->fixed_width(), res->missing_glyph(),
                 res->mix_fg(), res->has_bg(), res->fix_metrics(), res->scale());
   f->glyph->table_start = res->start_glyph_id();
-  f->glyph->table.resize(res->num_glyphs());
+  f->glyph->table.clear();
+  for (int i=0, l=res->num_glyphs(); i != l; ++i) f->glyph->table.emplace_back(parent->parent);
   GlyphMetrics *g = reinterpret_cast<GlyphMetrics*>(mpb.buf);
   for (int i=0, l=f->glyph->table.size(); i<l; i++) f->glyph->table[i].FromMetrics(g[i]);
-  if (app->main_process) if (auto html = app->main_process->browser->doc.DocElement()) html->SetStyleDirty();
+  if (dispatch->main_process) if (auto html = dispatch->main_process->browser->doc.DocElement()) html->SetStyleDirty();
   return IPC::Done;
 }
 

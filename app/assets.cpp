@@ -33,7 +33,7 @@ void Geometry::SetPosition(const float *v) {
   for (int i = 0; i<count; i++) for (int j = 0; j<vd; j++) vert[i*width+j] += delta[j];
 }
 
-void Geometry::ScrollTexCoord(float dx, float dx_extra, int *subtract_max_int) {
+void Geometry::ScrollTexCoord(GraphicsDevice *gd, float dx, float dx_extra, int *subtract_max_int) {
   int vpp = GraphicsDevice::VertsPerPrimitive(primtype), prims = count / vpp, max_int = 0;
   int texcoord_offset = vd * (norm_offset < 0 ? 1 : 2);
   for (int prim = 0; prim < prims; prim++) {
@@ -47,92 +47,67 @@ void Geometry::ScrollTexCoord(float dx, float dx_extra, int *subtract_max_int) {
   if (subtract_max_int) *subtract_max_int = max_int;
   int width_bytes = width * sizeof(float);
   int vert_size = count * width_bytes;
-  app->focused->gd->VertexPointer(vd, GraphicsDevice::Float, width_bytes, 0, &vert[0], vert_size, &vert_ind, true, primtype);
+  gd->VertexPointer(vd, GraphicsDevice::Float, width_bytes, 0, &vert[0], vert_size, &vert_ind, true, primtype);
 }
 
-string Asset::FileName(const string &asset_fn) {
+string AssetLoading::FileName(const string &asset_fn) {
   if (asset_fn.empty()) return "";
   if (asset_fn[0] == '/') return asset_fn;
-  return StrCat(app->assetdir, asset_fn);
+  return StrCat(appinfo->assetdir, asset_fn);
 }
 
-string Asset::FileContents(const string &asset_fn) {
-  auto i = app->asset_cache.find(asset_fn);
-  if (i != app->asset_cache.end()) return string(i->second.data(), i->second.size());
+string AssetLoading::FileContents(const string &asset_fn) {
+  auto i = asset_cache.find(asset_fn);
+  if (i != asset_cache.end()) return string(i->second.data(), i->second.size());
   if (asset_fn[0] == '/') return LocalFile::FileContents(asset_fn);
 #ifdef LFL_ANDROID
   static JNI *jni = Singleton<LFL::JNI>::Get();
   unique_ptr<BufferFile> f(jni->OpenAsset(asset_fn));
   return f ? string(move(f->buf)) : string();
 #endif
-  return LocalFile::FileContents(Asset::FileName(asset_fn));
+  return LocalFile::FileContents(FileName(asset_fn));
 }
 
-File *Asset::OpenFile(const string &asset_fn) {
-  auto i = app->asset_cache.find(asset_fn);
-  if (i != app->asset_cache.end()) return new BufferFile(StringPiece(i->second), asset_fn.c_str());
+File *AssetLoading::OpenFile(const string &asset_fn) {
+  auto i = asset_cache.find(asset_fn);
+  if (i != asset_cache.end()) return new BufferFile(StringPiece(i->second), asset_fn.c_str());
   if (asset_fn[0] == '/') return new LocalFile(asset_fn, "r");
 #ifdef LFL_ANDROID
   static JNI *jni = Singleton<LFL::JNI>::Get();
   return jni->OpenAsset(asset_fn);
 #endif
-  return new LocalFile(Asset::FileName(asset_fn), "r");
+  return new LocalFile(FileName(asset_fn), "r");
 }
 
-void Asset::Unload() {
-  if (parent) parent->Unloaded(this);
-  if (tex.ID && app->focused) tex.ClearGL();
-  if (geometry) { delete geometry; geometry = 0; }
-  if (hull)     { delete hull;     hull     = 0; }
-}
-
-void Asset::ResetGL(int flag) {
-  bool reload = flag & ResetGLFlag::Reload, forget = (flag & ResetGLFlag::Delete) == 0;
-  if (!texture.empty()) {
-    if (tex.ID) {
-      if (forget) tex.ID = 0;
-      else        tex.ClearGL();
-    }
-    if (reload) LoadTexture(nullptr, texture, &tex, nullptr);
-  } 
-}
-
-void Asset::Load(void *h, VideoAssetLoader *l) {
-  static int next_asset_type_id = 1, next_list_id = 1;
-  if (!name.empty()) typeID = next_asset_type_id++;
-  if (!geom_fn.empty()) geometry = Geometry::LoadOBJ(unique_ptr<File>(Asset::OpenFile(geom_fn)).get()).release();
-  if (!texture.empty() || h) LoadTexture(h, texture, &tex, l);
-}
-
-void Asset::LoadTexture(void *h, const string &asset_fn, Texture *out, VideoAssetLoader *l, int flag) {
+void AssetLoading::LoadTexture(void *h, const string &asset_fn, Texture *out, VideoAssetLoader *l, int flag) {
   if (!FLAGS_enable_video) return;
-  auto i = app->asset_cache.find(asset_fn);
-  if (i != app->asset_cache.end()) return LoadTexture(i->second.data(), asset_fn.c_str(), i->second.size(), out);
-  if (!l) l = app->asset_loader->default_video_loader;
+  auto i = asset_cache.find(asset_fn);
+  if (i != asset_cache.end()) return LoadTexture(i->second.data(), asset_fn.c_str(), i->second.size(), out);
+  if (!l) l = asset_loader->default_video_loader;
 
   void *handle = h;
-  if      (!h && 0) handle = l->LoadVideoFile(Asset::OpenFile(asset_fn));
+  if      (!h && 0) handle = l->LoadVideoFile(OpenFile(asset_fn));
   else if (!h)      handle = l->LoadVideoFileNamed(asset_fn);
   if (!handle) return ERROR("load: ", asset_fn);
   l->LoadVideo(handle, out, flag);
   if (!h) l->UnloadVideoFile(handle);
 }
 
-void Asset::LoadTexture(const void *FromBuf, const char *filename, int size, Texture *out, int flag) {
-  VideoAssetLoader *l = app->asset_loader->default_loader->GetVideoAssetLoader(filename);
+void AssetLoading::LoadTexture(const void *FromBuf, const char *filename, int size, Texture *out, int flag) {
+  VideoAssetLoader *l = asset_loader->default_loader->GetVideoAssetLoader(filename);
   void *handle = l->LoadVideoFile(new BufferFile(string(static_cast<const char*>(FromBuf), size), filename));
   if (!handle) return;
   l->LoadVideo(handle, out, flag);
   l->UnloadVideoFile(handle);
 }
 
-Texture *Asset::LoadTexture(const MultiProcessFileResource &file, int max_image_size) {
-  unique_ptr<Texture> tex = make_unique<Texture>();
-  Asset::LoadTexture(file.buf.data(), file.name.data(), file.buf.size(), tex.get(), 0);
+Texture *AssetLoading::LoadTexture(const MultiProcessFileResource &file, int max_image_size) {
+  unique_ptr<Texture> tex = make_unique<Texture>(window);
+  LoadTexture(file.buf.data(), file.name.data(), file.buf.size(), tex.get(), 0);
 
   if (tex->BufferSize() >= max_image_size) {
     unique_ptr<Texture> orig_tex = move(tex);
-    tex = make_unique<Texture>();
+    tex = make_unique<Texture>(window);
     float scale_factor = sqrt(float(max_image_size)/orig_tex->BufferSize());
     tex->Resize(orig_tex->width*scale_factor, orig_tex->height*scale_factor, Pixel::RGB24, Texture::Flag::CreateBuf);
 
@@ -145,32 +120,63 @@ Texture *Asset::LoadTexture(const MultiProcessFileResource &file, int max_image_
   return tex.release();
 }
 
-void Asset::LoadTextureArray(const string &fmt, const string &prefix, const string &suffix, int N, TextureArray*out, int flag) {
+void AssetLoading::LoadTextureArray(const string &fmt, const string &prefix, const string &suffix, int N, TextureArray*out, int flag) {
   out->a.clear();
-  for (int i=0; i != N; i++) out->a.emplace_back(app->focused->gd);
+  for (int i=0; i != N; i++) out->a.emplace_back(window);
   for (int i=0; i != N; i++)
-    Asset::LoadTexture(StringPrintf(fmt.c_str(), prefix.c_str(), i, suffix.c_str()), &out->a[i], 0, flag);
+    LoadTexture(StringPrintf(fmt.c_str(), prefix.c_str(), i, suffix.c_str()), &out->a[i], 0, flag);
+}
+
+Asset::Asset(AssetLoading *P) : parent(P), tex(P->window) {}
+Asset::Asset(AssetLoading *P, const string &N, const string &Tex, float S, int T, int R, const char *G, Geometry *H, unsigned CM, const DrawCB &CB)
+  : parent(P), name(N), texture(Tex), geom_fn(BlankNull(G)), cb(CB), scale(S), translate(T), rotate(R), hull(H), tex(P->window) { tex.cubemap=CM; }
+Asset::Asset(AssetLoading *P, const string &N, const string &Tex, float S, int T, int R, Geometry *G, Geometry *H, unsigned CM, unsigned TG, const DrawCB &CB)
+  : parent(P), name(N), texture(Tex), cb(CB), scale(S), translate(T), rotate(R), geometry(G), hull(H), tex(P->window), texgen(TG) { tex.cubemap=CM; }
+
+void Asset::Unload() {
+  if (storage) storage->Unloaded(this);
+  if (tex.ID) tex.ClearGL();
+  if (geometry) { delete geometry; geometry = 0; }
+  if (hull)     { delete hull;     hull     = 0; }
+}
+
+void Asset::ResetGL(int flag) {
+  bool reload = flag & ResetGLFlag::Reload, forget = (flag & ResetGLFlag::Delete) == 0;
+  if (!texture.empty()) {
+    if (tex.ID) {
+      if (forget) tex.ID = 0;
+      else        tex.ClearGL();
+    }
+    if (reload) parent->LoadTexture(nullptr, texture, &tex, nullptr);
+  } 
+}
+
+void Asset::Load(void *h, VideoAssetLoader *l) {
+  static int next_asset_type_id = 1, next_list_id = 1;
+  if (!name.empty()) typeID = next_asset_type_id++;
+  if (!geom_fn.empty()) geometry = Geometry::LoadOBJ(unique_ptr<File>(parent->OpenFile(geom_fn)).get()).release();
+  if (!texture.empty() || h) parent->LoadTexture(h, texture, &tex, l);
 }
 
 void SoundAsset::Unload() {
-  if (parent) parent->Unloaded(this);
+  if (storage) storage->Unloaded(this);
   wav.reset();
   if (handle) ERROR("leak: ", handle);
 }
 
 void SoundAsset::Load(void *handle, const char *FN, int Secs, int flag) {
   if (!FLAGS_enable_audio) return ERROR("load: ", FN, ": enable_audio = ", FLAGS_enable_audio);
-  if (handle) app->asset_loader->default_audio_loader->LoadAudio(handle, this, Secs, flag);
+  if (handle) parent->asset_loader->default_audio_loader->LoadAudio(handle, this, Secs, flag);
 }
 
 void SoundAsset::Load(void const *buf, int len, char const *FN, int Secs) {
-  void *handle = app->asset_loader->default_audio_loader->LoadAudioFile
+  void *handle = parent->asset_loader->default_audio_loader->LoadAudioFile
     (new BufferFile(string(static_cast<const char*>(buf), len), FN));
   if (!handle) return;
 
   Load(handle, FN, Secs, FlagNoRefill);
   if (!refill) {
-    app->asset_loader->default_audio_loader->UnloadAudioFile(handle);
+    parent->asset_loader->default_audio_loader->UnloadAudioFile(handle);
     handle = 0;
   }
 }
@@ -179,8 +185,8 @@ void SoundAsset::Load(int Secs, bool unload) {
   void *handle = 0;
 
   if (!filename.empty()) {
-    if (0) handle = app->asset_loader->default_audio_loader->LoadAudioFile(Asset::OpenFile(filename));
-    else   handle = app->asset_loader->default_audio_loader->LoadAudioFileNamed(filename);
+    if (0) handle = parent->asset_loader->default_audio_loader->LoadAudioFile(parent->OpenFile(filename));
+    else   handle = parent->asset_loader->default_audio_loader->LoadAudioFileNamed(filename);
     if (!handle) ERROR("SoundAsset::Load ", filename);
   }
 
@@ -188,25 +194,25 @@ void SoundAsset::Load(int Secs, bool unload) {
 
 #ifndef LFL_MOBILE /* XXX */
   if (!refill && handle && unload) {
-    app->asset_loader->default_audio_loader->UnloadAudioFile(handle);
+    parent->asset_loader->default_audio_loader->UnloadAudioFile(handle);
     handle = 0;
   }
 #endif
 }
 
-int SoundAsset::Refill(int reset) { return app->asset_loader->default_audio_loader->RefillAudio(this, reset); }
+int SoundAsset::Refill(int reset) { return parent->asset_loader->default_audio_loader->RefillAudio(this, reset); }
 
 void MovieAsset::Load(const char *fn) {
-  if (!fn || !(handle = app->asset_loader->default_movie_loader->LoadMovieFile(Asset::OpenFile(fn)))) return;
-  app->asset_loader->default_movie_loader->LoadMovie(handle, this);
+  if (!fn || !(handle = parent->asset_loader->default_movie_loader->LoadMovieFile(parent->OpenFile(fn)))) return;
+  parent->asset_loader->default_movie_loader->LoadMovie(handle, this);
   audio.Load();
   video.Load();
 }
 
 int MovieAsset::Play(int seek) {
   int ret;
-  app->asset_loader->movie_playing = this;
-  if ((ret = app->asset_loader->default_movie_loader->PlayMovie(this, 0)) <= 0) app->asset_loader->movie_playing = 0;
+  parent->asset_loader->movie_playing = this;
+  if ((ret = parent->asset_loader->default_movie_loader->PlayMovie(this, 0)) <= 0) parent->asset_loader->movie_playing = 0;
   return ret;
 }
 
@@ -286,9 +292,9 @@ void glIntersect(GraphicsDevice *gd, int x, int y, Color *c) {
   v2 *vert = reinterpret_cast<v2*>(&geom->vert[0]);
 
   vert[0] = v2(0, y);
-  vert[1] = v2(app->focused->gl_w, y);
+  vert[1] = v2(gd->parent->gl_w, y);
   vert[2] = v2(x, 0);
-  vert[3] = v2(x, app->focused->gl_h);
+  vert[3] = v2(x, gd->parent->gl_h);
 
   gd->DisableTexture();
   Scene::Select(gd, geom.get());
@@ -296,12 +302,13 @@ void glIntersect(GraphicsDevice *gd, int x, int y, Color *c) {
 }
 
 void glShadertoyShader(GraphicsDevice *gd, Shader *shader, const Texture *tex) {
-  Window *screen = app->focused;
+  Window *screen = gd->parent;
+  Application *a = screen->parent;
   float scale = shader->scale;
   gd->UseShader(shader);
-  shader->SetUniform1f("iGlobalTime", ToFSeconds(Now() - app->time_started).count());
+  shader->SetUniform1f("iGlobalTime", ToFSeconds(Now() - a->time_started).count());
   shader->SetUniform1f("iBlend", FLAGS_shadertoy_blend);
-  shader->SetUniform4f("iMouse", screen->mouse.x, screen->mouse.y, app->input->MouseButton1Down(), 0);
+  shader->SetUniform4f("iMouse", screen->mouse.x, screen->mouse.y, a->input->MouseButton1Down(), 0);
   shader->SetUniform3f("iResolution", XY_or_Y(scale, screen->gl_x + screen->gl_w), XY_or_Y(scale, screen->gl_y + screen->gl_h), 0);
   if (tex) {
     shader->SetUniform3f("iChannelResolution", XY_or_Y(scale, tex->width), XY_or_Y(scale, tex->height), 1);
@@ -632,13 +639,13 @@ unique_ptr<Geometry> Grid::Grid2D(float x, float y, float range, float step) {
   return make_unique<Geometry>(GraphicsDevice::Lines, verts.size(), &verts[0], nullptr, nullptr, Color(0,0,0));
 }
 
-Skybox::Skybox() :
-  a_left  ("", "", 1, 0, 0, Cube::Create(500, 500, 500).release(), 0, CubeMap::PX, TexGen::LINEAR),
-  a_right ("", "", 1, 0, 0, 0,                                     0, CubeMap::NX, 0),
-  a_top   ("", "", 1, 0, 0, 0,                                     0, CubeMap::PY, 0),
-  a_bottom("", "", 1, 0, 0, 0,                                     0, CubeMap::NY, 0),
-  a_front ("", "", 1, 0, 0, 0,                                     0, CubeMap::PZ, 0),
-  a_back  ("", "", 1, 0, 0, 0,                                     0, CubeMap::NZ, 0),
+Skybox::Skybox(AssetLoading *p) :
+  a_left  (p, "", "", 1, 0, 0, Cube::Create(500, 500, 500).release(), 0, CubeMap::PX, TexGen::LINEAR),
+  a_right (p, "", "", 1, 0, 0, 0,                                     0, CubeMap::NX, 0),
+  a_top   (p, "", "", 1, 0, 0, 0,                                     0, CubeMap::PY, 0),
+  a_bottom(p, "", "", 1, 0, 0, 0,                                     0, CubeMap::NY, 0),
+  a_front (p, "", "", 1, 0, 0, 0,                                     0, CubeMap::PZ, 0),
+  a_back  (p, "", "", 1, 0, 0, 0,                                     0, CubeMap::NZ, 0),
   e_left ("sb_left",  &a_left),  e_right ("sb_right",  &a_right),
   e_top  ("sb_top",   &a_top),   e_bottom("sb_bottom", &a_bottom),
   e_front("sb_front", &a_front), e_back  ("sb_back",   &a_back)

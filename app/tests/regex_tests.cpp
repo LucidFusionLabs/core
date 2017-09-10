@@ -19,20 +19,22 @@
 #include "gtest/gtest.h"
 #include "core/app/types/trie.h"
 
-extern "C" void MyAppCreate(int argc, const char* const* argv) {
-  LFL::FLAGS_font = LFL::FakeFontEngine::Filename();
-  LFL::app = new LFL::Application(argc, argv);
-  LFL::app->focused = LFL::Window::Create();
+namespace LFL {
+Application *app = nullptr;  
+DEFINE_int(size, 1024*1024, "Test size"); 
+
+extern "C" LFApp *MyAppCreate(int argc, const char* const* argv) {
+  FLAGS_font = FakeFontEngine::Filename();
+  app = new Application(argc, argv);
+  app->focused = CreateWindow(app);
   testing::InitGoogleTest(&argc, const_cast<char**>(argv));
+  return app;
 }
 
 extern "C" int MyAppMain() {
-  CHECK_EQ(0, LFL::app->Create(__FILE__));
+  CHECK_EQ(0, app->Create(__FILE__));
   return RUN_ALL_TESTS();
 }
-
-namespace LFL {
-DEFINE_int(size, 1024*1024, "Test size"); 
 
 struct MyEnvironment : public ::testing::Environment {
   string prefix1="yeah fun ", prot1="http://", url1="url", suffix1=" and whatever ";
@@ -45,7 +47,7 @@ struct MyEnvironment : public ::testing::Environment {
 MyEnvironment* const my_env = dynamic_cast<MyEnvironment*>(::testing::AddGlobalTestEnvironment(new MyEnvironment));
 
 TEST(RegexTest, StrstrURL) {
-  PerformanceTimers *timers = Singleton<PerformanceTimers>::Get();
+  PerformanceTimers *timers = Singleton<PerformanceTimers>::Set();
   int tid = timers->Create("StrstrURL");
   timers->AccumulateTo(tid);
   for (int i=0; i<FLAGS_size; ++i) {
@@ -59,7 +61,7 @@ TEST(RegexTest, StrstrURL) {
 }
 
 TEST(RegexTest, RegexpURL) {
-  PerformanceTimers *timers = Singleton<PerformanceTimers>::Get();
+  PerformanceTimers *timers = Singleton<PerformanceTimers>::Set();
   int tid = timers->Create("RegexpURL");
 
   Regex::Result match;
@@ -90,7 +92,7 @@ TEST(RegexTest, StreamRegexURL) {
 #endif
 
 TEST(RegexTest, AhoCorasickURL) {
-  PerformanceTimers *timers = Singleton<PerformanceTimers>::Get();
+  PerformanceTimers *timers = Singleton<PerformanceTimers>::Set();
   int tid = timers->Create("AhoCorasickURL");
 
   vector<Regex::Result> matches;
@@ -105,7 +107,7 @@ TEST(RegexTest, AhoCorasickURL) {
 }
 
 TEST(RegexTest, AhoCorasickMatcherURL) {
-  PerformanceTimers *timers = Singleton<PerformanceTimers>::Get();
+  PerformanceTimers *timers = Singleton<PerformanceTimers>::Set();
   int tid = timers->Create("AhoCorasickMatcherURL");
 
   AhoCorasickFSM<char> url_fsm({ "http://", "https://" });

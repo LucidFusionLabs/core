@@ -1,5 +1,5 @@
 /*
- * $Id: video.cpp 1336 2014-12-08 09:29:59Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -163,10 +163,11 @@ struct ApplePurchases : public PurchasesInterface {
     InAppPurchaseReceipt = 17, OriginalAppVersion = 19, ExpirationDate = 21 }; };
   struct InAppPurchaseReceiptAttribute { enum { ProductIdentifier = 1702 }; };
 
+  ApplicationInfo *appinfo;
   IOSPurchaseManager *purchaser;
   unordered_set<string> purchases;
   ~ApplePurchases() { [purchaser release]; }
-  ApplePurchases() : purchaser([[IOSPurchaseManager alloc] init]) { LoadPurchases(); }
+  ApplePurchases(ApplicationInfo *a) : appinfo(a), purchaser([[IOSPurchaseManager alloc] init]) { LoadPurchases(); }
 
   bool CanPurchase() { return [SKPaymentQueue canMakePayments]; }
   bool HavePurchase(const string &product_id) { return Contains(purchases, product_id); }
@@ -234,10 +235,10 @@ struct ApplePurchases : public PurchasesInterface {
       }
     }
 
-    if (bundle_id != app->GetPackageName()) return ERROR("wrong receipt bundle id");
+    if (bundle_id != appinfo->GetPackageName()) return ERROR("wrong receipt bundle id");
 
     Crypto::Digest sha1 = Crypto::DigestOpen(Crypto::DigestAlgos::SHA1());
-    Crypto::DigestUpdate(sha1, app->GetSystemDeviceId());
+    Crypto::DigestUpdate(sha1, appinfo->GetSystemDeviceId());
     Crypto::DigestUpdate(sha1, opaque_data);
     Crypto::DigestUpdate(sha1, bundle_id_data);
     string sha1hash = Crypto::DigestFinish(sha1);
@@ -288,5 +289,5 @@ struct ApplePurchases : public PurchasesInterface {
   }
 };
 
-unique_ptr<PurchasesInterface> SystemToolkit::CreatePurchases(string) { return make_unique<ApplePurchases>(); }
+unique_ptr<PurchasesInterface> SystemToolkit::CreatePurchases(ApplicationInfo *a, string) { return make_unique<ApplePurchases>(a); }
 }; // namespace LFL

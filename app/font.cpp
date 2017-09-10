@@ -114,14 +114,14 @@ void Glyph::Draw(GraphicsContext *gc, const LFL::Box &b) const {
 
 void FillColor::Draw(GraphicsContext *gc, const LFL::Box &b) const {
   if (!ready) {
-    Texture fill(gc->gd, 2, 2);
+    Texture fill(gc->gd->parent->parent, 2, 2);
     fill.RenewBuffer();
     SimpleVideoResampler::Fill(fill.buf, fill.width, fill.height, fill.pf, fill.LineSize(), 0, 0,
                                Color(internal.fillcolor.color));
 
     tex.width = fill.width;
     tex.height = fill.height;
-    if (auto cache = app->fonts->rgba_glyph_cache.get()) {
+    if (auto cache = gc->gd->parent->parent->fonts->rgba_glyph_cache.get()) {
       cache->Load(0, this, fill.buf, fill.LineSize(), fill.pf);
       tex.coord[Texture::minx_coord_ind] += 1.0/cache->tex.width;
       tex.coord[Texture::miny_coord_ind] += 1.0/cache->tex.height;
@@ -134,8 +134,8 @@ void FillColor::Draw(GraphicsContext *gc, const LFL::Box &b) const {
 }
 
 GlyphCache::~GlyphCache() {}
-GlyphCache::GlyphCache(unsigned T, int W, int H) :
-  dim(W, H ? H : W), tex(nullptr, dim.w, dim.h, Texture::preferred_pf, T), flow(make_unique<Flow>(&dim)) {}
+GlyphCache::GlyphCache(GraphicsDeviceHolder *p, unsigned T, int W, int H) :
+  dim(W, H ? H : W), tex(p, dim.w, dim.h, Texture::preferred_pf, T), flow(make_unique<Flow>(&dim)) {}
 
 void GlyphCache::Clear(bool reopen) {
   INFO("GlyphCache::Clear reopen=", reopen);    
@@ -254,7 +254,9 @@ Glyph *Font::FindOrInsertGlyph(char16_t ind) {
     int table_ind = ind - glyph->table_start;
     if (table_ind < glyph->table.size()) return &glyph->table[table_ind];
   }
-  return &glyph->index[ind];
+  auto it = glyph->index.find(ind);
+  if (it != glyph->index.end()) return &it->second;
+  else return &Insert(glyph->index, ind, Glyph(engine->parent->parent))->second;
 }
 
 Glyph *Font::FindGlyph(char16_t ind) {
@@ -270,8 +272,7 @@ Glyph *Font::FindGlyph(char16_t ind) {
     CHECK_LT(table_ind, glyph->table.size());
     return &glyph->table[table_ind];
   }
-  Glyph *g = &glyph->index[ind];
-  g->id = nbsp ? ' ' : ind;
+  Glyph *g = &LFL::Insert(glyph->index, ind, Glyph(engine->parent->parent, nbsp ? ' ' : ind))->second;
   engine->InitGlyphs(this, g, 1);
   if (nbsp) g->id = ind;
   if (zwnbsp) g->advance = g->tex.width = g->tex.height = 0;
@@ -318,7 +319,7 @@ void Font::DrawGlyphWithAttr(GraphicsContext *gc, int gid, const Box &w) {
 
 template <class X> void Font::Size(const StringPieceT<X> &text, Box *out, int maxwidth, int flag, int *lines_out) {
   vector<Box> line_box;
-  int lines = Draw(text, Box(0,0,maxwidth,0), &line_box, flag | DrawFlag::Clipped);
+  int lines = Draw(nullptr, text, Box(0,0,maxwidth,0), &line_box, flag | DrawFlag::Clipped);
   if (lines_out) *lines_out = lines;
   *out = Box(0, 0, 0, lines * Height());
   for (int i=0; i<line_box.size(); i++) out->w = max(out->w, line_box[i].w);
@@ -345,28 +346,29 @@ template <class X> void Font::Shape(const StringPieceT<X> &text, const Box &box,
   if (!(draw_flag & DrawFlag::DontCompleteFlow)) flow.Complete();
 }
 
-template <class X> int Font::Draw(const StringPieceT<X> &text, const Box &box, vector<Box> *lb, int draw_flag) {
+template <class X> int Font::Draw(GraphicsDevice *gd, const StringPieceT<X> &text, const Box &box, vector<Box> *lb, int draw_flag) {
   DrawableBoxArray out;
   Shape(text, box, &out, draw_flag | DrawFlag::DontAssignFlowP);
   if (lb) *lb = out.line;
-  if (!(draw_flag & DrawFlag::Clipped)) out.Draw(app->focused->gd, box.TopLeft());
+  if (!(draw_flag & DrawFlag::Clipped)) out.Draw(gd, box.TopLeft());
   return max(size_t(1), out.line.size());
 }
 
-template void Font::Size  <char>    (const StringPiece   &text, Box *out, int maxwidth, int flag, int *lines_out);
-template void Font::Size  <char16_t>(const String16Piece &text, Box *out, int maxwidth, int flag, int *lines_out);
-template void Font::Shape <char>    (const StringPiece   &text, const Box &box, DrawableBoxArray *out, int draw_flag, int attr_id);
-template void Font::Shape <char16_t>(const String16Piece &text, const Box &box, DrawableBoxArray *out, int draw_flag, int attr_id);
-template int  Font::Draw  <char>    (const StringPiece   &text, const Box &box, vector<Box> *lb, int draw_flag);
-template int  Font::Draw  <char16_t>(const String16Piece &text, const Box &box, vector<Box> *lb, int draw_flag);
+template void Font::Size  <char>    (                 const StringPiece   &text, Box *out, int maxwidth, int flag, int *lines_out);
+template void Font::Size  <char16_t>(                 const String16Piece &text, Box *out, int maxwidth, int flag, int *lines_out);
+template void Font::Shape <char>    (                 const StringPiece   &text, const Box &box, DrawableBoxArray *out, int draw_flag, int attr_id);
+template void Font::Shape <char16_t>(                 const String16Piece &text, const Box &box, DrawableBoxArray *out, int draw_flag, int attr_id);
+template int  Font::Draw  <char>    (GraphicsDevice*, const StringPiece   &text, const Box &box, vector<Box> *lb, int draw_flag);
+template int  Font::Draw  <char16_t>(GraphicsDevice*, const String16Piece &text, const Box &box, vector<Box> *lb, int draw_flag);
 
-FakeFontEngine::FakeFontEngine() : fake_font_desc(Filename(), "", FLAGS_font_size), 
+FakeFontEngine::FakeFontEngine(Fonts *p) :
+  FontEngine(p), fake_font_desc(Filename(), "", FLAGS_font_size), 
   fake_font(this, fake_font_desc, shared_ptr<FontEngine::Resource>()) {
   fake_font.desc = &fake_font_desc;
   fake_font.fixed_width = fake_font.max_width = fixed_width;
   fake_font.ascender = ascender;
   fake_font.descender = descender;
-  fake_font.glyph = make_shared<GlyphMap>(make_shared<GlyphCache>(0, 0));
+  fake_font.glyph = make_shared<GlyphMap>(parent->parent, make_shared<GlyphCache>(parent->parent, 0, 0));
   InitGlyphs(&fake_font, &fake_font.glyph->table[0], fake_font.glyph->table.size());
   for (char16_t wide_glyph_id = wide_glyph_begin, e = wide_glyph_end + 1; wide_glyph_id != e; ++wide_glyph_id) {
     Glyph *wg = fake_font.FindGlyph(wide_glyph_id);
@@ -394,10 +396,9 @@ void Fonts::SelectFillColor(GraphicsDevice *gd) {
 }
 
 FillColor *Fonts::GetFillColor(const Color &c) {
-  bool inserted = false;
-  auto it = LFL::FindOrInsert(color_map, ColorDesc(c), &inserted);
-  if (inserted) it->second.internal.fillcolor.color = ColorDesc(c);
-  return &it->second;
+  auto it = color_map.find(ColorDesc(c));
+  if (it != color_map.end()) return &it->second;
+  else return &LFL::Insert(color_map, ColorDesc(c), FillColor(parent, ColorDesc(c)))->second;
 }
 
 int Fonts::InitFontWidth() {
@@ -422,16 +423,16 @@ int Fonts::InitFontHeight() {
 
 FontEngine *Fonts::GetFontEngine(int engine_type) {
   switch (engine_type) {
-    case FontDesc::Engine::Atlas:    return atlas_engine.get();
-    case FontDesc::Engine::FreeType: return freetype_engine.get();
+    case FontDesc::Engine::Atlas:    return atlas_engine.get(this);
+    case FontDesc::Engine::FreeType: return freetype_engine.get(this);
 #if defined(LFL_WINDOWS)
-    case FontDesc::Engine::GDI:      return gdi_engine.get();
+    case FontDesc::Engine::GDI:      return gdi_engine.get(this);
 #elif defined(LFL_APPLE)
-    case FontDesc::Engine::CoreText: return coretext_engine.get();
+    case FontDesc::Engine::CoreText: return coretext_engine.get(this);
 #elif defined(LFL_ANDROID)
-    case FontDesc::Engine::Android:  return android_engine.get();
+    case FontDesc::Engine::Android:  return android_engine.get(this);
 #elif defined(LFL_LINUX)
-    case FontDesc::Engine::FC:       return fc_engine.get();
+    case FontDesc::Engine::FC:       return fc_engine.get(this);
 #endif
     case FontDesc::Engine::Default:  return DefaultFontEngine();
   } return DefaultFontEngine();
@@ -439,23 +440,23 @@ FontEngine *Fonts::GetFontEngine(int engine_type) {
 
 FontEngine *Fonts::DefaultFontEngine() {
   if (!default_font_engine) {
-    if      (FLAGS_font_engine == "atlas")      default_font_engine = atlas_engine.get();
-    else if (FLAGS_font_engine == "freetype")   default_font_engine = freetype_engine.get();
+    if      (FLAGS_font_engine == "atlas")      default_font_engine = atlas_engine.get(this);
+    else if (FLAGS_font_engine == "freetype")   default_font_engine = freetype_engine.get(this);
 #if defined(LFL_WINDOWS)
-    else if (FLAGS_font_engine == "gdi")        default_font_engine = gdi_engine.get();
+    else if (FLAGS_font_engine == "gdi")        default_font_engine = gdi_engine.get(this);
 #elif defined(LFL_APPLE)
-    else if (FLAGS_font_engine == "coretext")   default_font_engine = coretext_engine.get();
+    else if (FLAGS_font_engine == "coretext")   default_font_engine = coretext_engine.get(this);
 #elif defined(LFL_ANDROID)
-    else if (FLAGS_font_engine == "android")    default_font_engine = android_engine.get();
+    else if (FLAGS_font_engine == "android")    default_font_engine = android_engine.get(this);
 #elif defined(LFL_LINUX)
-    else if (FLAGS_font_engine == "fc")         default_font_engine = fc_engine.get();
+    else if (FLAGS_font_engine == "fc")         default_font_engine = fc_engine.get(this);
 #endif                                          
-    else                                        default_font_engine = fake_engine.get();
+    else                                        default_font_engine = fake_engine.get(this);
   }
   return default_font_engine;
 }
 
-Font *Fonts::Fake() { return &fake_engine.get()->fake_font; }
+Font *Fonts::Fake() { return &fake_engine.get(this)->fake_font; }
 
 Font *Fonts::Find(const FontDesc &d) {
   if (d.name.empty()) return 0;
@@ -480,8 +481,8 @@ Font *Fonts::FindOrInsert(FontEngine *engine, const FontDesc &d) {
   return Insert(engine, d);
 }
 
-Font *Fonts::GetByDesc(FontDesc d) {
-  d.size = ScaledFontSize(d.size);
+Font *Fonts::GetByDesc(FontDesc d, int scale_window_height) {
+  d.size = ScaledFontSize(d.size, scale_window_height);
   if (Font *f = Find(d)) return f;
 
   if (d.name == FakeFontEngine::Filename()) return Fake();
@@ -514,25 +515,25 @@ Font *Fonts::Change(Font *in, int new_size, const Color &new_fg, const Color &ne
   return GetByDesc(d);
 }
 
-int Fonts::ScaledFontSize(int pointsize) {
-  if (FLAGS_scale_font_height) {
-    float ratio = float(app->focused->gl_h) / FLAGS_scale_font_height;
+int Fonts::ScaledFontSize(int pointsize, int scale_window_height) {
+  if (FLAGS_scale_font_height && scale_window_height) {
+    float ratio = float(scale_window_height) / FLAGS_scale_font_height;
     pointsize = RoundF(pointsize * ratio);
   }
   return pointsize + FLAGS_add_font_size;
 }
 
-void Fonts::ResetGL(int flag) {
+void Fonts::ResetGL(GraphicsDeviceHolder *p, int flag) {
   bool reload = flag & ResetGLFlag::Reload, forget = (flag & ResetGLFlag::Delete) == 0;
   unordered_set<GlyphMap*> maps;
   unordered_set<GlyphCache*> caches;
   for (auto &i : desc_map) {
     auto f = i.second.get();
-    if (f->engine == atlas_engine.get() && f == dynamic_cast<AtlasFontEngine::Resource*>(f->resource.get())->primary) {
+    if (f->engine == atlas_engine.get(this) && f == dynamic_cast<AtlasFontEngine::Resource*>(f->resource.get())->primary) {
       if (!forget) f->glyph->cache->tex.Clear();
-      f->glyph->cache->tex = Texture();
+      f->glyph->cache->tex = Texture(p);
       if (!reload) continue;
-      Asset::LoadTexture(StrCat(f->desc->Filename(), ".0000.png"), &f->glyph->cache->tex);
+      loader->LoadTexture(StrCat(f->desc->Filename(), ".0000.png"), &f->glyph->cache->tex);
       if (!f->glyph->cache->tex.ID) ERROR("Reset font failed");
     } else maps.insert(f->glyph.get());
   }
@@ -553,15 +554,14 @@ void Fonts::LoadDefaultFonts() {
                                Color::white, Color::clear, FLAGS_font_flag));
   }
 
-  FontEngine *atlas_engine = app->fonts->atlas_engine.get();
-  atlas_engine->Init(FontDesc("MenuAtlas", "", 0, Color::white, Color::clear, 0, false));
+  atlas_engine.get(this)->Init(FontDesc("MenuAtlas", "", 0, Color::white, Color::clear, 0, false));
 
   if (FLAGS_console && FLAGS_font_engine != "atlas" && FLAGS_font_engine != "freetype")
     LoadConsoleFont(FLAGS_console_font.empty() ? "VeraMoBd.ttf" : FLAGS_console_font);
 }
 
 void Fonts::LoadConsoleFont(const string &name, const vector<int> &sizes) {
-  auto atlas_font_engine = atlas_engine.get();
+  auto atlas_font_engine = atlas_engine.get(this);
   FLAGS_console_font = StrCat("atlas://", name);
   FLAGS_atlas_font_sizes.clear();
   for (auto size : sizes) {
@@ -570,7 +570,7 @@ void Fonts::LoadConsoleFont(const string &name, const vector<int> &sizes) {
   }
 }
 
-Font *FontRef::Load() { return (ptr = app->fonts->Get(desc)); }
+Font *FontRef::Load(Window *W) { return W ? (ptr = W->parent->fonts->Get(W->gl_h, desc)) : nullptr; }
 
 void DejaVuSansFreetype::SetDefault() {
   FLAGS_font_engine = "freetype";
@@ -580,10 +580,10 @@ void DejaVuSansFreetype::SetDefault() {
   FLAGS_atlas_font_sizes = "32";
 }
 
-void DejaVuSansFreetype::Load() { 
+void DejaVuSansFreetype::Load(Fonts *fonts) { 
   vector<string> atlas_font_size;
   Split(FLAGS_atlas_font_sizes, iscomma, &atlas_font_size);
-  FontEngine *freetype = app->fonts->freetype_engine.get();
+  FontEngine *freetype = fonts->freetype_engine.get(fonts);
   for (int i=0; i<atlas_font_size.size(); i++) {
     int size = ::atoi(atlas_font_size[i].c_str());
     freetype->Init(FontDesc("DejaVuSans.ttf",                "sans-serif", size, Color::white, Color::clear, 0));

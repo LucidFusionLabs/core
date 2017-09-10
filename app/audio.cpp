@@ -1,5 +1,5 @@
 /*
- * $Id: audio.cpp 1330 2014-11-06 03:04:15Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -72,12 +72,12 @@ int Audio::Frame(unsigned clicks) {
 
   const int refillWhen = FLAGS_sample_rate*FLAGS_chans_out/2;
 
-  if (app->asset_loader->movie_playing) {
-    app->asset_loader->movie_playing->Play(0);
+  if (loader->asset_loader->movie_playing) {
+    loader->asset_loader->movie_playing->Play(0);
   } else if ((playing || loop) && Out.size() < refillWhen) {
     // QueueMix(playing ? playing : loop, !playing ? MixFlag::Reset : 0, -1, -1);
-    app->RunInMainThread(bind(&Audio::QueueMix, this,
-                              playing ? playing : loop, !playing ? MixFlag::Reset : 0, -1, -1));
+    dispatch->RunInMainThread(bind(&Audio::QueueMix, this,
+                                   playing ? playing : loop, !playing ? MixFlag::Reset : 0, -1, -1));
   }
   return 0;
 }

@@ -101,12 +101,12 @@ extern int optind;
 #include <sys/endian.h>
 #endif
 
-#define  INFO(...) ((::LFApp::Log::Info  <= ::LFL::FLAGS_loglevel) ? ::LFL::Log(::LFApp::Log::Info,  __FILE__, __LINE__, ::LFL::StrCat(__VA_ARGS__)) : void())
-#define ERROR(...) ((::LFApp::Log::Error <= ::LFL::FLAGS_loglevel) ? ::LFL::Log(::LFApp::Log::Error, __FILE__, __LINE__, ::LFL::StrCat(__VA_ARGS__)) : void())
-#define FATAL(...) { ::LFL::Log(::LFApp::Log::Fatal, __FILE__, __LINE__, ::LFL::StrCat(__VA_ARGS__)); throw(0); }
-#define ERRORv(v, ...) LFL::Log(::LFApp::Log::Error, __FILE__, __LINE__, ::LFL::StrCat(__VA_ARGS__)), v
+#define  INFO(...) ((::LFApp::Log::Info  <= ::LFL::FLAGS_loglevel) ? ::LFL::Logger::Log(::LFApp::Log::Info,  __FILE__, __LINE__, ::LFL::StrCat(__VA_ARGS__)) : void())
+#define ERROR(...) ((::LFApp::Log::Error <= ::LFL::FLAGS_loglevel) ? ::LFL::Logger::Log(::LFApp::Log::Error, __FILE__, __LINE__, ::LFL::StrCat(__VA_ARGS__)) : void())
+#define FATAL(...) { ::LFL::Logger::Log(::LFApp::Log::Fatal, __FILE__, __LINE__, ::LFL::StrCat(__VA_ARGS__)); throw(0); }
+#define ERRORv(v, ...) LFL::Logger::Log(::LFApp::Log::Error, __FILE__, __LINE__, ::LFL::StrCat(__VA_ARGS__)), v
 #ifdef LFL_DEBUG
-#define DEBUG(...) ((::LFApp::Log::Debug <= ::LFL::FLAGS_loglevel) ? ::LFL::Log(::LFApp::Log::Debug, __FILE__, __LINE__, ::LFL::StrCat(__VA_ARGS__)) : void())
+#define DEBUG(...) ((::LFApp::Log::Debug <= ::LFL::FLAGS_loglevel) ? ::LFL::Logger::Log(::LFApp::Log::Debug, __FILE__, __LINE__, ::LFL::StrCat(__VA_ARGS__)) : void())
 #else
 #define DEBUG(...)
 #endif
@@ -243,7 +243,8 @@ using LFL_STL11_NAMESPACE::atoi;
 using LFL_STL11_NAMESPACE::atof;
 #define tuple_get LFL_STL11_NAMESPACE::get
 
-template <class X> struct Singleton { static X *Get() { static X instance; return &instance; } };
+struct Logging;
+struct ApplicationInfo;
 template <class X> struct V2;
 typedef V2<float> v2;
 typedef V2<int> point;
@@ -258,7 +259,23 @@ typedef function<void(const string&)> StringCB;
 typedef function<void(int, const string&)> IntStringCB;
 typedef function<void(const string&, const string&)> StringStringCB;
 typedef function<void(const StringVec&)> StringVecCB; 
-void Log(int level, const char *file, int line, const string &m);
+
+template <class X> struct Singleton {
+  static X* Set() { static X instance; return &instance; }
+  static const X* Get() { return Set(); }
+};
+
+class Logger {
+  public:
+    static void Set(Logging*, ApplicationInfo*);
+    static void Log(int level, const char *file, int line, const string &m);
+    static void WriteLogLine(const char *tbuf, const char *message, const char *file, int line);
+    static void WriteDebugLine(const char *message, const char *file, int line);
+  private:
+    static Logging *log;
+    static ApplicationInfo *appinfo;
+};
+
 }; // namespace LFL
 
 #include "core/app/export.h"
@@ -266,14 +283,14 @@ void Log(int level, const char *file, int line, const string &m);
 #include "core/app/types/time.h"
 
 namespace LFL {
-extern Application *app;
-extern const char *not_implemented;
 extern const bool DEBUG, MOBILE, IOS, ANDROIDOS;
+struct HAlign { enum { Left  =1, Center=2, Right=3 }; };
+struct VAlign { enum { Bottom=1, Center=2, Top  =3 }; };
 
 struct FatalMessage {
   const char *file; int line; string msg; std::stringstream stream;
   FatalMessage(const char *F, int L, string M) : file(F), line(L), msg(move(M)) {}
-  ~FatalMessage() { ::LFL::Log(::LFApp::Log::Fatal, file, line, msg.append(stream.str())); throw(0); }
+  ~FatalMessage() { ::LFL::Logger::Log(::LFApp::Log::Fatal, file, line, msg.append(stream.str())); throw(0); }
   std::stringstream& GetStream() { return stream; }
 };
 
@@ -313,6 +330,22 @@ struct Module {
   virtual int Frame(unsigned) { return 0; }
   virtual int Free ()         { return 0; }
 };
+
+struct ApplicationLifetime {
+  bool run=1;
+  virtual ~ApplicationLifetime() {}
+};
+
+struct GraphicsDeviceHolder {
+  virtual ~GraphicsDeviceHolder() {}
+  virtual GraphicsDevice *GD() = 0;
+};
+
+struct WakeupHandle {
+  virtual ~WakeupHandle() {}
+  virtual void Wakeup(int flag=0) = 0;
+};
+
 }; // namespace LFL
 
 #include "core/app/math.h"
@@ -360,7 +393,7 @@ template <class X> struct FlagOfType : public Flag {
   X *v;
   virtual ~FlagOfType() {}
   FlagOfType(const char *N, const char *D, const char *F, int L, X *V)
-    : Flag(N, D, F, L), v(V) { Singleton<FlagMap>::Get()->Add(this); } 
+    : Flag(N, D, F, L), v(V) { Singleton<FlagMap>::Set()->Add(this); } 
 
   string Get() const { return Printable(*v); }
   bool IsBool() const { return TypeId<X>() == TypeId<bool>(); }
@@ -429,8 +462,6 @@ struct PerformanceTimers {
   string DebugString() const { string v; for (auto &t : timers) StrAppend(&v, t.name, " ", t.time.count() / 1000.0, "\n"); return v; }
 };
 
-struct HAlign { enum { Left  =1, Center=2, Right=3 }; };
-struct VAlign { enum { Bottom=1, Center=2, Top  =3 }; };
 }; // namespace LFL
 
 #include "core/app/toolkit.h"
@@ -445,7 +476,6 @@ struct VAlign { enum { Bottom=1, Center=2, Top  =3 }; };
 #include "core/app/assets.h"
 #include "core/app/layers.h"
 #include "core/app/input.h"
-#include "core/app/shell.h"
 #include "core/app/network.h"
 #include "core/app/camera.h"
 
@@ -460,21 +490,21 @@ struct RateLimiter {
 };
 
 struct FrameScheduler {
-  struct WakeupFlag { enum { InMainThread=1, ContingentOnEvents=2 }; };
+  Module *framework;
+  WindowHolder *window;
   RateLimiter maxfps;
   mutex frame_mutex, wait_mutex;
-  SocketWakeupThread wakeup_thread;
   SelectSocketSet main_wait_sockets;
+  unique_ptr<SocketWakeupThread> wakeup_thread;
   Socket system_event_socket = InvalidSocket, main_wait_wakeup_socket = InvalidSocket, iter_socket = InvalidSocket;
   const bool rate_limit, wait_forever, wait_forever_thread, synchronize_waits, monolithic_frame, run_main_loop;
-  FrameScheduler();
+  FrameScheduler(WindowHolder *window);
 
   void Init();
   void Free();
   void Start();
   bool MainWait();
   bool DoMainWait(bool poll=0);
-  void Wakeup(Window*, int flag=0);
   void UpdateTargetFPS(Window*, int fps);
   void UpdateWindowTargetFPS(Window*);
   void SetAnimating(Window*, bool);
@@ -487,10 +517,10 @@ struct FrameScheduler {
 };
 
 struct FrameWakeupTimer {
-  Window *root;
+  WakeupHandle *wakeup;
   bool needs_frame=false;
   unique_ptr<TimerInterface> timer;
-  FrameWakeupTimer(Window *w);
+  FrameWakeupTimer(WakeupHandle *w);
   void ClearWakeupIn();
   bool WakeupIn(Time interval);
 };
@@ -525,9 +555,11 @@ struct LuaContext {
 
 struct CUDA : public Module { int Init(); };
 
-struct Window : public ::LFAppWindow {
+struct Window : public ::LFAppWindow, public GraphicsDeviceHolder, public WakeupHandle {
   typedef function<int(Window*, unsigned, int)> FrameCB;
+  struct WakeupFlag { enum { InMainThread=1, ContingentOnEvents=2 }; };
 
+  Application *parent;
   GraphicsDevice *gd=0;
   point mouse, mouse_v, mouse2, mouse2_v, mouse_wheel;
   string caption;
@@ -541,7 +573,7 @@ struct Window : public ::LFAppWindow {
   vector<unique_ptr<View>> my_view;
   vector<unique_ptr<InputController>> my_input;
   vector<unique_ptr<Dialog>> dialogs;
-  FontRef default_font = FontRef(FontDesc::Default(), false);
+  FontRef default_font;
   function<MouseController*()> default_controller = []{ return nullptr; };
   function<KeyboardController*()> default_textbox = []{ return nullptr; };
   MouseController *active_controller=0;
@@ -550,14 +582,14 @@ struct Window : public ::LFAppWindow {
   unique_ptr<Shell> shell;
   CategoricalVariable<int> tex_mode, grab_mode, fill_mode;
 
-  Window();
+  Window(Application*);
   virtual ~Window();
-  static Window *Create();
 
   virtual void SetCaption(const string &c)           = 0;
   virtual void SetResizeIncrements(float x, float y) = 0;
   virtual void SetTransparency(float v)              = 0;
   virtual bool Reshape(int w, int h)                 = 0;
+  virtual GraphicsDevice *GD() { return gd; };
 
   LFL::Box Box()                   const { return LFL::Box(gl_x, gl_y, gl_w, gl_h); }
   LFL::Box Box(float xs, float ys) const { return LFL::Box(gl_w*xs, gl_h*ys); }
@@ -573,6 +605,7 @@ struct Window : public ::LFAppWindow {
   int  Frame(unsigned clicks, int flag);
   void RenderToFrameBuffer(FrameBuffer *fb);
   void InitConsole(const Callback &animating_cb);
+  void Wakeup(int flag=0);
 
   template <class X> X* GetView(size_t i) { return i < view.size() ? dynamic_cast<X*>(view[i]) : nullptr; }
   template <class X> X* GetOwnView(size_t i) { return i < my_view.size() ? dynamic_cast<X*>(my_view[i].get()) : nullptr; }
@@ -606,71 +639,159 @@ struct Window : public ::LFAppWindow {
 };
 
 struct Video {
-  static int Swap();
-  static bool CreateWindow(Window *W);
+  static int Swap(Window *W);
+  static bool CreateWindow(WindowHolder *H, Window *W);
   static void StartWindow(Window *W);
-  static void *BeginGLContextCreate(Window *);
-  static void *CompleteGLContextCreate(Window *, void *gl_context);
+  static void *BeginGLContextCreate(Window *W);
+  static void *CompleteGLContextCreate(Window *W, void *gl_context);
 };
 
-struct Application : public ::LFApp {
+struct ApplicationInfo {
   string name, progname, startdir, bindir, assetdir, savedir;
-  int pid=0, opengles_version=2, argc=0;
-  FILE *logfile=0, *logout=stdout, *logerr=stderr;
-  const char* const* argv=0;
-  tm log_time;
-  mutex log_mutex;
-  Time time_started;
-  Timer frame_time;
-  ThreadPool thread_pool;
-  CallbackQueue message_queue;
-  FrameScheduler scheduler;
-  unique_ptr<SocketServicesThread> network_thread;
-  unique_ptr<ProcessAPIClient> render_process;
-  unique_ptr<ProcessAPIServer> main_process;
+  virtual ~ApplicationInfo() {}
+  string GetPackageName();
+  string GetVersion();
+  string GetSystemDeviceName();
+  string GetSystemDeviceId();
+};
+
+struct WindowHolder : public GraphicsDeviceHolder, public WakeupHandle {
   unordered_map<const void*, Window*> windows;
   function<void(Window*)> window_init_cb, window_start_cb, window_closed_cb = [](Window *w){ delete w; };
+  unique_ptr<Module> framework;
+  bool suspended=0, frame_disabled=0;
   Window *focused=0;
-  ToolkitInterface *system_toolkit, *toolkit;
+  virtual ~WindowHolder() {}
 
-  unordered_map<string, StringPiece> asset_cache;
+  GraphicsDevice *GD() { return focused ? focused->gd : nullptr; }
+  void Wakeup(int flag=0) { if (focused) focused->Wakeup(flag); }
+  Window *SetFocusedWindowByID(void *id);
+  Window *SetFocusedWindow(Window *W);
+  void MakeCurrentWindow(Window*);
+  bool GetAppFrameEnabled();
+  void SetAppFrameEnabled(bool);
+};
+
+struct ThreadDispatcher : public ApplicationLifetime {
+  WakeupHandle *wakeup;
+  size_t main_thread_id=0;
+  ThreadPool thread_pool;
+  FrameScheduler scheduler;
+  CallbackQueue message_queue;
+  unique_ptr<ProcessAPIClient> render_process;
+  unique_ptr<ProcessAPIServer> main_process;
+  unique_ptr<SocketServicesThread> network_thread;
+  ThreadDispatcher(WindowHolder *w);
+  virtual ~ThreadDispatcher();
+
+  void SetMainThread();
+  bool MainThread() const { return Thread::GetId() == main_thread_id; }
+  void RunCallbackInMainThread(Callback cb);
+  void RunNowInMainThread(Callback cb) { if (MainThread()) cb(); else RunCallbackInMainThread(move(cb)); }
+  template <class... Args> void RunInMainThread(Args&&... args) {
+    RunCallbackInMainThread(Callback(forward<Args>(args)...));
+  }
+  template <class... Args> void RunInNetworkThread(Args&&... args) {
+    if (auto nt = network_thread.get()) nt->Write(new Callback(forward<Args>(args)...));
+    else (Callback(forward<Args>(args)...))();
+  }
+  template <class... Args> void RunInThreadPool(Args&&... args) {
+    thread_pool.Write(new Callback(forward<Args>(args)...));
+  } 
+};
+
+struct Clipboard {
+  Bind paste_bind;
+  Clipboard();
+  virtual ~Clipboard() {}
+  string GetClipboardText();
+  void SetClipboardText(const string &s);
+};
+
+struct MouseFocus {
+  WindowHolder *window;
+  MouseFocus(WindowHolder *w) : window(w) {}
+  virtual ~MouseFocus() {}
+  void GrabMouseFocus();
+  void ReleaseMouseFocus();
+};
+
+struct TouchKeyboard {
+  virtual ~TouchKeyboard() {}
+  void OpenTouchKeyboard();
+  void CloseTouchKeyboard();
+  void CloseTouchKeyboardAfterReturn(bool);
+  void SetTouchKeyboardTiled(bool);
+  void ToggleTouchKeyboard();
+};
+
+struct AssetStore {
+  AssetMap      asset;
+  SoundAssetMap soundasset;
+  MovieAssetMap movieasset;
+  virtual ~AssetStore() {}
+};
+
+struct ApplicationShutdown {
+  virtual ~ApplicationShutdown() {}
+  virtual void Shutdown() = 0;
+};
+
+struct SystemBrowser {
+  void OpenSystemBrowser(const string &url);
+};
+
+struct Networking {
+  unique_ptr<SocketServices> net;
+  virtual ~Networking() {}
+  Connection *ConnectTCP(const string &hostport, int default_port, Connection::CB *connected_cb,
+                         bool background_services = false);
+};
+
+struct Logging {
+  FILE *logfile=0, *logout=stdout, *logerr=stderr;
+  tm log_time;
+  mutex log_mutex;
+  bool log_pid=0;
+  virtual ~Logging() {}
+  virtual void Log(int level, const char *file, int line, const char *message) = 0;
+};
+
+struct Localization {
+  virtual ~Localization() {}
+  string   GetLocalizedString   (const char *key);
+  String16 GetLocalizedString16 (const char *key);
+  string   GetLocalizedInteger  (int number);
+  String16 GetLocalizedInteger16(int number);
+};
+
+struct Application : public ::LFApp, public ApplicationInfo, public ApplicationShutdown,
+  public WindowHolder, public ThreadDispatcher, public Clipboard, public AssetStore, public AssetLoading,
+  public MouseFocus, public TouchKeyboard, public SystemBrowser, public Networking, public Logging, public Localization {
+
+  Time time_started;
+  Timer frame_time;
+  ToolkitInterface *system_toolkit, *toolkit;
   const Color *splash_color = &Color::black;
   StringCB open_url_cb;
   Callback exit_cb;
-
   vector<Module*> modules;
-  unique_ptr<Module> framework;
   unique_ptr<Audio> audio;
   unique_ptr<Input> input;
   unique_ptr<Fonts> fonts;
   unique_ptr<Shaders> shaders;
-  unique_ptr<AssetLoader> asset_loader;
-  unique_ptr<SocketServices> net;
   unique_ptr<Camera> camera;
   unique_ptr<CUDA> cuda;
-
-  AssetMap      asset;
-  SoundAssetMap soundasset;
-  MovieAssetMap movieasset;
 
   virtual ~Application();
   Application(int ac, const char* const* av);
 
   bool Running() const { return run; }
-  bool MainThread() const { return Thread::GetId() == main_thread_id; }
   bool MainProcess() const { return !main_process; }
   Window *GetWindow(void *id) const { return FindOrNull(windows, id); }
   int LoadModule(Module *m) { return m ? PushBack(modules, m)->Init() : 0; }
-
-  string   GetLocalizedString   (const char *key);
-  String16 GetLocalizedString16 (const char *key);
-  string   GetLocalizedInteger  (int number);
-  String16 GetLocalizedInteger16(int number);
-  string   GetPackageName();
-  string   GetVersion();
-  string   GetSystemDeviceName();
-  string   GetSystemDeviceId();
-  string   PrintCallStack();
+  void Shutdown() { run=0; Wakeup(); }
+  string PrintCallStack();
 
   void Log(int level, const char *file, int line, const char *message);
   int Create(const char *source_filename);
@@ -684,16 +805,11 @@ struct Application : public ::LFApp {
   int Suspended();
   void DrawSplash(const Color &c);
   void ResetGL(int flag);
-  void MakeCurrentWindow(Window*);
   void CloseWindow(Window*);
   void CreateNewWindow();
   void StartNewWindow(Window*);
   void LoseFocus();
-  void GrabMouseFocus();
-  void ReleaseMouseFocus();
-  string GetClipboardText();
-  void SetClipboardText(const string &s);
-  void OpenSystemBrowser(const string &url);
+  SocketServicesThread *CreateNetworkThread(bool detach_existing_module, bool start);
   void ShowSystemContextMenu(const MenuItemVec &items);
   void ShowSystemFontChooser(const FontDesc &cur_font, const StringVecCB&);
   void ShowSystemFileChooser(bool files, bool dirs, bool multi, const StringVecCB&);
@@ -702,13 +818,6 @@ struct Application : public ::LFApp {
   void UpdateSystemImage(int n, Texture&);
   void UnloadSystemImage(int n);
   bool OpenSystemAppPreferences();
-  void OpenTouchKeyboard();
-  void CloseTouchKeyboard();
-  void CloseTouchKeyboardAfterReturn(bool);
-  void SetTouchKeyboardTiled(bool);
-  void ToggleTouchKeyboard();
-  bool GetAppFrameEnabled();
-  void SetAppFrameEnabled(bool);
   void SetAutoRotateOrientation(bool);
   void SetVerticalSwipeRecognizer(int touches);
   void SetHorizontalSwipeRecognizer(int touches);
@@ -721,32 +830,8 @@ struct Application : public ::LFApp {
   void SetKeepScreenOn(bool on);
   void SetExtendedBackgroundTask(Callback);
   void SetTheme(const string&);
-
   bool LoadKeychain(const string &key, string *val);
   void SaveKeychain(const string &key, const string &val);
-
-  SocketServicesThread *CreateNetworkThread(bool detach_existing_module, bool start);
-  Connection *ConnectTCP(const string &hostport, int default_port, Connection::CB *connected_cb,
-                         bool background_services = false);
-
-  int GetVolume();
-  int GetMaxVolume();
-  void SetVolume(int v);
-  void PlaySoundEffect(SoundAsset*, const v3 &pos=v3(), const v3 &vel=v3());
-  void PlayBackgroundMusic(SoundAsset*);
-
-  void RunCallbackInMainThread(Callback cb);
-  void RunNowInMainThread(Callback cb) { if (MainThread()) cb(); else RunCallbackInMainThread(move(cb)); }
-  template <class... Args> void RunInMainThread(Args&&... args) {
-    RunCallbackInMainThread(Callback(forward<Args>(args)...));
-  }
-  template <class... Args> void RunInNetworkThread(Args&&... args) {
-    if (auto nt = network_thread.get()) nt->Write(new Callback(forward<Args>(args)...));
-    else (Callback(forward<Args>(args)...))();
-  }
-  template <class... Args> void RunInThreadPool(Args&&... args) {
-    thread_pool.Write(new Callback(forward<Args>(args)...));
-  } 
 
   static StringPiece LoadResource(int id);
   static void *GetSymbol(const string &n);
@@ -756,18 +841,18 @@ struct Application : public ::LFApp {
   static void LoadDefaultSettings(const StringPairVec&);
   static void Daemonize(const char *dir, const char *progname);
   static void Daemonize(FILE *fout, FILE *ferr);
-  static void WriteLogLine(const char *tbuf, const char *message, const char *file, int line);
-  static void WriteDebugLine(const char *message, const char *file, int line);
+#ifdef LFL_WINDOWS
+  static void OpenSystemConsole(const char *title);
+  static void CloseSystemConsole();
+#endif
 };
 
-inline string   LS  (const char *n) { return app->GetLocalizedString(n); }
-inline String16 LS16(const char *n) { return app->GetLocalizedString16(n); }
-
 Application *CreateApplication(int ac, const char* const* av);
-unique_ptr<Module> CreateFrameworkModule();
+Window *CreateWindow(Application *app);
+unique_ptr<Module> CreateFrameworkModule(Application*);
 unique_ptr<Module> CreateAudioModule(Audio*);
 unique_ptr<Module> CreateCameraModule(CameraState*);
-unique_ptr<GraphicsDevice> CreateGraphicsDevice(Window*, int ver);
+unique_ptr<GraphicsDevice> CreateGraphicsDevice(Window*, Shaders*, int ver);
 VideoResamplerInterface *CreateVideoResampler();
 void InitCrashReporting(const string &id, const string &name, const string &email);
 void TestCrashReporting();

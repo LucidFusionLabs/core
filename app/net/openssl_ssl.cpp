@@ -1,5 +1,5 @@
 /*
- * $Id: crypto.cpp 1335 2014-12-02 04:13:46Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -63,13 +63,13 @@ Socket SSLSocket::Connect(CTXPtr sslctx, IPV4::Addr addr, int port) {
   return socket;
 }
 
-Socket SSLSocket::Listen(int port, bool reuse) {
+Socket SSLSocket::Listen(CTXPtr sslctx, int port, bool reuse) {
   bio = BIO_new_accept(const_cast<char*>(StrCat(port).c_str()));
   BIO *b = FromVoid<BIO*>(bio);
   BIO_ctrl(b, BIO_C_SET_ACCEPT, 1, Void("a"));
   if (reuse) BIO_set_bind_mode(b, BIO_BIND_REUSEADDR);
   if (BIO_do_accept(b) <= 0) return InvalidSocket;
-  BIO_set_accept_bios(b, BIO_new_ssl(FromVoid<SSL_CTX*>(app->net->ssl), 0));
+  BIO_set_accept_bios(b, BIO_new_ssl(FromVoid<SSL_CTX*>(sslctx), 0));
   BIO_get_fd(b, &socket);
   return socket;
 }

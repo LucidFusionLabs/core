@@ -36,6 +36,9 @@ DECLARE_bool(subpixel_fonts);
 
 struct FontEngine {
   struct Resource { virtual ~Resource() {} };
+  Fonts *parent;
+  FontEngine(Fonts *p) : parent(p) {}
+  virtual ~FontEngine() {}
   virtual const char*      Name() = 0;
   virtual void             Shutdown() {}
   virtual void             SetDefault() {}
@@ -59,7 +62,7 @@ struct Glyph : public Drawable {
   } internal;
   mutable Texture tex;
   mutable bool ready=0;
-  Glyph() { memzero(internal); tex.owner=0; }
+  Glyph(GraphicsDeviceHolder *p, int i=0) : id(i), tex(p) { memzero(internal); tex.owner=0; }
 
   bool operator<(const Glyph &y) const { return id < y.id; }
   void FromMetrics(const GlyphMetrics &m);
@@ -78,6 +81,7 @@ struct Glyph : public Drawable {
 };
 
 struct FillColor : public Glyph {
+  FillColor(GraphicsDeviceHolder *p, ColorDesc c) : Glyph(p) { internal.fillcolor.color = c; }
   virtual void Draw(GraphicsContext*, const LFL::Box&) const;
 };
 
@@ -103,7 +107,7 @@ struct GlyphCache {
 #endif
   vector<const Glyph*> glyph;
   int max_width=128, max_height=128;
-  GlyphCache(unsigned T, int W, int H=0);
+  GlyphCache(GraphicsDeviceHolder*, unsigned T, int W, int H=0);
   ~GlyphCache();
 
   bool ShouldCacheGlyph(const Texture &t) const {
@@ -127,9 +131,9 @@ struct GlyphMap {
   vector<Glyph>             table;
   unordered_map<int, Glyph> index;
   shared_ptr<GlyphCache>    cache;
-  GlyphMap(shared_ptr<GlyphCache> C = shared_ptr<GlyphCache>()) :
-    table_start(FLAGS_glyph_table_start), table(FLAGS_glyph_table_size), cache(move(C))
-  { for (auto b = table.begin(), g = b, e = table.end(); g != e; ++g) g->id = table_start + (g - b); }
+  GlyphMap(GraphicsDeviceHolder *p, shared_ptr<GlyphCache> C = shared_ptr<GlyphCache>()) :
+    table_start(FLAGS_glyph_table_start), cache(move(C))
+  { for (int i=0; i<FLAGS_glyph_table_size; ++i) table.emplace_back(p, table_start + i); }
 };
 
 struct Font {
@@ -193,15 +197,15 @@ struct Font {
   /**/               void Shape(const String16        &text, const Box &box, DrawableBoxArray *out, int draw_flag=0, int attr_id=0) { return Shape(String16Piece         (text), box, out, draw_flag, attr_id); }
   template <class X> void Shape(const X               *text, const Box &box, DrawableBoxArray *out, int draw_flag=0, int attr_id=0) { return Shape(StringPiece::Unbounded(text), box, out, draw_flag, attr_id); }
 
-  template <class X> int Draw(const StringPieceT<X> &text, point cp,       vector<Box> *lb=0, int draw_flag=0) { return Draw<X>    (                text,  Box(cp.x,cp.y+Height(),0,0), lb, draw_flag); }
-  /**/               int Draw(const string          &text, point cp,       vector<Box> *lb=0, int draw_flag=0) { return Draw(StringPiece           (text), Box(cp.x,cp.y+Height(),0,0), lb, draw_flag); }
-  /**/               int Draw(const String16        &text, point cp,       vector<Box> *lb=0, int draw_flag=0) { return Draw(String16Piece         (text), Box(cp.x,cp.y+Height(),0,0), lb, draw_flag); }
-  template <class X> int Draw(const X               *text, point cp,       vector<Box> *lb=0, int draw_flag=0) { return Draw(StringPiece::Unbounded(text), Box(cp.x,cp.y+Height(),0,0), lb, draw_flag); }
+  template <class X> int Draw(GraphicsDevice *gd, const StringPieceT<X> &text, point cp,       vector<Box> *lb=0, int draw_flag=0) { return Draw<X>(gd,                        text,  Box(cp.x,cp.y+Height(),0,0), lb, draw_flag); }
+  /**/               int Draw(GraphicsDevice *gd, const string          &text, point cp,       vector<Box> *lb=0, int draw_flag=0) { return Draw   (gd, StringPiece           (text), Box(cp.x,cp.y+Height(),0,0), lb, draw_flag); }
+  /**/               int Draw(GraphicsDevice *gd, const String16        &text, point cp,       vector<Box> *lb=0, int draw_flag=0) { return Draw   (gd, String16Piece         (text), Box(cp.x,cp.y+Height(),0,0), lb, draw_flag); }
+  template <class X> int Draw(GraphicsDevice *gd, const X               *text, point cp,       vector<Box> *lb=0, int draw_flag=0) { return Draw   (gd, StringPiece::Unbounded(text), Box(cp.x,cp.y+Height(),0,0), lb, draw_flag); }
 
-  template <class X> int Draw(const StringPieceT<X> &text, const Box &box, vector<Box> *lb=0, int draw_flag=0);
-  /**/               int Draw(const string          &text, const Box &box, vector<Box> *lb=0, int draw_flag=0) { return Draw(StringPiece           (text), box, lb, draw_flag); }
-  /**/               int Draw(const String16        &text, const Box &box, vector<Box> *lb=0, int draw_flag=0) { return Draw(String16Piece         (text), box, lb, draw_flag); }
-  template <class X> int Draw(const X               *text, const Box &box, vector<Box> *lb=0, int draw_flag=0) { return Draw(StringPiece::Unbounded(text), box, lb, draw_flag); }
+  template <class X> int Draw(GraphicsDevice *gd, const StringPieceT<X> &text, const Box &box, vector<Box> *lb=0, int draw_flag=0);
+  /**/               int Draw(GraphicsDevice *gd, const string          &text, const Box &box, vector<Box> *lb=0, int draw_flag=0) { return Draw(gd, StringPiece           (text), box, lb, draw_flag); }
+  /**/               int Draw(GraphicsDevice *gd, const String16        &text, const Box &box, vector<Box> *lb=0, int draw_flag=0) { return Draw(gd, String16Piece         (text), box, lb, draw_flag); }
+  template <class X> int Draw(GraphicsDevice *gd, const X               *text, const Box &box, vector<Box> *lb=0, int draw_flag=0) { return Draw(gd, StringPiece::Unbounded(text), box, lb, draw_flag); }
 };
 
 struct FakeFontEngine : public FontEngine {
@@ -210,7 +214,7 @@ struct FakeFontEngine : public FontEngine {
   // U+1FC = 'AE'; encoded: c7bc,  U+1FD = 'ae', encoded: c7bd
   FontDesc fake_font_desc;
   Font fake_font;
-  FakeFontEngine();
+  FakeFontEngine(Fonts*);
   virtual const char *Name() { return "FakeFontEngine"; }
   virtual unique_ptr<Font> Open(const FontDesc&) { return make_unique<Font>(fake_font); }
   virtual int LoadGlyphs(Font *f, const Glyph *g, int n) { return n; }
@@ -227,6 +231,7 @@ struct AtlasFontEngine : public FontEngine {
   typedef map<string, FontColorMap> FontMap;
   FontMap font_map;
   bool in_init=0;
+  AtlasFontEngine(Fonts *f);
 
   virtual const char*      Name() { return "AtlasFontEngine"; }
   virtual void             SetDefault();
@@ -237,12 +242,12 @@ struct AtlasFontEngine : public FontEngine {
   virtual int              LoadGlyphs(Font *f, const Glyph *g, int n) { return n; }
   virtual string           DebugString(Font *f) const;
 
-  static Font *OpenAtlas(const FontDesc&);
-  static void WriteAtlas(const string &name, Font *glyphs, Texture *t);
-  static void WriteAtlas(const string &name, Font *glyphs);
-  static void WriteGlyphFile(const string &name, Font *glyphs);
-  static void MakeFromPNGFiles(const string &name, const vector<string> &png, const point &atlas_dim, Font **glyphs_out);
-  static void SplitIntoPNGFiles(const string &input_png_fn, const map<int, v4> &glyphs, const string &dir_out);
+  static Font *OpenAtlas(Fonts*, const FontDesc&);
+  static void WriteAtlas(ApplicationInfo*, const string &name, Font *glyphs, Texture *t);
+  static void WriteAtlas(ApplicationInfo*, const string &name, Font *glyphs);
+  static void WriteGlyphFile(ApplicationInfo*, const string &name, Font *glyphs);
+  static void MakeFromPNGFiles(Fonts *fonts, const string &name, const vector<string> &png, const point &atlas_dim, Font **glyphs_out);
+  static void SplitIntoPNGFiles(GraphicsDeviceHolder*, const string &input_png_fn, const map<int, v4> &glyphs, const string &dir_out);
   static int Dimension(int n, int w, int h) { return 1 << max(8,FloorLog2(sqrt((w+4)*(h+4)*n))); }
 };
 
@@ -256,6 +261,7 @@ struct FreeTypeFontEngine : public FontEngine {
   unordered_map<FontDesc, Font*, FontDesc::Hasher, FontDesc::Equal> font_map;
   unordered_map<string, shared_ptr<Resource>> resource;
   GlyphCache::FilterCB subpixel_filter = &FreeTypeFontEngine::SubPixelFilter;
+  FreeTypeFontEngine(Fonts *p) : FontEngine(p) {}
 
   virtual const char*      Name() { return "FreeTypeFontEngine"; }
   virtual void             SetDefault();
@@ -282,6 +288,7 @@ struct CoreTextFontEngine : public FontEngine {
     Resource(const char *N=0, CGFontRef CGF=0, int F=0) : name(BlankNull(N)), cgfont(CGF), flag(F) {}
   };
   unordered_map<string, shared_ptr<Resource>> resource;
+  CoreTextFontEngine(Fonts *p) : FontEngine(p) {}
 
   virtual const char*      Name() { return "CoreTextFontEngine"; }
   virtual void             SetDefault();
@@ -311,7 +318,7 @@ struct GDIFontEngine : public FontEngine {
   };
   unordered_map<string, shared_ptr<Resource>> resource;
   HDC hdc=0;
-  GDIFontEngine();
+  GDIFontEngine(Fonts*);
   ~GDIFontEngine();
 
   virtual const char*      Name() { return "GDIFontEngine"; }
@@ -338,6 +345,7 @@ struct FCFontEngine : public FontEngine {
     Resource(unique_ptr<Font> f) : font(move(f)) {}
   };
   unordered_map<string, shared_ptr<Resource>> resource;
+  FCFontEngine(Fonts *p) : FontEngine(p) {}
 
   virtual const char*      Name() { return "FCFontEngine"; }
   virtual void             Shutdown();
@@ -361,6 +369,7 @@ struct AndroidFontEngine : public FontEngine {
     Resource(unique_ptr<Font> f) : font(move(f)) {}
   };
   unordered_map<string, shared_ptr<Resource>> resource;
+  AndroidFontEngine(Fonts *p) : FontEngine(p) {}
 
   virtual const char*      Name() { return "AndroidFontEngine"; }
   virtual void             Shutdown();
@@ -379,6 +388,8 @@ struct AndroidFontEngine {};
 
 struct IPCClientFontEngine : public FontEngine {
   struct Resource : public FontEngine::Resource { int id; Resource(int I=0) : id(I) {} };
+  ThreadDispatcher *dispatch;
+  IPCClientFontEngine(ThreadDispatcher *d, Fonts *p) : FontEngine(p), dispatch(d) {}
   virtual const char *Name() { return "IPCClientFontEngine"; }
   virtual unique_ptr<Font> Open(const FontDesc&);
   virtual int InitGlyphs(Font *f, Glyph *g, int n);
@@ -389,6 +400,7 @@ struct IPCClientFontEngine : public FontEngine {
 };
 
 struct IPCServerFontEngine : public FontEngine {
+  IPCServerFontEngine(Fonts *p) : FontEngine(p) {}
   virtual const char *Name() { return "IPCServerFontEngine"; }
   virtual unique_ptr<Font> Open(const FontDesc&);
   virtual int InitGlyphs(Font *f, Glyph *g, int n);
@@ -410,6 +422,9 @@ struct Fonts {
     }
   };
 
+  ApplicationInfo *appinfo;
+  GraphicsDeviceHolder *parent;
+  AssetLoading *loader;
   shared_ptr<GlyphCache> rgba_glyph_cache, a_glyph_cache;
   FontEngine *default_font_engine=0;
   LazyInitializedPtr<FakeFontEngine> fake_engine;
@@ -425,6 +440,7 @@ struct Fonts {
   unordered_map<string, Family> family_map;
   unordered_map<unsigned, FillColor> color_map;
   Font *default_font=0;
+  Fonts(ApplicationInfo *A, GraphicsDeviceHolder *P, AssetLoading *L) : appinfo(A), parent(P), loader(L) {}
   virtual ~Fonts();
 
   void SelectFillColor(GraphicsDevice*);
@@ -437,15 +453,15 @@ struct Fonts {
   FontEngine *GetFontEngine(int engine_type);
   FontEngine *DefaultFontEngine();
   Font *Fake();
-  Font *GetByDesc(FontDesc);
-  template <class... Args> Font *Get(Args&&... args) { return GetByDesc(FontDesc(forward<Args>(args)...)); }
+  Font *GetByDesc(FontDesc, int scale_window_height=0);
+  template <class... Args> Font *Get(int scale_window_height, Args&&... args) { return GetByDesc(FontDesc(forward<Args>(args)...), scale_window_height); }
   Font *Change(Font*, int new_size, const Color &new_fg, const Color &new_bg, int new_flag=0);
-  int ScaledFontSize(int pointsize);
-  void ResetGL(int flag);
+  int ScaledFontSize(int pointsize, int scale_window_height);
+  void ResetGL(GraphicsDeviceHolder *p, int flag);
   void LoadDefaultFonts();
   void LoadConsoleFont(const string &name, const vector<int> &sizes = vector<int>(1, 32));
   shared_ptr<GlyphCache> GetGlyphCache() {
-    if (!rgba_glyph_cache) rgba_glyph_cache = make_shared<GlyphCache>(0, 512);
+    if (!rgba_glyph_cache) rgba_glyph_cache = make_shared<GlyphCache>(parent, 0, 512);
     if (!rgba_glyph_cache->tex.ID) rgba_glyph_cache->tex.Create(rgba_glyph_cache->tex.width, rgba_glyph_cache->tex.height);
     return rgba_glyph_cache;
   }
@@ -455,9 +471,10 @@ struct FontRef {
   Font *ptr=0;
   FontDesc desc;
   FontRef(Font *F) { SetFont(F); }
-  FontRef(const FontDesc &d=FontDesc(), bool load=true) : desc(d) { if (load) Load(); }
+  FontRef(Window *W=nullptr, const FontDesc &d=FontDesc()) : desc(d) { if (W) Load(W); }
 
-  Font *Load();
+  Font *Load(Window*);
+  Font *Load(Window *w, FontDesc d) { desc=move(d); return Load(w); }
   operator Font* () const { return ptr; }
   Font* operator->() const { return ptr; }
   void SetFont(Font *F) { if ((ptr = F)) desc = *ptr->desc; }
@@ -465,7 +482,7 @@ struct FontRef {
 
 struct DejaVuSansFreetype {
   static void SetDefault();
-  static void Load();
+  static void Load(Fonts*);
 };
 
 }; // namespace LFL

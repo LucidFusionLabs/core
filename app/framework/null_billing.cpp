@@ -1,5 +1,5 @@
 /*
- * $Id: video.cpp 1336 2014-12-08 09:29:59Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -28,5 +28,5 @@ struct NullPurchases : public PurchasesInterface {
   bool MakePurchase(ProductInterface*, IntCB result_cb) { return false; };
 };
 
-unique_ptr<PurchasesInterface> SystemToolkit::CreatePurchases(string) { return make_unique<NullPurchases>(); }
+unique_ptr<PurchasesInterface> SystemToolkit::CreatePurchases(ApplicationInfo*, string) { return make_unique<NullPurchases>(); }
 }; // namespace LFL

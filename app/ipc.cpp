@@ -45,12 +45,13 @@ int NTService::WrapMain (const char *name, MainCB main_cb, int argc, const char*
 #if defined(LFL_MOBILE)
 int ProcessPipe::OpenPTY(const char* const* argv, const char *startdir) { FATAL("not implemented"); }
 int ProcessPipe::Open   (const char* const* argv, const char *startdir) { FATAL("not implemented"); }
-int ProcessPipe::Close()                                          { FATAL("not implemented"); }
+int ProcessPipe::Close()                                                { FATAL("not implemented"); }
 
 #elif defined(LFL_WINDOWS)
 MainCB nt_service_main = 0;
 const char *nt_service_name = 0;
 SERVICE_STATUS_HANDLE nt_service_status_handle = 0;
+ThreadDispatcher *nt_dispatcher = nullptr;
 
 static BOOL UpdateSCMStatus(DWORD dwCurrentState, DWORD dwWin32ExitCode,
                             DWORD dwServiceSpecificExitCode, DWORD dwCheckPoint,
@@ -74,7 +75,7 @@ static BOOL UpdateSCMStatus(DWORD dwCurrentState, DWORD dwWin32ExitCode,
 static void HandleNTServiceControl(DWORD controlCode) {
   if (controlCode == SERVICE_CONTROL_SHUTDOWN || controlCode == SERVICE_CONTROL_STOP) {
     UpdateSCMStatus(SERVICE_STOPPED, NO_ERROR, 0, 0, 0);
-    app->run = 0;
+    nt_dispatcher->run = 0;
   } else {
     UpdateSCMStatus(SERVICE_RUNNING, NO_ERROR, 0, 0, 0);
   }
@@ -191,7 +192,7 @@ MultiProcessBuffer::~MultiProcessBuffer() {
   if (impl != INVALID_HANDLE_VALUE) CloseHandle(impl);
 }
 void MultiProcessBuffer::Close() {}
-bool MultiProcessBuffer::Open() {
+bool MultiProcessBuffer::Open(ApplicationInfo *a) {
   bool read_only = url.size();
   if (!len || (url.size() && !impl)) return ERRORv(false, "mpb open url=", url, " len=", len);
   if (url.empty()) {
@@ -273,12 +274,12 @@ MultiProcessBuffer::~MultiProcessBuffer() {
   if (impl >= 0) close(impl);
 }
 void MultiProcessBuffer::Close() {}
-bool MultiProcessBuffer::Open() {
+bool MultiProcessBuffer::Open(ApplicationInfo *a) {
   bool read_only = 0 && url.size();
   if (!len || (url.size() && impl < 0)) return ERRORv(false, "mpb open url=", url, " len=", len, " fd=", impl);
   if (url.empty()) {
     string path;
-    if ((impl = LocalFile::CreateTemporary("mpb", &path)) < 0) return false;
+    if ((impl = LocalFile::CreateTemporary(a, "mpb", &path)) < 0) return false;
     if (unlink(path.c_str())) return ERRORv(false, "unlink ", path);
     if (ftruncate(impl, len)) return ERRORv(false, "ftruncate ", path, " ", len);
     url = MultiProcessBufferURL;
@@ -297,7 +298,7 @@ MultiProcessBuffer::MultiProcessBuffer(const IPC::ResourceHandle *h, Socket)
   : url((h && h->url()) ? h->url()->c_str() : ""), len(h ? h->len() : 0) {}
 MultiProcessBuffer::~MultiProcessBuffer() { if (buf) shmdt(buf); }
 void MultiProcessBuffer::Close() { if (impl >= 0) shmctl(impl, IPC_RMID, NULL); }
-bool MultiProcessBuffer::Open() {
+bool MultiProcessBuffer::Open(ApplicationInfo *a) {
   if (!len) return false;
   int key = url.empty() ? rand() : ShmKeyFromMultiProcessBufferURL(url);
   if ((impl = shmget(key, len, url.empty() ? (IPC_CREAT | 0600) : 0400)) < 0)
@@ -464,7 +465,7 @@ bool InterProcessComm::StartServerProcess(const string &server_program, const ve
 #error no_ipc_impl
 #endif
   
-  conn = app->net->unix_client->AddConnectedSocket(conn_socket, new ConnectionHandler(this));
+  conn = net->unix_client->AddConnectedSocket(conn_socket, new ConnectionHandler(this));
   conn->control_messages = conn_control_messages;
   INFO("ProcessAPIClient started server PID=", pid, " ", server_program);
   return true;
@@ -473,12 +474,12 @@ bool InterProcessComm::StartServerProcess(const string &server_program, const ve
 bool InterProcessComm::OpenSocket(const string &socket_name) {
   static string fd_url = "fd://", np_url = "np://", tcp_url = "tcp://";
   if (PrefixMatch(socket_name, fd_url)) {
-    conn = new SocketConnection(app->net->unix_client.get(), nullptr);
+    conn = new SocketConnection(net->unix_client.get(), nullptr);
     conn->state = Connection::Connected;
     conn->socket = atoi(socket_name.c_str() + fd_url.size());
     conn->control_messages = true;
   } else if (PrefixMatch(socket_name, tcp_url)) {
-    conn = new SocketConnection(app->net->unix_client.get(), nullptr);
+    conn = new SocketConnection(net->unix_client.get(), nullptr);
     string host, port;
     HTTP::ParseHost(socket_name.c_str() + tcp_url.size(), socket_name.c_str() + socket_name.size(), &host, &port);
     CHECK_NE(-1, (conn->socket = SystemNetwork::OpenSocket(LFL::Protocol::TCP)));
@@ -557,25 +558,25 @@ void ProcessAPIClient::ExecuteScript(const string &text, const StringCB &cb) {
 
 void ProcessAPIClient::LoadAsset(const string &content, const string &fn, const TextureCB &cb) { 
   MultiProcessBuffer mpb(server_process);
-  if (conn && mpb.Create(MultiProcessFileResource(content, fn, "")) &&
+  if (conn && mpb.Create(app_info, MultiProcessFileResource(this, content, fn, "")) &&
       SendIPC(conn, seq++, mpb.transfer_handle, LoadAssetRequest, MakeResourceHandle(MultiProcessFileResource::Type, mpb)))
     ExpectResponseIPC(LoadAsset, this, seq-1, cb);
 }
 
 int ProcessAPIClient::LoadAssetQuery::Response(const IPC::LoadAssetResponse *res, const MultiProcessTextureResource &tex) {
   if (res) mpb_id = res->mpb_id();
-  app->RunInMainThread(bind(&LoadAssetQuery::RunCB, this, tex));
+  parent->dispatcher->RunInMainThread(bind(&LoadAssetQuery::RunCB, this, tex));
   return IPC::Accept;
 }
 
 void ProcessAPIClient::LoadAssetQuery::RunCB(const MultiProcessTextureResource &tex) {
   cb(tex);
-  app->RunInNetworkThread([=]{ delete this; });
+  parent->dispatcher->RunInNetworkThread([=]{ delete this; });
 }
 
 int ProcessAPIClient::HandleAllocateBufferRequest(int seq, const IPC::AllocateBufferRequest *req, Void) {
   auto mpb = AddBuffer();
-  if (!mpb->Create(req->bytes()) ||
+  if (!mpb->Create(app_info, req->bytes()) ||
       !SendIPC(conn, seq, mpb->transfer_handle, AllocateBufferResponse, MakeResourceHandle(req->type(), *mpb), ipc_buffer_id))
     return IPC::Error;
 
@@ -589,32 +590,32 @@ int ProcessAPIClient::HandleCloseBufferRequest(int seq, const IPC::CloseBufferRe
 
 int ProcessAPIClient::HandleSetClearColorRequest(int seq, const IPC::SetClearColorRequest *req, Void) {
   if (auto c = req->c())
-    app->RunInMainThread(bind(&GraphicsDevice::ClearColor, app->focused->gd, Color(c->r(), c->g(), c->b(), c->a())));
+    dispatcher->RunInMainThread(bind(&GraphicsDevice::ClearColor, window->GD(), Color(c->r(), c->g(), c->b(), c->a())));
   return IPC::Done;
 }
 
 int ProcessAPIClient::HandleSetDocsizeRequest(int seq, const IPC::SetDocsizeRequest *req, Void) {
-  app->RunInMainThread(bind(&Browser::SetDocsize, browser, req->w(), req->h()));
+  dispatcher->RunInMainThread(bind(&Browser::SetDocsize, browser, req->w(), req->h()));
   return IPC::Done;
 }
 
 int ProcessAPIClient::HandleSetTitleRequest(int seq, const IPC::SetTitleRequest *req, Void) {
-  app->RunInMainThread(bind(&Window::SetCaption, app->focused, req->title() ? req->title()->str() : ""));
+  if (window->focused) dispatcher->RunInMainThread(bind(&Window::SetCaption, window->focused, req->title() ? req->title()->str() : ""));
   return IPC::Done;
 }
 
 int ProcessAPIClient::HandleSetURLRequest(int seq, const IPC::SetURLRequest *req, Void) {
-  app->RunInMainThread(bind(&Browser::SetURLText, browser, req->url() ? req->url()->str() : ""));
+  dispatcher->RunInMainThread(bind(&Browser::SetURLText, browser, req->url() ? req->url()->str() : ""));
   return IPC::Done;
 }
 
 int ProcessAPIClient::HandleOpenSystemFontRequest(int seq, const IPC::OpenSystemFontRequest *req, Void) {
   Font *font = 0;
   MultiProcessBuffer mpb(server_process);
-  if (const IPC::FontDescription *desc = req->desc()) font = app->fonts->GetByDesc(FontDesc(*desc));
+  if (const IPC::FontDescription *desc = req->desc()) font = fonts->GetByDesc(FontDesc(*desc));
   GlyphMap *glyph = font ? font->glyph.get() : 0;
   int glyph_table_size = glyph ? glyph->table.size() : 0, glyph_table_bytes = glyph_table_size * sizeof(GlyphMetrics);
-  if (!glyph || !conn || !mpb.Create(glyph_table_bytes)) return IPC::Error;
+  if (!glyph || !conn || !mpb.Create(app_info, glyph_table_bytes)) return IPC::Error;
 
   font_table.push_back(font);
   GlyphMetrics *g = reinterpret_cast<GlyphMetrics*>(mpb.buf);
@@ -631,15 +632,15 @@ int ProcessAPIClient::HandleOpenSystemFontRequest(int seq, const IPC::OpenSystem
 }
 
 int ProcessAPIClient::HandleLoadTextureRequest(int seq, const IPC::LoadTextureRequest *req, const MultiProcessTextureResource &tex) {
-  app->RunInMainThread(bind(&LoadTextureQuery::LoadTexture, new LoadTextureQuery(this, seq, req->mpb_id()), tex));
+  dispatcher->RunInMainThread(bind(&LoadTextureQuery::LoadTexture, new LoadTextureQuery(this, seq, req->mpb_id()), tex));
   return IPC::Accept;
 }
 
 void ProcessAPIClient::LoadTextureQuery::LoadTexture(const MultiProcessTextureResource &mpt) {
-  unique_ptr<Texture> tex = make_unique<Texture>();
+  unique_ptr<Texture> tex = make_unique<Texture>(parent->window);
   tex->LoadGL(mpt);
   tex->owner = true;
-  app->RunInNetworkThread(bind(&ProcessAPIClient::LoadTextureQuery::Complete, this, tex.release()));
+  parent->dispatcher->RunInNetworkThread(bind(&ProcessAPIClient::LoadTextureQuery::Complete, this, tex.release()));
 }
 
 void ProcessAPIClient::LoadTextureQuery::Complete(Texture *tex) {
@@ -650,32 +651,32 @@ void ProcessAPIClient::LoadTextureQuery::Complete(Texture *tex) {
 }
 
 int ProcessAPIClient::HandlePaintRequest(int seq, const IPC::PaintRequest *req, const MultiProcessPaintResource &paint) {
-  app->RunInMainThread(bind(&ProcessAPIClient::PaintQuery::PaintTile, new PaintQuery(this, seq, req->mpb_id()),
-                            req->x(), req->y(), req->z(), req->flag(), paint));
+  dispatcher->RunInMainThread(bind(&ProcessAPIClient::PaintQuery::PaintTile, new PaintQuery(this, seq, req->mpb_id()),
+                                   req->x(), req->y(), req->z(), req->flag(), paint));
   return IPC::Accept;
 }
 
 void ProcessAPIClient::PaintQuery::PaintTile(int x, int y, int z, int flag, const MultiProcessPaintResource &paint) {
   parent->browser->PaintTile(x, y, z, flag, paint);
-  app->RunInNetworkThread([=]{ delete this; });
+  parent->dispatcher->RunInNetworkThread([=]{ delete this; });
 }
 
 int ProcessAPIClient::HandleSwapTreeRequest(int seq, const IPC::SwapTreeRequest *req, const MultiProcessLayerTree &tree) {
-  app->RunInMainThread(bind(&ProcessAPIClient::SwapTreeQuery::SwapLayerTree,
-                            new SwapTreeQuery(this, seq, req->mpb_id()), req->id(), tree));
+  dispatcher->RunInMainThread(bind(&ProcessAPIClient::SwapTreeQuery::SwapLayerTree,
+                                   new SwapTreeQuery(this, seq, req->mpb_id()), req->id(), tree));
   return IPC::Accept;
 }
 
 void ProcessAPIClient::SwapTreeQuery::SwapLayerTree(int id, const MultiProcessLayerTree &tree) {
   tree.AssignTo(parent->browser->layers.get());
-  app->RunInNetworkThread([=]{ delete this; });
+  parent->dispatcher->RunInNetworkThread([=]{ delete this; });
 }
 
 int ProcessAPIClient::HandleWGetRequest(int seq, const IPC::WGetRequest *req, Void) {
   string url = req->url()->str();
   WGetQuery *wget = new WGetQuery(this, seq);
-  app->RunInNetworkThread([=]{ HTTPClient::WGet(url, 0, bind(&WGetQuery::WGetResponseCB, wget, _1, _2, _3, _4, _5),
-                                                bind(&WGetQuery::WGetRedirectCB, wget, _1)); });
+  dispatcher->RunInNetworkThread([=]{ HTTPClient::WGet(net, app_info, url, 0, bind(&WGetQuery::WGetResponseCB, wget, _1, _2, _3, _4, _5),
+                                                       bind(&WGetQuery::WGetRedirectCB, wget, _1)); });
   return IPC::Ok;
 }
 
@@ -683,7 +684,7 @@ void ProcessAPIClient::WGetQuery::SendResponse(const char *h, const char *b, int
   int len = h ? strlen(h)+1 : l;
   MultiProcessBuffer res_mpb(parent->server_process);
   if (!len) parent->SendIPC(parent->conn, seq, -1, WGetResponse, 0);
-  else if (res_mpb.Create(len)) {
+  else if (res_mpb.Create(parent->app_info, len)) {
     memcpy(res_mpb.buf, h ? h : b, len);
     parent->SendIPC(parent->conn, seq, res_mpb.transfer_handle, WGetResponse, MakeResourceHandle(0, res_mpb), h!=0, redir, h?l:0);
     res_mpb.Close();
@@ -692,15 +693,15 @@ void ProcessAPIClient::WGetQuery::SendResponse(const char *h, const char *b, int
 }
 
 int ProcessAPIServer::HandleLoadAssetRequest(int id, const IPC::LoadAssetRequest *req, const MultiProcessFileResource &mpf) {
-  unique_ptr<Texture> tex(Asset::LoadTexture(mpf));
-  if (!tex || !SendIPC(conn, seq++, -1, AllocateBufferRequest, MultiProcessBuffer::Size(MultiProcessTextureResource(*tex)), MultiProcessTextureResource::Type))
+  unique_ptr<Texture> tex(loader->LoadTexture(mpf));
+  if (!tex || !SendIPC(conn, seq++, -1, AllocateBufferRequest, MultiProcessBuffer::Size(MultiProcessTextureResource(this, *tex)), MultiProcessTextureResource::Type))
     return IPC::Error;
   return ExpectResponseIPC(AllocateBuffer, this, seq-1, bind
                            (&LoadAssetQuery::AllocateBufferResponse, new LoadAssetQuery(this, id, move(tex)), _1, _2));
 }
 
 int ProcessAPIServer::LoadAssetQuery::AllocateBufferResponse(const IPC::AllocateBufferResponse *res, MultiProcessBuffer &mpb) {
-  if (res && mpb.Copy(MultiProcessTextureResource(*tex))) parent->SendIPC(parent->conn, seq, -1, LoadAssetResponse, res->mpb_id());
+  if (res && mpb.Copy(MultiProcessTextureResource(parent, *tex))) parent->SendIPC(parent->conn, seq, -1, LoadAssetResponse, res->mpb_id());
   return Done();
 }
 
@@ -715,17 +716,17 @@ int ProcessAPIServer::HandleSetViewportRequest(int seq, const IPC::SetViewportRe
 }
 
 int ProcessAPIServer::HandleKeyPressRequest(int seq, const IPC::KeyPressRequest *req, Void) {
-  app->input->KeyPress(req->button(), 0, req->down());
+  input->KeyPress(req->button(), 0, req->down());
   return IPC::Done;
 }
 
 int ProcessAPIServer::HandleMouseClickRequest(int seq, const IPC::MouseClickRequest *req, Void) {
-  app->input->MouseClick(req->button(), req->down(), point(req->x(), req->y()));
+  input->MouseClick(req->button(), req->down(), point(req->x(), req->y()));
   return IPC::Done;
 }
 
 int ProcessAPIServer::HandleMouseMoveRequest(int seq, const IPC::MouseMoveRequest *req, Void) {
-  app->input->MouseMove(point(req->x(), req->y()), point(req->dx(), req->y()));
+  input->MouseMove(point(req->x(), req->y()), point(req->dx(), req->y()));
   return IPC::Done;
 }
 
@@ -755,13 +756,13 @@ void ProcessAPIServer::OpenSystemFont(const LFL::FontDesc &d, const OpenSystemFo
 
 void ProcessAPIServer::LoadTexture(Texture *tex, const LoadTextureIPC::CB &cb) {
   CHECK(tex);
-  if (!SendIPC(conn, seq++, -1, AllocateBufferRequest, MultiProcessBuffer::Size(MultiProcessTextureResource(*tex)), MultiProcessTextureResource::Type)) return;
+  if (!SendIPC(conn, seq++, -1, AllocateBufferRequest, MultiProcessBuffer::Size(MultiProcessTextureResource(this, *tex)), MultiProcessTextureResource::Type)) return;
   ExpectResponseIPC(AllocateBuffer, this, seq-1, bind
                     (&LoadTextureQuery::AllocateBufferResponse, new LoadTextureQuery(this, tex, cb), _1, _2));
 }
 
 int ProcessAPIServer::LoadTextureQuery::AllocateBufferResponse(const IPC::AllocateBufferResponse *res, MultiProcessBuffer &mpb) {
-  if (!res || !mpb.Copy(MultiProcessTextureResource(*tex)) ||
+  if (!res || !mpb.Copy(MultiProcessTextureResource(parent, *tex)) ||
       !parent->SendIPC(parent->conn, (seq = parent->seq++), -1, LoadTextureRequest, res->mpb_id())) return Error();
   parent->ExpectLoadTextureResponse(this);
   return IPC::Done;

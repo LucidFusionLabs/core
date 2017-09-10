@@ -102,7 +102,7 @@ struct Game {
     unsigned method;
     Time timeout;
     ReliableUDPNetwork(unsigned m, unsigned t=500) :
-      net(Singleton<Game::UDPNetwork>::Get()), method(m), timeout(t) {}
+      net(Singleton<Game::UDPNetwork>::Set()), method(m), timeout(t) {}
 
     void Clear() { retry.clear(); }
     void Acknowledged(unsigned short id) { retry.erase(id); }
@@ -202,15 +202,19 @@ struct GameTCPServer : public TCPServer {
 
 struct GameUDPServer : public UDPServer {
   int secret1, secret2;
-  GameUDPServer(int port) : UDPServer(port), secret1(rand()), secret2(rand()) {}
+  GameUDPServer(SocketServices *n, int port) : UDPServer(n, port), secret1(rand()), secret2(rand()) {}
 
   int Hash(Connection *c);
   int UDPFilter(SocketConnection *c, const char *content, int content_len) override;
 };
 
-struct GameGPlusServer : public GPlusServer {};
+struct GameGPlusServer : public GPlusServer {
+  using GPlusServer::GPlusServer;
+};
 
-struct GameInProcessServer : public InProcessServer {};
+struct GameInProcessServer : public InProcessServer {
+  using InProcessServer::InProcessServer;
+};
 
 struct GameServer : public Connection::Handler {
   struct History {
@@ -221,6 +225,8 @@ struct GameServer : public Connection::Handler {
     History() { WorldUpdate.id=0; memzeros(send_WorldUpdate); }
   };
 
+  ApplicationShutdown *shutdown;
+  SocketServices *net;
   Game *world;
   GameBots *bots;
   Time timestep;
@@ -234,39 +240,39 @@ struct GameServer : public Connection::Handler {
   const vector<Asset> *assets;
   History last;
 
-  GameServer(Game *w, unsigned ts, const string &name, const vector<Asset> *a) :
-    world(w), bots(0), timestep(ts), local_game_name(name), assets(a) {}
+  GameServer(ApplicationShutdown *s, SocketServices *n, Game *w, unsigned ts, const string &name, const vector<Asset> *a) :
+    shutdown(s), net(n), world(w), bots(0), timestep(ts), local_game_name(name), assets(a) {}
 
-  void InitTransport(int p, int port) {
+  void InitTransport(SocketServices *net, int p, int port) {
     proto = p;
     if (proto == Protocol::TCP) {
       if (!tcp_transport) {
         local_game_url = StrCat(port);
-        tcp_transport = new GameTCPServer(port);
-        tcp_transport->game_network = Singleton<Game::TCPNetwork>::Get();
+        tcp_transport = new GameTCPServer(net, port);
+        tcp_transport->game_network = Singleton<Game::TCPNetwork>::Set();
         tcp_transport->handler = this;
         svc.push_back(tcp_transport);
       }
     } else if (proto == Protocol::UDP) {
       if (!udp_transport) {
         local_game_url = StrCat(port);
-        udp_transport = new GameUDPServer(port);
-        udp_transport->game_network = Singleton<Game::UDPNetwork>::Get();
+        udp_transport = new GameUDPServer(net, port);
+        udp_transport->game_network = Singleton<Game::UDPNetwork>::Set();
         udp_transport->handler = this;
         svc.push_back(udp_transport);
       }
 #ifdef LFL_ANDROID
       if (!gplus_transport) {
-        gplus_transport = new GameGPlusServer();
-        gplus_transport->game_network = Singleton<Game::GoogleMultiplayerNetwork>::Get();
+        gplus_transport = new GameGPlusServer(net);
+        gplus_transport->game_network = Singleton<Game::GoogleMultiplayerNetwork>::Set();
         gplus_transport->handler = this;
         svc.push_back(gplus_transport);
       }
 #endif
     } else if (proto == Protocol::InProcess) {
       if (!inprocess_transport) {
-        inprocess_transport = new GameInProcessServer();
-        inprocess_transport->game_network = Singleton<Game::InProcessNetwork>::Get();
+        inprocess_transport = new GameInProcessServer(net);
+        inprocess_transport->game_network = Singleton<Game::InProcessNetwork>::Set();
         inprocess_transport->handler = this;
         svc.push_back(inprocess_transport);
       }
@@ -352,7 +358,7 @@ struct GameServer : public Connection::Handler {
     if (now > last.time_post_MasterUpdate + MasterUpdateInterval || last.time_post_MasterUpdate == Time(0)) {
       last.time_post_MasterUpdate = now;
       if (!master_sink_url.empty())
-        HTTPClient::WPost(master_sink_url, "application/octet-stream", local_game_url.c_str(), local_game_url.size());
+        HTTPClient::WPost(net, master_sink_url, "application/octet-stream", local_game_url.c_str(), local_game_url.size());
     }
 
     int updated = 0;
@@ -470,7 +476,7 @@ struct GameServer : public Connection::Handler {
         if (arg == rcon_auth_passwd && rcon_auth_passwd.size()) cd->rcon_auth = true;
         WritePrintWithRetry(c, cd, StrCat("rcon auth: ", cd->rcon_auth ? "enabled" : "disabled"));
       } else if (cmd == "shutdown") {
-        if (cd->rcon_auth) app->run = false;
+        if (cd->rcon_auth) shutdown->Shutdown();
       } else {
         RconRequestCB(c, cd, cmd, arg);
       }
@@ -506,6 +512,8 @@ struct GameClient {
     void disable() { just_ended=start_ind; start_ind=0; }
   };
 
+  AssetStore *assetstore;
+  SocketServices *sockets;
   string playername;
   Connection *conn=0;
   Game *world;
@@ -522,8 +530,8 @@ struct GameClient {
   TextArea *chat;
 
   ~GameClient() { Reset(); }
-  GameClient(Game *w, View *PlayerList, TextArea *Chat) :
-    world(w), retry(UDPClient::Write), playerlist(PlayerList), chat(Chat) {}
+  GameClient(AssetStore *a, SocketServices *n, Game *w, View *PlayerList, TextArea *Chat) :
+    assetstore(a), sockets(n), world(w), retry(UDPClient::Write), playerlist(PlayerList), chat(Chat) {}
 
   virtual void NewEntityCB(Entity *) {}
   virtual void DelEntityCB(Entity *) {}
@@ -534,7 +542,7 @@ struct GameClient {
   Entity *WorldAddEntity(int id) { return world->Add(id, new Entity()); }
   void WorldAddEntityFinish(Entity *e, int type) {
     CHECK(!e->asset);
-    world->scene->ChangeAsset(e, app->asset(assets[type]));
+    world->scene->ChangeAsset(e, assetstore->asset(assets[type]));
     NewEntityCB(e);
   }
 
@@ -563,7 +571,7 @@ struct GameClient {
     if (playername == n) return;
     playername = n;
     Rcon(StrCat("name ", n));
-    Singleton<FlagMap>::Get()->Set("player_name", n);
+    Singleton<FlagMap>::Set()->Set("player_name", n);
   }
 
   void MyEntityName(vector<string>) {
@@ -584,8 +592,8 @@ struct GameClient {
   int Connect(int prot, const string &url, int default_port) {
     Reset();
     if (prot == Protocol::TCP) {
-      net = Singleton<Game::TCPNetwork>::Get();
-      conn = app->net->tcp_client->Connect(url, default_port);
+      net = Singleton<Game::TCPNetwork>::Set();
+      conn = sockets->tcp_client->Connect(url, default_port);
       auto h = make_unique<Connection::CallbackHandler>(bind(&GameClient::StreamRead, this, _1), Connection::CB());
       h->connected_cb = [=](Connection *c){ 
         GameProtocol::JoinRequest req;
@@ -598,8 +606,8 @@ struct GameClient {
       return 0;
 
     } else if (prot == Protocol::UDP) {
-      net = Singleton<Game::UDPNetwork>::Get();
-      conn = app->net->udp_client->PersistentConnection
+      net = Singleton<Game::UDPNetwork>::Set();
+      conn = sockets->udp_client->PersistentConnection
         (url, bind(&GameClient::DatagramRead, this, _1, _2, _3), Connection::CB(), default_port);
       if (!Connected()) return 0;
 
@@ -610,8 +618,8 @@ struct GameClient {
 
 #ifdef LFL_ANDROID
     } else if (prot == Protocol::GPLUS) {
-      GPlusClient *gplus_client = app->net->gplus_client.get();
-      app->net->Enable(gplus_client);
+      GPlusClient *gplus_client = sockets->gplus_client.get(sockets);
+      sockets->Enable(gplus_client);
       net = Singleton<Game::GoogleMultiplayerNetwork>::Get();
       conn = gplus_client->PersistentConnection
         (url, bind(&GameClient::DatagramRead, this, _1, _2, _3), Connection::CB());
@@ -623,10 +631,10 @@ struct GameClient {
       return 0;
 #endif
     } else if (prot == Protocol::InProcess) {
-      InProcessClient *inprocess_client = app->net->inprocess_client.get();
-      app->net->Enable(inprocess_client);
+      InProcessClient *inprocess_client = sockets->inprocess_client.get(sockets);
+      sockets->Enable(inprocess_client);
       CHECK(inprocess_server);
-      net = Singleton<Game::InProcessNetwork>::Get();
+      net = Singleton<Game::InProcessNetwork>::Set();
       conn = inprocess_client->PersistentConnection
         (inprocess_server, bind(&GameClient::DatagramRead, this, _1, _2, _3), Connection::CB());
 
@@ -871,6 +879,7 @@ struct GameSettings {
 
 struct GameMultiTouchControls {
   enum { LEFT=5, RIGHT=6, UP=7, DOWN=2, UP_LEFT=8, UP_RIGHT=9, DOWN_LEFT=3, DOWN_RIGHT=4 };
+  Window *parent;
   GameClient *client;
   Font *dpad_font;
   Box lpad_win, rpad_win;
@@ -878,10 +887,10 @@ struct GameMultiTouchControls {
   float dp0_x=0, dp0_y=0, dp1_x=0, dp1_y=0;
   bool swipe_controls=0;
 
-  GameMultiTouchControls(GameClient *C) : client(C),
-  dpad_font(app->fonts->Get("dpad_atlas", "", 0, Color::black)),
-  lpad_win(app->focused->Box(.03, .05, .2, .2)),
-  rpad_win(app->focused->Box(.78, .05, .2, .2)),
+  GameMultiTouchControls(Window *W, GameClient *C) : parent(W), client(C),
+  dpad_font(W->parent->fonts->Get(W->gl_h, "dpad_atlas", "", 0, Color::white)),
+  lpad_win(W->Box(.03, .05, .2, .2)),
+  rpad_win(W->Box(.78, .05, .2, .2)),
   lpad_tbx(RoundF(lpad_win.w * .6)), lpad_tby(RoundF(lpad_win.h *.6)),
   rpad_tbx(RoundF(rpad_win.w * .6)), rpad_tby(RoundF(rpad_win.h *.6)) {}
 
@@ -892,22 +901,21 @@ struct GameMultiTouchControls {
   }
 
   void Update(unsigned clicks) {
-    Window *screen = app->focused;
     Entity *cam = &client->world->scene->cam;
 #if 0
     if (swipe_controls) {
-      if (screen->gesture_dpad_stop[0]) dp0_x = dp0_y = 0;
-      else if (screen->gesture_dpad_dx[0] || screen->gesture_dpad_dy[0]) {
+      if (parent->gesture_dpad_stop[0]) dp0_x = dp0_y = 0;
+      else if (parent->gesture_dpad_dx[0] || parent->gesture_dpad_dy[0]) {
         dp0_x = dp0_y = 0;
-        if (fabs(screen->gesture_dpad_dx[0]) > fabs(screen->gesture_dpad_dy[0])) dp0_x = screen->gesture_dpad_dx[0];
-        else                                                                     dp0_y = screen->gesture_dpad_dy[0];
+        if (fabs(parent->gesture_dpad_dx[0]) > fabs(parent->gesture_dpad_dy[0])) dp0_x = parent->gesture_dpad_dx[0];
+        else                                                                     dp0_y = parent->gesture_dpad_dy[0];
       }
 
-      if (screen->gesture_dpad_stop[1]) dp1_x = dp1_y = 0;
-      else if (screen->gesture_dpad_dx[1] || screen->gesture_dpad_dy[1]) {
+      if (parent->gesture_dpad_stop[1]) dp1_x = dp1_y = 0;
+      else if (parent->gesture_dpad_dx[1] || parent->gesture_dpad_dy[1]) {
         dp1_x = dp1_y = 0;
-        if (fabs(screen->gesture_dpad_dx[1]) > fabs(screen->gesture_dpad_dy[1])) dp1_x = screen->gesture_dpad_dx[1];
-        else                                                                     dp1_y = screen->gesture_dpad_dy[1];
+        if (fabs(parent->gesture_dpad_dx[1]) > fabs(parent->gesture_dpad_dy[1])) dp1_x = parent->gesture_dpad_dx[1];
+        else                                                                     dp1_y = parent->gesture_dpad_dy[1];
       }
 
       lpad_down = rpad_down = 0;
@@ -933,11 +941,11 @@ struct GameMultiTouchControls {
     } else {
       point l, r;
       if (FLAGS_swap_axis) {
-        l.x=int(screen->gesture_dpad_x[0]); l.y=int(screen->gesture_dpad_y[0]);
-        r.x=int(screen->gesture_dpad_x[1]); r.y=int(screen->gesture_dpad_y[1]);
+        l.x=int(parent->gesture_dpad_x[0]); l.y=int(parent->gesture_dpad_y[0]);
+        r.x=int(parent->gesture_dpad_x[1]); r.y=int(parent->gesture_dpad_y[1]);
       } else {
-        r.x=int(screen->gesture_dpad_x[0]); r.y=int(screen->gesture_dpad_y[0]);
-        l.x=int(screen->gesture_dpad_x[1]); l.y=int(screen->gesture_dpad_y[1]);
+        r.x=int(parent->gesture_dpad_x[0]); r.y=int(parent->gesture_dpad_y[0]);
+        l.x=int(parent->gesture_dpad_x[1]); l.y=int(parent->gesture_dpad_y[1]);
       }
       l = Input::TransformMouseCoordinate(l);
       r = Input::TransformMouseCoordinate(r);

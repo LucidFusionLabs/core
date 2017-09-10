@@ -1,5 +1,5 @@
 /*
- * $Id: crypto.cpp 1335 2014-12-02 04:13:46Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -1222,8 +1222,8 @@ struct SSHClientConnection : public SSHClient::Handler {
   }
 };
 
-Connection *SSHClient::Open(Params p, const SSHClient::ResponseCB &cb, Connection::CB *detach, Callback *success) { 
-  Connection *c = app->ConnectTCP(p.hostport, 22, detach, p.background_services);
+Connection *SSHClient::Open(Networking *net, Params p, const SSHClient::ResponseCB &cb, Connection::CB *detach, Callback *success) { 
+  Connection *c = net->ConnectTCP(p.hostport, 22, detach, p.background_services);
   return c ? SSHClient::CreateSSHHandler(c, move(p), cb, success) : 0;
 }
 

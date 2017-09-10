@@ -138,6 +138,7 @@ struct CMakeDaemon {
   };
   typedef function<void(const TargetInfo&)> TargetInfoCB;
 
+  ThreadDispatcher *dispatch;
   ProcessPipe process;
   int state = Null;
   vector<string> configs;
@@ -146,10 +147,10 @@ struct CMakeDaemon {
   Callback init_targets_cb;
   Semaphore *code_completions_done=0;
   unique_ptr<CodeCompletions> *code_completions_out=0;
-  CMakeDaemon() {}
+  CMakeDaemon(ThreadDispatcher *d) : dispatch(d) {}
 
   bool Ready() const { return state >= HaveTargets; }
-  void Start(const string &bin, const string &builddir);
+  void Start(ApplicationInfo*, SocketServices*, const string &bin, const string &builddir);
   void HandleClose(Connection *c);
   void HandleRead(Connection *c);
   bool GetTargetInfo(const string &target, TargetInfoCB&&);

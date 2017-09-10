@@ -14,20 +14,18 @@ int CompareTextureToBuffer(const Texture &test, const unsigned char *buf, int h,
   return 0;
 }
 
-int CompareTextureToBuffer(int tex_id, const unsigned char *buf, int h, int linesize, const char *fn=0, bool debug=0) {
+int CompareTextureToBuffer(GraphicsDeviceHolder *gd, int tex_id, const unsigned char *buf, int h, int linesize, const char *fn=0, bool debug=0) {
 #ifdef LFL_MOBILE
   INFO("skipping ", BlankNull(fn));
   return 0;
 #else
-  Texture test;
-  app->focused->gd->DumpTexture(&test, tex_id);
+  Texture test(gd);
+  gd->GD()->DumpTexture(&test, tex_id);
   return CompareTextureToBuffer(test, buf, h, linesize, fn, debug);
 #endif
 }
 
-}; // namespace LFL
-using namespace LFL;
-
+Application *app = nullptr;
 bool tests_done = false;
 int tests_result = -1;
 
@@ -35,26 +33,30 @@ extern "C" int MyAppFrame(Window *W, unsigned clicks, int flag) {
   if (!tests_done) {
     tests_result = RUN_ALL_TESTS();
     tests_done = true;
-    LFAppShutdown();
+    app->Shutdown();
   }
   return 0;
 }
 
-extern "C" void MyAppCreate(int argc, const char* const* argv) {
-  LFL::FLAGS_enable_video = LFL::FLAGS_enable_input = true;
-  LFL::app = new LFL::Application(argc, argv);
-  LFL::app->focused = LFL::Window::Create();
-  LFL::app->focused->frame_cb = MyAppFrame;
+extern "C" LFApp *MyAppCreate(int argc, const char* const* argv) {
+  FLAGS_enable_video = FLAGS_enable_input = true;
+  app = new Application(argc, argv);
+  app->focused = CreateWindow(app);
+  app->focused->frame_cb = MyAppFrame;
   testing::InitGoogleTest(&argc, const_cast<char**>(argv));
+  return app;
 }
 
 extern "C" int MyAppMain() {
-  CHECK_EQ(0, LFL::app->Create(__FILE__));
-  CHECK_EQ(0, LFL::app->Init());
-  LFL::app->focused->gd->have_npot_textures = false;
+  CHECK_EQ(0, app->Create(__FILE__));
+  CHECK_EQ(0, app->Init());
+  app->focused->gd->have_npot_textures = false;
   app->StartNewWindow(app->focused);
   return app->Main();
 }
+
+}; // namespace LFL
+using namespace LFL;
 
 TEST(GLTest, Texture) {
   static const int dim=16, psize=4, lsize=dim*psize, size=lsize*dim;
@@ -62,7 +64,8 @@ TEST(GLTest, Texture) {
   for (unsigned char *p = pdata, *e = pdata + size; p != e; ++p) *p = (p-pdata) % 256;
   memzero(zero_pdata);
 
-  Texture tex, tex2;
+  auto w = app->focused;
+  Texture tex(w), tex2(w);
   tex.Resize(dim, dim, Texture::preferred_pf, Texture::Flag::CreateGL);
   EXPECT_NE(0, tex.ID);
 
@@ -71,35 +74,35 @@ TEST(GLTest, Texture) {
   EXPECT_EQ(0, memcmp(pdata, tex.buf, size));
 
   tex.UpdateGL(tex.buf, Box(dim, dim));
-  EXPECT_EQ(0, CompareTextureToBuffer(tex.ID, pdata, dim, lsize, "gl_tests_02.png"));
+  EXPECT_EQ(0, CompareTextureToBuffer(w, tex.ID, pdata, dim, lsize, "gl_tests_02.png"));
 
-  GraphicsContext gc(app->focused->gd);
-  FrameBuffer fb(gc.gd);
+  GraphicsContext gc(w->gd);
+  FrameBuffer fb(w);
   fb.Create(dim, dim, FrameBuffer::Flag::CreateTexture);
   gc.gd->EnableLayering();
   gc.gd->DisableBlend();
   gc.gd->Clear();
   tex.Bind();
   gc.DrawTexturedBox(Box(dim, dim), tex.coord);
-  EXPECT_EQ(0, CompareTextureToBuffer(fb.tex.ID, pdata, dim, lsize, "gl_tests_03.png"));
+  EXPECT_EQ(0, CompareTextureToBuffer(w, fb.tex.ID, pdata, dim, lsize, "gl_tests_03.png"));
 
   gc.gd->Clear();
-  EXPECT_EQ(0, CompareTextureToBuffer(fb.tex.ID, zero_pdata, dim, lsize));
+  EXPECT_EQ(0, CompareTextureToBuffer(w, fb.tex.ID, zero_pdata, dim, lsize));
 
   gc.gd->Clear();
   tex.Bind();
   gc.DrawCrimpedBox(Box(dim, dim), tex.coord, 0);
-  EXPECT_EQ(0, CompareTextureToBuffer(fb.tex.ID, pdata, dim, lsize, "gl_tests_04.png"));
+  EXPECT_EQ(0, CompareTextureToBuffer(w, fb.tex.ID, pdata, dim, lsize, "gl_tests_04.png"));
 
   gc.gd->Clear();
   fb.Release(false);
-  EXPECT_EQ(0, CompareTextureToBuffer(fb.tex.ID, zero_pdata, dim, lsize));
+  EXPECT_EQ(0, CompareTextureToBuffer(w, fb.tex.ID, zero_pdata, dim, lsize));
 
   fb.Attach(0, 0, false);
   gc.gd->Clear();
   tex.Bind();
   gc.DrawTexturedBox(Box(dim, dim), tex.coord);
-  EXPECT_EQ(0, CompareTextureToBuffer(fb.tex.ID, pdata, dim, lsize, "gl_tests_05.png"));
+  EXPECT_EQ(0, CompareTextureToBuffer(w, fb.tex.ID, pdata, dim, lsize, "gl_tests_05.png"));
   fb.Release(false);
 
   gc.gd->Clear();
@@ -111,10 +114,10 @@ TEST(GLTest, Texture) {
 }
 
 TEST(GLTest, Fonts) {
-  GraphicsContext gc(app->focused->gd);
-
+  auto w = app->focused;
+  GraphicsContext gc(w->gd);
   Color c(0xffcdef12);
-  Texture tex(gc.gd, 37, 93), tex2;
+  Texture tex(w, 37, 93), tex2(w);
   tex.RenewBuffer();
   SimpleVideoResampler::Fill(tex.buf, tex.width, tex.height, tex.pf, tex.LineSize(), 0, 0, c);
   EXPECT_EQ(4, Pixel::Size(tex.pf));
@@ -154,14 +157,15 @@ TEST(GLTest, Fonts) {
 #import <CoreText/CTFont.h>
 #import <CoreGraphics/CGBitmapContext.h>
 TEST(GLTest, CoreText) {
+  auto w = app->focused;
   Color fg = Color(0xfd, 0x00, 0x00), bg = Color(0x00, 0x00, 0xfc);
-  Font *font = app->fonts->Get("coretext://Monaco", "", 12, fg, bg);
+  Font *font = app->fonts->Get(w->gl_h, "coretext://Monaco", "", 12, fg, bg);
   CHECK_NE(nullptr, font);
   CoreTextFontEngine::Resource *resource = static_cast<CoreTextFontEngine::Resource*>(font->resource.get());
   CHECK_NE(nullptr, resource);
   Glyph *g = font->FindGlyph('a');
   CHECK_NE(nullptr, font);
-  Texture ref;
+  Texture ref(w);
   // for (int i=0; i<=1000; i++) for (int j=0; j<=1000; j++) {
   for (int i=0, j=0; j <= 1000; j ? j++ : i++) { if (i > 1000) { i=0; j=1; }
     g->tex.RenewBuffer();
@@ -187,10 +191,10 @@ TEST(GLTest, CoreText) {
       else                    EXPECT_NE(0, cmp);
     }
   }
-  GraphicsContext gc(app->focused->gd);
-  FrameBuffer fb(gc.gd);
+  GraphicsContext gc(w->gd);
+  FrameBuffer fb(w);
   fb.Create(g->tex.width, g->tex.height, FrameBuffer::Flag::CreateTexture);
-  font->Draw(string(1, 'a'), Box(-g->bearing_x, g->tex.height - g->bearing_y, g->tex.width, font->ascender));
-  EXPECT_EQ(0, CompareTextureToBuffer(fb.tex.ID, ref.buf, g->tex.height, g->tex.LineSize(), "gl_tests_11.png"));
+  font->Draw(gc.gd, string(1, 'a'), Box(-g->bearing_x, g->tex.height - g->bearing_y, g->tex.width, font->ascender));
+  EXPECT_EQ(0, CompareTextureToBuffer(w, fb.tex.ID, ref.buf, g->tex.height, g->tex.LineSize(), "gl_tests_11.png"));
 }
 #endif

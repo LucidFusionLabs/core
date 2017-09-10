@@ -74,7 +74,7 @@
 
 #ifdef LFL_GDDEBUG
 #define GDDebug(...) { \
-  if (app->focused) app->focused->gd->CheckForError(__FILE__, __LINE__); \
+  CheckForError(__FILE__, __LINE__); \
   if (FLAGS_gd_debug) DebugPrintf("%s", StrCat(__VA_ARGS__).c_str()); }
 #else 
 #define GDDebug(...)
@@ -348,9 +348,10 @@ struct OpenGLES2 : public GraphicsDevice, public QOpenGLFunctions {
   LFL::Material material;
   LFL::Light light[4];
   Deferred deferred;
-  OpenGLES2(Window *P) : GraphicsDevice(P) {}
+  Shaders *shaders;
+  OpenGLES2(Window *P, Shaders *S) : GraphicsDevice(P, 2), shaders(S) {}
 
-  void Init(const Box &b) {
+  void Init(AssetLoading *loader, const Box &b) {
     done_init = true;
     GDDebug("Init");
     memzero(vertex_attr); memzero(tex_attr); memzero(color_attr); memzero(normal_attr); memzero(bound_texture);
@@ -364,12 +365,12 @@ struct OpenGLES2 : public GraphicsDevice, public QOpenGLFunctions {
     default_color.push_back(Color(1.0, 1.0, 1.0, 1.0));
     scissor_stack.clear();
     scissor_stack.push_back(vector<Box>());
-    if (vertex_shader.empty()) vertex_shader = Asset::FileContents("default.vert");
-    if ( pixel_shader.empty()) pixel_shader  = Asset::FileContents("default.frag");
-    Shader::Create("app",          vertex_shader, pixel_shader, ShaderDefines(1,0,1,0), &app->shaders->shader_default);
-    Shader::Create("app_cubemap",  vertex_shader, pixel_shader, ShaderDefines(1,0,0,1), &app->shaders->shader_cubemap);
-    Shader::Create("app_normals",  vertex_shader, pixel_shader, ShaderDefines(0,1,1,0), &app->shaders->shader_normals);
-    Shader::Create("app_cubenorm", vertex_shader, pixel_shader, ShaderDefines(0,1,0,1), &app->shaders->shader_cubenorm);
+    if (vertex_shader.empty()) vertex_shader = loader->FileContents("default.vert");
+    if ( pixel_shader.empty()) pixel_shader  = loader->FileContents("default.frag");
+    Shader::Create(parent->parent, "app",          vertex_shader, pixel_shader, ShaderDefines(1,0,1,0), &shaders->shader_default);
+    Shader::Create(parent->parent, "app_cubemap",  vertex_shader, pixel_shader, ShaderDefines(1,0,0,1), &shaders->shader_cubemap);
+    Shader::Create(parent->parent, "app_normals",  vertex_shader, pixel_shader, ShaderDefines(0,1,1,0), &shaders->shader_normals);
+    Shader::Create(parent->parent, "app_cubenorm", vertex_shader, pixel_shader, ShaderDefines(0,1,0,1), &shaders->shader_cubenorm);
     UseShader((shader = 0));
     VertexPointer(0, 0, 0, 0, NULL, deferred.vertexbuffer_size, NULL, true, 0);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
@@ -434,8 +435,8 @@ struct OpenGLES2 : public GraphicsDevice, public QOpenGLFunctions {
     else if (t == GL_DIFFUSE)  { light_color=1; light[n].color.diffuse  = Color(v); }
     else if (t == GL_SPECULAR) { light_color=1; light[n].color.specular = Color(v); }
 
-    if (light_pos)   { shader->dirty_light_pos  [n] = app->shaders->shader_cubenorm.dirty_light_pos  [n] = app->shaders->shader_normals.dirty_light_pos  [n] = 1; }
-    if (light_color) { shader->dirty_light_color[n] = app->shaders->shader_cubenorm.dirty_light_color[n] = app->shaders->shader_normals.dirty_light_color[n] = 1; }
+    if (light_pos)   { shader->dirty_light_pos  [n] = shaders->shader_cubenorm.dirty_light_pos  [n] = shaders->shader_normals.dirty_light_pos  [n] = 1; }
+    if (light_color) { shader->dirty_light_color[n] = shaders->shader_cubenorm.dirty_light_color[n] = shaders->shader_normals.dirty_light_color[n] = 1; }
   }
 
   void Scalef(float x, float y, float z) {
@@ -555,17 +556,17 @@ struct OpenGLES2 : public GraphicsDevice, public QOpenGLFunctions {
   }
 
   void UpdateShader() {
-    if (cubemap_on && normals_on) UseShader(&app->shaders->shader_cubenorm);
-    else if          (cubemap_on) UseShader(&app->shaders->shader_cubemap);
-    else if          (normals_on) UseShader(&app->shaders->shader_normals);
-    else                          UseShader(&app->shaders->shader_default);
+    if (cubemap_on && normals_on) UseShader(&shaders->shader_cubenorm);
+    else if          (cubemap_on) UseShader(&shaders->shader_cubemap);
+    else if          (normals_on) UseShader(&shaders->shader_normals);
+    else                          UseShader(&shaders->shader_default);
   }
 
   void UpdateColor()  { ClearDeferred(); dirty_color = true;  GDDebug("UpdateColor"); }
   void UpdateMatrix() { ClearDeferred(); dirty_matrix = true; GDDebug("UpdateMatrix"); }
   void UpdateMaterial() {
     ClearDeferred();
-    shader->dirty_material = app->shaders->shader_cubenorm.dirty_material = app->shaders->shader_normals.dirty_material = true;
+    shader->dirty_material = shaders->shader_cubenorm.dirty_material = shaders->shader_normals.dirty_material = true;
     GDDebug("UpdateMaterial");
   }
 
@@ -698,7 +699,7 @@ struct OpenGLES2 : public GraphicsDevice, public QOpenGLFunctions {
 };
 #endif // LFL_GLES2
 
-unique_ptr<GraphicsDevice> CreateGraphicsDevice(Window *w, int opengles_version) {
+unique_ptr<GraphicsDevice> CreateGraphicsDevice(Window *w, Shaders *s, int opengles_version) {
   unique_ptr<GraphicsDevice> gd;
 #ifdef LFL_GLEW
 #ifdef GLEW_MX
@@ -711,7 +712,7 @@ unique_ptr<GraphicsDevice> CreateGraphicsDevice(Window *w, int opengles_version)
 #endif
 
 #ifdef LFL_GLES2
-  if (opengles_version == 2) gd = make_unique<OpenGLES2>(w);
+  if (opengles_version == 2) gd = make_unique<OpenGLES2>(w, s);
 #ifdef LFL_GLES1
   else
 #endif

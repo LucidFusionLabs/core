@@ -28,8 +28,22 @@ struct Shell {
     Command(const string &N, const CB &Cb) : name(N), cb(Cb) {}
   };
   Window *parent;
+  ApplicationInfo *app_info;
+  ApplicationShutdown *app_shutdown;
+  ThreadDispatcher *dispatch;
+  GraphicsDeviceHolder *gd;
+  Clipboard *clipboard;
+  SocketServices *net;
+  AssetStore *assets;
+  AssetLoading *loading;
+  Audio *audio;
+  MouseFocus *mouse_focus;
+  TouchKeyboard *touch_keyboard;
+  Fonts *fonts;
   vector<Command> command;
-  Shell(Window *W);
+  Shell(Window*, ApplicationInfo*, ApplicationShutdown *shutdown, ThreadDispatcher*, 
+        GraphicsDeviceHolder*, Clipboard*, SocketServices*, AssetStore*, AssetLoading*, Audio*,
+        MouseFocus*, TouchKeyboard*, Fonts*);
 
   template <class... Args> void Add(Args&&... args) { command.emplace_back(forward<Args>(args)...); }
   void AddSceneCommands(Scene *scene);
@@ -45,7 +59,7 @@ struct Shell {
   void console(const vector<string>&);
   void consolecolor(const vector<string>&);
   void showkeyboard(const vector<string>&);
-  void clipboard(const vector<string>&);
+  void ClipBoard(const vector<string>&);
   void startcmd(const vector<string>&);
   void savedir(const vector<string>&);
   void savesettings(const vector<string>&);

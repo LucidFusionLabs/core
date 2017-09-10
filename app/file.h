@@ -122,9 +122,9 @@ struct LocalFile : public File {
   static bool unlink(const string &fn);
   static int IsFile(const string &localfilename);
   static int IsDirectory(const string &localfilename);
-  static int CreateTemporary(const string &prefix, string *localfilename_out);
-  static string CreateTemporaryName(const string &prefix);
-  static string CreateTemporaryNameTemplate(const string &prefix);
+  static int CreateTemporary(ApplicationInfo*, const string &prefix, string *localfilename_out);
+  static string CreateTemporaryName(ApplicationInfo*, const string &prefix);
+  static string CreateTemporaryNameTemplate(ApplicationInfo*, const string &prefix);
   static string CurrentDirectory(int max_size=1024);
   static string JoinPath(const string &x, const string &y);
   static string FileContents(const string &localfilename) { return LocalFile(localfilename, "r").Contents(); }
@@ -304,7 +304,7 @@ struct StringFile {
   string Line(int i) const { return (F && i < F->size()) ? (*F)[i] : ""; }
   void AssignTo(vector<string> **Fo, string *Ho) { if (Fo) *Fo=F; if (Ho) *Ho=H; Clear(); }
 
-  int ReadVersioned (const VersionedFileName &fn, int iter=-1);
+  int ReadVersioned (const VersionedFileName &fn, ApplicationLifetime *life=0, int iter=-1);
   int WriteVersioned(const VersionedFileName &fn, int iter, const string &hdr=string());
   int WriteVersioned(const char *D, const char *C, const char *V, int iter, const string &hdr=string())
   { return WriteVersioned(VersionedFileName(D, C, V), iter, hdr); }
@@ -329,10 +329,10 @@ struct SettingsFile {
   static const char *VarName() { return "settings"; }
   static const char *Separator() { return " = "; }
 
-  static int Load();
+  static int Load(ApplicationInfo*);
   static int Read(const string &dir, const string &name);
   static int Write(const vector<string> &fields, const string &dir, const string &name);
-  static int Save(const vector<string> &fields);
+  static int Save(ApplicationInfo*, const vector<string> &fields);
 };
 
 struct MatrixFile {
@@ -348,7 +348,7 @@ struct MatrixFile {
   const char *Text() { return H.c_str(); }
   void AssignTo(Matrix **Fo, string *Ho) { if (Fo) *Fo=F; if (Ho) *Ho=H; Clear(); }
 
-  int ReadVersioned       (const VersionedFileName &fn, int iteration=-1);
+  int ReadVersioned       (const VersionedFileName &fn, ApplicationLifetime *life=0, int iteration=-1);
   int WriteVersioned      (const VersionedFileName &fn, int iteration);
   int WriteVersionedBinary(const VersionedFileName &fn, int iteration);
   int WriteVersioned(const char *D, const char *C, const char *V, int iter)
@@ -368,8 +368,8 @@ struct MatrixFile {
 
   static string Filename(const VersionedFileName &fn, const string &suf, int iter) { return Filename(fn._class, fn.var, suf, iter); }
   static string Filename(const string &_class, const string &var, const string &suffix, int iteration);
-  static int FindHighestIteration(const VersionedFileName &fn, const string &suffix);
-  static int FindHighestIteration(const VersionedFileName &fn, const string &suffix1, const string &suffix2);
+  static int FindHighestIteration(const VersionedFileName &fn, const string &suffix, ApplicationLifetime *life=0);
+  static int FindHighestIteration(const VersionedFileName &fn, const string &suffix1, const string &suffix2, ApplicationLifetime *life=0);
   static int ReadHeader    (IterWordIter *word, string *hdrout);
   static int ReadDimensions(IterWordIter *word, int *M, int *N);
   static int WriteHeader      (File *file, const string &name, const string &hdr, int M, int N);

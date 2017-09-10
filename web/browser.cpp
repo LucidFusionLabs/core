@@ -44,11 +44,11 @@
 #endif
 
 namespace LFL {
-unique_ptr<BrowserInterface> CreateDefaultBrowser(View *v, int w, int h) {
+unique_ptr<BrowserInterface> CreateDefaultBrowser(ThreadDispatcher *d, Window *g, AssetLoading *l, Fonts *f, SocketServices *n, ProcessAPI *a, SystemBrowser *b, View *v, int w, int h) {
   unique_ptr<BrowserInterface> ret;
   if ((ret = CreateQTWebKitBrowser (v, w, h))) return ret;
   if ((ret = CreateBerkeliumBrowser(v, w, h))) return ret;
-  return make_unique<Browser>(v, Box(w, h));
+  return make_unique<Browser>(d, g, l, f, n, a, b, v, Box(w, h));
 }
 
 string DOM::Node::HTML4Style() { 
@@ -225,7 +225,7 @@ void DOM::Renderer::UpdateStyle(Flow *F) {
   wordspacing_px = (!wordspacing.Null() && !wordspacing._norm) ? wordspacing.getPixelValue(F) : 0;
 }
 
-Font *DOM::Renderer::UpdateFont(Flow *F) {
+Font *DOM::Renderer::UpdateFont(Flow *F, Fonts *fonts, Window *win) {
   DOM::FontFamily  font_family  = style.FontFamily();
   DOM::FontSize    font_size    = style.FontSize();
   DOM::FontStyle   font_style   = style.FontStyle();
@@ -244,8 +244,9 @@ Font *DOM::Renderer::UpdateFont(Flow *F) {
       //      " ", ff[j].source.size() ? ff[j].source[0] : "<NO2>");
     }
   }
-  return font ? font : app->fonts->Get(FLAGS_font, "", font_size_px, color,
-                                       over_background_image ? background_color : solid_background_color); 
+  return font ? font : fonts->Get
+    (win->gl_h, FLAGS_font, "", font_size_px, color,
+     over_background_image ? background_color : solid_background_color); 
 }
 
 void DOM::Renderer::UpdateDimensions(Flow *F) {
@@ -346,7 +347,8 @@ void DOM::Renderer::Finish() {
 }
 
 Browser::Document::~Document() {}
-Browser::Document::Document(const Box &V) : alloc(1024*1024), parser(make_unique<DocumentParser>(this)) {}
+Browser::Document::Document(ThreadDispatcher *D, AssetLoading *L, Fonts *F, GraphicsDeviceHolder *G, SocketServices *N, const Box &V) : alloc(1024*1024),
+  dispatch(D), loader(L), fonts(F), parser(make_unique<DocumentParser>(G, N, this)) {}
 
 void Browser::Document::Clear() {
   js_context.reset();
@@ -361,9 +363,9 @@ void Browser::Document::Clear() {
   active_input = 0;
 }
 
-Browser::Browser(View *v, const Box &b) :
-  doc(b), v_scrollbar(v), h_scrollbar(v, Widget::Slider::Flag::AttachedHorizontal) {
-  if (Font *maf = app->fonts->Get("MenuAtlas", "", 0, Color::white, Color::clear, 0, 0)) {
+Browser::Browser(ThreadDispatcher *d, Window *w, AssetLoading *l, Fonts *f, SocketServices *n, ProcessAPI *A, SystemBrowser *B, View *v, const Box &b) :
+  doc(d, l, f, w, n, b), dispatch(d), window(w), missing_image(w->parent), v_scrollbar(v), h_scrollbar(v, Widget::Slider::Flag::AttachedHorizontal), system_browser(B) {
+  if (Font *maf = f->Get(window->GD()->parent->gl_h, "MenuAtlas", "", 0, Color::white, Color::clear, 0, 0)) {
     missing_image = maf->FindGlyph(0)->tex;
     missing_image.width = missing_image.height = 16;
     missing_image.owner = false;
@@ -373,19 +375,19 @@ Browser::Browser(View *v, const Box &b) :
 }
 
 void Browser::Navigate(const string &url) {
-  if (!layers) return app->OpenSystemBrowser(url);
+  if (!layers) return system_browser->OpenSystemBrowser(url);
   else Open(url);
 }
 
 void Browser::Open(const string &url) {
-  if (app->render_process) return app->RunInNetworkThread(bind(&ProcessAPIClient::Navigate, app->render_process.get(), url));
+  if (dispatch->render_process) return dispatch->RunInNetworkThread(bind(&ProcessAPIClient::Navigate, dispatch->render_process.get(), url));
   doc.parser->OpenFrame(url, nullptr);
-  if (app->main_process) { app->main_process->SetURL(url); app->main_process->SetTitle(url); }
-  else                   { SetURLText(url); app->focused->SetCaption(url); }
+  if (dispatch->main_process) { dispatch->main_process->SetURL(url); dispatch->main_process->SetTitle(url); }
+  else                        { SetURLText(url); window->GD()->parent->SetCaption(url); }
 }
 
 void Browser::KeyEvent(int key, bool down) {
-  if (app->render_process) app->RunInNetworkThread(bind(&ProcessAPIClient::KeyPress, app->render_process.get(), key, down));
+  if (dispatch->render_process) dispatch->RunInNetworkThread(bind(&ProcessAPIClient::KeyPress, dispatch->render_process.get(), key, down));
   else {
     if (auto n = doc.node->documentElement()) EventNode(n, initial_displacement, key);
     if (down && doc.active_input && doc.active_input->tiles) {
@@ -396,15 +398,15 @@ void Browser::KeyEvent(int key, bool down) {
 }
 
 void Browser::MouseMoved(int x, int y) {
-  if (app->render_process || (!app->render_process && !app->main_process)) y -= app->focused->gl_h+viewport.top()+VScrolled();
-  if (app->render_process) { app->RunInNetworkThread(bind(&ProcessAPIClient::MouseMove, app->render_process.get(), x, y, x-mouse.x, y-mouse.y)); mouse=point(x,y); }
+  if (dispatch->render_process || (!dispatch->render_process && !dispatch->main_process)) y -= window->GD()->parent->gl_h+viewport.top()+VScrolled();
+  if (dispatch->render_process) { dispatch->RunInNetworkThread(bind(&ProcessAPIClient::MouseMove, dispatch->render_process.get(), x, y, x-mouse.x, y-mouse.y)); mouse=point(x,y); }
   else if (auto n = doc.node->documentElement()) { mouse=point(x,y); EventNode(n, initial_displacement, Mouse::Event::Motion); }
 }
 
 void Browser::MouseButton(int b, bool d, int x, int y) {
   // doc.gui.Input(b, mouse, d, 1);
-  if (app->render_process || (!app->render_process && !app->main_process)) y -= app->focused->gl_h+viewport.top()+VScrolled();
-  if (app->render_process) { app->RunInNetworkThread(bind(&ProcessAPIClient::MouseClick, app->render_process.get(), b, d, x, y)); mouse=point(x,y); }
+  if (dispatch->render_process || (!dispatch->render_process && !dispatch->main_process)) y -= window->GD()->parent->gl_h+viewport.top()+VScrolled();
+  if (dispatch->render_process) { dispatch->RunInNetworkThread(bind(&ProcessAPIClient::MouseClick, dispatch->render_process.get(), b, d, x, y)); mouse=point(x,y); }
   else if (auto n = doc.node->documentElement()) { mouse=point(x,y); EventNode(n, initial_displacement, Mouse::ButtonID(b)); }
 }
 
@@ -418,13 +420,13 @@ void Browser::AnchorClicked(DOM::HTMLAnchorElement *anchor) {
 }
 
 void Browser::SetClearColor(const Color &c) {
-  if (app->main_process) app->main_process->SetClearColor(c);
-  else                   app->focused->gd->ClearColor(c);
+  if (dispatch->main_process) dispatch->main_process->SetClearColor(c);
+  else                        window->GD()->ClearColor(c);
 }
 
 void Browser::SetViewport(int w, int h) {
   viewport.SetDimension(point(w, h));
-  if (app->render_process)               app->RunInNetworkThread(bind(&ProcessAPIClient::SetViewport, app->render_process.get(), w, h));
+  if (dispatch->render_process)          dispatch->RunInNetworkThread(bind(&ProcessAPIClient::SetViewport, dispatch->render_process.get(), w, h));
   else if (auto html = doc.DocElement()) html->SetLayoutDirty(); 
 }
 
@@ -436,11 +438,11 @@ void Browser::Layout(const Box &b) {
 }
 
 void Browser::Draw(const Box &b) {
-  if (!app->render_process && (!doc.node || !doc.node->documentElement())) return;
+  if (!dispatch->render_process && (!doc.node || !doc.node->documentElement())) return;
   int v_scrolled = VScrolled(), h_scrolled = HScrolled(); 
   if (!layers) { Render(v_scrolled); UpdateScrollbar(); }
   else {
-    if (app->render_process) { IPCTrace("Browser::Draw ipc_buffer_size: %zd\n", app->render_process->ipc_buffer.size()); }
+    if (dispatch->render_process) { IPCTrace("Browser::Draw ipc_buffer_size: %zd\n", dispatch->render_process->ipc_buffer.size()); }
     else if (doc.Dirty()) Render();
     layers->node[0].scrolled = point(h_scrolled, -v_scrolled);
     layers->Draw(viewport + b.TopLeft(), point(0, -viewport.h));
@@ -454,7 +456,7 @@ void Browser::UpdateScrollbar() {
 }
 
 void Browser::Render(bool screen_coords, int v_scrolled) {
-  INFO(app->main_process ? "Render" : "Main", " process Browser::Render, requested: ", doc.parser->requested, ", completed:",
+  INFO(dispatch->main_process ? "Render" : "Main", " process Browser::Render, requested: ", doc.parser->requested, ", completed:",
        doc.parser->completed, ", outstanding: ", doc.parser->outstanding.size());
   DOM::Renderer *html_render = doc.node->documentElement()->render;
   html_render->tiles = layers ? layers->layer[0].get() : nullptr;
@@ -504,11 +506,12 @@ void Browser::Paint(Flow *flow, const point &displacement) {
 
 void Browser::PaintNode(Flow *flow, DOM::Node *n, const point &displacement_in) {
   if (!n) return;
+  auto gd = window->GD();
   DOM::Renderer *render = n->render;
   ComputedStyle *style = &render->style;
   bool is_body  = n->htmlElementType == DOM::HTML_BODY_ELEMENT;
   bool is_table = n->htmlElementType == DOM::HTML_TABLE_ELEMENT;
-  if (render->style_dirty || render->layout_dirty) { ScissorStack ss(app->focused->gd); LayoutNode(flow, n, 0); }
+  if (render->style_dirty || render->layout_dirty) { ScissorStack ss(gd); LayoutNode(flow, n, 0); }
   if (render->display_none) return;
 
   if (!render->done_positioned) {
@@ -554,8 +557,8 @@ void Browser::PaintNode(Flow *flow, DOM::Node *n, const point &displacement_in) 
       render->tiles->AddDrawableBoxArray(render->child_bg,  displacement);
       render->tiles->AddDrawableBoxArray(render->child_box, displacement);
     } else {
-      render->child_bg .Draw(app->focused->gd, displacement);
-      render->child_box.Draw(app->focused->gd, displacement);
+      render->child_bg .Draw(gd, displacement);
+      render->child_box.Draw(gd, displacement);
     }
   }
   if (auto input = n->AsHTMLInputElement()) {
@@ -614,7 +617,7 @@ DOM::Node *Browser::LayoutNode(Flow *flow, DOM::Node *n, bool reflow) {
   if (render->clear_height) flow->AppendVerticalSpace(render->clear_height);
 
   if (style->font_not_inherited || !(render->child_flow.cur_attr.font = flow->cur_attr.font))
-    flow->SetFont((render->child_flow.cur_attr.font = render->UpdateFont(flow)));
+    flow->SetFont((render->child_flow.cur_attr.font = render->UpdateFont(flow, doc.fonts, window)));
 
   if (render->block_level_box) {
     if (!table_element) {
@@ -663,7 +666,7 @@ DOM::Node *Browser::LayoutNode(Flow *flow, DOM::Node *n, bool reflow) {
     string t = n->AsElement()->getAttribute("type");
     if (t == "" || t == "text") {
       DOM::HTMLInputElement *input = n->AsHTMLInputElement();
-      if (!input->text) input->text = make_unique<TiledTextBox>();
+      if (!input->text) input->text = make_unique<TiledTextBox>(window);
       point dim(X_or_Y(n->render->width_px, 256), X_or_Y(n->render->height_px, 16));
       render->flow->AppendBox(dim.x, dim.y, &render->box);
       input->text->cmd_fb.SetDimensions(render->box.w, render->box.h,
@@ -758,7 +761,7 @@ void Browser::LayoutBackground(DOM::Node *n) {
     if (is_body) SetClearColor(render->background_color);
     else {
       flow.SetFGColor(&render->background_color);
-      flow.out->PushBack(*box, flow.cur_attr, Singleton<BoxFilled>::Get());
+      flow.out->PushBack(*box, flow.cur_attr, Singleton<BoxFilled>::Set());
     }
   } else if (is_body) SetClearColor(Color(1.0, 1.0, 1.0, 0.0));
 
@@ -788,22 +791,22 @@ void Browser::LayoutBackground(DOM::Node *n) {
   if (render->bs_t) {
     flow.SetFGColor(&render->border_top);
     flow.out->PushBack(Box(render->border.x, render->padding.top(), render->border.w, render->border.top() - render->padding.top()),
-                       flow.cur_attr, Singleton<BoxFilled>::Get());
+                       flow.cur_attr, Singleton<BoxFilled>::Set());
   }
   if (render->bs_b) {
     flow.SetFGColor(&render->border_bottom);
     flow.out->PushBack(Box(render->border.x, render->border.y, render->border.w, render->padding.y - render->border.y),
-                       flow.cur_attr, Singleton<BoxFilled>::Get());
+                       flow.cur_attr, Singleton<BoxFilled>::Set());
   }
   if (render->bs_r) {
     flow.SetFGColor(&render->border_right);
     flow.out->PushBack(Box(render->padding.right(), render->border.y, render->border.right() - render->padding.right(), render->border.h),
-                       flow.cur_attr, Singleton<BoxFilled>::Get());
+                       flow.cur_attr, Singleton<BoxFilled>::Set());
   }
   if (render->bs_l) {
     flow.SetFGColor(&render->border_left);
     flow.out->PushBack(Box(render->border.x, render->border.y, render->padding.x - render->border.x, render->border.h),
-                       flow.cur_attr, Singleton<BoxFilled>::Get());
+                       flow.cur_attr, Singleton<BoxFilled>::Set());
   }
 }
 
@@ -924,7 +927,7 @@ class QTWebKitBrowser : public QObject, public BrowserInterface {
   point dim, mouse;
   bool mouse1_down=0;
 
-  QTWebKitBrowser(int w, int h) {
+  QTWebKitBrowser(GraphicsDeviceHolder *w, int w, int h) : tex(w) {
     Resize(w, h);
     lfl_qapp->connect(&page, SIGNAL(repaintRequested(const QRect&)),           this, SLOT(ViewUpdate(const QRect &)));
     lfl_qapp->connect(&page, SIGNAL(scrollRequested(int, int, const QRect &)), this, SLOT(Scroll(int, int, const QRect &)));
@@ -971,10 +974,11 @@ class QTWebKitBrowser : public QObject, public BrowserInterface {
     page.currentFrame()->render(&painter, dirtyRect);
     painter.end();
 
+    auto gd = tex.parent->gd();
     int instride = image.bytesPerLine(), bpp = Pixel::Size(tex.pf);
     int mx = dirtyRect.x(), my = dirtyRect.y(), mw = dirtyRect.width(), mh = dirtyRect.height();
     const unsigned char *in = (const unsigned char *)image.bits();
-    screen->gd->BindTexture(GraphicsDevice::Texture2D, tex.ID);
+    gd->BindTexture(GraphicsDevice::Texture2D, tex.ID);
 
     unsigned char *buf = tex.buf;
     for (int j = 0; j < mh; j++) {
@@ -984,7 +988,7 @@ class QTWebKitBrowser : public QObject, public BrowserInterface {
       else                                  memcpy(buf+dst_ind, in+src_ind, mw*bpp);
     }
     tex.UpdateGL(Box(0, my, tex.width, dirtyRect.height()));
-    if (!screen->target_fps) app->scheduler.Wakeup(0);
+    if (!gd->parent->target_fps) gd->parent->Wakeup();
   }
 };
 
@@ -997,11 +1001,12 @@ unique_ptr<BrowserInterface> CreateQTWebKitBrowser(View*, int w, int h) { return
 
 #ifdef LFL_BERKELIUM
 struct BerkeliumModule : public Module {
-  BerkeliumModule() { app->LoadModule(this); }
+  ApplicationInfo *appinfo;
+  BerkeliumModule(ApplicationInfo *a) : appinfo(a) {}
   int Frame(unsigned t) { Berkelium::update(); return 0; }
   int Free() { Berkelium::destroy(); return 0; }
   int Init() {
-    const char *homedir = app->savedir;
+    const char *homedir = appinfo->savedir;
     INFO("berkelium init");
     Berkelium::init(
 #ifdef _WIN32

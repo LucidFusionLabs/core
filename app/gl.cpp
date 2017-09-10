@@ -387,28 +387,28 @@ void Texture::Coordinates(float *texcoord, const Box &b, int wd, int hd) {
 }
 
 void Texture::Resize(int W, int H, int PF, int flag) {
-  GraphicsDevice *d = gd ? gd : app->focused->gd;
+  auto gd = parent->GD();
   if (PF) pf = PF;
   width=W; height=H;
   if (buf || (flag & Flag::CreateBuf)) RenewBuffer();
   if (!ID && (flag & Flag::CreateGL)) {
     if (!cubemap) {
-      d->DisableCubeMap();
-      d->GenTextures(GraphicsDevice::Texture2D, 1, &ID);
+      gd->DisableCubeMap();
+      gd->GenTextures(GraphicsDevice::Texture2D, 1, &ID);
     } else if (cubemap == CubeMap::PX) {
-      d->ActiveTexture(0);
-      d->GenTextures(GraphicsDevice::TextureCubeMap, 1, &ID);
+      gd->ActiveTexture(0);
+      gd->GenTextures(GraphicsDevice::TextureCubeMap, 1, &ID);
     }
     if (!(flag & Flag::RepeatGL)) {
-      d->TexParameter(GraphicsDevice::Texture2D, GraphicsDevice::TextureWrapS, GraphicsDevice::ClampToEdge);
-      d->TexParameter(GraphicsDevice::Texture2D, GraphicsDevice::TextureWrapT, GraphicsDevice::ClampToEdge);
+      gd->TexParameter(GraphicsDevice::Texture2D, GraphicsDevice::TextureWrapS, GraphicsDevice::ClampToEdge);
+      gd->TexParameter(GraphicsDevice::Texture2D, GraphicsDevice::TextureWrapT, GraphicsDevice::ClampToEdge);
     }
   }
   if (ID || cubemap) {
-    int opengl_width = d->TextureDim(width), opengl_height = d->TextureDim(height);
+    int opengl_width = gd->TextureDim(width), opengl_height = gd->TextureDim(height);
     int gl_tt = GLTexType(), gl_pt = GLPixelType(), gl_bt = GLBufferType();
-    if (ID) d->BindTexture(gl_tt, ID);
-    d->TexImage2D(gl_tt, 0, GraphicsDevice::GLInternalFormat, opengl_width, opengl_height, 0, gl_pt, gl_bt, 0);
+    if (ID) gd->BindTexture(gl_tt, ID);
+    gd->TexImage2D(gl_tt, 0, GraphicsDevice::GLInternalFormat, opengl_width, opengl_height, 0, gl_pt, gl_bt, 0);
     Coordinates(coord, width, height, opengl_width, opengl_height);
   }
 }
@@ -432,20 +432,21 @@ void Texture::UpdateBuffer(const unsigned char *B, const ::LFL::Box &box, int PF
   SimpleVideoResampler::Blit(B, buf, box.w, box.h, PF, linesize, 0, 0, pf, LineSize(), box.x, box.y, blit_flag);
 }
 
-void Texture::Bind() const { if (auto d = gd ? gd : app->focused->gd) d->BindTexture(GLTexType(), ID); }
+void Texture::Bind() const { parent->GD()->BindTexture(GLTexType(), ID); }
 void Texture::ClearGL() { 
-  GraphicsDevice *d = gd ? gd : (app->focused ? app->focused->gd : 0);
-  if (!d) { if (FLAGS_gd_debug) ERROR("DelTexture no device ", ID); return; }
   if (ID) {
-    if (!app->MainThread()) { app->RunInMainThread(bind(&GraphicsDevice::DelTexture, d, ID)); }
-    else d->DelTexture(ID);
+    auto gd = parent->GD();
+    if (!gd) { if (FLAGS_gd_debug) ERROR("DelTexture no device ", ID); return; }
+    auto a = gd->parent->parent;
+    if (!a->MainThread()) { a->RunInMainThread(bind(&GraphicsDevice::DelTexture, gd, ID)); }
+    else gd->DelTexture(ID);
     ID = 0;
   }
 }
 
 void Texture::LoadGL(const MultiProcessTextureResource &t) { return LoadGL(MakeUnsigned(t.buf.data()), point(t.width, t.height), t.pf, t.linesize); }
 void Texture::LoadGL(const unsigned char *B, const point &dim, int PF, int linesize, int flag) {
-  Texture temp;
+  Texture temp(parent);
   temp .Resize(dim.x, dim.y, preferred_pf, Flag::CreateBuf);
   temp .UpdateBuffer(B, dim, PF, linesize, Flag::FlipY);
   this->Resize(dim.x, dim.y, preferred_pf, Flag::CreateGL | (flag & Flag::RepeatGL));
@@ -453,11 +454,11 @@ void Texture::LoadGL(const unsigned char *B, const point &dim, int PF, int lines
 }
 
 void Texture::UpdateGL(const unsigned char *B, const ::LFL::Box &box, int pf, int flag) {
-  GraphicsDevice *d = gd ? gd : app->focused->gd;
+  auto gd = parent->GD();
   int gl_tt = GLTexType(), gl_y = (flag & Flag::FlipY) ? (height - box.y - box.h) : box.y;
-  d->BindTexture(gl_tt, ID);
-  d->TexSubImage2D(gl_tt, 0, box.x, gl_y, box.w, box.h,
-                   pf ? Pixel::OpenGLID(pf) : GLPixelType(), GLBufferType(), B);
+  gd->BindTexture(gl_tt, ID);
+  gd->TexSubImage2D(gl_tt, 0, box.x, gl_y, box.w, box.h,
+                    pf ? Pixel::OpenGLID(pf) : GLPixelType(), GLBufferType(), B);
 }
 
 void Texture::ResetGL(int flag) {
@@ -507,12 +508,13 @@ void TextureArray::DrawSequence(Asset *out, Entity *e, int *ind) {
   *ind = (*ind + 1) % a.size();
   const Texture *in = &a[*ind];
   out->tex.ID = in->ID;
-  if (out->geometry) Scene::Draw(in->gd, out->geometry, e);
+  if (out->geometry) Scene::Draw(in->parent->GD(), out->geometry, e);
 }
 
 /* DepthTexture */
 
 void DepthTexture::Resize(int W, int H, int DF, int flag) {
+  auto gd = parent->GD();
   if (DF) df = DF;
   width=W; height=H;
   if (!ID && (flag & Flag::CreateGL)) gd->GenRenderBuffers(1, &ID);
@@ -525,6 +527,7 @@ void DepthTexture::Resize(int W, int H, int DF, int flag) {
 
 void DepthTexture::ClearGL() {
   if (ID) {
+    auto gd = parent->GD();
     if (gd) gd->DelRenderBuffers(1, &ID);
     else if (FLAGS_gd_debug) ERROR("DelRenderBuffer no device ", ID);
     ID = 0;
@@ -541,6 +544,7 @@ void DepthTexture::ResetGL(int flag) {
 /* FrameBuffer */
 
 void FrameBuffer::Resize(int W, int H, int flag) {
+  auto gd = parent->GD();
   width=W; height=H;
   if (!ID && (flag & Flag::CreateGL)) {
     gd->GenFrameBuffers(1, &ID);
@@ -556,26 +560,28 @@ void FrameBuffer::Resize(int W, int H, int flag) {
 #if 0
     ERROR("FrameBuffer Resize(", W, ", ", H, ") status ", status);
 #else
-    ERROR("FrameBuffer Resize(", W, ", ", H, ") status ", status, " from:\n", app->PrintCallStack());
+    ERROR("FrameBuffer Resize(", W, ", ", H, ") status ", status, " from:\n", gd->parent->parent->PrintCallStack());
 #endif
   }
   if (flag & Flag::ReleaseFB) Release();
 }
 
 void FrameBuffer::AllocDepthTexture(DepthTexture *out) { CHECK_EQ(out->ID, 0); out->Create(width, height); }
-void FrameBuffer::AllocTexture(unsigned *out) { Texture t; AllocTexture(&t); *out = t.ReleaseGL(); } 
+void FrameBuffer::AllocTexture(unsigned *out) { Texture t(parent); AllocTexture(&t); *out = t.ReleaseGL(); } 
 void FrameBuffer::AllocTexture(Texture *out) {
   CHECK_EQ(out->ID, 0);
   out->Create(width, height); 
 }
 
 void FrameBuffer::Release(bool update_viewport) {
+  auto gd = parent->GD();
   gd->attached_framebuffer = nullptr;
   gd->BindFrameBuffer(gd->default_framebuffer);
   if (update_viewport) gd->RestoreViewport(DrawMode::_2D);
 }
 
 void FrameBuffer::Attach(int ct, int dt, bool update_viewport) {
+  auto gd = parent->GD();
   gd->attached_framebuffer = this;
   gd->BindFrameBuffer(ID);
   if (ct) { if (tex  .ID != ct) tex.owner   = false; gd->FrameBufferTexture     ((tex.ID   = ct)); }
@@ -589,6 +595,7 @@ void FrameBuffer::Attach(int ct, int dt, bool update_viewport) {
 
 void FrameBuffer::ClearGL() {
   if (ID) {
+    auto gd = parent->GD();
     if (gd) gd->DelFrameBuffers(1, &ID);
     else if (FLAGS_gd_debug) ERROR("DelFrameBuffer no device ", ID);
     ID = 0;
@@ -604,27 +611,27 @@ void FrameBuffer::ResetGL(int flag) {
   if (reload && width && height) Create(width, height);
 }
 
+/* Shaders */
+
+void Shaders::SetGlobalUniform1f(GraphicsDevice *gd, const string &name, float v) {
+  gd->UseShader(&shader_default);  shader_default .SetUniform1f(name, v);
+  gd->UseShader(&shader_normals);  shader_normals .SetUniform1f(name, v);
+  gd->UseShader(&shader_cubemap);  shader_cubemap .SetUniform1f(name, v);
+  gd->UseShader(&shader_cubenorm); shader_cubenorm.SetUniform1f(name, v);
+}
+
+void Shaders::SetGlobalUniform2f(GraphicsDevice *gd, const string &name, float v1, float v2){ 
+  gd->UseShader(&shader_default);  shader_default .SetUniform2f(name, v1, v2);
+  gd->UseShader(&shader_normals);  shader_normals .SetUniform2f(name, v1, v2);
+  gd->UseShader(&shader_cubemap);  shader_cubemap .SetUniform2f(name, v1, v2);
+  gd->UseShader(&shader_cubenorm); shader_cubenorm.SetUniform2f(name, v1, v2);
+}
+
 /* Shader */
 
-void Shader::SetGlobalUniform1f(const string &name, float v) {
-  GraphicsDevice *gd = app->focused->gd;
-  gd->UseShader(&app->shaders->shader_default);  app->shaders->shader_default .SetUniform1f(name, v);
-  gd->UseShader(&app->shaders->shader_normals);  app->shaders->shader_normals .SetUniform1f(name, v);
-  gd->UseShader(&app->shaders->shader_cubemap);  app->shaders->shader_cubemap .SetUniform1f(name, v);
-  gd->UseShader(&app->shaders->shader_cubenorm); app->shaders->shader_cubenorm.SetUniform1f(name, v);
-}
-
-void Shader::SetGlobalUniform2f(const string &name, float v1, float v2){ 
-  GraphicsDevice *gd = app->focused->gd;
-  gd->UseShader(&app->shaders->shader_default);  app->shaders->shader_default .SetUniform2f(name, v1, v2);
-  gd->UseShader(&app->shaders->shader_normals);  app->shaders->shader_normals .SetUniform2f(name, v1, v2);
-  gd->UseShader(&app->shaders->shader_cubemap);  app->shaders->shader_cubemap .SetUniform2f(name, v1, v2);
-  gd->UseShader(&app->shaders->shader_cubenorm); app->shaders->shader_cubenorm.SetUniform2f(name, v1, v2);
-}
-
-int Shader::Create(const string &name, const string &vertex_shader, const string &fragment_shader, const ShaderDefines &defines, Shader *out) {
-  if (out) *out = Shader();
-  auto gd = app->focused->gd;
+int Shader::Create(GraphicsDeviceHolder *parent, const string &name, const string &vertex_shader, const string &fragment_shader, const ShaderDefines &defines, Shader *out) {
+  if (out) *out = Shader(parent);
+  auto gd = parent->GD();
   int p = gd->CreateProgram();
 
   string hdr =
@@ -634,7 +641,7 @@ int Shader::Create(const string &name, const string &vertex_shader, const string
     "#define lowp\r\n"
     "#define highp\r\n"
     "#endif\r\n";
-  if (app->opengles_version == 2) hdr += "#define LFL_GLES2\r\n";
+  if (gd->version == 2) hdr += "#define LFL_GLES2\r\n";
   hdr += defines.text + string("\r\n");
 
   if (vertex_shader.size()) {
@@ -708,7 +715,7 @@ int Shader::Create(const string &name, const string &vertex_shader, const string
   return p;
 }
 
-int Shader::CreateShaderToy(const string &name, const string &pixel_shader, Shader *out) {
+int Shader::CreateShaderToy(GraphicsDeviceHolder *parent, const string &name, const string &pixel_shader, Shader *out) {
   static string header =
     "uniform float iGlobalTime, iBlend;\r\n"
     "uniform vec3 iResolution;\r\n"
@@ -730,21 +737,21 @@ int Shader::CreateShaderToy(const string &name, const string &pixel_shader, Shad
   static string footer =
     "void main(void) { mainImage(gl_FragColor, gl_FragCoord.xy); }\r\n";
 
-  GraphicsDevice *gd = app->focused->gd;
-  return Shader::Create(name, gd->vertex_shader, StrCat(header, pixel_shader, footer), ShaderDefines(1,0,1,0), out);
+  GraphicsDevice *gd = parent->GD();
+  return Shader::Create(parent, name, gd->vertex_shader, StrCat(header, pixel_shader, footer), ShaderDefines(1,0,1,0), out);
 }
 
-int Shader::GetUniformIndex(const string &name) { return app->focused->gd->GetUniformLocation(ID, name); }
-void Shader::SetUniform1i(const string &name, float v)                                { app->focused->gd->Uniform1i (GetUniformIndex(name), v); }
-void Shader::SetUniform1f(const string &name, float v)                                { app->focused->gd->Uniform1f (GetUniformIndex(name), v); }
-void Shader::SetUniform2f(const string &name, float v1, float v2)                     { app->focused->gd->Uniform2f (GetUniformIndex(name), v1, v2); }
-void Shader::SetUniform3f(const string &name, float v1, float v2, float v3)           { app->focused->gd->Uniform3f (GetUniformIndex(name), v1, v2, v3); }
-void Shader::SetUniform4f(const string &name, float v1, float v2, float v3, float v4) { app->focused->gd->Uniform4f (GetUniformIndex(name), v1, v2, v3, v4); }
-void Shader::SetUniform3fv(const string &name, const float *v)                        { app->focused->gd->Uniform3fv(GetUniformIndex(name), 1, v); }
-void Shader::SetUniform3fv(const string &name, int n, const float *v)                 { app->focused->gd->Uniform3fv(GetUniformIndex(name), n, v); }
+int Shader::GetUniformIndex(const string &name) { return parent->GD()->GetUniformLocation(ID, name); }
+void Shader::SetUniform1i(const string &name, float v)                                { parent->GD()->Uniform1i (GetUniformIndex(name), v); }
+void Shader::SetUniform1f(const string &name, float v)                                { parent->GD()->Uniform1f (GetUniformIndex(name), v); }
+void Shader::SetUniform2f(const string &name, float v1, float v2)                     { parent->GD()->Uniform2f (GetUniformIndex(name), v1, v2); }
+void Shader::SetUniform3f(const string &name, float v1, float v2, float v3)           { parent->GD()->Uniform3f (GetUniformIndex(name), v1, v2, v3); }
+void Shader::SetUniform4f(const string &name, float v1, float v2, float v3, float v4) { parent->GD()->Uniform4f (GetUniformIndex(name), v1, v2, v3, v4); }
+void Shader::SetUniform3fv(const string &name, const float *v)                        { parent->GD()->Uniform3fv(GetUniformIndex(name), 1, v); }
+void Shader::SetUniform3fv(const string &name, int n, const float *v)                 { parent->GD()->Uniform3fv(GetUniformIndex(name), n, v); }
 void Shader::ClearGL() {
   if (ID) {
-    GraphicsDevice *gd = app->focused ? app->focused->gd : 0;
+    auto gd = parent->GD();
     if (gd) gd->DelProgram(ID);
     else if (FLAGS_gd_debug) ERROR("DelProgram no device ", ID);
     ID = 0;
@@ -849,11 +856,14 @@ Box GraphicsDevice::GetScissorBox() {
 }
   
 void GraphicsDevice::DrawPixels(const Box &b, const Texture &tex) {
-  Texture temp;
+  Texture temp(parent->parent);
   temp.Resize(tex.width, tex.height, tex.pf, Texture::Flag::CreateGL);
   temp.UpdateGL(tex.buf, LFL::Box(tex.width, tex.height), 0, Texture::Flag::FlipY); 
   GraphicsContext::DrawTexturedBox1(this, b, temp.coord);
   temp.ClearGL();
 }
+
+Shaders::Shaders(GraphicsDeviceHolder *p) : shader_default(p), shader_normals(p), shader_cubemap(p),
+  shader_cubenorm(p) {}
 
 }; // namespace LFL

@@ -1,5 +1,5 @@
 /*
- * $Id: html.h 1316 2014-10-20 04:34:40Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -53,8 +53,9 @@ struct HTMLParser {
 
   bool lower_attrs, tag_soup, intag, incomment, inscript, instyle, inpre, done_html, done_head, done_body;
   String text; string charset, deferred;
+  ApplicationLifetime *life;
 
-  HTMLParser() : lower_attrs(1), tag_soup(1) { text.reserve(4096); Reset(); }
+  HTMLParser(ApplicationLifetime *l) : lower_attrs(1), tag_soup(1), life(l) { text.reserve(4096); Reset(); }
   void Reset() {
     intag=incomment=inscript=instyle=inpre=done_html=done_head=done_body=0;
     stack.clear(); text.clear(); charset.clear();
@@ -86,7 +87,7 @@ struct HTMLParser {
                         convert_charset ? charset_normalized_content.size() : input_content_len);
 
     static String comment_start="!--", comment_close="--", style_close="</style", script_close="</script";
-    for (const Char *p=content.buf, *e=content.buf+content.len; app->run && p<e; p++) {
+    for (const Char *p=content.buf, *e=content.buf+content.len; life->run && p<e; p++) {
       if (intag && text.size() == comment_start.size() && text == comment_start) { intag=0; incomment=1; text.clear(); }
       bool inspecial = inscript || instyle || incomment;
       if      (*p == '>' && instyle   && CloseSpecial(style_close,   &HTMLParser::Style,   1)) continue;

@@ -38,7 +38,7 @@ struct AndroidAdvertisingView : public AdvertisingViewInterface {
   }
 
   void Show(bool show_or_hide) {
-    ERROR(not_implemented);
+    ERROR("not implemented");
   }
 
   void Show(TableViewInterface *t, bool show_or_hide) {

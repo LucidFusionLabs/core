@@ -1,5 +1,5 @@
 /*
- * $Id: assets.cpp 1334 2014-11-28 09:14:21Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -22,14 +22,14 @@
 namespace LFL {
 void LayersInterface::Update() {
   for (auto &i : this->layer) i->Run(TilesInterface::RunFlag::ClearEmpty);
-  if (app->main_process) app->main_process->SwapTree(0, this);
+  if (dispatch->main_process) dispatch->main_process->SwapTree(0, this);
 }
 
 void LayersInterface::Draw(const Box &b, const point &p) {
   if (layer.size() > 0) layer[0]->Draw(b, p + node[0].scrolled);
   for (int c=node[0].child_offset; c; c=child[c-1].next_child_offset) {
     const Node *n = &node[child[c-1].node_id-1];
-    Scissor s(app->focused->gd, n->box + b.TopLeft());
+    Scissor s(gd->GD(), n->box + b.TopLeft());
     if (layer.size() > n->layer_id) layer[n->layer_id]->Draw(b, p + n->scrolled);
   }
 }
@@ -43,27 +43,27 @@ void TilesInterface::AddDrawableBoxArray(const DrawableBoxArray &box, point p) {
       if (!attr_set && (attr_set=1)) SetAttr(attr);
       InitDrawBackground(p);
       DrawableBoxRun(iter.Data(), iter.Length(), attr, VectorGet(box.line, iter.cur_attr2))
-        .DrawBackground(app->focused->gd, p, bind(&TilesInterface::DrawBackground, this, _1, _2));
+        .DrawBackground(gd->GD(), p, bind(&TilesInterface::DrawBackground, this, _1, _2));
       ContextClose();
     }
     if (1) {
       ContextOpen();
       if (!attr_set && (attr_set=1)) SetAttr(attr);
       InitDrawBox(p);
-      DrawableBoxRun(iter.Data(), iter.Length(), attr).Draw(app->focused->gd, p, bind(&TilesInterface::DrawBox, this, _1, _2, _3));
+      DrawableBoxRun(iter.Data(), iter.Length(), attr).Draw(gd->GD(), p, bind(&TilesInterface::DrawBox, this, _1, _2, _3));
       ContextClose();
     }
   }
 }
 
 void Tiles::InitDrawBox(const point &p) {
-  PreAdd(bind(&DrawableBoxRun::draw, DrawableBoxRun(0,0,attr), app->focused->gd, p));
+  PreAdd(bind(&DrawableBoxRun::draw, DrawableBoxRun(0,0,attr), fb.parent->GD(), p));
   if (attr->scissor) AddScissor(*attr->scissor + p);
 }
 
 void Tiles::InitDrawBackground(const point &p) {
   PreAdd(bind(&DrawableBoxRun::DrawBackground,
-              DrawableBoxRun(0,0,attr), app->focused->gd, p, &DrawableBoxRun::DefaultDrawBackgroundCB));
+              DrawableBoxRun(0,0,attr), fb.parent->GD(), p, &DrawableBoxRun::DefaultDrawBackgroundCB));
 }
 
 void Tiles::DrawBox(GraphicsContext *gc, const Drawable *d, const Box &b) {
@@ -76,7 +76,7 @@ void Tiles::DrawBackground(GraphicsDevice *gd, const Box &b) {
 
 void Tiles::AddScissor(const Box &b) {
   PreAdd(bind(&Tiles::PushScissor, this, b));
-  PostAdd(bind(&GraphicsDevice::PopScissor, app->focused->gd));
+  PostAdd(bind(&GraphicsDevice::PopScissor, fb.parent->GD()));
 }
 
 #ifdef  LFL_TILES_IPC_DEBUG
@@ -122,13 +122,13 @@ void TilesIPCClient::Run(int flag) {
   bool clear_empty = (flag & RunFlag::ClearEmpty);
   TilesMatrixIter(&mat) {
     if (!tile->cb.Count() && !clear_empty) continue;
-    app->main_process->Paint(layer, point(j, i), flag, tile->cb);
+    dispatch->main_process->Paint(layer, point(j, i), flag, tile->cb);
   }
 }
 
-int MultiProcessPaintResource::Run(const Box &t) const {
-  GraphicsContext gc(app->focused->gd, &attr);
-  ProcessAPIClient *s = CheckPointer(app->render_process.get());
+int MultiProcessPaintResource::Run(GraphicsDevice *gd, const Box &t) const {
+  ProcessAPIClient *s = dynamic_cast<ProcessAPIClient*>(parent);
+  GraphicsContext gc(gd, &attr);
   Iterator i(data.buf);
   int si=0, sd=0, count=0; 
   TilesIPCDebug("MPPR Begin");
@@ -136,7 +136,7 @@ int MultiProcessPaintResource::Run(const Box &t) const {
     int type = *i.Get<int>();
     switch (type) {
       default:                       FATAL("unknown type ", type);
-      case SetAttr           ::Type: { auto c=i.Get<SetAttr>           (); c->Update(&attr, app->render_process.get());           i.offset += SetAttr           ::Size; TilesIPCDebug("MPPR SetAttr %s",     attr.DebugString().c_str()); } break;
+      case SetAttr           ::Type: { auto c=i.Get<SetAttr>           (); c->Update(&attr, s);                                   i.offset += SetAttr           ::Size; TilesIPCDebug("MPPR SetAttr %s",     attr.DebugString().c_str()); } break;
       case InitDrawBox       ::Type: { auto c=i.Get<InitDrawBox>       (); DrawableBoxRun(0,0,&attr).draw(gc.gd, c->p);           i.offset += InitDrawBox       ::Size; TilesIPCDebug("MPPR InitDrawBox %s", c->p.DebugString().c_str()); } break;
       case InitDrawBackground::Type: { auto c=i.Get<InitDrawBackground>(); DrawableBoxRun(0,0,&attr).DrawBackground(gc.gd, c->p); i.offset += InitDrawBackground::Size; TilesIPCDebug("MPPR InitDrawBG %s",  c->p.DebugString().c_str()); } break;
       case DrawBackground    ::Type: { auto c=i.Get<DrawBackground>    (); gc.DrawTexturedBox(c->b);                                      i.offset += DrawBackground    ::Size; TilesIPCDebug("MPPR DrawBG %s",      c->b.DebugString().c_str()); } break;
@@ -148,7 +148,7 @@ int MultiProcessPaintResource::Run(const Box &t) const {
                                      } break;
     }
   }
-  if (si != sd) { ERROR("mismatching scissor ", si, " != ", sd); for (int i=sd; i<si; ++i) app->focused->gd->PopScissor(); }
+  if (si != sd) { ERROR("mismatching scissor ", si, " != ", sd); for (int i=sd; i<si; ++i) gd->PopScissor(); }
   TilesIPCDebug("MPPR End");
   return count;
 }

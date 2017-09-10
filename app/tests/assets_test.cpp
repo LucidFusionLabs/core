@@ -19,6 +19,8 @@
 #include "gtest/gtest.h"
 
 namespace LFL {
+extern Application *app;
+
 TEST(LoaderTest, ZLib) {
   string contents = LocalFile::FileContents("../../../../core/app/assets/MenuAtlas,0,255,255,255,0.0000.png");
   string compressed = ZLibWriter::Compress(contents);
@@ -28,7 +30,8 @@ TEST(LoaderTest, ZLib) {
 
 #ifdef LFL_PNG
 TEST(LoaderTest, PNG) {
-  Texture tex(app->focused->gd, 256, 256), tex_in;
+  auto w = app->focused;
+  Texture tex(w, 256, 256), tex_in(w);
   tex.RenewBuffer();
   for (int i=0; i<tex.height; i++)
     for (int j=0; j<tex.width; j++)
@@ -53,7 +56,7 @@ TEST(LoaderTest, PNG) {
 TEST(AssetTest, Tiles) {
   int tile_test_a=0, tile_test_b=0, tile_test_c=0, tile_test_d=0, tile_test_e=0, tile_test_f=0, tile_test_g=0;
   int tile_test_h=0, tile_test_i=0, tile_test_j=0, tile_test_k=0, tile_test_l=0, tile_test_m=0;
-  Tiles tiles(app->focused->gd, 0), *T = &tiles;
+  Tiles tiles(nullptr, app, app->focused, 0), *T = &tiles;
   T->Run(0);
   T->ContextOpen();
   T->PreAdd ([&](){ tile_test_a++; });

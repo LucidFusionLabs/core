@@ -1,5 +1,5 @@
 /*
- * $Id: math.h 1335 2014-12-02 04:13:46Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -516,7 +516,7 @@ template <class T=double> struct matrix {
 
   void AssignDataPtr(int nm, int nn, T *nv, Allocator *Alloc=0) {
     if (m) { alloc->Free(m); m=0; }
-    if (!Alloc) Alloc = Singleton<NullAllocator>::Get();
+    if (!Alloc) Alloc = Singleton<NullAllocator>::Set();
     Assign(nm, nn, nm*nn*sizeof(T), 0, Alloc);
     m = nv;
   }

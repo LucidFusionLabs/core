@@ -1,5 +1,5 @@
 /*
- * $Id: network.cpp 1334 2014-11-28 09:14:21Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -107,7 +107,7 @@ IPV4EndpointPool::IPV4EndpointPool(const string &ip_csv) {
   source_ports.resize(source_addrs.size());
   for (int i=0; i<source_ports.size(); i++) {
     source_ports[i].resize(bytes_per_ip, 0);
-    source_ports[i][bytes_per_ip-1] = 1<<7; // mark port 65536 as used
+    source_ports[i][bytes_per_ip-1] = 1<7; // mark port 65536 as used
   }
   if (!source_addrs.size()) ERROR("warning empty address pool");
 }
@@ -427,14 +427,14 @@ void SocketWakeupThread::Start() {
 }
 void SocketWakeupThread::Wakeup() { char c=0; if (pipe[1] >= 0) CHECK_EQ(send(pipe[1], &c, 1, 0), 1); }
 void SocketWakeupThread::ThreadProc() {
-  while (app->run) {
+  while (dispatch->run) {
     if (frame_mutex) { ScopedMutex sm(*frame_mutex); }
-    if (app->run) {
+    if (dispatch->run) {
       SelectSocketSet my_sockets;
       { ScopedMutex sm(sockets_mutex); my_sockets = sockets; }
       my_sockets.Select(-1);
       if (my_sockets.GetReadable(pipe[0])) { char buf[128]; recv(pipe[0], buf, sizeof(buf), 0); }
-      if (app->run) app->scheduler.Wakeup(app->focused);
+      if (dispatch->run) window->focused->Wakeup();
     }
     if (wait_mutex) { ScopedMutex sm(*wait_mutex); }
   }
@@ -519,7 +519,7 @@ bool Connection::ConnectState(int n) {
 /* SocketConnection */
 
 void SocketConnection::Close() {
-  app->net->ConnCloseDetached(app->net->tcp_client.get(), this);
+  svc->net->ConnCloseDetached(svc->net->tcp_client.get(), this);
 }
 
 int SocketConnection::Read() {
@@ -596,7 +596,7 @@ int SocketConnection::Write(const char *buf, int len) {
 
   if (!wb.size() && len) {
     writable = true;
-    app->net->UpdateActive(this);
+    svc->net->UpdateActive(this);
   }
   wb.Add(buf, len);
   wb.EnsureZeroTerminated();
@@ -678,15 +678,15 @@ int SocketConnection::WriteVFlush(const iovec *iov, int len, int transfer_socket
 }
 
 int SocketConnection::SendTo(const char *buf, int len) { return SystemNetwork::SendTo(socket, addr, port, buf, len); }
-void SocketConnection::RemoveFromMainWait(Window *w) { app->scheduler.DelMainWaitSocket(w, socket); }
+void SocketConnection::RemoveFromMainWait(Window *w) { svc->net->dispatcher->scheduler.DelMainWaitSocket(w, socket); }
 void SocketConnection::AddToMainWait(Window *w, function<bool()> readable_cb) {
-  app->scheduler.AddMainWaitSocket(w, socket, SocketSet::READABLE, move(readable_cb));
+  svc->net->dispatcher->scheduler.AddMainWaitSocket(w, socket, SocketSet::READABLE, move(readable_cb));
 }
 
 /* SocketService */
 
 void SocketService::Close(SocketConnection *c) {
-  app->net->active.Del(c->socket);
+  net->active.Del(c->socket);
   if (c->detach) conn[c->socket].release();
   else SystemNetwork::CloseSocket(c->socket);
   if (connect_src_pool && (c->src_addr || c->src_port)) connect_src_pool->Close(c->src_addr, c->src_port);
@@ -721,19 +721,19 @@ int SocketService::OpenSocket(SocketConnection *c, int protocol, int blocking, I
 Socket SocketService::Listen(IPV4::Addr addr, int port, SocketListener *listener) {
   Socket fd = -1;
   if (listener->ssl) {
-    if ((listener->socket = listener->bio.Listen(port, true)) == InvalidSocket)
+    if ((listener->socket = listener->bio.Listen(net->ssl, port, true)) == InvalidSocket)
       return ERRORv(-1, "ssl_listen: ", -1);
   } else {
     if ((listener->socket = SystemNetwork::Listen(protocol, addr, port)) == InvalidSocket)
       return ERRORv(-1, "SystemNetwork::Listen(", protocol, ", ", port, "): ", SystemNetwork::LastError());
   }
-  app->net->active.Add(listener->socket, SocketSet::READABLE, &listener->self_reference);
+  net->active.Add(listener->socket, SocketSet::READABLE, &listener->self_reference);
   return listener->socket;
 }
 
 SocketConnection *SocketService::Accept(int state, Socket socket, IPV4::Addr addr, int port) {
   auto c = (conn[socket] = make_unique<SocketConnection>(this, state, socket, addr, port)).get();
-  app->net->active.Add(c->socket, SocketSet::READABLE, &c->self_reference);
+  net->active.Add(c->socket, SocketSet::READABLE, &c->self_reference);
   return c;
 }
 
@@ -765,9 +765,9 @@ SocketConnection *SocketService::Connect(IPV4::Addr addr, int port, IPV4Endpoint
     if (this->Connected(c) < 0) c->SetError();
     if (c->handler) { if (c->handler->Connected(c) < 0) { ERROR(c->Name(), ": handler connected"); c->SetError(); } }
     if (c->detach) { Detach(c); conn.erase(c->socket); }
-    else app->net->UpdateActive(c);
+    else net->UpdateActive(c);
   } else {
-    app->net->active.Add(c->socket, SocketSet::READABLE|SocketSet::WRITABLE, &c->self_reference);
+    net->active.Add(c->socket, SocketSet::READABLE|SocketSet::WRITABLE, &c->self_reference);
   }
   return c;
 }
@@ -780,7 +780,7 @@ SocketConnection *SocketService::Connect(const string &hostport, int default_por
 }
 
 SocketConnection *SocketService::SSLConnect(SSLSocket::CTXPtr sslctx, const string &hostport, int default_port, Connection::CB *detach) {
-  if (!sslctx) sslctx = app->net->ssl;
+  if (!sslctx) sslctx = net->ssl;
   if (!sslctx) return ERRORv(nullptr, "no ssl: ", -1);
 
   auto c = new SocketConnection(this, Connection::Connecting, 0, 0, detach);
@@ -794,12 +794,12 @@ SocketConnection *SocketService::SSLConnect(SSLSocket::CTXPtr sslctx, const stri
 
   INFO(c->Name(), ": connecting (fd=", c->socket, ")");
   conn[c->socket] = unique_ptr<SocketConnection>(c);
-  app->net->active.Add(c->socket, SocketSet::WRITABLE, &c->self_reference);
+  net->active.Add(c->socket, SocketSet::WRITABLE, &c->self_reference);
   return c;
 }
 
 SocketConnection *SocketService::SSLConnect(SSLSocket::CTXPtr sslctx, IPV4::Addr addr, int port, Connection::CB *detach) {
-  if (!sslctx) sslctx = app->net->ssl;
+  if (!sslctx) sslctx = net->ssl;
   if (!sslctx) return ERRORv(nullptr, "no ssl: ", -1);
 
   auto c = new SocketConnection(this, Connection::Connecting, addr, port, detach);
@@ -811,7 +811,7 @@ SocketConnection *SocketService::SSLConnect(SSLSocket::CTXPtr sslctx, IPV4::Addr
 
   INFO(c->Name(), ": connecting (fd=", c->socket, ")");
   conn[c->socket] = unique_ptr<SocketConnection>(c);
-  app->net->active.Add(c->socket, SocketSet::WRITABLE, &c->self_reference);
+  net->active.Add(c->socket, SocketSet::WRITABLE, &c->self_reference);
   return c;
 }
 
@@ -820,7 +820,7 @@ SocketConnection *SocketService::AddConnectedSocket(Socket conn_socket, Connecti
   CHECK_NE(-1, (conn->socket = conn_socket));
   conn->state = Connection::Connected;
   conn->svc->conn[conn->socket] = unique_ptr<SocketConnection>(conn);
-  app->net->active.Add(conn->socket, SocketSet::READABLE, &conn->self_reference);
+  net->active.Add(conn->socket, SocketSet::READABLE, &conn->self_reference);
   return conn;
 }
 
@@ -843,7 +843,7 @@ void SocketService::EndpointReadCB(string *endpoint_name, string *packet) {
 
 void SocketService::EndpointRead(const string &endpoint_name, const char *buf, int len) {
   if (len) CHECK(buf);
-  if (!app->MainThread()) return app->RunInMainThread(bind(&SocketService::EndpointReadCB, this, new string(endpoint_name), new string(buf, len)));
+  if (!net->dispatcher->MainThread()) return net->dispatcher->RunInMainThread(bind(&SocketService::EndpointReadCB, this, new string(endpoint_name), new string(buf, len)));
 
   auto ep = endpoint.find(endpoint_name);
   if (ep == endpoint.end()) { 
@@ -869,7 +869,7 @@ void SocketService::Detach(SocketConnection *c) {
   INFO(c->Name(), ": detached from ", name, " state=", c->state, " socket=", c->socket);
   SocketService::Close(c);
   c->readable = c->writable = 0;
-  app->RunInMainThread([=](){
+  net->dispatcher->RunInMainThread([=](){
     if (c->detach_delete) { if (c->state == Connection::Connected) c->Close(); delete c; }
     else if (c->detach) (*c->detach)(c);
   });
@@ -877,11 +877,11 @@ void SocketService::Detach(SocketConnection *c) {
 
 /* SocketServices */
 
-SocketServices::SocketServices() {
-  udp_client = make_unique<UDPClient>();
-  tcp_client = make_unique<TCPClient>();
-  unix_client = make_unique<UnixClient>();
-  system_resolver = make_unique<SystemResolver>();
+SocketServices::SocketServices(ThreadDispatcher *D, WakeupHandle *W) : dispatcher(D), wakeup(W) {
+  udp_client = make_unique<UDPClient>(this);
+  tcp_client = make_unique<TCPClient>(this);
+  unix_client = make_unique<UnixClient>(this);
+  system_resolver = make_unique<SystemResolver>(this);
 }
 
 SocketServices::~SocketServices() {
@@ -1188,8 +1188,8 @@ int SocketServicesThread::ConnectionHandler::Read(Connection *c) {
 }
 
 SocketServicesThread::SocketServicesThread(SocketServices *N, bool Init) : init(Init), net(N),
-  rd(new SocketConnection(app->net->unix_client.get(), new SocketServicesThread::ConnectionHandler())),
-  wr(new SocketConnection(app->net->unix_client.get(), new SocketServicesThread::ConnectionHandler())),
+  rd(new SocketConnection(net->unix_client.get(), new SocketServicesThread::ConnectionHandler())),
+  wr(new SocketConnection(net->unix_client.get(), new SocketServicesThread::ConnectionHandler())),
   thread(make_unique<Thread>(bind(&SocketServicesThread::HandleMessagesLoop, this))) {
   Socket fd[2];
   CHECK(SystemNetwork::OpenSocketPair(fd));
@@ -1208,7 +1208,7 @@ void SocketServicesThread::Write(Callback *x) {
 
 void SocketServicesThread::HandleMessagesLoop() {
   if (init) net->Init();
-  while (GetLFApp()->run) { net->Frame(0); }
+  while (net->dispatcher->run) { net->Frame(0); }
 }
 
 /* UDP Client */
@@ -1277,7 +1277,7 @@ SocketConnection *InProcessClient::PersistentConnection(InProcessServer *server,
 #ifdef LFL_PCAP
 void Sniffer::Threadproc() {
   pcap_pkthdr *pkthdr; const unsigned char *packet; int ret;
-  while (app->run && (ret = pcap_next_ex((pcap_t*)handle, &pkthdr, &packet)) >= 0) {
+  while (dispatch->run && (ret = pcap_next_ex((pcap_t*)handle, &pkthdr, &packet)) >= 0) {
     if (!ret) continue;
     cb((const char *)packet, pkthdr->caplen, pkthdr->len);
   }
@@ -1396,15 +1396,16 @@ unique_ptr<GeoResolution> GeoResolution::Open(const string &db) { return nullptr
 bool GeoResolution::Resolve(const string &addr, string *country, string *region, string *city, float *lat, float *lng) { FATAL("not implemented"); }
 #endif
 
-bool NBReadable(Socket fd, int timeout) {
+bool NBReadable(Socket fd, ApplicationLifetime *life, int timeout) {
   SelectSocketSet ss;
   ss.Add(fd, SocketSet::READABLE, 0);
   ss.Select(timeout);
-  return app->run && ss.GetReadable(fd);
+  if (life && !life->run) return false;
+  return ss.GetReadable(fd);
 }
 
-int NBRead(Socket fd, char *buf, int len, int timeout) {
-  if (timeout && !NBReadable(fd, timeout)) return 0;
+int NBRead(Socket fd, char *buf, int len, ApplicationLifetime *life, int timeout) {
+  if (timeout && !NBReadable(fd, life, timeout)) return 0;
   int o = 0, s = 0;
   do {
     if ((s = read(fd, buf+o, len-o)) <= 0) {
@@ -1414,8 +1415,8 @@ int NBRead(Socket fd, char *buf, int len, int timeout) {
   return o;
 }
 
-int NBRead(Socket fd, string *buf, int timeout) {
-  int l = NBRead(fd, &(*buf)[0], buf->size(), timeout);
+int NBRead(Socket fd, string *buf, ApplicationLifetime *life, int timeout) {
+  int l = NBRead(fd, &(*buf)[0], buf->size(), life, timeout);
   buf->resize(max(0,l));
   return l;
 }
@@ -1430,14 +1431,14 @@ int FWrite(FILE *f, const string &s) {
 int FWrite(FILE *f, const string &s) { return write(fileno(f), s.data(), s.size()); }
 #endif
 bool FWriteSuccess(FILE *f, const string &s) { return FWrite(f, s) == s.size(); }
-bool FGets(char *buf, int len) { return NBFGets(stdin, buf, len, -1); }
-bool NBFGets(FILE *f, char *buf, int len, int timeout) {
+bool FGets(char *buf, int len, ApplicationLifetime *life) { return NBFGets(stdin, buf, len, life, -1); }
+bool NBFGets(FILE *f, char *buf, int len, ApplicationLifetime *life, int timeout) {
 #ifndef LFL_WINDOWS
   int fd = fileno(f);
   SelectSocketSet ss;
   ss.Add(fd, SocketSet::READABLE, 0);
   ss.Select(timeout);
-  if (!app->run || !ss.GetReadable(fd)) return 0;
+  if ((life && !life->run) || !ss.GetReadable(fd)) return 0;
   fgets(buf, len, f);
   return 1;
 #else

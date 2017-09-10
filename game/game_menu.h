@@ -25,6 +25,7 @@ struct GameMenuGUI : public View, public Connection::Handler {
   typedef Particles<1024, 1, true> MenuParticles;
 
   GameSettings *settings=0;
+  SocketServices *net;
   IPV4::Addr ip, broadcast_ip;
   UDPServer pinger;
   string master_get_url;
@@ -46,14 +47,16 @@ struct GameMenuGUI : public View, public Connection::Handler {
   MenuParticles particles;
   Entity *cam=0;
 
-  GameMenuGUI(Window *W, const string &master_url, int port, GameSettings *Settings=0, Texture *Title=0) :
-    View(W), settings(Settings), pinger(-1), master_get_url(master_url), topbar(W), title(Title),
-    font       (FontDesc(FLAGS_font,                 "", 12, Color::grey80)),
-    bright_font(FontDesc(FLAGS_font,                 "", 12, Color::white)),
-    glow_font  (FontDesc(StrCat(FLAGS_font, "Glow"), "", 12)), default_port(port),
+  GameMenuGUI(Window *W, SocketServices *N, ToolkitInterface *TK, Audio *audio,
+              const string &master_url, int port, GameSettings *Settings=0, Texture *Title=0) :
+    View(W), settings(Settings), net(N), pinger(N, -1), master_get_url(master_url), topbar(W), title(Title),
+    font       (W, FontDesc(FLAGS_font,                 "", 12, Color::grey80)),
+    bright_font(W, FontDesc(FLAGS_font,                 "", 12, Color::white)),
+    glow_font  (W, FontDesc(StrCat(FLAGS_font, "Glow"), "", 12, Color::white)), default_port(port),
     nav(make_unique<NavigationView>(W, "", "")), particles("GameMenuParticles") {
+
     pinger.handler = this;
-    app->net->Enable(&pinger);
+    N->Enable(&pinger);
     SystemNetwork::SetSocketBroadcastEnabled(pinger.GetListener()->socket, true);
     Sniffer::GetIPAddress(&ip);
     Sniffer::GetBroadcastAddress(&broadcast_ip);
@@ -73,27 +76,31 @@ struct GameMenuGUI : public View, public Connection::Handler {
       }, font, glow_font, &Color::white);
     sublevel->selected = 1;
 
-    server_start = app->toolkit->CreateToolbar("Light", MenuItemVec{
+    server_start = TK->CreateToolbar(root, "Light", MenuItemVec{
       { "start", "", bind(&GameMenuGUI::MenuServerStart, this) },
     }, 0);
 
-    server_join = app->toolkit->CreateToolbar("Light", MenuItemVec{
+    server_join = TK->CreateToolbar(root, "Light", MenuItemVec{
       { "join", "", bind(&GameMenuGUI::MenuServerJoin, this) },
     }, 0);
 
     TableItemVec settings_items;
     for (auto &i : settings->vec)
       settings_items.emplace_back(i.key, TableItem::Selector, Join(i.value->data, ","));
-    singleplayer = app->toolkit->CreateTableView("Single Player", "", "Clear", move(settings_items));
+    singleplayer = TK->CreateTableView(root, "Single Player", "", "Clear", move(settings_items));
     singleplayer->SetToolbar(server_start.get());
-    startserver = app->toolkit->CreateTableView("Start Server", "", "Clear", TableItemVec{});
-    serverlist = app->toolkit->CreateTableView("Multiplayer", "", "Clear", TableItemVec{
+    startserver = TK->CreateTableView(root, "Start Server", "", "Clear", TableItemVec{});
+    serverlist = TK->CreateTableView(root, "Multiplayer", "", "Clear", TableItemVec{
       TableItem("", TableItem::Separator),
       TableItem("[ add server ]", TableItem::TextInput, "", "", 0, 0, 0, Callback(), bind(&GameMenuGUI::MenuAddServer, this, _1)),
     });
     serverlist->SetToolbar(server_start.get());
 
     TableItemVec options_items{
+#ifdef LFL_ANDROID
+      // LayoutGPlusSigninButton(&menuflow, gplus->GetSignedIn());
+      // gplus_signin_button.EnableHover();
+#endif
       TableItem("Player Name",         TableItem::TextInput, "", "", 0, 0, 0, Callback()),
       TableItem("Control Sensitivity", TableItem::Slider,    ""),
       TableItem("Volume",              TableItem::Slider,    ""),
@@ -110,10 +117,10 @@ struct GameMenuGUI : public View, public Connection::Handler {
       TableItem("",                    TableItem::Separator),
       TableItem("Promotions",          TableItem::WebView,   "http://lucidfusionlabs.com/apps.html"),
     };
-    float max_volume = app->GetMaxVolume();
+    float max_volume = audio->GetMaxVolume();
     options_items[1].CheckAssignValues("Control Sensitivity", FLAGS_msens/10.0, 0, 10, .1);
-    options_items[2].CheckAssignValues("Volume", app->GetVolume() / max_volume, 0, max_volume, .5);
-    options = app->toolkit->CreateTableView("Options", "", "Clear", move(options_items));
+    options_items[2].CheckAssignValues("Volume", audio->GetVolume() / max_volume, 0, max_volume, .5);
+    options = TK->CreateTableView(root, "Options", "", "Clear", move(options_items));
 
 #ifdef LFL_ANDROID
     gplus = Singleton<GPlus>::Get();
@@ -131,7 +138,7 @@ struct GameMenuGUI : public View, public Connection::Handler {
       { "accept", "", [=](){ gplus->Accept(); } },
     }, font);
 
-    gplus_invite = app->toolkit->CreateTableView("GPlus", "", "Clear", TableItemVec{});
+    gplus_invite = TK->CreateTableView(root, "GPlus", "", "Clear", TableItemVec{});
 #endif
 
     nav->PushTableView(singleplayer.get());
@@ -143,15 +150,15 @@ struct GameMenuGUI : public View, public Connection::Handler {
     particles.texture = parts->ID;
   }
 
-  bool Activate  () { active=1; topbar.active=1; toplevel->selected=last_selected=-1; root->shell->mouseout(vector<string>()); if (ads) ads->Show(false); return 1; }
-  bool Deactivate() { active=0; topbar.active=0; UpdateSettings(); if (ads) ads->Show(true); return 1; }
+  bool Activate  () {                active=1; topbar.active=1; toplevel->selected=last_selected=-1; root->shell->mouseout(vector<string>()); if (ads) ads->Show(false); return 1; }
+  bool Deactivate() { nav->PopAll(); active=0; topbar.active=0; UpdateSettings(); if (ads) ads->Show(true); return 1; }
 
   void UpdateSettings() {
     // root->shell->Run(StrCat("name ", String::ToUTF8(tab3_player_name.Text16())));
     // root->shell->Run(StrCat("msens ", StrCat(tab3_sensitivity.scrolled * tab3_sensitivity.doc_height)));
   }
 
-  void MenuQuit() { toplevel->selected=3; app->run=0; }
+  void MenuQuit() { toplevel->selected=3; root->parent->Shutdown(); }
   void MenuServerStart() {
     if (toplevel->selected != 0 && !(toplevel->selected == 1 && sublevel->selected == 2)) return;
     Deactivate();
@@ -172,7 +179,7 @@ struct GameMenuGUI : public View, public Connection::Handler {
 
   void Refresh() { 
     if (broadcast_ip) SystemNetwork::SendTo(pinger.GetListener()->socket, broadcast_ip, default_port, "ping\n", 5);
-    if (!master_get_url.empty()) HTTPClient::WGet(master_get_url, 0, bind(&GameMenuGUI::MasterGetResponseCB, this, _1, _2, _3, _4, _5));
+    if (!master_get_url.empty()) HTTPClient::WGet(net, nullptr, master_get_url, 0, bind(&GameMenuGUI::MasterGetResponseCB, this, _1, _2, _3, _4, _5));
     master_server_list.clear();
     master_server_selected=-1;
   }
@@ -223,11 +230,6 @@ struct GameMenuGUI : public View, public Connection::Handler {
     menuftr2   = Box (box.x, box.y+font->Height()*4, box.w, box.h-font->Height()*6);
     LayoutTopbar();
     LayoutMenu();
-#ifdef LFL_ANDROID
-    // gplus_signin_button.EnableHover();
-    // mobile_font.desc = FontDesc("MobileAtlas", "", 0, Color::white);
-    // CHECK(mobile_font.Load());
-#endif
   }
 
   void LayoutTopbar() {
@@ -263,7 +265,6 @@ struct GameMenuGUI : public View, public Connection::Handler {
             items.emplace_back(master_server_list[i].name, TableItem::Label, master_server_list[i].players);
           serverlist->ReplaceSection(0, TableItem(), 0, move(items));
         }
-        // tab2_server_join.LayoutBox(&menuflow, bright_font, Box(box.w*.2, -box.h*.8, box.w*.6, box.h*.1));
       } else if (sublevel->selected == 2) {
         my_selected = 0;
       }
@@ -273,13 +274,8 @@ struct GameMenuGUI : public View, public Connection::Handler {
         child_view.push_back(v);
         child_box.PushBack(box, menuflow.out->attr.GetAttrId(menuflow.cur_attr), v);
       }
-      // tab1_server_start.LayoutBox(&menuflow, bright_font, Box(box.w*.2, -box.h*.8, box.w*.6, box.h*.1));
     }
     else if (my_selected == 2) {
-      Scissor s(root->gd, *menuflow.container);
-#ifdef LFL_ANDROID
-      LayoutGPlusSigninButton(&menuflow, gplus->GetSignedIn());
-#endif
       if (auto v = nav->AppendFlow(&menuflow)) {
         child_view.push_back(v);
         child_box.PushBack(box, menuflow.out->attr.GetAttrId(menuflow.cur_attr), v);
@@ -328,7 +324,7 @@ struct GameMenuGUI : public View, public Connection::Handler {
     topbar.Draw();
 
     if (particles.texture) {
-      particles.Update(cam, clicks, root->mouse.x, root->mouse.y, app->input->MouseButton1Down());
+      particles.Update(cam, clicks, root->mouse.x, root->mouse.y, root->parent->input->MouseButton1Down());
       particles.Draw(gc.gd);
     }
 
@@ -352,7 +348,7 @@ struct GamePlayerListGUI : public View {
   PlayerList playerlist;
   int winning_team=0;
   GamePlayerListGUI(Window *W, const char *TitleName, const char *Team1, const char *Team2) : View(W),
-    font(FontDesc(FLAGS_font, "", 12, Color::black)), titlename(TitleName), team1(Team1), team2(Team2) {}
+    font(W, FontDesc(FLAGS_font, "", 12, Color::white)), titlename(TitleName), team1(Team1), team2(Team2) {}
 
   void HandleTextMessage(const string &in) {
     playerlist.clear();
@@ -375,7 +371,7 @@ struct GamePlayerListGUI : public View {
   }
 
   void Layout() {
-    CHECK(font.Load());
+    CHECK(font.Load(root));
     if (!child_box.Size()) child_box.PushNop();
   }
 
@@ -398,7 +394,7 @@ struct GamePlayerListGUI : public View {
     }
     outgeom1.Draw(gc.gd, out1.TopLeft());
     outgeom2.Draw(gc.gd, out2.TopLeft());
-    font->Draw(titletext, Box(win.x, win.top()-font->Height(), win.w, font->Height()), 0, Font::DrawFlag::AlignCenter);
+    font->Draw(gc.gd, titletext, Box(win.x, win.top()-font->Height(), win.w, font->Height()), 0, Font::DrawFlag::AlignCenter);
     gc.gd->SetColor(Color::grey60); BoxTopLeftOutline    ().Draw(&gc, win);
     gc.gd->SetColor(Color::grey20); BoxBottomRightOutline().Draw(&gc, win);
   }
@@ -419,7 +415,7 @@ struct GamePlayerListGUI : public View {
 struct GameChatGUI : public TextArea {
   GameClient **server;
   GameChatGUI(Window *W, int key, GameClient **s) :
-    TextArea(W, FontDesc(FLAGS_font, "", 10, Color::grey80), 100, 10), server(s) { 
+    TextArea(W, FontRef(W, FontDesc(FLAGS_font, "", 10, Color::grey80)), 100, 10), server(s) { 
     write_timestamp = deactivate_on_enter = true;
     line_fb.align_top_or_bot = false;
     SetToggleKey(key, true);

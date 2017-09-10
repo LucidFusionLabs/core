@@ -83,12 +83,14 @@ struct Resolver {
     bool WriteResolveRequest(const Request &req);
   };
 
+  SocketServices *net;
   vector<Request> queue;
   vector<IPV4::Addr> conn_available;
   unordered_map<IPV4::Addr, unique_ptr<Nameserver>> conn;
   int max_outstanding_per_ns=10, auto_disconnect_seconds=0;
   bool remove_timedout_servers = false;
 
+  Resolver(SocketServices *n) : net(n) {}
   virtual ~Resolver() {}
   virtual bool HandleNoConnections() { return false; }
   bool Connected() const { for (auto &n : conn) if (n.second->c->state == Connection::Connected) return 1; return 0; }
@@ -106,7 +108,7 @@ struct Resolver {
 
 struct SystemResolver : public Resolver {
   vector<IPV4::Addr> nameservers;
-  SystemResolver() { remove_timedout_servers = true; }
+  SystemResolver(SocketServices *n) : Resolver(n) { remove_timedout_servers = true; }
   bool HandleNoConnections();
   static void GetNameservers(vector<IPV4::Addr> *nameservers);
 };
@@ -121,7 +123,7 @@ struct RecursiveResolver {
     Cache Acache, MXcache;
     DNS::Response authority;
     string authority_domain;
-    AuthorityTreeNode() { resolver.auto_disconnect_seconds=10; }
+    AuthorityTreeNode(SocketServices *n) : resolver(n) { resolver.auto_disconnect_seconds=10; }
   };
 
   struct Request {
@@ -141,9 +143,12 @@ struct RecursiveResolver {
     int Ancestors() const { return parent_request ? 1 + parent_request->Ancestors() : 0; }
   };
 
+  ThreadDispatcher *dispatch;
+  SocketServices *net;
   AuthorityTreeNode root;
   long long queries_requested=0, queries_completed=0;
-  RecursiveResolver() { ConnectoToRootServers(); }
+  RecursiveResolver(ThreadDispatcher *d, SocketServices *n) :
+    dispatch(d), net(n), root(n) { ConnectoToRootServers(); }
 
   void ConnectoToRootServers();
   bool StartResolveRequest(Request *req);

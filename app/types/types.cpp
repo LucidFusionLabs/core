@@ -28,7 +28,7 @@
 
 namespace LFL {
 void Allocator::Reset() { FATAL("unimplemented reset"); }
-Allocator *Allocator::Default() { return Singleton<MallocAllocator>::Get(); }
+Allocator *Allocator::Default() { return Singleton<MallocAllocator>::Set(); }
 
 void *MallocAllocator::Malloc(int size) { return ::malloc(size); }
 void *MallocAllocator::Realloc(void *p, int size) { 

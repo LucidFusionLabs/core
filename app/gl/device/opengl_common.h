@@ -55,7 +55,7 @@ void CheckForError(const char *file, int line) {
 
     ERROR(file, ":", line, " gl error: ", gl_error, ", framebuffer = ", framebuffer_id);
     BreakHook();
-    if (app->opengles_version == 2) {
+    if (version == 2) {
       glValidateProgram(shader->ID);
       glGetProgramiv(shader->ID, GL_VALIDATE_STATUS, &gl_validate_status);
       if (gl_validate_status != GL_TRUE) ERROR(shader->name, ": gl validate status ", gl_validate_status);
@@ -222,7 +222,7 @@ void LogVersion() {
   INFO("GL_SHADING_LANGUAGE_VERSION: ", glslver);
   INFO("GL_EXTENSIONS: ", glexts);
 
-  app->opengles_version = 1 + (glslver != NULL);
+  version = 1 + (glslver != NULL);
 #ifdef LFL_MOBILE
   have_cubemap = strstr(glexts, "GL_EXT_texture_cube_map") != 0;
 #else
@@ -230,7 +230,7 @@ void LogVersion() {
 #endif
   int depth_bits=0;
   GetIntegerv(DepthBits, &depth_bits);
-  INFO("opengles_version = ", app->opengles_version, ", depth_bits = ", depth_bits);
+  INFO("opengles_version = ", version, ", depth_bits = ", depth_bits);
   INFO("have_cubemap = ", have_cubemap ? "true" : "false");
 
 #if 0

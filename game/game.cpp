@@ -18,6 +18,7 @@
 
 #include "core/app/gl/view.h"
 #include "core/app/gl/toolkit.h"
+#include "core/app/shell.h"
 #include "core/web/browser.h"
 #include "core/game/game.h"
 

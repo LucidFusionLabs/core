@@ -56,6 +56,7 @@ const int Key::Insert     = -35;
 const int Texture::updatesystemimage_pf = Pixel::RGB24;
 
 struct NullWindow : public Window {
+  NullWindow(Application *A) : Window(A) {}
   void SetCaption(const string &c) {}
   void SetResizeIncrements(float x, float y) {}
   void SetTransparency(float v) {}
@@ -63,10 +64,13 @@ struct NullWindow : public Window {
 };
 
 struct NullFrameworkModule : public Module {
+  WindowHolder *window;
+  NullFrameworkModule(WindowHolder *w) : window(w) {}
+
   int Init() {
     INFO("NullFrameworkModule::Init()");
-    app->focused->id = app->focused;
-    app->windows[app->focused->id] = app->focused;
+    window->focused->id = window->focused;
+    window->windows[window->focused->id] = window->focused;
     return 0;
   }
 };
@@ -90,33 +94,36 @@ struct NullPanelView : public PanelViewInterface {
 struct NullNag : public NagInterface {
 };
 
-int Application::Suspended() { return 0; }
-void Application::RunCallbackInMainThread(Callback cb) {
+void ThreadDispatcher::RunCallbackInMainThread(Callback cb) {
   message_queue.Write(new Callback(move(cb)));
-  if (!FLAGS_target_fps) scheduler.Wakeup(focused);
+  if (!FLAGS_target_fps) wakeup->Wakeup();
 }
 
-void Application::MakeCurrentWindow(Window *W) {}
+void WindowHolder::MakeCurrentWindow(Window *W) {}
+void Window::Wakeup(int) {}
+
+int Application::Suspended() { return 0; }
 void Application::CloseWindow(Window *W) {
   windows.erase(W->id);
-  if (windows.empty()) app->run = false;
-  if (app->window_closed_cb) app->window_closed_cb(W);
-  app->focused = 0;
+  if (windows.empty()) run = false;
+  if (window_closed_cb) window_closed_cb(W);
+  focused = 0;
 }
 
 void Application::LoseFocus() {}
-void Application::GrabMouseFocus() {}
-void Application::ReleaseMouseFocus() {}
+void MouseFocus::GrabMouseFocus() {}
+void MouseFocus::ReleaseMouseFocus() {}
 
-string Application::GetClipboardText() { return ""; }
-void Application::SetClipboardText(const string &s) {}
+string Clipboard::GetClipboardText() { return ""; }
+void Clipboard::SetClipboardText(const string &s) {}
 
-void Application::SetAppFrameEnabled(bool) {}
-void Application::OpenTouchKeyboard() {}
-void Application::CloseTouchKeyboard() {}
-void Application::ToggleTouchKeyboard() {}
-void Application::CloseTouchKeyboardAfterReturn(bool v) {}
-void Application::SetTouchKeyboardTiled(bool v) {}
+void TouchKeyboard::OpenTouchKeyboard() {}
+void TouchKeyboard::CloseTouchKeyboard() {}
+void TouchKeyboard::ToggleTouchKeyboard() {}
+void TouchKeyboard::CloseTouchKeyboardAfterReturn(bool v) {}
+void TouchKeyboard::SetTouchKeyboardTiled(bool v) {}
+
+void WindowHolder::SetAppFrameEnabled(bool) {}
 void Application::SetAutoRotateOrientation(bool v) {}
 void Application::ShowSystemStatusBar(bool v) {}
 void Application::ShowSystemFontChooser(const FontDesc &cur_font, const StringVecCB&) {}
@@ -125,19 +132,18 @@ void Application::ShowSystemContextMenu(const vector<MenuItem>&items) {}
 void Application::SetKeepScreenOn(bool v) {}
 void Application::SetTheme(const string &v) {}
 
-bool Video::CreateWindow(Window *W) { 
-  app->windows[W->id] = W;
+bool Video::CreateWindow(WindowHolder *H, Window *W) { 
+  H->windows[W->id] = W;
   return true;
 }
 void Video::StartWindow(Window*) {}
-int Video::Swap() { return 0; }
+int Video::Swap(Window*) { return 0; }
 
-FrameScheduler::FrameScheduler() :
-  maxfps(&FLAGS_target_fps), wakeup_thread(&frame_mutex, &wait_mutex), rate_limit(0), wait_forever(!FLAGS_target_fps),
+FrameScheduler::FrameScheduler(WindowHolder *w) :
+  window(w), maxfps(&FLAGS_target_fps), rate_limit(0), wait_forever(!FLAGS_target_fps),
   wait_forever_thread(0), synchronize_waits(0), monolithic_frame(1), run_main_loop(1) {}
 
 bool FrameScheduler::DoMainWait(bool only_poll) { return false; }
-void FrameScheduler::Wakeup(Window*, int) {}
 void FrameScheduler::UpdateWindowTargetFPS(Window*) {}
 void FrameScheduler::AddMainWaitMouse(Window*) {}
 void FrameScheduler::DelMainWaitMouse(Window*) {}
@@ -151,14 +157,14 @@ extern "C" int main(int argc, const char *argv[]) {
   return MyAppMain();
 }
 
-Window *Window::Create() { return new NullWindow(); }
 Application *CreateApplication(int ac, const char* const* av) { return new Application(ac, av); }
-unique_ptr<Module> CreateFrameworkModule() { return unique_ptr<NullFrameworkModule>(); }
+Window *CreateWindow(Application *A) { return new NullWindow(A); }
+unique_ptr<Module> CreateFrameworkModule(Application *app) { return make_unique<NullFrameworkModule>(app); }
 unique_ptr<TimerInterface> SystemToolkit::CreateTimer(Callback cb) { return nullptr; }
-unique_ptr<AlertViewInterface> SystemToolkit::CreateAlert(AlertItemVec items) { return make_unique<NullAlertView>(); }
-unique_ptr<PanelViewInterface> SystemToolkit::CreatePanel(const Box &b, const string &title, PanelItemVec items) { return nullptr; }
-unique_ptr<MenuViewInterface> SystemToolkit::CreateMenu(const string &title, MenuItemVec items) { return make_unique<NullMenuView>(); }
-unique_ptr<MenuViewInterface> SystemToolkit::CreateEditMenu(vector<MenuItem> items) { return nullptr; }
+unique_ptr<AlertViewInterface> SystemToolkit::CreateAlert(Window*, AlertItemVec items) { return make_unique<NullAlertView>(); }
+unique_ptr<PanelViewInterface> SystemToolkit::CreatePanel(Window*, const Box &b, const string &title, PanelItemVec items) { return nullptr; }
+unique_ptr<MenuViewInterface> SystemToolkit::CreateMenu(Window*, const string &title, MenuItemVec items) { return make_unique<NullMenuView>(); }
+unique_ptr<MenuViewInterface> SystemToolkit::CreateEditMenu(Window*, vector<MenuItem> items) { return nullptr; }
 unique_ptr<NagInterface> SystemToolkit::CreateNag(const string &id, int min_days, int min_uses, int min_events, int remind_days) { return make_unique<NullNag>(); }
 
 }; // namespace LFL

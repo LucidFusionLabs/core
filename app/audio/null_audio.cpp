@@ -1,5 +1,5 @@
 /*
- * $Id: camera.cpp 1330 2014-11-06 03:04:15Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -17,10 +17,10 @@
  */
 
 namespace LFL {
-int Application::GetMaxVolume() { return 0; }
-int Application::GetVolume() { return 0; }
-void Application::SetVolume(int v) {}
-void Application::PlayBackgroundMusic(SoundAsset *music) {}
-void Application::PlaySoundEffect(SoundAsset *sa, const v3 &pos, const v3 &vel) {}
+int Audio::GetMaxVolume() { return 0; }
+int Audio::GetVolume() { return 0; }
+void Audio::SetVolume(int v) {}
+void Audio::PlayBackgroundMusic(SoundAsset *music) {}
+void Audio::PlaySoundEffect(SoundAsset *sa, const v3 &pos, const v3 &vel) {}
 unique_ptr<Module> CreateAudioModule(Audio *a) { return nullptr; }
 }; // namespace LFL

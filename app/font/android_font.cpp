@@ -1,5 +1,5 @@
 /*
- * $Id: camera.cpp 1330 2014-11-06 03:04:15Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -177,7 +177,7 @@ void AndroidFontEngine::SetDefault() {
 }
 
 int AndroidFontEngine::InitGlyphs(Font *f, Glyph *g, int n) {
-  static FreeTypeFontEngine *ttf_engine = app->fonts->freetype_engine.get();
+  static FreeTypeFontEngine *ttf_engine = parent->freetype_engine.get(parent);
   int ret = ttf_engine->InitGlyphs(f, g, n);
   for (Glyph *e = g + n; g != e; ++g) {
     if (g->internal.freetype.id) continue;
@@ -208,7 +208,7 @@ int AndroidFontEngine::InitGlyphs(Font *f, Glyph *g, int n) {
 }
 
 int AndroidFontEngine::LoadGlyphs(Font *f, const Glyph *g, int n) {
-  static FreeTypeFontEngine *ttf_engine = app->fonts->freetype_engine.get();
+  static FreeTypeFontEngine *ttf_engine = parent->freetype_engine.get(parent);
   for (const Glyph *e = g + n; g != e; ++g)
     ttf_engine->LoadGlyphs(X_or_Y(g->internal.freetype.substitute, f), g, 1);
   return n;
@@ -231,7 +231,7 @@ unique_ptr<Font> AndroidFontEngine::Open(const FontDesc &d) {
 }
 
 unique_ptr<Font> AndroidFontEngine::OpenTTF(const FontDesc &ttf) {
-  static FreeTypeFontEngine *ttf_engine = app->fonts->freetype_engine.get();
+  static FreeTypeFontEngine *ttf_engine = parent->freetype_engine.get(parent);
   if (!ttf_engine->Init(ttf)) { ERROR("ttf init failed for ", ttf.DebugString()); return nullptr; }
   INFO("AndroidFontEngine::OpenTTF ", ttf.DebugString());
   unique_ptr<Font> ret = ttf_engine->Open(ttf);

@@ -76,7 +76,7 @@
     [super lockFocus];
     CGLLockContext([context CGLContextObj]);
     if ([context view] != self) [context setView:self];
-    SetLFAppWindow(_screen);
+    _screen->parent->SetFocusedWindow(_screen);
     if (needs_reshape) { [self reshape]; needs_reshape=NO; }
   }
 
@@ -110,7 +110,7 @@
   }
 
   - (NSOpenGLContext *)createGLContext {
-    NSOpenGLContext *prev_context = dynamic_cast<LFL::OSXWindow*>(LFL::app->focused)->gl;
+    NSOpenGLContext *prev_context = dynamic_cast<LFL::OSXWindow*>(_screen->parent->focused)->gl;
     NSOpenGLContext *ret = [[NSOpenGLContext alloc] initWithFormat:pixel_format shareContext:prev_context];
     [ret setView:self];
     return ret;
@@ -120,7 +120,7 @@
     initialized = true;
     if (!LFL::FLAGS_enable_video) {
       if (first) INFOf("OSXModule impl = %s", "PassThru");
-      exit(LFAppMainLoop());
+      exit(_screen->parent->MainLoop());
     } else if (_screen->target_fps == 0) {
       if (first) INFOf("OSXModule impl = %s", "MainWait");
       [self setNeedsDisplay:YES];
@@ -145,16 +145,17 @@
   - (void)drawRect:(NSRect)dirtyRect { if (use_timer) [self getFrameForTime:0]; }
   - (void)getFrameForTime:(const CVTimeStamp*)outputTime {
     static bool first_callback = 1;
-    if (first_callback && !(first_callback = 0)) SetLFAppMainThread();
+    auto a = _screen->parent;
+    if (first_callback && !(first_callback = 0)) a->SetMainThread();
     if (!initialized) return;
-    if (LFL::app->run) LFAppFrame(true);
+    if (a->run) a->EventDrivenFrame(true, true);
     else [[NSApplication sharedApplication] terminate:self];
   }
    
   - (void)reshape {
     if (!initialized) return;
     [context update];
-    SetLFAppWindow(_screen);
+    _screen->parent->SetFocusedWindow(_screen);
     float screen_w = [self frame].size.width, screen_h = [self frame].size.height;
     _screen->Reshaped(LFL::point(screen_w, screen_h), LFL::Box(0, 0, int(screen_w), int(screen_h)));
   }
@@ -174,9 +175,10 @@
   - (void)mouseDown:(NSEvent*)e { [self mouseClick:e down:1]; }
   - (void)mouseUp:  (NSEvent*)e { [self mouseClick:e down:0]; }
   - (void)mouseClick:(NSEvent*)e down:(bool)d {
-    SetLFAppWindow(_screen);
+    auto a = _screen->parent;
+    a->SetFocusedWindow(_screen);
     NSPoint p = [e locationInWindow];
-    int fired = LFL::app->input->MouseClick(1+ctrl_down, d, LFL::point(p.x, p.y));
+    int fired = a->input->MouseClick(1+ctrl_down, d, LFL::point(p.x, p.y));
     if (fired && _frame_on_mouse_input) [self setNeedsDisplay:YES]; 
     prev_mouse_pos = p;
   }
@@ -184,12 +186,13 @@
   - (void)mouseDragged:(NSEvent*)e { [self mouseMove:e drag:1]; }
   - (void)mouseMoved:  (NSEvent*)e { [self mouseMove:e drag:0]; }
   - (void)mouseMove: (NSEvent*)e drag:(bool)drag {
-    SetLFAppWindow(_screen);
+    auto a = _screen->parent;
+    a->SetFocusedWindow(_screen);
     if (_screen->cursor_grabbed) {
-      LFL::app->input->MouseMove(LFL::point(prev_mouse_pos.x, prev_mouse_pos.y), LFL::point([e deltaX], -[e deltaY]));
+      a->input->MouseMove(LFL::point(prev_mouse_pos.x, prev_mouse_pos.y), LFL::point([e deltaX], -[e deltaY]));
     } else {
       NSPoint p=[e locationInWindow], d=NSMakePoint(p.x-prev_mouse_pos.x, p.y-prev_mouse_pos.y);
-      int fired = LFL::app->input->MouseMove(LFL::point(p.x, p.y), LFL::point(d.x, d.y));
+      int fired = a->input->MouseMove(LFL::point(p.x, p.y), LFL::point(d.x, d.y));
       if (fired && _frame_on_mouse_input) [self setNeedsDisplay:YES]; 
       prev_mouse_pos = p;
     }
@@ -197,38 +200,42 @@
 
   - (void)magnifyWithEvent:(NSEvent*)event {
     CGFloat p_scale = [event magnification] + 1.0;
+    auto a = _screen->parent;
     LFL::v2 d(p_scale, p_scale);
-    int fired = LFL::app->input->MouseZoom(LFL::app->focused ? LFL::app->focused->mouse : LFL::point(), d, 0);
+    int fired = a->input->MouseZoom(a->focused ? a->focused->mouse : LFL::point(), d, 0);
     if (fired && _frame_on_mouse_input) [self setNeedsDisplay:YES]; 
   }
 
   - (void)swipeWithEvent:(NSEvent*)event {
     LFL::v2 d([event deltaX], [event deltaY]);
-    int fired = LFL::app->input->MouseWheel(d, d);
+    int fired = _screen->parent->input->MouseWheel(d, d);
     if (fired && _frame_on_mouse_input) [self setNeedsDisplay:YES]; 
   }
 
   - (void)keyDown:(NSEvent *)theEvent { [self keyPress:theEvent down:1]; }
   - (void)keyUp:  (NSEvent *)theEvent { [self keyPress:theEvent down:0]; }
   - (void)keyPress:(NSEvent *)theEvent down:(bool)d {
-    SetLFAppWindow(_screen);
+    auto a = _screen->parent;
+    a->SetFocusedWindow(_screen);
     int c = getKeyCode([theEvent keyCode]);
-    int fired = c ? LFL::app->input->KeyPress(c, 0, d) : 0;
+    int fired = c ? a->input->KeyPress(c, 0, d) : 0;
     if (fired && _frame_on_keyboard_input) [self setNeedsDisplay:YES]; 
   }
 
   - (void)flagsChanged:(NSEvent *)theEvent {
     int flags = [theEvent modifierFlags];
     bool cmd = flags & NSCommandKeyMask, ctrl = flags & NSControlKeyMask, shift = flags & NSShiftKeyMask;
-    if (cmd   != cmd_down)   { LFL::app->input->KeyPress(0x82, 0, cmd);   cmd_down   = cmd;   }
-    if (ctrl  != ctrl_down)  { LFL::app->input->KeyPress(0x86, 0, ctrl);  ctrl_down  = ctrl;  }
-    if (shift != shift_down) { LFL::app->input->KeyPress(0x83, 0, shift); shift_down = shift; }
+    auto a = _screen->parent;
+    if (cmd   != cmd_down)   { a->input->KeyPress(0x82, 0, cmd);   cmd_down   = cmd;   }
+    if (ctrl  != ctrl_down)  { a->input->KeyPress(0x86, 0, ctrl);  ctrl_down  = ctrl;  }
+    if (shift != shift_down) { a->input->KeyPress(0x83, 0, shift); shift_down = shift; }
   }
 
   - (void)clearKeyModifiers {
-    if (cmd_down)   { LFL::app->input->KeyPress(0x82, 0, 0); cmd_down   = 0; }
-    if (ctrl_down)  { LFL::app->input->KeyPress(0x86, 0, 0); ctrl_down  = 0; }
-    if (shift_down) { LFL::app->input->KeyPress(0x83, 0, 0); shift_down = 0; }
+    auto a = _screen->parent;
+    if (cmd_down)   { a->input->KeyPress(0x82, 0, 0); cmd_down   = 0; }
+    if (ctrl_down)  { a->input->KeyPress(0x86, 0, 0); ctrl_down  = 0; }
+    if (shift_down) { a->input->KeyPress(0x83, 0, 0); shift_down = 0; }
   }
 
   static int getKeyCode(int c) {
@@ -297,12 +304,13 @@
   - (BOOL)windowShouldClose:(id)sender { return _gameView.should_close; }
   - (void)windowWillClose:(NSNotification *)notification { 
     [_gameView stopThread];
-    SetLFAppWindow(_gameView.screen);
-    LFL::app->CloseWindow(_gameView.screen);
-    if (LFL::app->windows.empty()) LFAppAtExit();
+    auto wh = _gameView.screen->parent;
+    wh->SetFocusedWindow(_gameView.screen);
+    wh->CloseWindow(_gameView.screen);
+    if (wh->windows.empty()) LFAppAtExit();
   }
 
-  - (void)objcWindowSelect { SetLFAppWindow(_gameView.screen); }
+  - (void)objcWindowSelect { _gameView.screen->parent->SetFocusedWindow(_gameView.screen); }
   - (void)objcWindowFrame { [_gameView getFrameForTime:nil]; } 
 @end
 
@@ -316,7 +324,7 @@
     // [[NSFileManager defaultManager] changeCurrentDirectoryPath: [[NSBundle mainBundle] resourcePath]];
     int ret = MyAppMain();
     if (ret) exit(ret);
-    INFOf("OSXFramework::Main argc=%d ret=%d\n", LFL::app->argc, ret);
+    INFOf("OSXFramework::Main ret=%d\n", ret);
   }
 
   - (GameView*)createWindow: (int)w height:(int)h nativeWindow:(LFL::Window*)s {
@@ -400,7 +408,7 @@
   }
   
   - (void)modalAlertDidEnd:(NSAlert *)alert returnCode:(NSInteger)returnCode contextInfo:(void *)contextInfo {
-    NSWindow *window = [dynamic_cast<LFL::OSXWindow*>(LFL::app->focused)->view window];
+    NSWindow *window = (NSWindow*)contextInfo;
     [NSApp endSheet: window];
   }
 
@@ -583,42 +591,48 @@ const int Key::Insert = -1;
 const int Texture::updatesystemimage_pf = Pixel::RGB24;
 
 struct OSXFrameworkModule : public Module {
+  WindowHolder *window;
+  OSXFrameworkModule(WindowHolder *w) : window(w) {}
+
   int Init() {
     INFO("OSXFrameworkModule::Init()");
-    CHECK(Video::CreateWindow(app->focused));
-    app->MakeCurrentWindow(app->focused);
+    CHECK(Video::CreateWindow(window, window->focused));
+    window->MakeCurrentWindow(window->focused);
     return 0;
   }
 };
 
 struct OSXAlertView : public AlertViewInterface {
+  WindowHolder *win;
   OSXAlert *alert;
   ~OSXAlertView() { [alert release]; }
-  OSXAlertView(AlertItemVec items) : alert([[OSXAlert alloc] init: move(items)]) {}
+  OSXAlertView(WindowHolder *w, AlertItemVec items) : win(w), alert([[OSXAlert alloc] init: move(items)]) {}
 
   void Hide() {}
   void Show(const string &arg) {
+    NSWindow *w = [dynamic_cast<OSXWindow*>(win->focused)->view window];
     if (alert.add_text) [alert.input setStringValue: MakeNSString(arg)];
-    [alert.alert beginSheetModalForWindow:[dynamic_cast<OSXWindow*>(app->focused)->view window] modalDelegate:alert
-      didEndSelector:@selector(alertDidEnd:returnCode:contextInfo:) contextInfo:nil];
-    [dynamic_cast<OSXWindow*>(app->focused)->view  clearKeyModifiers];
+    [alert.alert beginSheetModalForWindow:w modalDelegate:alert
+      didEndSelector:@selector(alertDidEnd:returnCode:contextInfo:) contextInfo:w];
+    [dynamic_cast<OSXWindow*>(win->focused)->view  clearKeyModifiers];
   }
 
   void ShowCB(const string &title, const string &msg, const string &arg, StringCB confirm_cb) {
+    NSWindow *w = [dynamic_cast<OSXWindow*>(win->focused)->view window];
     alert.confirm_cb = move(confirm_cb);
     [alert.alert setMessageText: MakeNSString(title)];
     [alert.alert setInformativeText: MakeNSString(msg)];
-    [alert.alert beginSheetModalForWindow:[dynamic_cast<OSXWindow*>(app->focused)->view  window] modalDelegate:alert
-      didEndSelector:@selector(alertDidEnd:returnCode:contextInfo:) contextInfo:nil];
-    [dynamic_cast<OSXWindow*>(app->focused)->view  clearKeyModifiers];
+    [alert.alert beginSheetModalForWindow:w modalDelegate:alert
+      didEndSelector:@selector(alertDidEnd:returnCode:contextInfo:) contextInfo:w];
+    [dynamic_cast<OSXWindow*>(win->focused)->view  clearKeyModifiers];
   }
 
   string RunModal(const string &arg) {
-    NSWindow *window = [dynamic_cast<OSXWindow*>(app->focused)->view  window];
+    NSWindow *w = [dynamic_cast<OSXWindow*>(win->focused)->view window];
     if (alert.add_text) [alert.input setStringValue: MakeNSString(arg)];
-    [alert.alert beginSheetModalForWindow:window modalDelegate:alert
-      didEndSelector:@selector(modalAlertDidEnd:returnCode:contextInfo:) contextInfo:nil];
-    [NSApp runModalForWindow: window];
+    [alert.alert beginSheetModalForWindow:w modalDelegate:alert
+      didEndSelector:@selector(modalAlertDidEnd:returnCode:contextInfo:) contextInfo:w];
+    [NSApp runModalForWindow: w];
     return alert.add_text ? GetNSString([alert.input stringValue]) : "";
   }
 };
@@ -701,64 +715,72 @@ bool OSXWindow::Reshape(int w, int h) {
   return true;
 }
 
-int Application::Suspended() { return 0; }
-void Application::RunCallbackInMainThread(Callback cb) {
+void ThreadDispatcher::RunCallbackInMainThread(Callback cb) {
   message_queue.Write(new Callback(move(cb)));
-  if (!FLAGS_target_fps) scheduler.Wakeup(focused);
+  if (!FLAGS_target_fps) wakeup->Wakeup();
 }
 
-void Application::MakeCurrentWindow(Window *W) { 
+void WindowHolder::MakeCurrentWindow(Window *W) { 
   if (!(focused = W)) return;
   [[dynamic_cast<OSXWindow*>(W)->view openGLContext] makeCurrentContext];
   if (W->gd) W->gd->MarkDirty();
 }
 
+int Application::Suspended() { return 0; }
 void Application::CloseWindow(Window *W) {
   windows.erase(W->id);
   if (windows.empty()) run = false;
-  if (app->window_closed_cb) app->window_closed_cb(W);
+  if (window_closed_cb) window_closed_cb(W);
   // [static_cast<AppDelegate*>([NSApp delegate]) destroyWindow: [dynamic_cast<OSXWindow*>(W)->view window]];
   focused = 0;
 }
 
 void Application::LoseFocus() { [dynamic_cast<OSXWindow*>(focused)->view clearKeyModifiers]; }
 
-void Application::ReleaseMouseFocus() { 
+void MouseFocus::ReleaseMouseFocus() { 
   CGDisplayShowCursor(kCGDirectMainDisplay);
   CGAssociateMouseAndMouseCursorPosition(true);
-  focused->grab_mode.Off();
-  focused->cursor_grabbed = 0;
+  window->focused->grab_mode.Off();
+  window->focused->cursor_grabbed = 0;
 }
 
-void Application::GrabMouseFocus() {
+void MouseFocus::GrabMouseFocus() {
   CGDisplayHideCursor(kCGDirectMainDisplay);
   CGAssociateMouseAndMouseCursorPosition(false);
-  focused->grab_mode.On(); 
-  focused->cursor_grabbed = 1;
+  window->focused->grab_mode.On(); 
+  window->focused->cursor_grabbed = 1;
   CGWarpMouseCursorPosition
-    (NSPointToCGPoint([[dynamic_cast<OSXWindow*>(focused)->view window] convertRectToScreen:
-                      NSMakeRect(focused->gl_w / 2, focused->gl_h / 2, 0, 0)].origin));
+    (NSPointToCGPoint([[dynamic_cast<OSXWindow*>(window->focused)->view window] convertRectToScreen:
+                      NSMakeRect(window->focused->gl_w / 2, window->focused->gl_h / 2, 0, 0)].origin));
 }
 
-void Application::SetClipboardText(const string &s) {
+void Clipboard::SetClipboardText(const string &s) {
   NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
   [pasteboard clearContents];
   [pasteboard declareTypes:[NSArray arrayWithObject:NSPasteboardTypeString] owner:nil];
   [pasteboard setString:[[NSString alloc] initWithUTF8String:s.c_str()] forType:NSPasteboardTypeString];
 }
 
-string Application::GetClipboardText() { 
+string Clipboard::GetClipboardText() { 
   NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
   NSString *v = [pasteboard stringForType:NSPasteboardTypeString];
   return [v UTF8String];
 }
 
-void Application::SetAppFrameEnabled(bool) {}
-void Application::ToggleTouchKeyboard() {}
-void Application::OpenTouchKeyboard() {}
-void Application::CloseTouchKeyboard() {}
-void Application::CloseTouchKeyboardAfterReturn(bool v) {}
-void Application::SetTouchKeyboardTiled(bool v) {}
+void TouchKeyboard::ToggleTouchKeyboard() {}
+void TouchKeyboard::OpenTouchKeyboard() {}
+void TouchKeyboard::CloseTouchKeyboard() {}
+void TouchKeyboard::CloseTouchKeyboardAfterReturn(bool v) {}
+void TouchKeyboard::SetTouchKeyboardTiled(bool v) {}
+
+void Window::Wakeup(int flag) {
+  if (parent->scheduler.wait_forever) {
+    if (flag & WakeupFlag::InMainThread) [dynamic_cast<OSXWindow*>(this)->view setNeedsDisplay:YES];
+    else [dynamic_cast<OSXWindow*>(this)->view performSelectorOnMainThread:@selector(setNeedsDisplay:) withObject:@YES waitUntilDone:NO];
+  }
+}
+
+void WindowHolder::SetAppFrameEnabled(bool) {}
 int Application::SetExtraScale(bool v) { return false; }
 void Application::SetDownScale(bool v) {}
 void Application::SetTitleBar(bool v) {}
@@ -782,7 +804,7 @@ void Application::ShowSystemFileChooser(bool choose_files, bool choose_dirs, boo
   [panel setCanChooseDirectories:choose_dirs];
   [panel setAllowsMultipleSelection:choose_multi];
   NSInteger clicked = [panel runModal];
-  app->LoseFocus();
+  LoseFocus();
   if (clicked != NSFileHandlingPanelOKButton) return;
 
   StringVec arg;
@@ -792,11 +814,11 @@ void Application::ShowSystemFileChooser(bool choose_files, bool choose_dirs, boo
 
 void Application::ShowSystemContextMenu(const MenuItemVec &items) {
   NSEvent *event = [NSEvent mouseEventWithType: NSLeftMouseDown
-                            location:           NSMakePoint(app->focused->mouse.x, app->focused->mouse.y)
+                            location:           NSMakePoint(focused->mouse.x, focused->mouse.y)
                             modifierFlags:      NSLeftMouseDownMask
                             timestamp:          0
-                            windowNumber:       [[dynamic_cast<OSXWindow*>(app->focused)->view window] windowNumber]
-                            context:            [[dynamic_cast<OSXWindow*>(app->focused)->view window] graphicsContext]
+                            windowNumber:       [[dynamic_cast<OSXWindow*>(focused)->view window] windowNumber]
+                            context:            [[dynamic_cast<OSXWindow*>(focused)->view window] graphicsContext]
                             eventNumber:        0
                             clickCount:         1
                             pressure:           1];
@@ -812,15 +834,15 @@ void Application::ShowSystemContextMenu(const MenuItemVec &items) {
     if (i.cb) [item setRepresentedObject: [[ObjcCallback alloc] initWithCB: i.cb]];
   }
 
-  [NSMenu popUpContextMenu:menu withEvent:event forView:dynamic_cast<OSXWindow*>(app->focused)->view];
-  [dynamic_cast<OSXWindow*>(app->focused)->view clearKeyModifiers];
+  [NSMenu popUpContextMenu:menu withEvent:event forView:dynamic_cast<OSXWindow*>(focused)->view];
+  [dynamic_cast<OSXWindow*>(focused)->view clearKeyModifiers];
 }
 
-bool Video::CreateWindow(Window *W) { 
-  [dynamic_cast<OSXWindow*>(app->focused)->view clearKeyModifiers];
+bool Video::CreateWindow(WindowHolder *H, Window *W) { 
+  [dynamic_cast<OSXWindow*>(H->focused)->view clearKeyModifiers];
   W->id = (dynamic_cast<OSXWindow*>(W)->view =
            [static_cast<AppDelegate*>([NSApp delegate]) createWindow:W->gl_w height:W->gl_h nativeWindow:W]);
-  if (W->id) app->windows[W->id] = W;
+  if (W->id) H->windows[W->id] = W;
   W->SetCaption(W->caption);
   return true; 
 }
@@ -831,27 +853,19 @@ void *Video::CompleteGLContextCreate(Window *W, void *gl_context) {
   return [dynamic_cast<OSXWindow*>(W)->view createGLContext];
 }
 
-int Video::Swap() {
-  auto screen = app->focused;
-  screen->gd->Flush();
-  // [[dynamic_cast<OSXWindow*>(screen)->view openGLContext] flushBuffer];
-  CGLFlushDrawable([[dynamic_cast<OSXWindow*>(screen)->view openGLContext] CGLContextObj]);
-  screen->gd->CheckForError(__FILE__, __LINE__);
+int Video::Swap(Window *W) {
+  W->gd->Flush();
+  // [[dynamic_cast<OSXWindow*>(W)->view openGLContext] flushBuffer];
+  CGLFlushDrawable([[dynamic_cast<OSXWindow*>(W)->view openGLContext] CGLContextObj]);
+  W->gd->CheckForError(__FILE__, __LINE__);
   return 0;
 }
 
-FrameScheduler::FrameScheduler() :
-  maxfps(&FLAGS_target_fps), wakeup_thread(&frame_mutex, &wait_mutex), rate_limit(0), wait_forever(!FLAGS_target_fps),
+FrameScheduler::FrameScheduler(WindowHolder *w) :
+  window(w), maxfps(&FLAGS_target_fps), rate_limit(0), wait_forever(!FLAGS_target_fps),
   wait_forever_thread(0), synchronize_waits(0), monolithic_frame(0), run_main_loop(0) {}
 
 bool FrameScheduler::DoMainWait(bool only_poll) { return false; }
-void FrameScheduler::Wakeup(Window *w, int flag) {
-  if (wait_forever && w) {
-    if (flag & WakeupFlag::InMainThread) [dynamic_cast<OSXWindow*>(w)->view setNeedsDisplay:YES];
-    else [dynamic_cast<OSXWindow*>(w)->view performSelectorOnMainThread:@selector(setNeedsDisplay:) withObject:@YES waitUntilDone:NO];
-  }
-}
-
 void FrameScheduler::UpdateWindowTargetFPS(Window *w) { 
   [dynamic_cast<OSXWindow*>(w)->view stopThread];
   [dynamic_cast<OSXWindow*>(w)->view startThread:false];
@@ -875,14 +889,14 @@ void FrameScheduler::DelMainWaitSocket(Window *w, Socket fd) {
   [dynamic_cast<OSXWindow*>(w)->view delMainWaitSocket: fd];
 }
 
-Window *Window::Create() { return new OSXWindow(); }
+Window *CreateWindow(Application *app) { return new OSXWindow(app); }
 Application *CreateApplication(int ac, const char* const* av) { return new Application(ac, av); }
-unique_ptr<Module> CreateFrameworkModule() { return make_unique<OSXFrameworkModule>(); }
+unique_ptr<Module> CreateFrameworkModule(Application *a) { return make_unique<OSXFrameworkModule>(a); }
 unique_ptr<TimerInterface> SystemToolkit::CreateTimer(Callback cb) { return make_unique<AppleTimer>(move(cb)); }
-unique_ptr<AlertViewInterface> SystemToolkit::CreateAlert(AlertItemVec items) { return make_unique<OSXAlertView>(move(items)); }
-unique_ptr<PanelViewInterface> SystemToolkit::CreatePanel(const Box &b, const string &title, PanelItemVec items) { return make_unique<OSXPanelView>(b, title, move(items)); }
-unique_ptr<MenuViewInterface> SystemToolkit::CreateMenu(const string &title, MenuItemVec items) { return make_unique<OSXMenuView>(title, move(items)); }
-unique_ptr<MenuViewInterface> SystemToolkit::CreateEditMenu(MenuItemVec items) {
+unique_ptr<AlertViewInterface> SystemToolkit::CreateAlert(Window *w, AlertItemVec items) { return make_unique<OSXAlertView>(w->parent, move(items)); }
+unique_ptr<PanelViewInterface> SystemToolkit::CreatePanel(Window*, const Box &b, const string &title, PanelItemVec items) { return make_unique<OSXPanelView>(b, title, move(items)); }
+unique_ptr<MenuViewInterface> SystemToolkit::CreateMenu(Window*, const string &title, MenuItemVec items) { return make_unique<OSXMenuView>(title, move(items)); }
+unique_ptr<MenuViewInterface> SystemToolkit::CreateEditMenu(Window*, MenuItemVec items) {
   NSMenuItem *item; 
   NSMenu *menu = [[NSMenu alloc] initWithTitle:@"Edit"];
   item = [menu addItemWithTitle:@"Copy"  action:@selector(copy:)  keyEquivalent:@"c"];

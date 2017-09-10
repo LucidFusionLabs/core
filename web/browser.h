@@ -1,5 +1,5 @@
 /*
- * $Id: gui.h 1336 2014-12-08 09:29:59Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -26,18 +26,18 @@
 namespace LFL {
 
 struct BrowserController : public InputController {
+  Window *window;
   BrowserInterface *browser;
   int last_mx=0, last_my=0;
-  BrowserController(BrowserInterface *B) : browser(B) { active=1; }
+  BrowserController(Window *W, BrowserInterface *B) : window(W), browser(B) { active=1; }
   void Button(InputEvent::Id event, bool down) {
     int key = InputEvent::GetKey(event);
     if (key)                                browser->KeyEvent(key, down);
     else if (event == Mouse::Event::Wheel)  browser->MouseWheel(0, down*32);
     else if (event == Mouse::Event::Click2) browser->MouseButton(2, down, last_mx, last_my);
     else if (event == Mouse::Event::Click) {
-      Window *screen = app->focused;
-      if (down) screen->active_textbox = 0;
-      browser->MouseButton(1, down, screen->mouse.x, screen->mouse.y);
+      if (down) window->active_textbox = 0;
+      browser->MouseButton(1, down, window->mouse.x, window->mouse.y);
     }
   }
   void Moved(InputEvent::Id event, point p, point d) {
@@ -75,7 +75,7 @@ struct Renderer : public Object {
   Renderer(Node *N) : style(N), inline_style(N) {}
 
   void  UpdateStyle(Flow *F);
-  Font* UpdateFont(Flow *F);
+  Font* UpdateFont(Flow *F, Fonts *fonts, Window *w);
   void  UpdateDimensions(Flow *F);
   void  UpdateMarginWidth(Flow *F, int w);
   void  UpdateBackgroundImage(Flow *F);
@@ -113,6 +113,9 @@ struct Browser : public BrowserInterface {
   struct Document {
     DOM::BlockChainObjectAlloc alloc;
     DOM::HTMLDocument *node=0;
+    ThreadDispatcher *dispatch;
+    AssetLoading *loader;
+    Fonts *fonts;
     string content_type, char_set;
     vector<unique_ptr<StyleSheet>> style_sheet;
     unique_ptr<DocumentParser> parser;
@@ -122,7 +125,7 @@ struct Browser : public BrowserInterface {
     int height=0;
 
     ~Document();
-    Document(const Box &V=Box());
+    Document(ThreadDispatcher*, AssetLoading*, Fonts*, GraphicsDeviceHolder*, SocketServices*, const Box &V=Box());
     const DOM::Element *DocElement() const { return node ? node->documentElement() : 0; }
     /**/  DOM::Element *DocElement()       { return node ? node->documentElement() : 0; }
     bool Dirty() const { if (auto html = DocElement()) return html->render->layout_dirty || html->render->style_dirty; return 0; }
@@ -135,14 +138,19 @@ struct Browser : public BrowserInterface {
 
   Document doc;
   unique_ptr<LayersInterface> layers;
+  ThreadDispatcher *dispatch;
+  Window *window;
   RenderLog *render_log=0;
   Texture missing_image;
   point dim, mouse, initial_displacement;
   Box viewport;
   Widget::Slider v_scrollbar, h_scrollbar;
   StringCB url_cb;
+  ProcessAPI *ipc;
+  SystemBrowser *system_browser;
 
-  Browser(View *v=0, const Box &b=Box());
+  Browser(ThreadDispatcher *d, Window *w, AssetLoading*, Fonts*, SocketServices*, ProcessAPI*,
+          SystemBrowser*, View *v=0, const Box &b=Box());
 
   void Navigate(const string &url);
   void Open(const string &url);
@@ -160,7 +168,7 @@ struct Browser : public BrowserInterface {
   Box Viewport() const { return Box(viewport.Dimension()); }
   int VScrolled() const { return v_scrollbar.scrolled * X_or_Y(v_scrollbar.doc_height, 1000); }
   int HScrolled() const { return h_scrollbar.scrolled * 1000; }
-  void InitLayers(unique_ptr<LayersInterface> l) { CHECK(!layers); (layers = move(l))->Init(app->focused->gd, 2); }
+  void InitLayers(unique_ptr<LayersInterface> l) { CHECK(!layers); (layers = move(l))->Init(ipc, dispatch, window, 2); }
   void PaintTile(int x, int y, int z, int flag, const MultiProcessPaintResource &paint);
   string GetURL() const { return String::ToUTF8(doc.node->URL); }
   void SetURLText(const string &s) { if (url_cb) url_cb(s); }
@@ -185,10 +193,10 @@ struct Browser : public BrowserInterface {
 
   static int ToWebKitY(const Box &w) { return -w.y - w.h; }
 };
-
+unique_ptr<BrowserInterface> CreateDefaultBrowser  (ThreadDispatcher*, Window*, AssetLoading*, Fonts*, SocketServices*, ProcessAPI*, SystemBrowser*,
+                                                    View *v, int w=1024, int h=1024);
 unique_ptr<BrowserInterface> CreateQTWebKitBrowser (View *v, int w=1024, int h=1024);
 unique_ptr<BrowserInterface> CreateBerkeliumBrowser(View *v, int w=1024, int h=1024);
-unique_ptr<BrowserInterface> CreateDefaultBrowser  (View *v, int w=1024, int h=1024);
 
 }; // namespace LFL
 #endif // LFL_CORE_APP_BROWSER_H__

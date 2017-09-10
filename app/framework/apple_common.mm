@@ -49,7 +49,14 @@
 
 @implementation AppleURLSessions
   {
+    LFL::ThreadDispatcher *dispatch;
     std::unordered_map<void*, LFL::NSURLSessionStreamConnection*> task_map;
+  }
+
+  - (id)initWithDispatch: (LFL::ThreadDispatcher*)v {
+    self = [super init];
+    dispatch = v;
+    return self;
   }
 
   - (void)addTask:(void*)task withConnection:(LFL::NSURLSessionStreamConnection*)conn {
@@ -67,7 +74,7 @@
 
   - (void)URLSession:(NSURLSession *)session task:(NSURLSessionTask *)task didCompleteWithError:(NSError *)error {
     // INFOf("AppleURLSessions::URLSession: task: %p didCompleteWithError: %s", task, LFL::GetNSString([error localizedDescription]).c_str());
-    LFL::app->RunInMainThread([=](){
+    dispatch->RunInMainThread([=](){
       auto it = task_map.find(task);
       CHECK_NE(task_map.end(), it);
       delete it->second;
@@ -137,10 +144,14 @@ void NSURLSessionStreamConnection::Close() {
   }
 }
 
-NSURLSessionStreamConnection::NSURLSessionStreamConnection(const string &hostport, int default_port,
-                                                           Connection::CB s_cb) : connected_cb(move(s_cb)) {
+NSURLSessionStreamConnection::NSURLSessionStreamConnection
+(SocketService *p, const string &hostport, int default_port, Connection::CB s_cb) : 
+  Connection(p), connected_cb(move(s_cb)) {
+  auto dispatch = svc->net->dispatcher;
   if (!session) {
-    apple_url_sessions = [[AppleURLSessions alloc] init];
+    if (!apple_url_sessions) {
+      apple_url_sessions = [[AppleURLSessions alloc] initWithDispatch: dispatch];
+    }
     NSURLSessionConfiguration* config = [NSURLSessionConfiguration defaultSessionConfiguration];
     NSString *appid = [[[NSBundle mainBundle] infoDictionary] objectForKey:@"CFBundleIdentifier"];
     CHECK(config);
@@ -159,15 +170,16 @@ NSURLSessionStreamConnection::NSURLSessionStreamConnection(const string &hostpor
   CHECK(stream);
   [stream retain];
   [stream resume];
-  app->RunInMainThread([=](){ [apple_url_sessions addTask: stream withConnection: this]; });
+  dispatch->RunInMainThread([=](){ [apple_url_sessions addTask: stream withConnection: this]; });
   ReadableCB(true, false, false);
 }
 
 int NSURLSessionStreamConnection::WriteFlush(const char *buf, int len) {
   [stream writeData:LFL::MakeNSData(buf, len) timeout:0 completionHandler:^(NSError *error){
     if (!stream) return;
-    if (!connected) app->RunInMainThread([=]() { if (!connected && (connected=1)) ConnectedCB(); });
-    if (error) app->RunInMainThread([=](){ if (!done && (done=1)) { if (readable_cb()) app->scheduler.Wakeup(app->focused); } });
+    auto dispatch = svc->net->dispatcher;
+    if (!connected) dispatch->RunInMainThread([=]() { if (!connected && (connected=1)) ConnectedCB(); });
+    if (error) dispatch->RunInMainThread([=](){ if (!done && (done=1)) { if (readable_cb()) svc->net->wakeup->Wakeup(); } });
   }];
   return len;
 }
@@ -186,20 +198,20 @@ void NSURLSessionStreamConnection::ReadableCB(bool init, bool error, bool eof) {
   if (!init) {
     if (!connected && (connected=1)) ConnectedCB();
     if (!error) rb.Add(buf.data(), buf.size());
-    if (readable_cb()) app->scheduler.Wakeup(app->focused);
+    if (readable_cb()) svc->net->wakeup->Wakeup();
   }
   buf.clear();
   if (done) return;
   if (eof) {
     done = true;
-    if (readable_cb()) app->scheduler.Wakeup(app->focused);
+    if (readable_cb()) svc->net->wakeup->Wakeup();
     return;
   }
   [stream readDataOfMinLength:1 maxLength:65536 timeout:0 completionHandler:^(NSData *data, BOOL atEOF, NSError *error){
     if (!stream) return;
     if (!error) buf.append(static_cast<const char *>(data.bytes), data.length);
     else INFO(endpoint_name, ": ", GetNSString([error localizedDescription]));
-    app->RunInMainThread(bind(&NSURLSessionStreamConnection::ReadableCB, this, false, error != nil, atEOF));
+    svc->net->dispatcher->RunInMainThread(bind(&NSURLSessionStreamConnection::ReadableCB, this, false, error != nil, atEOF));
   }];
 }
 
@@ -240,22 +252,22 @@ CGImageRef MakeCGImage(Texture &t) {
   return ret;
 }
 
-string Application::GetVersion() {
+string ApplicationInfo::GetVersion() {
   NSDictionary *info = [[NSBundle mainBundle] infoDictionary];
   NSString *version = [info objectForKey:@"CFBundleVersion"];
   return version ? GetNSString(version) : "";
 }
 
-String16 Application::GetLocalizedString16(const char *key) { return String16(); }
-string Application::GetLocalizedString(const char *key) {
+String16 Localization::GetLocalizedString16(const char *key) { return String16(); }
+string Localization::GetLocalizedString(const char *key) {
   NSString *localized = 
     [[NSBundle mainBundle] localizedStringForKey: [NSString stringWithUTF8String: key] value:nil table:nil];
   if (!localized) return StrCat("<missing localized: ", key, ">");
   else            return [localized UTF8String];
 }
 
-String16 Application::GetLocalizedInteger16(int number) { return String16(); }
-string Application::GetLocalizedInteger(int number) {
+String16 Localization::GetLocalizedInteger16(int number) { return String16(); }
+string Localization::GetLocalizedInteger(int number) {
   static NSNumberFormatter *formatter=0;
   static dispatch_once_t onceToken;
   dispatch_once(&onceToken, ^{

@@ -1,5 +1,5 @@
 /*
- * $Id: audio.h 1335 2014-12-02 04:13:46Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -40,6 +40,8 @@ struct Sample {
 };
 
 struct Audio : public Module {
+  ThreadDispatcher *dispatch;
+  AssetLoading *loader;
   mutex inlock, outlock;
   unique_ptr<RingSampler> IL, IR;
   RingSampler::Handle RL, RR;
@@ -48,7 +50,7 @@ struct Audio : public Module {
   SoundAsset *playing=0, *loop=0;
   deque<float> Out;
   unique_ptr<Module> impl;
-  Audio() : Out(32768)  {}
+  Audio(ThreadDispatcher *D, AssetLoading *L) : dispatch(D), loader(L), Out(32768)  {}
 
   int Init ();
   int Start();
@@ -57,6 +59,13 @@ struct Audio : public Module {
   void QueueMix(SoundAsset *sa, int flag=MixFlag::Reset, int offset=-1, int len=-1);
   void QueueMixBuf(const RingSampler::Handle *L, int channels=1, int flag=0);
   int Snapshot(SoundAsset *sa);
+
+  int GetVolume();
+  int GetMaxVolume();
+  void SetVolume(int v);
+  void PlaySoundEffect(SoundAsset*, const v3 &pos=v3(), const v3 &vel=v3());
+  void PlayBackgroundMusic(SoundAsset*);
+
   static double VisualDelay();
 };
 

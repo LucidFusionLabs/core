@@ -1,5 +1,5 @@
 /*
- * $Id: camera.cpp 1330 2014-11-06 03:04:15Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -39,7 +39,7 @@ void FreeTypeFontEngine::SetDefault() {
 
 bool FreeTypeFontEngine::Init(const FontDesc &d) {
   if (Contains(resource, d.name)) return true;
-  string content = d.name.data()[0] == '/' ? LocalFile::FileContents(d.name) : Asset::FileContents(d.name);
+  string content = d.name.data()[0] == '/' ? LocalFile::FileContents(d.name) : parent->loader->FileContents(d.name);
   if (Resource *r = OpenBuffer(d, &content)) {
     resource[d.name] = shared_ptr<Resource>(r);
     return true;
@@ -134,20 +134,20 @@ unique_ptr<Font> FreeTypeFontEngine::Open(const FontDesc &d) {
   auto ri = resource.find(d.name);
   if (ri == resource.end()) return 0;
   unique_ptr<Font> ret = make_unique<Font>(this, d, ri->second);
-  ret->glyph = make_shared<GlyphMap>();
+  ret->glyph = make_shared<GlyphMap>(parent->parent);
   int count = InitGlyphs(ret.get(), &ret->glyph->table[0], ret->glyph->table.size());
   ret->fix_metrics = true;
   ret->mix_fg = true;
 
   bool new_cache = false, pre_load = false;
   ret->glyph->cache = 
-    (!new_cache ? app->fonts->GetGlyphCache() :
-     make_shared<GlyphCache>(0, AtlasFontEngine::Dimension(ret->max_width, ret->Height(), count)));
+    (!new_cache ? parent->GetGlyphCache() :
+     make_shared<GlyphCache>(parent->parent, 0, AtlasFontEngine::Dimension(ret->max_width, ret->Height(), count)));
   GlyphCache *cache = ret->glyph->cache.get();
 
   if (new_cache) cache->tex.RenewBuffer();
   if (pre_load) LoadGlyphs(ret.get(), &ret->glyph->table[0], ret->glyph->table.size());
-  if (FLAGS_atlas_dump) AtlasFontEngine::WriteAtlas(d.Filename(), ret.get(), &cache->tex);
+  if (FLAGS_atlas_dump) AtlasFontEngine::WriteAtlas(parent->appinfo, d.Filename(), ret.get(), &cache->tex);
   if (new_cache) {
     cache->tex.LoadGL();
     cache->tex.ClearBuffer();

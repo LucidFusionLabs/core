@@ -48,10 +48,10 @@ static LFL::FreeListVector<NSImage*> app_images;
     CATransition *transition;
   }
 
-  - (id)init { 
+  - (id)initWithWindow: (LFL::OSXWindow*)win { 
     self = [super init];
     _header_height = 30;
-    NSView *contentView = dynamic_cast<LFL::OSXWindow*>(LFL::app->focused)->view.window.contentView;
+    NSView *contentView = win->view.window.contentView;
     _view = [[NSView alloc] initWithFrame: contentView.frame];
     _view.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
     _viewControllers = [[NSMutableArray alloc] init];
@@ -163,7 +163,7 @@ static LFL::FreeListVector<NSImage*> app_images;
     std::vector<LFL::TableSection<LFL::TableItem>> data;
   }
 
-  - (id)init: (LFL::TableViewInterface*)lself withTitle:(const std::string&)title andStyle:(const std::string&)style items:(std::vector<LFL::TableSection<LFL::TableItem>>)item { 
+  - (id)init: (LFL::TableViewInterface*)lself withWindow:(LFL::OSXWindow*)w withTitle:(const std::string&)title andStyle:(const std::string&)style items:(std::vector<LFL::TableSection<LFL::TableItem>>)item { 
     self = [super init];
     self.title = LFL::MakeNSString(title);
     _lfl_self = lself;
@@ -180,7 +180,7 @@ static LFL::FreeListVector<NSImage*> app_images;
       [OSXTable addHiddenIndices:i to:hide_indices];
     }
 
-    NSView *contentView = dynamic_cast<LFL::OSXWindow*>(LFL::app->focused)->view.window.contentView;
+    NSView *contentView = w->view.window.contentView;
     _tableContainer = [[NSScrollView alloc] initWithFrame: contentView.frame];
     self.view = [_tableContainer autorelease];
     self.view.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
@@ -466,17 +466,18 @@ struct OSXCollectionView : public CollectionViewInterface {
 };
 
 struct OSXTableView : public TableViewInterface {
+  OSXWindow *win;
   OSXTable *table;
   ~OSXTableView() { [table release]; }
-  OSXTableView(const string &title, const string &style, TableItemVec items) :
-    table([[OSXTable alloc] init:this withTitle:title andStyle:style items:TableSection<TableItem>::Convert(move(items))]) {}
+  OSXTableView(OSXWindow *w, const string &title, const string &style, TableItemVec items) : win(w),
+    table([[OSXTable alloc] init:this withWindow:w withTitle:title andStyle:style items:TableSection<TableItem>::Convert(move(items))]) {}
 
   void DelNavigationButton(int align) {}
   void AddNavigationButton(int align, const TableItem &item) {}
   void SetToolbar(ToolbarViewInterface *t) {}
 
   void Show(bool show_or_hide) {
-    NSView *contentView = dynamic_cast<OSXWindow*>(app->focused)->view.window.contentView;
+    NSView *contentView = win->view.window.contentView;
     if (show_or_hide) {
       [[contentView animator] addSubview:table.tableContainer];
       [table.tableContainer setFrameOrigin:CGPointMake(0, 0)];
@@ -528,12 +529,13 @@ struct OSXTextView : public TextViewInterface {
 };
 
 struct OSXNavigationView : public NavigationViewInterface {
+  OSXWindow *win;
   OSXNavigation *nav;
   ~OSXNavigationView() { [nav release]; }
-  OSXNavigationView() : nav([[OSXNavigation alloc] init]) {}
+  OSXNavigationView(OSXWindow *w) : win(w), nav([[OSXNavigation alloc] initWithWindow:w]) {}
 
   void Show(bool show_or_hide) {
-    GameContainerView *contentView = dynamic_cast<OSXWindow*>(app->focused)->view.window.contentView;
+    GameContainerView *contentView = win->view.window.contentView;
     if ((shown = show_or_hide)) {
       [contentView.gameView removeFromSuperview];
       [[contentView animator] addSubview:nav.view];
@@ -573,7 +575,7 @@ struct OSXNavigationView : public NavigationViewInterface {
 };
 
 int Application::LoadSystemImage(const string &n) {
-  NSImage *image = [[NSImage alloc] initWithContentsOfFile: MakeNSString(StrCat(app->assetdir, "../drawable-xhdpi/", n, ".png")) ];
+  NSImage *image = [[NSImage alloc] initWithContentsOfFile: MakeNSString(StrCat(assetdir, "../drawable-xhdpi/", n, ".png")) ];
   if (!image) return 0;
   return app_images.Insert(move(image)) + 1;
 }
@@ -586,11 +588,11 @@ void Application::UnloadSystemImage(int n) {
   app_images.Erase(n-1);
 }
 
-unique_ptr<ToolbarViewInterface> SystemToolkit::CreateToolbar(const string &theme, MenuItemVec items, int flag) { return make_unique<OSXToolbarView>(move(items)); }
-unique_ptr<CollectionViewInterface> SystemToolkit::CreateCollectionView(const string &title, const string &style, const string &theme, vector<CollectionItem> items) { return make_unique<OSXCollectionView>(title, style, move(items)); }
-unique_ptr<TableViewInterface> SystemToolkit::CreateTableView(const string &title, const string &style, const string &theme, TableItemVec items) { return make_unique<OSXTableView>(title, style, move(items)); }
-unique_ptr<TextViewInterface> SystemToolkit::CreateTextView(const string &title, File *file) { return make_unique<OSXTextView>(title, file); }
-unique_ptr<TextViewInterface> SystemToolkit::CreateTextView(const string &title, const string &text) { return make_unique<OSXTextView>(title, text); }
-unique_ptr<NavigationViewInterface> SystemToolkit::CreateNavigationView(const string &style, const string &theme) { return make_unique<OSXNavigationView>(); }
+unique_ptr<ToolbarViewInterface> SystemToolkit::CreateToolbar(Window *w, const string &theme, MenuItemVec items, int flag) { return make_unique<OSXToolbarView>(move(items)); }
+unique_ptr<CollectionViewInterface> SystemToolkit::CreateCollectionView(Window *w, const string &title, const string &style, const string &theme, vector<CollectionItem> items) { return make_unique<OSXCollectionView>(title, style, move(items)); }
+unique_ptr<TableViewInterface> SystemToolkit::CreateTableView(Window *w, const string &title, const string &style, const string &theme, TableItemVec items) { return make_unique<OSXTableView>(dynamic_cast<OSXWindow*>(w), title, style, move(items)); }
+unique_ptr<TextViewInterface> SystemToolkit::CreateTextView(Window *w, const string &title, File *file) { return make_unique<OSXTextView>(title, file); }
+unique_ptr<TextViewInterface> SystemToolkit::CreateTextView(Window *w, const string &title, const string &text) { return make_unique<OSXTextView>(title, text); }
+unique_ptr<NavigationViewInterface> SystemToolkit::CreateNavigationView(Window *w, const string &style, const string &theme) { return make_unique<OSXNavigationView>(dynamic_cast<OSXWindow*>(w)); }
 
 }; // namespace LFL

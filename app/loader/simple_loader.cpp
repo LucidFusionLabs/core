@@ -1,5 +1,5 @@
 /*
- * $Id: camera.cpp 1330 2014-11-06 03:04:15Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -18,5 +18,5 @@
 
 namespace LFL {
 const int SoundAsset::FromBufPad = 0;
-unique_ptr<AssetLoaderInterface> CreateAssetLoader() { return CreateSimpleAssetLoader(); }
+unique_ptr<AssetLoaderInterface> CreateAssetLoader(AssetLoading *l) { return CreateSimpleAssetLoader(l); }
 }; // namespace LFL

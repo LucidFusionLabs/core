@@ -1,5 +1,5 @@
 /*
- * $Id: crypto.cpp 1335 2014-12-02 04:13:46Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -23,7 +23,7 @@ ptrdiff_t SSLSocket::Write(const StringPiece &b) { return -1; }
 ptrdiff_t SSLSocket::Read(char *buf, int readlen) { return -1; }
 Socket SSLSocket::Connect(CTXPtr sslctx, const string &hostport) { return InvalidSocket; }
 Socket SSLSocket::Connect(CTXPtr sslctx, IPV4::Addr addr, int port) { return InvalidSocket; }
-Socket SSLSocket::Listen(int port, bool reuse) { return InvalidSocket; }
+Socket SSLSocket::Listen(CTXPtr sslctx, int port, bool reuse) { return InvalidSocket; }
 Socket SSLSocket::Accept(SSLSocket *out) { return InvalidSocket; }
 SSLSocket::CTXPtr SSLSocket::Init() { return nullptr; }
 void SSLSocket::Free() {}

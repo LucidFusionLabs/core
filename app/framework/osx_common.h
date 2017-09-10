@@ -1,5 +1,5 @@
 /*
- * $Id: osx_common.h 1336 2014-12-08 09:29:59Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -34,7 +34,8 @@ namespace LFL {
 struct OSXWindow : public Window {
   GameView *view=0;
   NSOpenGLContext *gl=0;
-  ~OSXWindow() { ClearChildren(); }
+  OSXWindow(Application *app) : Window(app) {}
+  virtual ~OSXWindow() { ClearChildren(); }
   void SetCaption(const string &c);
   void SetResizeIncrements(float x, float y);
   void SetTransparency(float v);

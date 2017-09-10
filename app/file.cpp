@@ -166,29 +166,29 @@ int LocalFile::IsDirectory(const string &filename) {
   return buf.st_mode & S_IFDIR;
 }
 
-int LocalFile::CreateTemporary(const string &prefix, string *name) {
+int LocalFile::CreateTemporary(ApplicationInfo *a, const string &prefix, string *name) {
   string v;
   if (!name) name = &v;
-  *name = CreateTemporaryNameTemplate(prefix);
+  *name = CreateTemporaryNameTemplate(a, prefix);
 
   int fd = -1;
   if ((fd = mkstemp(&(*name)[0])) < 0) return ERRORv(-1, "mkstemp ", *name, ": ", strerror(errno));
   return fd;
 }
 
-string LocalFile::CreateTemporaryName(const string &prefix) {
-  string ret = CreateTemporaryNameTemplate(prefix);
+string LocalFile::CreateTemporaryName(ApplicationInfo *a, const string &prefix) {
+  string ret = CreateTemporaryNameTemplate(a, prefix);
   CHECK(mktemp(&ret[0]));
   return ret;
 }
 
-string LocalFile::CreateTemporaryNameTemplate(const string &prefix) {
+string LocalFile::CreateTemporaryNameTemplate(ApplicationInfo *a, const string &prefix) {
 #ifdef LFL_APPLE
   string dir = "/var/tmp/";
 #else
-  string dir = app->savedir;
+  string dir = a->savedir;
 #endif
-  return StrCat(dir, app->name, "_", prefix, ".XXXXXXXX");
+  return StrCat(dir, a->name, "_", prefix, ".XXXXXXXX");
 }
 #endif // LFL_WINDOWS
 
@@ -489,8 +489,8 @@ void StringFile::Print(const string &name, bool nl) {
   if (!nl) INFO(s);
 }
 
-int StringFile::ReadVersioned(const VersionedFileName &fn, int iteration) {
-  if (iteration == -1) if ((iteration = MatrixFile::FindHighestIteration(fn, "string")) == -1) return -1;
+int StringFile::ReadVersioned(const VersionedFileName &fn, ApplicationLifetime *life, int iteration) {
+  if (iteration == -1) if ((iteration = MatrixFile::FindHighestIteration(fn, "string", life)) == -1) return -1;
   if (Read(StrCat(fn.dir, MatrixFile::Filename(fn, "string", iteration)))) return -1;
   return iteration;
 }
@@ -554,9 +554,9 @@ int StringFile::WriteRow(File *file, const string &rowval) {
 
 /* MatrixFile */
 
-int MatrixFile::ReadVersioned(const VersionedFileName &fn, int iteration) {
+int MatrixFile::ReadVersioned(const VersionedFileName &fn, ApplicationLifetime *life, int iteration) {
   static const char *fileext[] = { "matbin", "matrix" };
-  if (iteration == -1) if ((iteration = FindHighestIteration(fn, fileext[0], fileext[1])) == -1) return -1;
+  if (iteration == -1) if ((iteration = FindHighestIteration(fn, fileext[0], fileext[1], life)) == -1) return -1;
 
   bool found = 0;
   if (!found) if (!ReadBinary(string(fn.dir) + Filename(fn, fileext[0], iteration))) found=1;
@@ -667,19 +667,19 @@ string MatrixFile::Filename(const string &Class, const string &Var, const string
   return StringPrintf("%s.%04d.%s.%s", Class.c_str(), iteration, Var.c_str(), Suffix.c_str());
 }
 
-int MatrixFile::FindHighestIteration(const VersionedFileName &fn, const string &Suffix) {
+int MatrixFile::FindHighestIteration(const VersionedFileName &fn, const string &Suffix, ApplicationLifetime *life) {
   int iteration = -1, iter;
   string pref = StrCat(fn._class, ".");
   string suf  = StrCat(".", fn.var, ".", Suffix);
 
   DirectoryIter d(fn.dir, 0, pref.c_str(), suf.c_str());
-  for (const char *f = d.Next(); app->run && f; f = d.Next()) {
+  for (const char *f = d.Next(); (!life || life->run) && f; f = d.Next()) {
     if ((iter = atoi(f + pref.length())) > iteration) iteration = iter;
   }
   return iteration;
 }
 
-int MatrixFile::FindHighestIteration(const VersionedFileName &fn, const string &Suffix1, const string &Suffix2) {
+int MatrixFile::FindHighestIteration(const VersionedFileName &fn, const string &Suffix1, const string &Suffix2, ApplicationLifetime *life) {
   int iter1 = FindHighestIteration(fn, Suffix1);
   int iter2 = FindHighestIteration(fn, Suffix2);
   return iter1 >= iter2 ? iter1 : iter2;
@@ -752,19 +752,19 @@ int MatrixFile::WriteRow(File *file, const double *row, int N, bool lastrow) {
 
 /* SettingsFile */
 
-int SettingsFile::Load() {
-  int ret = SettingsFile::Read(app->savedir, StrCat(app->name, "_settings"));
-  Singleton<FlagMap>::Get()->dirty = false;
+int SettingsFile::Load(ApplicationInfo *a) {
+  int ret = SettingsFile::Read(a->savedir, StrCat(a->name, "_settings"));
+  Singleton<FlagMap>::Set()->dirty = false;
   return ret;
 }
 
 int SettingsFile::Read(const string &dir, const string &name) {
   StringFile settings; int lastiter=0;
   VersionedFileName vfn(dir.c_str(), name.c_str(), VarName());
-  if (settings.ReadVersioned(vfn, lastiter) < 0) return ERRORv(-1, name, ".", lastiter, ".name");
+  if (settings.ReadVersioned(vfn, nullptr, lastiter) < 0) return ERRORv(-1, name, ".", lastiter, ".name");
   for (int i=0, l=settings.Lines(); i<l; i++) {
     const char *line = (*settings.F)[i].c_str(), *sep = strstr(line, Separator());
-    if (sep) Singleton<FlagMap>::Get()->Set(string(line, sep-line), sep + strlen(Separator()));
+    if (sep) Singleton<FlagMap>::Set()->Set(string(line, sep-line), sep + strlen(Separator()));
   }
   return 0;
 }
@@ -778,10 +778,10 @@ int SettingsFile::Write(const vector<string> &fields, const string &dir, const s
   return 0;
 }
 
-int SettingsFile::Save(const vector<string> &fields) {
-  Singleton<FlagMap>::Get()->dirty = false;
-  chdir(app->startdir.c_str());
-  int ret = SettingsFile::Write(fields, app->savedir, StrCat(app->name, "_settings"));
+int SettingsFile::Save(ApplicationInfo *a, const vector<string> &fields) {
+  Singleton<FlagMap>::Set()->dirty = false;
+  chdir(a->startdir.c_str());
+  int ret = SettingsFile::Write(fields, a->savedir, StrCat(a->name, "_settings"));
   INFO("wrote settings");
   return ret;
 }
