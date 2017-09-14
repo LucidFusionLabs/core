@@ -465,7 +465,7 @@ bool InterProcessComm::StartServerProcess(const string &server_program, const ve
 #error no_ipc_impl
 #endif
   
-  conn = net->unix_client->AddConnectedSocket(conn_socket, new ConnectionHandler(this));
+  conn = net->unix_client->AddConnectedSocket(conn_socket, make_unique<ConnectionHandler>(this));
   conn->control_messages = conn_control_messages;
   INFO("ProcessAPIClient started server PID=", pid, " ", server_program);
   return true;

@@ -253,8 +253,6 @@ typedef void* CXCompilationDatabase;
 typedef void* CXIndex;
 typedef void* Void;
 struct typed_ptr { void *type, *v; };
-struct void_ptr { void *v; };
-struct const_void_ptr { const void *v; };
 
 struct LFApp {
   struct Log { enum { Fatal=-1, Error=0, Info=3, Debug=7 }; int unused; };
@@ -296,8 +294,6 @@ namespace LFL {
 template <class X> void *TypeId() { static char id=0; return &id; }
 template <class X> typed_ptr MakeTyped(X v) { typed_ptr x = { TypeId<X>(), v }; return x; }
 template <class X> X GetTyped(const typed_ptr &p) { return p.type == TypeId<X>() ? static_cast<X>(p.v) : 0; }
-template <class X> X FromVoid(const void_ptr &p) { return static_cast<X>(p.v); }
-template <class X> X FromVoid(const const_void_ptr &p) { return static_cast<X>(p.v); }
 }; // namespace LFL
 #endif // __cplusplus
 #endif // LFL_CORE_APP_EXPORT_H__

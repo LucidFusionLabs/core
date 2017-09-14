@@ -289,7 +289,7 @@ void JNI::MainThreadRunRunnableOnUiThread(GlobalJNIObject* runnable) {
   jni->app->RunCallbackInMainThread(bind(&JNI::RunGlobalRunnableOnUiThread, nullptr, runnable));
 }
 
-BufferFile *JNI::OpenAsset(const string &fn) {
+unique_ptr<BufferFile> JNI::OpenAsset(const string &fn) {
   static jmethodID get_assets_mid = CheckNotNull(env->GetMethodID(activity_class, "getAssets", "()Landroid/content/res/AssetManager;"));
   static jmethodID assetmgr_open_mid = CheckNotNull(env->GetMethodID(assetmgr_class, "open", "(Ljava/lang/String;)Ljava/io/InputStream;"));
   static jmethodID inputstream_avail_mid = CheckNotNull(env->GetMethodID(inputstream_class, "available", "()I"));
@@ -305,7 +305,7 @@ BufferFile *JNI::OpenAsset(const string &fn) {
   if (CheckForException()) return nullptr;
 
   unique_ptr<BufferFile> ret = make_unique<BufferFile>(string(), fn.c_str());
-  if (!len) return ret.release();
+  if (!len) return ret;
   ret->buf.resize(len);
 
   LocalJNIObject readable(env, env->CallStaticObjectMethod(channels_class, channels_newchan_mid, input.v));
@@ -313,7 +313,7 @@ BufferFile *JNI::OpenAsset(const string &fn) {
   len = env->CallIntMethod(readable.v, readbytechan_read_mid, bytes.v);
 
   if (len != ret->buf.size() || CheckForException()) return nullptr;
-  return ret.release();
+  return ret;
 }
 
 template <class X> GlobalJNIType<X>::GlobalJNIType(X V) : GlobalJNIType(jni->env, V) {}

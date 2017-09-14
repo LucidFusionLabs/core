@@ -21,29 +21,56 @@
 namespace LFL {
   
 struct AudioAssetLoader {
-  virtual void *LoadAudioFile(File*) = 0;
-  virtual void *LoadAudioFileNamed(const string &fn) = 0;
-  virtual void UnloadAudioFile(void *h) = 0;
+  struct Handle : public UniqueVoidPtr {
+    AudioAssetLoader *parent;
+    bool owner;
+    ~Handle() { reset(0); }
+    Handle(Handle &&x) : UniqueVoidPtr(move(x)), parent(x.parent), owner(x.owner) {}
+    Handle(AudioAssetLoader *p=0, void *v=0, bool o=1) : UniqueVoidPtr(v), parent(p), owner(o) {}
+    Handle &operator=(Handle &&x) { reset(x.release()); parent=x.parent; owner=x.owner; return *this; }
+    void reset(void *x) { if (owner && v) parent->UnloadAudioFile(*this); v=x; }
+  };
 
-  virtual void LoadAudio(void *h, SoundAsset *a, int seconds, int flag) = 0;
+  virtual void UnloadAudioFile(Handle&) = 0;
+  virtual Handle LoadAudioFile(unique_ptr<File>) = 0;
+  virtual Handle LoadAudioFileNamed(const string &fn) = 0;
+  virtual void LoadAudio(Handle &h, SoundAsset *a, int seconds, int flag) = 0;
   virtual int RefillAudio(SoundAsset *a, int reset) = 0;
 };
 
 struct VideoAssetLoader {
-  virtual void *LoadVideoFile(File*) = 0;
-  virtual void *LoadVideoFileNamed(const string &fn) = 0;
-  virtual void UnloadVideoFile(void *h) = 0;
-
   struct Flag { enum { LoadGL=1, Clear=2, RepeatGL=4, Default=LoadGL|Clear }; };
-  virtual void LoadVideo(void *h, Texture *out, int flag=Flag::Default) = 0;
+  struct Handle : public UniqueVoidPtr {
+    VideoAssetLoader *parent;
+    bool owner;
+    ~Handle() { reset(0); }
+    Handle(Handle &&x) : UniqueVoidPtr(move(x)), parent(x.parent), owner(x.owner) {}
+    Handle(VideoAssetLoader *p=0, void *v=0, bool o=1) : UniqueVoidPtr(v), parent(p), owner(o) {}
+    Handle &operator=(Handle &&x) { reset(x.release()); parent=x.parent; owner=x.owner; return *this; }
+    void reset(void *x) { if (v) parent->UnloadVideoFile(*this); v=x; }
+  };
+
+  virtual void UnloadVideoFile(Handle&) = 0;
+  virtual Handle LoadVideoFile(unique_ptr<File>) = 0;
+  virtual Handle LoadVideoFileNamed(const string &fn) = 0;
+  virtual void LoadVideo(Handle &h, Texture *out, int flag=Flag::Default) = 0;
 };
 
 struct MovieAssetLoader {
-  virtual void *LoadMovieFile(File*) = 0;
-  virtual void *LoadMovieFileNamed(const string &fn) = 0;
-  virtual void UnloadMovieFile(void *h) = 0;
+  struct Handle : public UniqueVoidPtr {
+    MovieAssetLoader *parent;
+    bool owner;
+    ~Handle() { reset(0); }
+    Handle(Handle &&x) : UniqueVoidPtr(move(x)), parent(x.parent), owner(x.owner) {}
+    Handle(MovieAssetLoader *p=0, void *v=0, bool o=1) : UniqueVoidPtr(v), parent(p), owner(o) {}
+    Handle &operator=(Handle &&x) { reset(x.release()); parent=x.parent; owner=x.owner; return *this; }
+    void reset(void *x) { if (v) parent->UnloadMovieFile(*this); v=x; }
+  };
 
-  virtual void LoadMovie(void *h, MovieAsset *a) = 0;
+  virtual void UnloadMovieFile(Handle&) = 0;
+  virtual Handle LoadMovieFile(unique_ptr<File>) = 0;
+  virtual Handle LoadMovieFileNamed(const string &fn) = 0;
+  virtual void LoadMovie(Handle &h, MovieAsset *a) = 0;
   virtual int PlayMovie(MovieAsset *a, int seek) = 0;
 };
 
@@ -102,10 +129,17 @@ struct WavWriter {
   int Flush();
 };
 
+struct ZLibStream : public UniqueVoidPtr {
+  ZLibStream();
+  ZLibStream(ZLibStream &&x) : UniqueVoidPtr(move(x)) {}
+  ~ZLibStream() { reset(0); }
+  void reset(void *x);
+};
+
 struct ZLibReader {
   string out;
   int blocksize;
-  VoidPtr stream;
+  ZLibStream stream;
   ~ZLibReader();
   ZLibReader(int blocksize=32768);
   bool Add(const StringPiece &in, bool partial_flush=0, bool final=0, int max_out=0);
@@ -115,7 +149,7 @@ struct ZLibReader {
 struct ZLibWriter {
   string out;
   int blocksize;
-  VoidPtr stream;
+  ZLibStream stream;
   ~ZLibWriter();
   ZLibWriter(int blocksize=32768);
   bool Add(const StringPiece &in, bool partial_flush=0, bool final=0, int max_out=0);
@@ -123,10 +157,10 @@ struct ZLibWriter {
 };
 
 struct OGGReader {
-  static void  Close(void *h);
-  static void *OpenBuffer(const char *buf, size_t len, int *sr_out, int *chans_out, int *total_out);
-  static void *OpenFile(const string &fn, int *sr_out, int *chans_out, int *total_out);
-  static int   Read(void *h, int chans, int samples, RingSampler::Handle *out, bool reset);
+  static AudioAssetLoader::Handle OpenBuffer(AudioAssetLoader *p, const char *buf, size_t len, int *sr_out, int *chans_out, int *total_out);
+  static AudioAssetLoader::Handle OpenFile(AudioAssetLoader *p, const string &fn, int *sr_out, int *chans_out, int *total_out);
+  static int Read(AudioAssetLoader::Handle &h, int chans, int samples, RingSampler::Handle *out, bool reset);
+  static void Close(AudioAssetLoader::Handle &h);
 };
 
 struct AssetLoader : public Module {
@@ -151,22 +185,21 @@ struct SimpleAssetLoader : public AssetLoaderInterface {
   virtual void *LoadFileNamed(const string &filename);
   virtual void UnloadFile(void *h);
 
-  virtual void *LoadAudioFile(File*);
-  virtual void *LoadAudioFileNamed(const string &filename);
-  virtual void UnloadAudioFile(void *h);
-
-  virtual void *LoadVideoFile(File*);
-  virtual void *LoadVideoFileNamed(const string &filename);
-  virtual void UnloadVideoFile(void *h);
-
-  virtual void *LoadMovieFile(File*);
-  virtual void *LoadMovieFileNamed(const string &filename);
-  virtual void UnloadMovieFile(void *h);
-
-  virtual void LoadVideo(void *h, Texture *out, int load_flag=VideoAssetLoader::Flag::Default);
-  virtual void LoadAudio(void *h, SoundAsset *a, int seconds, int flag);
+  virtual void UnloadAudioFile(AudioAssetLoader::Handle &h);
+  virtual AudioAssetLoader::Handle LoadAudioFile(unique_ptr<File>);
+  virtual AudioAssetLoader::Handle LoadAudioFileNamed(const string &filename);
+  virtual void LoadAudio(AudioAssetLoader::Handle &h, SoundAsset *a, int seconds, int flag);
   virtual int RefillAudio(SoundAsset *a, int reset);
-  virtual void LoadMovie(void *h, MovieAsset *a);
+
+  virtual void UnloadVideoFile(VideoAssetLoader::Handle &h);
+  virtual VideoAssetLoader::Handle LoadVideoFile(unique_ptr<File>);
+  virtual VideoAssetLoader::Handle LoadVideoFileNamed(const string &filename);
+  virtual void LoadVideo(VideoAssetLoader::Handle &h, Texture *out, int load_flag=VideoAssetLoader::Flag::Default);
+
+  virtual void UnloadMovieFile(MovieAssetLoader::Handle &h);
+  virtual MovieAssetLoader::Handle LoadMovieFile(unique_ptr<File>);
+  virtual MovieAssetLoader::Handle LoadMovieFileNamed(const string &filename);
+  virtual void LoadMovie(MovieAssetLoader::Handle &h, MovieAsset *a);
   virtual int PlayMovie(MovieAsset *a, int seek) ;
 };
 

@@ -105,7 +105,7 @@ struct JNI {
   static void MainThreadRunRunnable          (GlobalJNIObject* runnable);
   static void MainThreadRunRunnableOnUiThread(GlobalJNIObject* runnable);
 
-  BufferFile *OpenAsset(const string &fn);
+  unique_ptr<BufferFile> OpenAsset(const string &fn);
 };
 
 struct GPlus {

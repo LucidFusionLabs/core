@@ -21,18 +21,12 @@
 #include <zlib.h>
 
 namespace LFL {
-ZLibReader::ZLibReader(int bs) : blocksize(bs) {
-  z_stream *zs = new z_stream;
-  memzerop(zs);
-  if (inflateInit(zs) != Z_OK) { delete zs; ERROR("inflateInit"); return; }
-  stream = zs;
-}
+ZLibStream::ZLibStream() : UniqueVoidPtr(new z_stream) { memzerop(FromVoid<z_stream*>(*this)); }
+void ZLibStream::reset(void *x) { if (v) delete FromVoid<z_stream*>(*this); v=x; }
 
-ZLibReader::~ZLibReader() {
-  if (!stream) return;
-  z_stream *zs = FromVoid<z_stream*>(stream);
-  inflateEnd(zs);
-  delete zs;
+ZLibReader::~ZLibReader() { if (stream) inflateEnd(FromVoid<z_stream*>(stream)); }
+ZLibReader::ZLibReader(int bs) : blocksize(bs) {
+  if (inflateInit(FromVoid<z_stream*>(stream)) != Z_OK) ERROR("inflateInit");
 }
 
 bool ZLibReader::Add(const StringPiece &in, bool partial_flush, bool final, int max_out) {
@@ -62,18 +56,9 @@ string ZLibReader::Decompress(const StringPiece &in) {
   return zreader.Add(in, false, true) ? zreader.out : "";
 }
 
+ZLibWriter::~ZLibWriter() { if (stream) deflateEnd(FromVoid<z_stream*>(stream)); }
 ZLibWriter::ZLibWriter(int bs) : blocksize(bs) {
-  z_stream *zs = new z_stream;
-  memzerop(zs);
-  if (deflateInit(zs, Z_BEST_COMPRESSION) != Z_OK) { delete zs; ERROR("deflateInit"); return; }
-  stream = zs;
-}
-
-ZLibWriter::~ZLibWriter() {
-  if (!stream) return;
-  z_stream *zs = FromVoid<z_stream*>(stream);
-  deflateEnd(zs);
-  delete zs;
+  if (deflateInit(FromVoid<z_stream*>(stream), Z_BEST_COMPRESSION) != Z_OK) ERROR("deflateInit");
 }
 
 bool ZLibWriter::Add(const StringPiece &in, bool partial_flush, bool final, int max_out) {
@@ -309,33 +294,32 @@ string Geometry::ExportOBJ(const Geometry *geom, const set<int> *prim_filter, bo
 }
 
 SimpleAssetLoader::SimpleAssetLoader(AssetLoading *p) : parent(p) { INFO("SimpleAssetLoader"); }
+void SimpleAssetLoader::UnloadFile(void *h) { delete static_cast<File*>(h); }
+void *SimpleAssetLoader::LoadFile(File *f) { return f; }
 void *SimpleAssetLoader::LoadFileNamed(const string &filename) {
   unique_ptr<File> f(parent->OpenFile(filename));
   if (!f || !f->Opened()) return ERRORv(nullptr, "open: ", filename);
   return f.release();
 }
 
-void *SimpleAssetLoader::LoadFile(File *f) { return f; }
-void SimpleAssetLoader::UnloadFile(void *h) { delete static_cast<File*>(h); }
+void SimpleAssetLoader::UnloadAudioFile(AudioAssetLoader::Handle &h) { return UnloadFile(h.get()); }
+AudioAssetLoader::Handle SimpleAssetLoader::LoadAudioFile(unique_ptr<File> f) { return AudioAssetLoader::Handle(this, f.release()); }
+AudioAssetLoader::Handle SimpleAssetLoader::LoadAudioFileNamed(const string &filename) { return AudioAssetLoader::Handle(this, LoadFileNamed(filename)); }
 
-void *SimpleAssetLoader::LoadAudioFile(File *f) { return LoadFile(f); }
-void *SimpleAssetLoader::LoadAudioFileNamed(const string &filename) { return LoadFileNamed(filename); }
-void SimpleAssetLoader::UnloadAudioFile(void *h) { return UnloadFile(h); }
+void SimpleAssetLoader::UnloadVideoFile(VideoAssetLoader::Handle &h) { return UnloadFile(h.get()); }
+VideoAssetLoader::Handle SimpleAssetLoader::LoadVideoFile(unique_ptr<File> f) { return VideoAssetLoader::Handle(this, f.release()); }
+VideoAssetLoader::Handle SimpleAssetLoader::LoadVideoFileNamed(const string &filename) { return VideoAssetLoader::Handle(this, LoadFileNamed(filename)); }
 
-void *SimpleAssetLoader::LoadVideoFile(File *f) { return LoadFile(f); }
-void *SimpleAssetLoader::LoadVideoFileNamed(const string &filename) { return LoadFileNamed(filename); }
-void SimpleAssetLoader::UnloadVideoFile(void *h) { return UnloadFile(h); }
+void SimpleAssetLoader::UnloadMovieFile(MovieAssetLoader::Handle &h) { return UnloadFile(h.get()); }
+MovieAssetLoader::Handle SimpleAssetLoader::LoadMovieFile(unique_ptr<File> f) { return MovieAssetLoader::Handle(this, f.release()); }
+MovieAssetLoader::Handle SimpleAssetLoader::LoadMovieFileNamed(const string &filename) { return MovieAssetLoader::Handle(this, LoadFileNamed(filename)); }
 
-void *SimpleAssetLoader::LoadMovieFile(File *f) { return LoadFile(f); }
-void *SimpleAssetLoader::LoadMovieFileNamed(const string &filename) { return LoadFileNamed(filename); }
-void SimpleAssetLoader::UnloadMovieFile(void *h) { return UnloadFile(h); }
-
-void SimpleAssetLoader::LoadVideo(void *h, Texture *out, int load_flag) {
+void SimpleAssetLoader::LoadVideo(VideoAssetLoader::Handle &h, Texture *out, int load_flag) {
   static char jpghdr[2] = { '\xff', '\xd8' }; // 0xff, 0xd8
   static char gifhdr[4] = { 'G', 'I', 'F', '8' };
   static char pnghdr[8] = { '\211', 'P', 'N', 'G', '\r', '\n', '\032', '\n' };
 
-  File *f = static_cast<File*>(h);
+  File *f = FromVoid<File*>(h);
   string fn = f->Filename();
   unsigned char hdr[8];
   if (f->Read(hdr, 8) != 8) return ERROR("load ", fn, " : failed");
@@ -356,8 +340,8 @@ void SimpleAssetLoader::LoadVideo(void *h, Texture *out, int load_flag) {
   if (load_flag & Flag::Clear)  out->ClearBuffer();
 }
 
-void SimpleAssetLoader::LoadAudio(void *h, SoundAsset *a, int seconds, int flag) {
-  File *f = static_cast<File*>(h);
+void SimpleAssetLoader::LoadAudio(AudioAssetLoader::Handle &h, SoundAsset *a, int seconds, int flag) {
+  File *f = FromVoid<File*>(h);
   string fn = f->Filename();
   if (SuffixMatch(fn, ".wav", false)) {
     WavHeader wav_header;
@@ -379,7 +363,7 @@ void SimpleAssetLoader::LoadAudio(void *h, SoundAsset *a, int seconds, int flag)
     if (wav_reader.Read(&H, 0, wav_samples))
       return ERROR("LoadAudio(", a->name, ", ", fn, ") read failed: ", strerror(errno));
   } else if (SuffixMatch(fn, ".ogg", false)) {
-    if (!(a->handle = OGGReader::OpenFile(fn, &a->sample_rate, &a->channels, 0)))
+    if (!(a->handle = OGGReader::OpenFile(this, fn, &a->sample_rate, &a->channels, 0)))
       return ERROR("LoadOGG(", a->name, ", ", fn, ") failed");
     a->seconds = seconds;
     a->wav = make_unique<RingSampler>(a->sample_rate, SoundAsset::Size(a));
@@ -403,7 +387,7 @@ int SimpleAssetLoader::RefillAudio(SoundAsset *a, int reset) {
   return wrote;
 }
 
-void SimpleAssetLoader::LoadMovie(void *h, MovieAsset *a) {}
+void SimpleAssetLoader::LoadMovie(MovieAssetLoader::Handle &h, MovieAsset *a) {}
 int SimpleAssetLoader::PlayMovie(MovieAsset *a, int seek) { return 0; }
 
 unique_ptr<AssetLoaderInterface> CreateSimpleAssetLoader(AssetLoading *p) { return make_unique<SimpleAssetLoader>(p); }

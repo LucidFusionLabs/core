@@ -1,5 +1,5 @@
 /*
- * $Id: camera.cpp 1330 2014-11-06 03:04:15Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -50,7 +50,7 @@ Crypto::MACAlgo    Crypto::   MACAlgos::SHA256()       { return Void(kCCHmacAlgS
 Crypto::MACAlgo    Crypto::   MACAlgos::SHA512()       { return Void(kCCHmacAlgSHA512); }
 
 const char *Crypto::CipherAlgos::Name(CipherAlgo v) {
-  switch (size_t(v.v)) {
+  switch (size_t(v.get())) {
     case CCCipherAlgo::AES128_CTR:   return "aes128-ctr";
     case CCCipherAlgo::AES128_CBC:   return "aes128-cbc";
     case CCCipherAlgo::AES256_CBC:   return "aes256-cbc";
@@ -64,7 +64,7 @@ const char *Crypto::CipherAlgos::Name(CipherAlgo v) {
 }
 
 int Crypto::CipherAlgos::KeySize(CipherAlgo v) {
-  switch (size_t(v.v)) {
+  switch (size_t(v.get())) {
     case CCCipherAlgo::AES128_CTR:   return kCCKeySizeAES128;
     case CCCipherAlgo::AES128_CBC:   return kCCKeySizeAES128;
     case CCCipherAlgo::AES256_CBC:   return kCCKeySizeAES256;
@@ -78,7 +78,7 @@ int Crypto::CipherAlgos::KeySize(CipherAlgo v) {
 }
 
 const char *Crypto::DigestAlgos::Name(DigestAlgo v) {
-  switch (size_t(v.v)) {
+  switch (size_t(v.get())) {
     case CCDigestAlgo::MD5:    return "md5";
     case CCDigestAlgo::SHA1:   return "sha1";
     case CCDigestAlgo::SHA256: return "sha256";
@@ -89,7 +89,7 @@ const char *Crypto::DigestAlgos::Name(DigestAlgo v) {
 }
 
 int Crypto::DigestAlgos::HashSize(DigestAlgo v) {
-  switch (size_t(v.v)) {
+  switch (size_t(v.get())) {
     case CCDigestAlgo::MD5:    return CC_MD5_DIGEST_LENGTH;
     case CCDigestAlgo::SHA1:   return CC_SHA1_DIGEST_LENGTH;
     case CCDigestAlgo::SHA256: return CC_SHA256_DIGEST_LENGTH;
@@ -100,7 +100,7 @@ int Crypto::DigestAlgos::HashSize(DigestAlgo v) {
 }
 
 const char *Crypto::MACAlgos::Name(MACAlgo v) {
-  switch (size_t(v.v)) {
+  switch (size_t(v.get())) {
     case kCCHmacAlgMD5:    return "md5";
     case kCCHmacAlgSHA1:   return "sha1";
     case kCCHmacAlgSHA256: return "sha256";
@@ -110,7 +110,7 @@ const char *Crypto::MACAlgos::Name(MACAlgo v) {
 }
 
 int Crypto::MACAlgos::HashSize(MACAlgo v) {
-  switch (size_t(v.v)) {
+  switch (size_t(v.get())) {
     case kCCHmacAlgMD5:    return CC_MD5_DIGEST_LENGTH;
     case kCCHmacAlgSHA1:   return CC_SHA1_DIGEST_LENGTH;
     case kCCHmacAlgSHA256: return CC_SHA256_DIGEST_LENGTH;
@@ -135,7 +135,7 @@ int Crypto::CipherGetBlockSize(Cipher c) {
 int Crypto::CipherOpen(Cipher x, CipherAlgo algo, bool dir, const StringPiece &key, const StringPiece &IV, int, int) {
   bool ctr = false, ecb = false;
   auto c = FromVoid<CCCipher*>(x);
-  switch((c->algo = size_t(algo.v))) {
+  switch((c->algo = size_t(algo.get()))) {
     case CCCipherAlgo::AES128_CTR:   c->ccalgo = kCCAlgorithmAES; ctr = true; break;
     case CCCipherAlgo::AES128_CBC:   c->ccalgo = kCCAlgorithmAES;             break;
     case CCCipherAlgo::AES256_CBC:   c->ccalgo = kCCAlgorithmAES;             break;
@@ -146,7 +146,7 @@ int Crypto::CipherOpen(Cipher x, CipherAlgo algo, bool dir, const StringPiece &k
     case CCCipherAlgo::RC4:          c->ccalgo = kCCAlgorithmRC4;             break;
     default:                         return -1;
   }
-  int mode = (size_t(algo.v) == CCCipherAlgo::RC4) ? kCCModeRC4 :
+  int mode = (size_t(algo.get()) == CCCipherAlgo::RC4) ? kCCModeRC4 :
     (ctr ? kCCModeCTR : (ecb ? kCCModeECB : kCCModeCBC));
   return CCCryptorCreateWithMode
     (dir ? kCCEncrypt : kCCDecrypt, mode, c->ccalgo, 0, IV.data(), key.data(), key.size(), 0, 0, 0,
@@ -166,7 +166,7 @@ int Crypto::CipherFinal(Cipher c, char *out, int outlen) {
 }
 
 Crypto::Digest Crypto::DigestOpen(DigestAlgo algo) {
-  auto d = new CCDigest(size_t(algo.v));
+  auto d = new CCDigest(size_t(algo.get()));
   switch(d->algo) {
     case CCDigestAlgo::MD5:    d->v=calloc(sizeof(CC_MD5_CTX),   1); CC_MD5_Init   (static_cast<CC_MD5_CTX*>   (d->v)); break;
     case CCDigestAlgo::SHA1:   d->v=calloc(sizeof(CC_SHA1_CTX),  1); CC_SHA1_Init  (static_cast<CC_SHA1_CTX*>  (d->v)); break;
@@ -208,7 +208,7 @@ string Crypto::DigestFinish(Digest x) {
 
 Crypto::MAC Crypto::MACOpen(MACAlgo algo, const StringPiece &k) {
   auto m = new CCMAC();
-  CCHmacInit(&m->ctx, (m->algo = size_t(algo.v)), k.data(), k.size());
+  CCHmacInit(&m->ctx, (m->algo = size_t(algo.get())), k.data(), k.size());
   return m;
 }
 

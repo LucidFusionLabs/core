@@ -88,14 +88,13 @@ struct AssetLoading {
   unique_ptr<AssetLoader> asset_loader;
   unordered_map<string, StringPiece> asset_cache;
   AssetLoading(ApplicationInfo *A, WindowHolder *W) : appinfo(A), window(W) {}
-  void LoadTexture(         const string &asset_fn, Texture *out, VideoAssetLoader *l=0, int flag=VideoAssetLoader::Flag::Default) { LoadTexture(0, asset_fn, out, l, flag); }
-  void LoadTexture(void *h, const string &asset_fn, Texture *out, VideoAssetLoader *l=0, int flag=VideoAssetLoader::Flag::Default);
+  void LoadTexture(const string &asset_fn, Texture *out, VideoAssetLoader *l=0, int flag=VideoAssetLoader::Flag::Default);
   void LoadTexture(const void *from_buf, const char *fn, int size, Texture *out, int flag=VideoAssetLoader::Flag::Default);
   void LoadTextureArray(const string &fmt, const string &prefix, const string &suffix, int N, TextureArray*out, int flag=VideoAssetLoader::Flag::Default);
   Texture *LoadTexture(const MultiProcessFileResource &file, int max_image_size = 1000000);
   string FileName(const string &asset_fn);
   string FileContents(const string &asset_fn);
-  File *OpenFile(const string &asset_fn);
+  unique_ptr<File> OpenFile(const string &asset_fn);
 };
 
 struct Asset {
@@ -117,7 +116,7 @@ struct Asset {
   Asset(AssetLoading *P, const string &N, const string &Tex, float S, int T, int R, const char *G, Geometry *H, unsigned CM, const DrawCB &CB=DrawCB());
   Asset(AssetLoading *P, const string &N, const string &Tex, float S, int T, int R, Geometry *G, Geometry *H, unsigned CM, unsigned TG, const DrawCB &CB=DrawCB());
 
-  void Load(void *handle=0, VideoAssetLoader *l=0);
+  void Load(VideoAssetLoader *l=0);
   void Unload();
   void ResetGL(int flag);
 
@@ -139,10 +138,9 @@ struct SoundAsset {
   SoundAssetMap *storage;
   string name, filename;
   unique_ptr<RingSampler> wav;
-  int channels=FLAGS_chans_out, sample_rate=FLAGS_sample_rate, seconds=FLAGS_soundasset_seconds;
+  AudioAssetLoader::Handle handle;
   RefillCB refill;
-  void *handle=0;
-  int handle_arg1=-1;
+  int channels=FLAGS_chans_out, sample_rate=FLAGS_sample_rate, seconds=FLAGS_soundasset_seconds, handle_arg1=-1;
   float gain=1, max_distance=0, reference_distance=0;
   unique_ptr<AudioResamplerInterface> resampler;
 
@@ -150,7 +148,7 @@ struct SoundAsset {
   SoundAsset(AssetLoading *L, const string &N, const string &FN, RingSampler *W, int C, int SR, int S) :
     parent(L), name(N), filename(FN), wav(W), channels(C), sample_rate(SR), seconds(S) {}
 
-  void Load(void *handle, const char *FN, int Secs, int flag=0);
+  void Load(AudioAssetLoader::Handle &handle, const char *FN, int Secs, int flag=0);
   void Load(const void *FromBuf, int size, const char *FileName, int Seconds=FLAGS_soundasset_seconds);
   void Load(int seconds=FLAGS_soundasset_seconds, bool unload=true);
   void Unload();
@@ -166,7 +164,7 @@ struct MovieAsset {
   string name, filename;
   SoundAsset audio;
   Asset video;
-  void *handle=0;
+  MovieAssetLoader::Handle handle;
 
   MovieAsset(AssetLoading *H) : parent(H), audio(H), video(H) {}
   void Load(const char *fn=0);

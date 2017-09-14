@@ -1134,7 +1134,7 @@ struct SSHClientConnection : public SSHClient::Handler {
       ECGroup group = GetECPairGroup(identity->ec);
       string algo_name, curve_name;
       Crypto::DigestAlgo hash_id;
-      if (!GetECName(GetECGroupID(group), &algo_name, &curve_name, &hash_id)) ERROR("unknown curve_id ", GetECGroupID(group).v);
+      if (!GetECName(GetECGroupID(group), &algo_name, &curve_name, &hash_id)) ERROR("unknown curve_id ", GetECGroupID(group).get());
       else {
         string pubkey = SSH::ECDSAKey(algo_name, curve_name,
                                       ECPointGetData(group, GetECPairPubKey(identity->ec), ctx)).ToString();

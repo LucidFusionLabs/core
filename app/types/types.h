@@ -43,20 +43,54 @@ template <typename X, typename Y, Y (X::*Z)> struct MemberGreaterThanCompare {
   bool operator()(const X &a, const X &b) { return a.*Z > b.*Z; }
 };
 
-struct VoidPtr : public void_ptr {
-  VoidPtr(void *V=0) { v=V; }
-  operator bool() const { return v; }
-  bool operator< (const VoidPtr &x) const { return v <  x.v; }
-  bool operator==(const VoidPtr &x) const { return v == x.v; }
+class VoidPtr {
+  protected:
+    void *v;
+  public:
+    VoidPtr(void *V=0) : v(V) {}
+    operator bool() const { return v; }
+    bool operator< (const VoidPtr &x) const { return v <  x.v; }
+    bool operator==(const VoidPtr &x) const { return v == x.v; }
+    const void *get() const { return v; }
+    void *get() { return v; }
 };
 
-struct ConstVoidPtr : public const_void_ptr {
-  ConstVoidPtr(const void *V=0) { v=V; }
-  ConstVoidPtr(const VoidPtr &x) { v=x.v; }
-  operator bool() const { return v; }
-  bool operator< (const ConstVoidPtr &x) const { return v <  x.v; }
-  bool operator==(const ConstVoidPtr &x) const { return v == x.v; }
+class ConstVoidPtr {
+  protected:
+    const void *v;
+  public:
+    ConstVoidPtr(const void *V=0) : v(V) {}
+    operator bool() const { return v; }
+    bool operator< (const ConstVoidPtr &x) const { return v <  x.v; }
+    bool operator==(const ConstVoidPtr &x) const { return v == x.v; }
+    const void *get() const { return v; }
 };
+
+class UniqueVoidPtr {
+  protected:
+    void *v;
+  public:
+    UniqueVoidPtr(void *V=0) : v(V) {}
+    UniqueVoidPtr(UniqueVoidPtr &&x) : v(x.release()) {}
+    UniqueVoidPtr(const UniqueVoidPtr&) = delete;
+    virtual ~UniqueVoidPtr() {}
+
+    operator bool() const { return v; }
+    bool operator< (const UniqueVoidPtr &x) const { return v <  x.v; }
+    bool operator==(const UniqueVoidPtr &x) const { return v == x.v; }
+    UniqueVoidPtr &operator=(UniqueVoidPtr &&x) { reset(x.release()); return *this; }
+    const void *get() const { return v; }
+    void *get() { return v; }
+    void *release() { void *ret=0; swap(ret, v); return ret; }
+    virtual void reset(void *x) { v=x; }
+};
+
+template <class X> X FromVoid(      VoidPtr      &&p) { return static_cast<X>(p.get()); }
+template <class X> X FromVoid(      VoidPtr       &p) { return static_cast<X>(p.get()); }
+template <class X> X FromVoid(const VoidPtr       &p) { return static_cast<X>(p.get()); }
+template <class X> X FromVoid(const ConstVoidPtr  &p) { return static_cast<X>(p.get()); }
+template <class X> X FromVoid(const UniqueVoidPtr &p) { return static_cast<X>(p.get()); }
+template <class X> X FromVoid(      UniqueVoidPtr &p) { return static_cast<X>(p.get()); }
 
 template <class X> struct LazyInitializedPtr {
   unique_ptr<X> ptr;

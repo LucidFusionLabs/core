@@ -797,7 +797,7 @@ Base64::Base64() : encoding_table("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrs
   for (int i = 0; i < 64; i++) decoding_table[uint8_t(encoding_table[i])] = i;
 }
 
-string Base64::Encode(const char *in, size_t input_length) {
+string Base64::Encode(const char *in, size_t input_length) const {
   const unsigned char *data = MakeUnsigned(in);
   string encoded_data(4 * ((input_length + 2) / 3), 0);
   for (int i = 0, j = 0; i < input_length;) {
@@ -814,7 +814,7 @@ string Base64::Encode(const char *in, size_t input_length) {
   return encoded_data;
 }
 
-string Base64::Decode(const char *data, size_t input_length) {
+string Base64::Decode(const char *data, size_t input_length) const {
   CHECK_EQ(input_length % 4, 0);
   string decoded_data(input_length / 4 * 3, 0);
   if (data[input_length - 1] == '=') decoded_data.erase(decoded_data.size()-1);

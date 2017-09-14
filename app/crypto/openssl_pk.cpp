@@ -1,5 +1,5 @@
 /*
- * $Id: openssl_pk.cpp 1330 2014-11-06 03:04:15Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -140,7 +140,7 @@ string ECDSAOpenSSHPublicKey(ECPair key, const string &comment) {
   ECGroup group = GetECPairGroup(key);
   string algo_name, curve_name;
   if (!GetECName(GetECGroupID(group), &algo_name, &curve_name, nullptr))
-    return ERRORv("", "unknown curve_id ", GetECGroupID(group).v);
+    return ERRORv("", "unknown curve_id ", GetECGroupID(group).get());
 
   BigNumContext ctx = NewBigNumContext();
   string proto = SSH::ECDSAKey(algo_name, curve_name,
@@ -203,7 +203,7 @@ ECDef Crypto::EllipticCurve::NISTP384() { return Void(NID_secp384r1); };
 ECDef Crypto::EllipticCurve::NISTP521() { return Void(NID_secp521r1); };
 
 ECPair Crypto::EllipticCurve::NewPair(ECDef id, bool generate) {
-  EC_KEY *pair = EC_KEY_new_by_curve_name(int(intptr_t(id.v)));
+  EC_KEY *pair = EC_KEY_new_by_curve_name(int(intptr_t(id.get())));
   if (generate && pair) {
     EC_KEY_set_asn1_flag(pair, OPENSSL_EC_NAMED_CURVE);
     if (EC_KEY_generate_key(pair) != 1) { EC_KEY_free(pair); return NULL; }

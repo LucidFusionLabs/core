@@ -1,5 +1,5 @@
 /*
- * $Id: camera.cpp 1330 2014-11-06 03:04:15Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -17,9 +17,9 @@
  */
 
 namespace LFL {
-void OGGReader::Close(void *h) {}
-void *OGGReader::OpenBuffer(const char *buf, size_t len, int *sr_out, int *chans_out, int *total_out) { return 0; }
-void *OGGReader::OpenFile(const string &fn, int *sr_out, int *chans_out, int *total_out) { return 0; }
-int OGGReader::Read(void *h, int chans, int samples, RingSampler::Handle *out, bool reset) { return -1; }
+void OGGReader::Close(AudioAssetLoader::Handle &h) {}
+AudioAssetLoader::Handle OGGReader::OpenBuffer(AudioAssetLoader*, const char *buf, size_t len, int *sr_out, int *chans_out, int *total_out) { return 0; }
+AudioAssetLoader::Handle OGGReader::OpenFile(AudioAssetLoader*, const string &fn, int *sr_out, int *chans_out, int *total_out) { return 0; }
+int OGGReader::Read(AudioAssetLoader::Handle &h, int chans, int samples, RingSampler::Handle *out, bool reset) { return -1; }
 
 }; // namespace LFL

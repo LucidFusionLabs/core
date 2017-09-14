@@ -815,8 +815,8 @@ SocketConnection *SocketService::SSLConnect(SSLSocket::CTXPtr sslctx, IPV4::Addr
   return c;
 }
 
-SocketConnection *SocketService::AddConnectedSocket(Socket conn_socket, Connection::Handler *handler) {
-  auto *conn = new SocketConnection(this, handler);
+SocketConnection *SocketService::AddConnectedSocket(Socket conn_socket, unique_ptr<Connection::Handler> handler) {
+  auto *conn = new SocketConnection(this, move(handler));
   CHECK_NE(-1, (conn->socket = conn_socket));
   conn->state = Connection::Connected;
   conn->svc->conn[conn->socket] = unique_ptr<SocketConnection>(conn);
@@ -1188,8 +1188,8 @@ int SocketServicesThread::ConnectionHandler::Read(Connection *c) {
 }
 
 SocketServicesThread::SocketServicesThread(SocketServices *N, bool Init) : init(Init), net(N),
-  rd(new SocketConnection(net->unix_client.get(), new SocketServicesThread::ConnectionHandler())),
-  wr(new SocketConnection(net->unix_client.get(), new SocketServicesThread::ConnectionHandler())),
+  rd(new SocketConnection(net->unix_client.get(), make_unique<SocketServicesThread::ConnectionHandler>())),
+  wr(new SocketConnection(net->unix_client.get(), make_unique<SocketServicesThread::ConnectionHandler>())),
   thread(make_unique<Thread>(bind(&SocketServicesThread::HandleMessagesLoop, this))) {
   Socket fd[2];
   CHECK(SystemNetwork::OpenSocketPair(fd));

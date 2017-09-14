@@ -68,37 +68,33 @@ string AssetLoading::FileContents(const string &asset_fn) {
   return LocalFile::FileContents(FileName(asset_fn));
 }
 
-File *AssetLoading::OpenFile(const string &asset_fn) {
+unique_ptr<File> AssetLoading::OpenFile(const string &asset_fn) {
   auto i = asset_cache.find(asset_fn);
-  if (i != asset_cache.end()) return new BufferFile(StringPiece(i->second), asset_fn.c_str());
-  if (asset_fn[0] == '/') return new LocalFile(asset_fn, "r");
+  if (i != asset_cache.end()) return make_unique<BufferFile>(StringPiece(i->second), asset_fn.c_str());
+  if (asset_fn[0] == '/') return make_unique<LocalFile>(asset_fn, "r");
 #ifdef LFL_ANDROID
   static JNI *jni = Singleton<LFL::JNI>::Get();
   return jni->OpenAsset(asset_fn);
 #endif
-  return new LocalFile(FileName(asset_fn), "r");
+  return make_unique<LocalFile>(FileName(asset_fn), "r");
 }
 
-void AssetLoading::LoadTexture(void *h, const string &asset_fn, Texture *out, VideoAssetLoader *l, int flag) {
+void AssetLoading::LoadTexture(const string &asset_fn, Texture *out, VideoAssetLoader *l, int flag) {
   if (!FLAGS_enable_video) return;
   auto i = asset_cache.find(asset_fn);
   if (i != asset_cache.end()) return LoadTexture(i->second.data(), asset_fn.c_str(), i->second.size(), out);
   if (!l) l = asset_loader->default_video_loader;
 
-  void *handle = h;
-  if      (!h && 0) handle = l->LoadVideoFile(OpenFile(asset_fn));
-  else if (!h)      handle = l->LoadVideoFileNamed(asset_fn);
+  auto handle = l->LoadVideoFileNamed(asset_fn);
   if (!handle) return ERROR("load: ", asset_fn);
   l->LoadVideo(handle, out, flag);
-  if (!h) l->UnloadVideoFile(handle);
 }
 
 void AssetLoading::LoadTexture(const void *FromBuf, const char *filename, int size, Texture *out, int flag) {
   VideoAssetLoader *l = asset_loader->default_loader->GetVideoAssetLoader(filename);
-  void *handle = l->LoadVideoFile(new BufferFile(string(static_cast<const char*>(FromBuf), size), filename));
+  auto handle = l->LoadVideoFile(make_unique<BufferFile>(string(static_cast<const char*>(FromBuf), size), filename));
   if (!handle) return;
   l->LoadVideo(handle, out, flag);
-  l->UnloadVideoFile(handle);
 }
 
 Texture *AssetLoading::LoadTexture(const MultiProcessFileResource &file, int max_image_size) {
@@ -147,15 +143,15 @@ void Asset::ResetGL(int flag) {
       if (forget) tex.ID = 0;
       else        tex.ClearGL();
     }
-    if (reload) parent->LoadTexture(nullptr, texture, &tex, nullptr);
+    if (reload) parent->LoadTexture(texture, &tex, nullptr);
   } 
 }
 
-void Asset::Load(void *h, VideoAssetLoader *l) {
+void Asset::Load(VideoAssetLoader *l) {
   static int next_asset_type_id = 1, next_list_id = 1;
   if (!name.empty()) typeID = next_asset_type_id++;
   if (!geom_fn.empty()) geometry = Geometry::LoadOBJ(unique_ptr<File>(parent->OpenFile(geom_fn)).get()).release();
-  if (!texture.empty() || h) parent->LoadTexture(h, texture, &tex, l);
+  if (!texture.empty()) parent->LoadTexture(texture, &tex, l);
 }
 
 void SoundAsset::Unload() {
@@ -164,26 +160,21 @@ void SoundAsset::Unload() {
   if (handle) ERROR("leak: ", handle);
 }
 
-void SoundAsset::Load(void *handle, const char *FN, int Secs, int flag) {
+void SoundAsset::Load(AudioAssetLoader::Handle &h, const char *FN, int Secs, int flag) {
   if (!FLAGS_enable_audio) return ERROR("load: ", FN, ": enable_audio = ", FLAGS_enable_audio);
-  if (handle) parent->asset_loader->default_audio_loader->LoadAudio(handle, this, Secs, flag);
+  if (h) parent->asset_loader->default_audio_loader->LoadAudio(h, this, Secs, flag);
 }
 
 void SoundAsset::Load(void const *buf, int len, char const *FN, int Secs) {
-  void *handle = parent->asset_loader->default_audio_loader->LoadAudioFile
-    (new BufferFile(string(static_cast<const char*>(buf), len), FN));
+  handle = parent->asset_loader->default_audio_loader->LoadAudioFile
+    (make_unique<BufferFile>(string(static_cast<const char*>(buf), len), FN));
   if (!handle) return;
 
   Load(handle, FN, Secs, FlagNoRefill);
-  if (!refill) {
-    parent->asset_loader->default_audio_loader->UnloadAudioFile(handle);
-    handle = 0;
-  }
+  if (!refill) handle.reset(0);
 }
 
 void SoundAsset::Load(int Secs, bool unload) {
-  void *handle = 0;
-
   if (!filename.empty()) {
     if (0) handle = parent->asset_loader->default_audio_loader->LoadAudioFile(parent->OpenFile(filename));
     else   handle = parent->asset_loader->default_audio_loader->LoadAudioFileNamed(filename);
@@ -193,10 +184,7 @@ void SoundAsset::Load(int Secs, bool unload) {
   Load(handle, filename.c_str(), Secs);
 
 #ifndef LFL_MOBILE /* XXX */
-  if (!refill && handle && unload) {
-    parent->asset_loader->default_audio_loader->UnloadAudioFile(handle);
-    handle = 0;
-  }
+  if (!refill && handle && unload) handle.reset(0);
 #endif
 }
 

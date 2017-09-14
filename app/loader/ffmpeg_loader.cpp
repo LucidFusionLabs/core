@@ -103,20 +103,20 @@ struct FFMpegAssetLoader : public AssetLoaderInterface {
 #endif
   }
 
-  virtual void *LoadAudioFile(File *f) { return LoadFile(f); }
-  virtual void *LoadAudioFileNamed(const string &filename) { return LoadFileNamed(filename); }
-  virtual void UnloadAudioFile(void *h) { return UnloadFile(h); }
+  virtual void UnloadAudioFile(AudioAssetLoader::Handle &h) { return UnloadFile(h.get()); }
+  virtual AudioAssetLoader::Handle LoadAudioFile(unique_ptr<File> f) { return AudioAssetLoader::Handle(this, LoadFile(f.release())); }
+  virtual AudioAssetLoader::Handle LoadAudioFileNamed(const string &filename) { return AudioAssetLoader::Handle(this, LoadFileNamed(filename)); }
 
-  virtual void *LoadVideoFile(File *f) { return LoadFile(f); }
-  virtual void *LoadVideoFileNamed(const string &filename) { return LoadFileNamed(filename); }
-  virtual void UnloadVideoFile(void *h) { return UnloadFile(h); }
+  virtual void UnloadVideoFile(VideoAssetLoader::Handle &h) { return UnloadFile(h.get()); }
+  virtual VideoAssetLoader::Handle LoadVideoFile(unique_ptr<File> f) { return VideoAssetLoader::Handle(this, LoadFile(f.release())); }
+  virtual VideoAssetLoader::Handle LoadVideoFileNamed(const string &filename) { return VideoAssetLoader::Handle(this, LoadFileNamed(filename)); }
 
-  virtual void *LoadMovieFile(File *f) { return LoadFile(f); }
-  virtual void *LoadMovieFileNamed(const string &filename) { return LoadFileNamed(filename); }
-  virtual void UnloadMovieFile(void *h) { return UnloadFile(h); }
+  virtual void UnloadMovieFile(MovieAssetLoader::Handle &h) { return UnloadFile(h.get()); }
+  virtual MovieAssetLoader::Handle LoadMovieFile(unique_ptr<File> f) { return MovieAssetLoader::Handle(this, LoadFile(f.release())); }
+  virtual MovieAssetLoader::Handle LoadMovieFileNamed(const string &filename) { return MovieAssetLoader::Handle(this, LoadFileNamed(filename)); }
 
-  void LoadVideo(void *handle, Texture *out, int load_flag=VideoAssetLoader::Flag::Default) {
-    AVFormatContext *fctx = static_cast<AVFormatContext*>(handle);
+  void LoadVideo(VideoAssetLoader::Handle &handle, Texture *out, int load_flag=VideoAssetLoader::Flag::Default) {
+    AVFormatContext *fctx = FromVoid<AVFormatContext*>(handle);
     int video_index = -1, got=0;
     for (int i=0; i<fctx->nb_streams; i++) {
       AVStream *st = fctx->streams[i];
@@ -149,9 +149,9 @@ struct FFMpegAssetLoader : public AssetLoaderInterface {
     // av_frame_free(&frame);
   }
 
-  void LoadAudio(void *handle, SoundAsset *a, int seconds, int flag) {
-    AVFormatContext *fctx = static_cast<AVFormatContext*>(handle);
-    LoadMovie(a, 0, fctx);
+  void LoadAudio(AudioAssetLoader::Handle &handle, SoundAsset *a, int seconds, int flag) {
+    AVFormatContext *fctx = FromVoid<AVFormatContext*>(handle);
+    LoadMovie(this, a, 0, fctx);
 
     int samples = RefillAudio(a, 1);
     if (samples == SoundAsset::Size(a) && !(flag & SoundAsset::FlagNoRefill)) a->refill = RefillAudioCB;
@@ -162,12 +162,12 @@ struct FFMpegAssetLoader : public AssetLoaderInterface {
     }
   }
 
-  void LoadMovie(void *handle, MovieAsset *ma) {
-    LoadMovie(&ma->audio, &ma->video, static_cast<AVFormatContext*>(handle));
-    PlayMovie(&ma->audio, &ma->video, static_cast<AVFormatContext*>(handle), 0);
+  void LoadMovie(MovieAssetLoader::Handle &handle, MovieAsset *ma) {
+    LoadMovie(this, &ma->audio, &ma->video, FromVoid<AVFormatContext*>(handle));
+    PlayMovie(&ma->audio, &ma->video, FromVoid<AVFormatContext*>(handle), 0);
   }
 
-  int PlayMovie(MovieAsset *ma, int seek) { return PlayMovie(&ma->audio, &ma->video, static_cast<AVFormatContext*>(ma->handle), seek); }
+  int PlayMovie(MovieAsset *ma, int seek) { return PlayMovie(&ma->audio, &ma->video, FromVoid<AVFormatContext*>(ma->handle), seek); }
   int RefillAudio(SoundAsset *a, int reset) { return RefillAudioCB(a, reset); }
 
   static AVFormatContext *Load(AVIOContext *pb, const string &filename, char *probe_buf, int probe_buflen, AVIOContext **pbOut=0) {
@@ -200,7 +200,7 @@ struct FFMpegAssetLoader : public AssetLoaderInterface {
   }
 
   static int RefillAudioCB(SoundAsset *a, int reset) {
-    AVFormatContext *fctx = static_cast<AVFormatContext*>(a->handle);
+    AVFormatContext *fctx = FromVoid<AVFormatContext*>(a->handle);
     AVCodecContext *avctx = fctx->streams[a->handle_arg1]->codec;
     bool open_resampler = false;
     if (reset) {
@@ -225,7 +225,7 @@ struct FFMpegAssetLoader : public AssetLoaderInterface {
     return wrote;
   }
 
-  static void LoadMovie(SoundAsset *sa, Asset *va, AVFormatContext *fctx) {
+  static void LoadMovie(AudioAssetLoader *p, SoundAsset *sa, Asset *va, AVFormatContext *fctx) {
     if (avformat_find_stream_info(fctx, 0) < 0) return ERROR("av_find_stream_info");
 
     int audio_index = -1, video_index = -1, got=0;
@@ -248,7 +248,6 @@ struct FFMpegAssetLoader : public AssetLoaderInterface {
       AVCodec *codec = avcodec_find_decoder(avctx->codec_id);
       if (!codec || avcodec_open2(avctx, codec, 0) < 0) return ERROR("avcodec_open2: ", codec);
 
-      sa->handle = fctx;
       sa->handle_arg1 = audio_index;
       sa->channels = avctx->channels == 1 ? 1 : FLAGS_chans_out;
       sa->sample_rate = FLAGS_sample_rate;
