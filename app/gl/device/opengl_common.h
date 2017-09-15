@@ -126,10 +126,9 @@ void Screenshot(Texture *out) { ScreenshotBox(out, Box(parent->gl_w, parent->gl_
 void ScreenshotBox(Texture *out, const Box &b, int flag) {
   ClearDeferred();
   out->Resize(b.w, b.h, Texture::preferred_pf, Texture::Flag::CreateBuf);
-  unsigned char *pixels = out->NewBuffer();
-  glReadPixels(b.x, b.y, b.w, b.h, out->GLPixelType(), out->GLBufferType(), pixels);
-  out->UpdateBuffer(pixels, point(b.w, b.h), out->pf, b.w*4, flag);
-  delete [] pixels;
+  auto pixels = out->NewBuffer();
+  glReadPixels(b.x, b.y, b.w, b.h, out->GLPixelType(), out->GLBufferType(), pixels.get());
+  out->UpdateBuffer(pixels.get(), point(b.w, b.h), out->pf, b.w*4, flag);
   GDDebug("ScreenshotBox");
 }
 

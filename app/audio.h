@@ -93,8 +93,6 @@ struct AudioResamplerInterface {
   static microseconds MonotonouslyIncreasingTimestamp(microseconds laststamp, microseconds stamp, microseconds *step, int steps);
 };
 
-AudioResamplerInterface *CreateAudioResampler();
-
 struct StatefulFilter {
   double state[32];
   int size=0, next=0, filterLenB=0, filterLenA=0, samples=0;
@@ -128,6 +126,8 @@ RingSampler *ISpectogram(const Matrix *in, int window, int hop, int fftlen, int 
 
 Matrix *F0Stream(const RingSampler::Handle *in, Matrix *out, int window, int hop, int method=F0EstmMethod::Default);
 float FundamentalFrequency(const RingSampler::Handle *in, int window, int offset, int method=F0EstmMethod::Default);
+
+unique_ptr<AudioResamplerInterface> CreateAudioResampler();
 
 }; // namespace LFL
 #endif // LFL_CORE_APP_AUDIO_H__

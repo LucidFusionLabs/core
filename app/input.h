@@ -62,10 +62,10 @@ struct Bind {
 
   ~Bind() { Destruct(); }
   Bind(InputEvent::Id K=0, Key::Mod M=0)               : cb_type(NONE),    key(K|M) {}
-  Bind(InputEvent::Id K,             const CB     &Cb) : cb_type(CB_VOID), key(K|0) { new (&cb.cb_void)     CB(Cb); }
-  Bind(InputEvent::Id K, Key::Mod M, const CB     &Cb) : cb_type(CB_VOID), key(K|M) { new (&cb.cb_void)     CB(Cb); }
-  Bind(InputEvent::Id K,             const TimeCB &Cb) : cb_type(CB_TIME), key(K|0) { new (&cb.cb_time) TimeCB(Cb); }
-  Bind(InputEvent::Id K, Key::Mod M, const TimeCB &Cb) : cb_type(CB_TIME), key(K|M) { new (&cb.cb_time) TimeCB(Cb); }
+  Bind(InputEvent::Id K,             const CB     &Cb) : cb_type(CB_VOID), key(K|0) { new(&cb.cb_void)     CB(Cb); }
+  Bind(InputEvent::Id K, Key::Mod M, const CB     &Cb) : cb_type(CB_VOID), key(K|M) { new(&cb.cb_void)     CB(Cb); }
+  Bind(InputEvent::Id K,             const TimeCB &Cb) : cb_type(CB_TIME), key(K|0) { new(&cb.cb_time) TimeCB(Cb); }
+  Bind(InputEvent::Id K, Key::Mod M, const TimeCB &Cb) : cb_type(CB_TIME), key(K|M) { new(&cb.cb_time) TimeCB(Cb); }
   Bind(const Bind &c) { Assign(c); }
   Bind &operator=(const Bind &c) { Destruct(); Assign(c); return *this; }
   bool operator<(const Bind &c) const { SortImpl1(key, c.key); }
@@ -155,10 +155,10 @@ struct MouseControllerCallback {
 
   ~MouseControllerCallback() { Destruct(); }
   MouseControllerCallback()                                          : type(NONE) {}
-  MouseControllerCallback(const CB       &c, ThreadDispatcher *mt=0) : type(CB_VOID)  { new (&cb.cb_void)  CB     (c); run_from_message_loop=mt; }
-  MouseControllerCallback(const BoolCB   &c, ThreadDispatcher *mt=0) : type(CB_BOOL)  { new (&cb.cb_bool)  BoolCB (c); run_from_message_loop=mt; }
-  MouseControllerCallback(const CoordCB  &c, ThreadDispatcher *mt=0) : type(CB_COORD) { new (&cb.cb_coord) CoordCB(c); run_from_message_loop=mt; }
-  MouseControllerCallback(const ScaleCB  &c, ThreadDispatcher *mt=0) : type(CB_SCALE) { new (&cb.cb_scale) ScaleCB(c); run_from_message_loop=mt; }
+  MouseControllerCallback(const CB       &c, ThreadDispatcher *mt=0) : type(CB_VOID)  { new(&cb.cb_void)  CB     (c); run_from_message_loop=mt; }
+  MouseControllerCallback(const BoolCB   &c, ThreadDispatcher *mt=0) : type(CB_BOOL)  { new(&cb.cb_bool)  BoolCB (c); run_from_message_loop=mt; }
+  MouseControllerCallback(const CoordCB  &c, ThreadDispatcher *mt=0) : type(CB_COORD) { new(&cb.cb_coord) CoordCB(c); run_from_message_loop=mt; }
+  MouseControllerCallback(const ScaleCB  &c, ThreadDispatcher *mt=0) : type(CB_SCALE) { new(&cb.cb_scale) ScaleCB(c); run_from_message_loop=mt; }
   MouseControllerCallback(const MouseControllerCallback &c) { Assign(c); }
   MouseControllerCallback &operator=(const MouseControllerCallback &c) { Destruct(); Assign(c); return *this; }
 

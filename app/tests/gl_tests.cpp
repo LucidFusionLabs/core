@@ -40,8 +40,8 @@ extern "C" int MyAppFrame(Window *W, unsigned clicks, int flag) {
 
 extern "C" LFApp *MyAppCreate(int argc, const char* const* argv) {
   FLAGS_enable_video = FLAGS_enable_input = true;
-  app = new Application(argc, argv);
-  app->focused = CreateWindow(app);
+  app = CreateApplication(argc, argv).release();
+  app->focused = CreateWindow(app).release();
   app->focused->frame_cb = MyAppFrame;
   testing::InitGoogleTest(&argc, const_cast<char**>(argv));
   return app;
@@ -184,7 +184,7 @@ TEST(GLTest, CoreText) {
     if (!ref.buf) {
       // PngWriter::Write("gl_tests_12.png", g->tex);
       // printf("reference:\n%s", g->tex.HexDump().c_str());
-      ref.buf = g->tex.ReleaseBuffer();
+      ref.buf = g->tex.ReleaseBuffer().release();
     } else {
       int cmp = memcmp(ref.buf, g->tex.buf, g->tex.BufferSize());
       if (i < 333 && j < 999) EXPECT_EQ(0, cmp);

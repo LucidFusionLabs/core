@@ -37,7 +37,7 @@ void AtlasFontEngine::SetDefault() {
 }
 
 bool AtlasFontEngine::Init(const FontDesc &d) {
-  if (Font *f = OpenAtlas(parent, d)) {
+  if (Font *f = OpenAtlas(parent, d).release()) {
     ScopedReentryGuard scoped(&in_init);
     font_map[d.name][d.fg][d.flag][d.size] = f;
     FontDesc de = d;
@@ -92,7 +92,7 @@ unique_ptr<Font> AtlasFontEngine::Open(const FontDesc &d) {
   return ERRORv(nullptr, "AtlasFont ", d.DebugString(), " clone failed");
 }
 
-Font *AtlasFontEngine::OpenAtlas(Fonts *fonts, const FontDesc &d) {
+unique_ptr<Font> AtlasFontEngine::OpenAtlas(Fonts *fonts, const FontDesc &d) {
   Texture tex(fonts->loader->window);
   string fn = d.Filename();
   fonts->loader->LoadTexture(StrCat(fn, ".0000.png"), &tex);
@@ -103,12 +103,12 @@ Font *AtlasFontEngine::OpenAtlas(Fonts *fonts, const FontDesc &d) {
   if (gmfile && gm.Read(gmfile.get())) return ERRORv(nullptr, "load ", d.name, ".0000.glyphs.matrix failed");
 
   tex.owner = false;
-  Resource *resource = new Resource();
-  Font *ret = new Font(fonts->atlas_engine.get(fonts), d, shared_ptr<FontEngine::Resource>(resource));
+  Resource *resource = make_unique<Resource>().release();
+  auto ret = make_unique<Font>(fonts->atlas_engine.get(fonts), d, shared_ptr<FontEngine::Resource>(resource));
   ret->glyph = make_shared<GlyphMap>(fonts->loader->window, make_shared<GlyphCache>(fonts->loader->window, tex.ID, tex.width, tex.height));
   ret->mix_fg = Color(d.bg).a() != 1.0;
   GlyphCache *cache = ret->glyph->cache.get();
-  resource->primary = ret;
+  resource->primary = ret.get();
 
   float max_t = 0, max_u = 0;
   MatrixRowIter(gm.F) {
@@ -156,8 +156,8 @@ void AtlasFontEngine::WriteGlyphFile(ApplicationInfo *appinfo, const string &nam
     WriteVersioned(VersionedFileName(appinfo->assetdir.c_str(), name.c_str(), "glyphs"), 0);
 }
 
-void AtlasFontEngine::MakeFromPNGFiles(Fonts *fonts, const string &name, const vector<string> &png, const point &atlas_dim, Font **glyphs_out) {
-  Font *ret = new Font(fonts->atlas_engine.get(fonts), FontDesc(name), shared_ptr<FontEngine::Resource>());
+unique_ptr<Font> AtlasFontEngine::MakeFromPNGFiles(Fonts *fonts, const string &name, const vector<string> &png, const point &atlas_dim) {
+  unique_ptr<Font> ret = make_unique<Font>(fonts->atlas_engine.get(fonts), FontDesc(name), shared_ptr<FontEngine::Resource>());
   ret->glyph = make_shared<GlyphMap>(fonts->loader->window, make_shared<GlyphCache>(fonts->loader->window, 0, atlas_dim.x, atlas_dim.y));
   for (int i=ret->glyph->table.size(), l=png.size(); i < l; ++i) ret->glyph->table.emplace_back(fonts->loader->window);
 
@@ -181,12 +181,10 @@ void AtlasFontEngine::MakeFromPNGFiles(Fonts *fonts, const string &name, const v
     out->tex.ClearBuffer();
   }
 
-  WriteAtlas(fonts->appinfo, name, ret, &cache->tex);
+  WriteAtlas(fonts->appinfo, name, ret.get(), &cache->tex);
   cache->tex.LoadGL();
   cache->tex.ClearBuffer();
-
-  if (glyphs_out) *glyphs_out = ret;
-  else delete ret;
+  return ret;
 }
 
 void AtlasFontEngine::SplitIntoPNGFiles(GraphicsDeviceHolder *parent, const string &input_png_fn, const map<int, v4> &glyphs, const string &dir_out) {

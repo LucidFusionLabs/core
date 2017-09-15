@@ -242,11 +242,11 @@ struct AtlasFontEngine : public FontEngine {
   virtual int              LoadGlyphs(Font *f, const Glyph *g, int n) { return n; }
   virtual string           DebugString(Font *f) const;
 
-  static Font *OpenAtlas(Fonts*, const FontDesc&);
+  static unique_ptr<Font> OpenAtlas(Fonts*, const FontDesc&);
   static void WriteAtlas(ApplicationInfo*, const string &name, Font *glyphs, Texture *t);
   static void WriteAtlas(ApplicationInfo*, const string &name, Font *glyphs);
   static void WriteGlyphFile(ApplicationInfo*, const string &name, Font *glyphs);
-  static void MakeFromPNGFiles(Fonts *fonts, const string &name, const vector<string> &png, const point &atlas_dim, Font **glyphs_out);
+  static unique_ptr<Font> MakeFromPNGFiles(Fonts *fonts, const string &name, const vector<string> &png, const point &atlas_dim);
   static void SplitIntoPNGFiles(GraphicsDeviceHolder*, const string &input_png_fn, const map<int, v4> &glyphs, const string &dir_out);
   static int Dimension(int n, int w, int h) { return 1 << max(8,FloorLog2(sqrt((w+4)*(h+4)*n))); }
 };
@@ -273,8 +273,8 @@ struct FreeTypeFontEngine : public FontEngine {
 
   static void Init();
   static void SubPixelFilter(const Box &b, unsigned char *buf, int linesize, int pf);
-  static Resource *OpenFile  (const FontDesc&);
-  static Resource *OpenBuffer(const FontDesc&, string *content);
+  static unique_ptr<Resource> OpenFile  (const FontDesc&);
+  static unique_ptr<Resource> OpenBuffer(const FontDesc&, string *content);
 };
 
 #ifdef LFL_APPLE

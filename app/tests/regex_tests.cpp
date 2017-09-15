@@ -25,8 +25,8 @@ DEFINE_int(size, 1024*1024, "Test size");
 
 extern "C" LFApp *MyAppCreate(int argc, const char* const* argv) {
   FLAGS_font = FakeFontEngine::Filename();
-  app = new Application(argc, argv);
-  app->focused = CreateWindow(app);
+  app = CreateApplication(argc, argv).release();
+  app->focused = CreateWindow(app).release();
   testing::InitGoogleTest(&argc, const_cast<char**>(argv));
   return app;
 }

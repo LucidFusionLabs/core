@@ -149,8 +149,8 @@ void Bind::Assign(const Bind &c) {
   key = c.key;
   cb_type = c.cb_type;
   switch (cb_type) {
-    case CB_VOID: new (&cb.cb_void)     CB(c.cb.cb_void); break;
-    case CB_TIME: new (&cb.cb_time) TimeCB(c.cb.cb_time); break;
+    case CB_VOID: new(&cb.cb_void)     CB(c.cb.cb_void); break;
+    case CB_TIME: new(&cb.cb_time) TimeCB(c.cb.cb_time); break;
     case NONE: break;
   }
 }
@@ -459,11 +459,11 @@ void MouseControllerCallback::Destruct() {
 void MouseControllerCallback::Assign(const MouseControllerCallback &c) {
   run_from_message_loop = c.run_from_message_loop;
   switch ((type = c.type)) {
-    case CB_VOID:  new (&cb.cb_void)  CB     (c.cb.cb_void);  break;
-    case CB_BOOL:  new (&cb.cb_bool)  BoolCB (c.cb.cb_bool);  break;
-    case CB_COORD: new (&cb.cb_coord) CoordCB(c.cb.cb_coord); break;
-    case CB_SCALE: new (&cb.cb_scale) ScaleCB(c.cb.cb_scale); break;
-    default:                                                  break;
+    case CB_VOID:  new(&cb.cb_void)  CB     (c.cb.cb_void);  break;
+    case CB_BOOL:  new(&cb.cb_bool)  BoolCB (c.cb.cb_bool);  break;
+    case CB_COORD: new(&cb.cb_coord) CoordCB(c.cb.cb_coord); break;
+    case CB_SCALE: new(&cb.cb_scale) ScaleCB(c.cb.cb_scale); break;
+    default:                                                 break;
   }
 }
 

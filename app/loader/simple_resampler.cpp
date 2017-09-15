@@ -1,5 +1,5 @@
 /*
- * $Id: camera.cpp 1330 2014-11-06 03:04:15Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -17,6 +17,6 @@
  */
 
 namespace LFL {
-AudioResamplerInterface *CreateAudioResampler() { return nullptr; }
-VideoResamplerInterface *CreateVideoResampler() { return new SimpleVideoResampler(); }
+unique_ptr<AudioResamplerInterface> CreateAudioResampler() { return nullptr; }
+unique_ptr<VideoResamplerInterface> CreateVideoResampler() { return make_unique<SimpleVideoResampler>(); }
 }; // namespace LFL

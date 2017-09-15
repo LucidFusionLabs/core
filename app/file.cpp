@@ -63,9 +63,9 @@ int File::ReadIOV(void *buf, const IOVec *v, int iovlen) {
 }
 
 int File::Rewrite(const ArrayPiece<IOVec> &v, const function<string(int)> &encode_f) {
-  File *new_file = Create();
-  int ret = Rewrite(v, encode_f, new_file);
-  return ReplaceWith(new_file) ? ret : -1;
+  auto new_file = Create();
+  int ret = Rewrite(v, encode_f, new_file.get());
+  return ReplaceWith(move(new_file)) ? ret : -1;
 }
 
 int File::Rewrite(const ArrayPiece<IOVec> &v, const function<string(int)> &encode_f, File *new_file) {
@@ -115,18 +115,17 @@ int BufferFile::Write(const void *In, size_t size) {
   return size;
 }
 
-File *BufferFile::Create() {
-  BufferFile *ret = new BufferFile(string());
+unique_ptr<File> BufferFile::Create() {
+  auto ret = make_unique<BufferFile>(string());
   if (fn.size()) ret->fn = StrCat(fn, ".new");
-  return ret;
+  return unique_ptr<File>(ret.release());
 }
 
-bool BufferFile::ReplaceWith(File *nf) {
-  BufferFile *new_file = dynamic_cast<BufferFile*>(nf);
+bool BufferFile::ReplaceWith(unique_ptr<File> nf) {
+  BufferFile *new_file = dynamic_cast<BufferFile*>(nf.get());
   if (!new_file) return false;
   swap(*this, *new_file);
   swap(this->fn, new_file->fn);
-  delete new_file;
   return true;
 }
 
@@ -272,9 +271,9 @@ int LocalFile::Write(const void *buf, size_t size) {
 }
 
 bool LocalFile::Flush() { fflush(static_cast<FILE*>(impl)); return true; }
-File *LocalFile::Create() { return new LocalFile(StrCat(fn, ".new"), "w+"); }
-bool LocalFile::ReplaceWith(File *nf) {
-  LocalFile *new_file = dynamic_cast<LocalFile*>(nf);
+unique_ptr<File> LocalFile::Create() { return make_unique<LocalFile>(StrCat(fn, ".new"), "w+"); }
+bool LocalFile::ReplaceWith(unique_ptr<File> nf) {
+  LocalFile *new_file = dynamic_cast<LocalFile*>(nf.get());
   if (!new_file) return false;
 #ifdef LFL_WINDOWS
   _unlink(fn.c_str());
@@ -282,7 +281,6 @@ bool LocalFile::ReplaceWith(File *nf) {
   int ret = rename(new_file->fn.c_str(), fn.c_str());
   swap(*this, *new_file);
   swap(this->fn, new_file->fn);
-  delete new_file;
   return !ret;
 }
 
@@ -384,12 +382,12 @@ ContainerFileHeader::ContainerFileHeader(const char *text) {
 }
 
 void ContainerFile::Open(const string &fn) {
-  if (file) delete file;
-  file = fn.size() ? new LocalFile(fn, "r+", true) : 0;
+  file.reset();
+  if (fn.size()) file = make_unique<LocalFile>(fn, "r+", true);
   read_offset = 0;
   write_offset = -1;
   done = (file ? file->Size() : 0) <= 0;
-  nr.Init(file);
+  nr.Init(file.get());
 }
 
 int ContainerFile::Add(const StringPiece &msg, int status) {
@@ -397,14 +395,14 @@ int ContainerFile::Add(const StringPiece &msg, int status) {
   write_offset = file->Seek(0, File::Whence::END);
 
   ContainerFileHeader ph(status);
-  int wrote = WriteEntry(file, &ph, move(msg), true);
+  int wrote = WriteEntry(file.get(), &ph, move(msg), true);
   nr.SetFileOffset(wrote > 0 ? write_offset + wrote : write_offset);
   return wrote > 0;
 } 
 
 bool ContainerFile::Update(int offset, const ContainerFileHeader *ph, const StringPiece &msg) {
   if (offset < 0 || (write_offset = file->Seek(offset, File::Whence::SET)) != offset) return false;
-  int wrote = WriteEntry(file, ph, move(msg), true);
+  int wrote = WriteEntry(file.get(), ph, move(msg), true);
   nr.SetFileOffset(wrote > 0 ? offset + wrote : offset);
   return wrote > 0;
 }
@@ -412,7 +410,7 @@ bool ContainerFile::Update(int offset, const ContainerFileHeader *ph, const Stri
 bool ContainerFile::UpdateFlag(int offset, int status) {
   if (offset < 0 || (write_offset = file->Seek(offset, File::Whence::SET)) != offset) return false;
   ContainerFileHeader ph(status);
-  int wrote = WriteEntryFlag(file, &ph, true);
+  int wrote = WriteEntryFlag(file.get(), &ph, true);
   nr.SetFileOffset(wrote > 0 ? offset + wrote : offset);
   return wrote > 0;
 }
@@ -527,7 +525,7 @@ int StringFile::Read(IterWordIter *word, int header) {
     if (MatrixFile::ReadDimensions(word, &M, &N)) return -1;
   }
 
-  if (!F) F = new vector<string>;
+  if (!F) F = make_unique<vector<string>>();
   else F->clear(); 
   for (string line = word->iter->NextString(); !word->iter->Done(); line = word->iter->NextString()) F->push_back(line);
   return 0;
@@ -597,7 +595,7 @@ int MatrixFile::Read(IterWordIter *word, int header) {
     if (ReadDimensions(word, &M, &N)) return -1;
   }
 
-  if (!F) F = new Matrix(M,N);
+  if (!F) F = make_unique<Matrix>(M,N);
   else if (F->M != M || F->N != N) (F->Open(M, N));
 
   MatrixIter(F) {
@@ -625,7 +623,7 @@ int MatrixFile::ReadBinary(const string &path) {
   }
 
   if (F) FATAL("unexpected arg %p", this);
-  F = new Matrix();
+  F = make_unique<Matrix>();
   F->AssignDataPtr(hdr->M, hdr->N, reinterpret_cast<double*>(buf + hdr->data), mmap.release());
   return 0;
 }
@@ -789,17 +787,17 @@ int SettingsFile::Save(ApplicationInfo *a, const vector<string> &fields) {
 /* Matrix Archive */ 
 
 MatrixArchiveOutputFile::~MatrixArchiveOutputFile() { Close(); }
-MatrixArchiveOutputFile::MatrixArchiveOutputFile(const string &name) : file(0) { if (name.size()) Open(name); }
-void MatrixArchiveOutputFile::Close() { if (file) { delete file; file=0; } }
-int MatrixArchiveOutputFile::Open(const string &name) { file = new LocalFile(name, "w"); if (file->Opened()) return 0; Close(); return -1; }
-int MatrixArchiveOutputFile::Write(Matrix *m, const string &hdr, const string &name) { return MatrixFile(m, hdr).Write(file, name); } 
+MatrixArchiveOutputFile::MatrixArchiveOutputFile(const string &name) { if (name.size()) Open(name); }
+void MatrixArchiveOutputFile::Close() { file.reset(); }
+int MatrixArchiveOutputFile::Open(const string &name) { file = make_unique<LocalFile>(name, "w"); if (file->Opened()) return 0; Close(); return -1; }
+int MatrixArchiveOutputFile::Write(Matrix *m, const string &hdr, const string &name) { return MatrixFile(m, hdr).Write(file.get(), name); } 
 
 MatrixArchiveInputFile::~MatrixArchiveInputFile() { Close(); }
-MatrixArchiveInputFile::MatrixArchiveInputFile(const string &name) : file(0), index(0) { if (name.size()) Open(name); }
-void MatrixArchiveInputFile::Close() {if (file) { delete file; file=0; } index=0; }
-int MatrixArchiveInputFile::Open(const string &name) { LocalFileLineIter *lfi=new LocalFileLineIter(name); file=new IterWordIter(lfi, true); return !lfi->f.Opened(); }
-int MatrixArchiveInputFile::Read(Matrix **out, string *hdrout) { index++; return MatrixFile::Read(file, out, hdrout); }
-int MatrixArchiveInputFile::Skip() { index++; return MatrixFile().Read(file, 1); }
+MatrixArchiveInputFile::MatrixArchiveInputFile(const string &name) { if (name.size()) Open(name); }
+void MatrixArchiveInputFile::Close() { file.reset(); index=0; }
+int MatrixArchiveInputFile::Open(const string &name) { auto lfi = make_unique<LocalFileLineIter>(name); bool v = lfi->f.Opened(); file = make_unique<IterWordIter>(lfi.release(), true); return !v; }
+int MatrixArchiveInputFile::Read(unique_ptr<Matrix> *out, string *hdrout) { index++; return MatrixFile::Read(file.get(), out, hdrout); }
+int MatrixArchiveInputFile::Skip() { index++; return MatrixFile().Read(file.get(), 1); }
 string MatrixArchiveInputFile::Filename() { if (!file) return ""; return ""; } // file->file->f.filename(); }
 int MatrixArchiveInputFile::Count(const string &name) { MatrixArchiveInputFile a(name); int ret=0; while (a.Skip() != -1) ret++; return ret; }
 

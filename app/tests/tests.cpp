@@ -24,8 +24,8 @@ Application *app = nullptr;
 extern "C" LFApp *MyAppCreate(int argc, const char* const* argv) {
   FLAGS_enable_video = true;
   FLAGS_font = FakeFontEngine::Filename();
-  app = new Application(argc, argv);
-  app->focused = CreateWindow(app);
+  app = CreateApplication(argc, argv).release();
+  app->focused = CreateWindow(app).release();
   testing::InitGoogleTest(&argc, const_cast<char**>(argv));
   return app;
 }

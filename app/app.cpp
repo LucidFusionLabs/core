@@ -363,7 +363,7 @@ void Application::Log(int level, const char *file, int line, const char *message
 }
 
 void Application::CreateNewWindow() {
-  Window *orig_window = focused, *new_window = CreateWindow(this);
+  Window *orig_window = focused, *new_window = CreateWindow(this).release();
   if (window_init_cb) window_init_cb(new_window);
   new_window->gd = CreateGraphicsDevice(new_window, shaders.get(), 2).release();
   CHECK(Video::CreateWindow(this, new_window));

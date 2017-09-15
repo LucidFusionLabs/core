@@ -329,6 +329,11 @@ bool MultiProcessResource::Read(const MultiProcessBuffer &mpb, int type, Seriali
 #if !defined(LFL_IPC)
 bool InterProcessComm::StartServerProcess(const string &server_program, const vector<string> &arg) { return false; }
 bool InterProcessComm::OpenSocket(const string &socket_name) { return false; }
+void InterProcessComm::HandleIPC(Connection *c, int filter_msg) {}
+bool InterProcessComm::Write(Connection *conn, IPC::Id id, IPC::Seq seq, const StringPiece &rpc_text, int transfer_handle) { return 0; }
+MultiProcessBuffer *InterProcessComm::NewBuffer() const { return 0; }
+MultiProcessBuffer *InterProcessComm::AddBuffer() { return 0; }
+bool InterProcessComm::DelBuffer(IPC::Seq id) { return 0; }
 #else
 
 MultiProcessBuffer *InterProcessComm::NewBuffer() const { return new MultiProcessBuffer(server_process); }
@@ -338,6 +343,7 @@ MultiProcessBuffer *InterProcessComm::AddBuffer() {
   ipc_buffer[ipc_buffer_id] = ret;
   return ret;
 }
+
 bool InterProcessComm::DelBuffer(IPC::Seq id) {
   auto i = ipc_buffer.find(id);
   if (i == ipc_buffer.end()) return false;

@@ -60,20 +60,20 @@ void FreeTypeFontEngine::SubPixelFilter(const Box &b, unsigned char *buf, int li
   SimpleVideoResampler::Filter(buf, b.w, b.h, pf, linesize, b.x, b.y, &kernel, ColorChannel::Alpha, SimpleVideoResampler::Flag::ZeroOnly);
 }
 
-FreeTypeFontEngine::Resource *FreeTypeFontEngine::OpenFile(const FontDesc &d) {
+unique_ptr<FreeTypeFontEngine::Resource> FreeTypeFontEngine::OpenFile(const FontDesc &d) {
   Init(); 
   int error;
   FT_FaceRec_ *face = 0;
   if ((error = FT_New_Face(ft_library, d.name.c_str(), 0, &face))) { ERROR("FT_New_Face: ",       error); return 0; }
   if ((error = FT_Select_Charmap(face, FT_ENCODING_UNICODE)))      { ERROR("FT_Select_Charmap: ", error); return 0; }
   FT_Library_SetLcdFilter(ft_library, FLAGS_subpixel_fonts ? FT_LCD_FILTER_LIGHT : FT_LCD_FILTER_NONE);
-  return new Resource(face, d.name);
+  return make_unique<Resource>(face, d.name);
 }
 
-FreeTypeFontEngine::Resource *FreeTypeFontEngine::OpenBuffer(const FontDesc &d, string *content) {
+unique_ptr<FreeTypeFontEngine::Resource> FreeTypeFontEngine::OpenBuffer(const FontDesc &d, string *content) {
   Init();
   int error;
-  Resource *r = new Resource(0, d.name, content);
+  auto r = make_unique<Resource>(0, d.name, content);
   if ((error = FT_New_Memory_Face(ft_library, (const FT_Byte*)r->content.data(), r->content.size(), 0, &r->face))) { ERROR("FT_New_Memory_Face: ", error); delete r; return 0; }
   if ((error = FT_Select_Charmap(r->face, FT_ENCODING_UNICODE)))                                                   { ERROR("FT_Select_Charmap: ",  error); delete r; return 0; }
   FT_Library_SetLcdFilter(ft_library, FLAGS_subpixel_fonts ? FT_LCD_FILTER_LIGHT : FT_LCD_FILTER_NONE);

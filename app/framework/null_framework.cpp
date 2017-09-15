@@ -157,8 +157,8 @@ extern "C" int main(int argc, const char *argv[]) {
   return MyAppMain();
 }
 
-Application *CreateApplication(int ac, const char* const* av) { return new Application(ac, av); }
-Window *CreateWindow(Application *A) { return new NullWindow(A); }
+unique_ptr<Application> CreateApplication(int ac, const char* const* av) { return make_unique<Application>(ac, av); }
+unique_ptr<Window> CreateWindow(Application *A) { return make_unique<NullWindow>(A); }
 unique_ptr<Module> CreateFrameworkModule(Application *app) { return make_unique<NullFrameworkModule>(app); }
 unique_ptr<TimerInterface> SystemToolkit::CreateTimer(Callback cb) { return nullptr; }
 unique_ptr<AlertViewInterface> SystemToolkit::CreateAlert(Window*, AlertItemVec items) { return make_unique<NullAlertView>(); }

@@ -1,5 +1,5 @@
 /*
- * $Id: camera.cpp 1330 2014-11-06 03:04:15Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -124,7 +124,7 @@ struct FFMpegVideoResampler : public VideoResamplerInterface {
   }
 };
 
-AudioResamplerInterface *CreateAudioResampler() { return new FFMpegAudioResampler(); }
-VideoResamplerInterface *CreateVideoResampler() { return new FFMpegVideoResampler(); }
+unique_ptr<AudioResamplerInterface> CreateAudioResampler() { return make_unique<FFMpegAudioResampler>(); }
+unique_ptr<VideoResamplerInterface> CreateVideoResampler() { return make_unique<FFMpegVideoResampler>(); }
 
 }; // namespace LFL

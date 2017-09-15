@@ -213,9 +213,9 @@ struct Texture : public Drawable {
   unsigned ReleaseGL() { unsigned ret = ID; ID = 0; return ret; }
 
   void ClearBuffer() { if (buf_owner) delete [] buf; buf = 0; buf_owner = 1; }
-  unsigned char *NewBuffer() const { return new unsigned char [BufferSize()](); }
-  unsigned char *RenewBuffer() { ClearBuffer(); buf = NewBuffer(); return buf; }
-  unsigned char *ReleaseBuffer() { unsigned char *ret=0; swap(ret, buf); ClearBuffer(); return ret; }
+  unsigned char *RenewBuffer() { ClearBuffer(); buf = NewBuffer().release(); return buf; }
+  unique_ptr<unsigned char[]> NewBuffer() const { return make_unique<unsigned char[]>(BufferSize()); }
+  unique_ptr<unsigned char[]> ReleaseBuffer() { unsigned char *ret=0; swap(ret, buf); ClearBuffer(); return unique_ptr<unsigned char[]>(ret); }
 
   struct Flag { enum { CreateGL=1, CreateBuf=2, FlipY=4, Resample=8, RepeatGL=16 }; };
   void Create      (int PF=0)               { Create(width, height, PF); }

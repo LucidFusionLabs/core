@@ -847,13 +847,13 @@ struct Application : public ::LFApp, public ApplicationInfo, public ApplicationS
 #endif
 };
 
-Application *CreateApplication(int ac, const char* const* av);
-Window *CreateWindow(Application *app);
+unique_ptr<Application> CreateApplication(int ac, const char* const* av);
+unique_ptr<Window> CreateWindow(Application *app);
 unique_ptr<Module> CreateFrameworkModule(Application*);
 unique_ptr<Module> CreateAudioModule(Audio*);
 unique_ptr<Module> CreateCameraModule(CameraState*);
 unique_ptr<GraphicsDevice> CreateGraphicsDevice(Window*, Shaders*, int ver);
-VideoResamplerInterface *CreateVideoResampler();
+unique_ptr<VideoResamplerInterface> CreateVideoResampler();
 void InitCrashReporting(const string &id, const string &name, const string &email);
 void TestCrashReporting();
 

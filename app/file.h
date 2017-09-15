@@ -66,8 +66,8 @@ struct File {
   virtual int Write(const void *buf, size_t size=-1) = 0;
   virtual bool Flush() { return false; }
 
-  virtual File *Create() { return NULL; }
-  virtual bool ReplaceWith(File*) { return false; }
+  virtual unique_ptr<File> Create() { return NULL; }
+  virtual bool ReplaceWith(unique_ptr<File>) { return false; }
 
   string Contents();
   string ReadString(int size);
@@ -104,8 +104,8 @@ struct BufferFile : public File {
   int Read(void *out, size_t size);
   int Write(const void *in, size_t size=-1);
 
-  File *Create();
-  bool ReplaceWith(File*);
+  unique_ptr<File> Create();
+  bool ReplaceWith(unique_ptr<File>);
 };
 
 struct LocalFile : public File {
@@ -145,8 +145,8 @@ struct LocalFile : public File {
   int Write(const void *buf, size_t size=-1);
   bool Flush();
 
-  File *Create();
-  bool ReplaceWith(File*);
+  unique_ptr<File> Create();
+  bool ReplaceWith(unique_ptr<File>);
 };
 
 struct SearchPaths {
@@ -252,12 +252,11 @@ struct ContainerFileHeader {
 };
 
 struct ContainerFile {
-  File *file=0;
+  unique_ptr<File> file;
   bool done=0;
   int read_offset=0, write_offset=-1;
   NextRecordReader nr;
-  ContainerFile(const string &fn=string()) : nr(file) { Open(fn); }
-  ~ContainerFile() { delete file; }
+  ContainerFile(const string &fn=string()) : nr(file.get()) { Open(fn); }
 
   bool Opened() const { return file && file->Opened(); }
   void Open(const string &fn);
@@ -292,17 +291,16 @@ struct FlatFile : public ContainerFile {
 };
 
 struct StringFile {
-  vector<string> *F;
+  unique_ptr<vector<string>> F;
   string H;
-  StringFile() { Clear(); }
+  StringFile() {}
   StringFile(vector<string> *f, const string &h=string()) : F(f), H(h) {}
-  ~StringFile() { delete F; }
 
-  void Clear() { F=0; H.clear(); }
+  void Clear() { F.reset(); H.clear(); }
   void Print(const string &name, bool nl=1);
   int Lines() const { return F ? F->size() : 0; }
   string Line(int i) const { return (F && i < F->size()) ? (*F)[i] : ""; }
-  void AssignTo(vector<string> **Fo, string *Ho) { if (Fo) *Fo=F; if (Ho) *Ho=H; Clear(); }
+  void AssignTo(vector<string> **Fo, string *Ho) { if (Fo) *Fo=F.get(); if (Ho) *Ho=H; Clear(); }
 
   int ReadVersioned (const VersionedFileName &fn, ApplicationLifetime *life=0, int iter=-1);
   int WriteVersioned(const VersionedFileName &fn, int iter, const string &hdr=string());
@@ -339,14 +337,14 @@ struct MatrixFile {
   struct Header { enum { NONE=0, DIM_PLUS=1, DIM=2 }; };
   struct BinaryHeader{ int magic, M, N, name, transcript, data, unused1, unused2; };
 
-  Matrix *F; string H;
+  unique_ptr<Matrix> F;
+  string H;
   MatrixFile() { Clear(); }
   MatrixFile(Matrix *f, const string &h=string()) : F(f), H(h) {}
-  ~MatrixFile() { delete F; }
 
-  void Clear() { F=0; H.clear(); }
+  void Clear() { F.reset(); H.clear(); }
   const char *Text() { return H.c_str(); }
-  void AssignTo(Matrix **Fo, string *Ho) { if (Fo) *Fo=F; if (Ho) *Ho=H; Clear(); }
+  void AssignTo(unique_ptr<Matrix> *Fo, string *Ho) { if (Fo) *Fo=move(F); if (Ho) *Ho=H; Clear(); }
 
   int ReadVersioned       (const VersionedFileName &fn, ApplicationLifetime *life=0, int iteration=-1);
   int WriteVersioned      (const VersionedFileName &fn, int iteration);
@@ -376,24 +374,25 @@ struct MatrixFile {
   static int WriteBinaryHeader(File *file, const string &name, const string &hdr, int M, int N);
   static int WriteRow         (File *file, const double *row, int N, bool lastrow=0);
 
-  static int Read(IterWordIter *fd, Matrix **F, string *H)
+  static int Read(IterWordIter *fd, unique_ptr<Matrix> *F, string *H)
   { MatrixFile f; int ret=f.Read(fd); f.AssignTo(F, H); return ret; }
-  static int Read(const string &fn, Matrix **F, string *H)
+  static int Read(const string &fn, unique_ptr<Matrix> *F, string *H)
   { MatrixFile f; int ret=f.Read(fn); f.AssignTo(F, H); return ret; }
-  static int ReadVersioned(const VersionedFileName &fn, Matrix **F, string *H, int iter=-1)
+  static int ReadVersioned(const VersionedFileName &fn, unique_ptr<Matrix> *F, string *H, int iter=-1)
   { MatrixFile f; int ret=f.ReadVersioned(fn); f.AssignTo(F, H); return ret; }
-  static int ReadVersioned(const char *D, const char *C, const char *V, Matrix **F, string *H=0, int iter=-1)
+  static int ReadVersioned(const char *D, const char *C, const char *V, unique_ptr<Matrix> *F, string *H=0, int iter=-1)
   { return ReadVersioned(VersionedFileName(D, C, V), F, H, iter); }
 };
 
 struct MatrixArchiveInputFile {
-  IterWordIter *file; int index;
+  unique_ptr<IterWordIter> file;
+  int index=0;
   MatrixArchiveInputFile(const string &name=string());
   ~MatrixArchiveInputFile();
 
   void Close();
   int Open(const string &name);
-  int Read(Matrix **out, string *hdrout);
+  int Read(unique_ptr<Matrix> *out, string *hdrout);
   int Read(MatrixFile *f) { return Read(&f->F, &f->H); }
   int Skip();
   string Filename();
@@ -401,14 +400,14 @@ struct MatrixArchiveInputFile {
 };
 
 struct MatrixArchiveOutputFile {
-  File *file;
+  unique_ptr<File> file;
   MatrixArchiveOutputFile(const string &name=string());
   ~MatrixArchiveOutputFile();
 
   void Close();
   int Open(const string &name);
   int Write(Matrix*, const string &hdr, const string &name);
-  int Write(const MatrixFile *f, const string &name) { return Write(f->F, f->H, name); }
+  int Write(const MatrixFile *f, const string &name) { return Write(f->F.get(), f->H, name); }
 };
 
 template <class X, void (*Assign)(double *, X), bool (*Equals)(const double*, X)>

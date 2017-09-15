@@ -1,5 +1,5 @@
 /*
- * $Id: camera.cpp 1330 2014-11-06 03:04:15Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -23,8 +23,8 @@ void FreeTypeFontEngine::SetDefault() {}
 bool FreeTypeFontEngine::Init(const FontDesc &d) { return false; }
 void FreeTypeFontEngine::Init() {}
 void FreeTypeFontEngine::SubPixelFilter(const Box &b, unsigned char *buf, int linesize, int pf) {}
-FreeTypeFontEngine::Resource *FreeTypeFontEngine::OpenFile(const FontDesc &d) { return 0; }
-FreeTypeFontEngine::Resource *FreeTypeFontEngine::OpenBuffer(const FontDesc &d, string *content) { return 0; }
+unique_ptr<FreeTypeFontEngine::Resource> FreeTypeFontEngine::OpenFile(const FontDesc &d) { return 0; }
+unique_ptr<FreeTypeFontEngine::Resource> FreeTypeFontEngine::OpenBuffer(const FontDesc &d, string *content) { return 0; }
 int FreeTypeFontEngine::InitGlyphs(Font *f, Glyph *g, int n) { return 0; }
 int FreeTypeFontEngine::LoadGlyphs(Font *f, const Glyph *g, int n) { return 0; }
 unique_ptr<Font> FreeTypeFontEngine::Open(const FontDesc &d) { return nullptr; }

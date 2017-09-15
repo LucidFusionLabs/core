@@ -240,10 +240,10 @@ void CleanUpTextureCGImageData(void *info, const void *data, size_t size) {
 
 CGImageRef MakeCGImage(Texture &t) {
   if (!t.buf) return nullptr;
-  unsigned char *buf = t.ReleaseBuffer();
+  unique_ptr<unsigned char[]> buf = t.ReleaseBuffer();
   CGColorSpaceRef rgb = CGColorSpaceCreateDeviceRGB();
   CGDataProviderRef provider = 
-    CGDataProviderCreateWithData(buf, buf, t.BufferSize(), CleanUpTextureCGImageData);
+    CGDataProviderCreateWithData(buf.get(), buf.get(), t.BufferSize(), CleanUpTextureCGImageData);
   auto ret = CGImageCreate(t.width, t.height, 8, 8*t.PixelSize(), t.LineSize(), rgb,
                            kCGBitmapByteOrderDefault /* | kCGImageAlphaLast */,
                            provider, nullptr, false, kCGRenderingIntentDefault);
