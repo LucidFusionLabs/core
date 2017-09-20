@@ -27,6 +27,19 @@
 #endif
 
 namespace LFL {
+const char *IterWordIter::Next() {
+  if (!iter) return 0;
+  const char *w = word.in.buf ? word.Next() : 0;
+  while (!w) {
+    first_count++;
+    const char *line = iter->Next();
+    if (!line) return 0;
+    word = StringWordIter(line, iter->CurrentLength(), word.IsSpace);
+    w = word.Next();
+  }
+  return w;
+}    
+
 void Allocator::Reset() { FATAL("unimplemented reset"); }
 Allocator *Allocator::Default() { return Singleton<MallocAllocator>::Set(); }
 
@@ -152,6 +165,31 @@ void RingSampler::Handle::CopyFrom(const RingSampler::Handle *src) {
   if (N > src->Len()) { B=N-src->Len(); N=src->Len(); }
   for (int i=0; i<N; i++) Write(src->Read(-N+i));
   for (int i=0; i<B; i++) Write(0.0);
+}
+
+string GraphViz::Footer() { return "}\r\n"; }
+string GraphViz::DigraphHeader(const string &name) {
+  return StrCat("digraph ", name, " {\r\n"
+                "rankdir=LR;\r\n"
+                "size=\"8,5\"\r\n"
+                "node [style = solid];\r\n"
+                "node [shape = circle];\r\n");
+}
+
+string GraphViz::NodeColor(const string &s) { return StrCat("node [color = ", s, "];\r\n"); }
+string GraphViz::NodeShape(const string &s) { return StrCat("node [shape = ", s, "];\r\n"); }
+string GraphViz::NodeStyle(const string &s) { return StrCat("node [style = ", s, "];\r\n"); }
+
+void GraphViz::AppendNode(string *out, const string &n1, const string &label) {
+  StrAppend(out, "\"", n1, "\"",
+            (label.size() ? StrCat(" [ label = \"", label, "\" ] ") : ""),
+            ";\r\n");
+}
+
+void GraphViz::AppendEdge(string *out, const string &n1, const string &n2, const string &label) {
+  StrAppend(out, "\"", n1, "\" -> \"", n2, "\"",
+            (label.size() ? StrCat(" [ label = \"", label, "\" ] ") : ""),
+            ";\r\n");
 }
 
 TableItem::TableItem(string K, int T, string V, string RT, int TG, int LI, int RI, Callback CB, StringCB RC,

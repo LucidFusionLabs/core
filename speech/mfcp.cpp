@@ -1,5 +1,5 @@
 /*
- * $Id: mfcp.cpp 1336 2014-12-08 09:29:59Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -22,16 +22,18 @@
 #include "corpus.h"
 
 namespace LFL {
+Application *app;
 DEFINE_bool(verify,       false,       "Verify copied matrix file");
 }; // namespace LFL
 using namespace LFL;
 
-extern "C" void MyAppCreate(int argc, const char* const* argv) {
+extern "C" LFApp *MyAppCreate(int argc, const char* const* argv) {
 #ifdef _WIN32
   FLAGS_open_console = 1;
 #endif
-  app = new Application(argc, argv);
-  app->focused = Window::Create();
+  app = CreateApplication(argc, argv).release();
+  app->focused = CreateWindow(app).release();
+  return app;
 }
 
 extern "C" int MyAppMain() {
@@ -78,10 +80,10 @@ extern "C" int MyAppMain() {
     if (MatrixFile::WriteBinaryHeader(&file, BaseName(out), hdr.c_str(), M, N) < 0) return ERRORv(-1, "writeBinaryHeader: ", -1);
 
     /* read & write */
-    double *row = (double *)alloca(N*sizeof(double));
+    vector<double> row(N, 0);
     for (int i=0; i<M; i++) {
       for (int j=0; j<N; j++) row[j] = atof(word.NextString()); 
-      if ((ret = file.Write(row, N*sizeof(double))) != N*sizeof(double)) FATAL("file write ret: ", ret);
+      if ((ret = file.Write(row.data(), N*sizeof(double))) != N*sizeof(double)) FATAL("file write ret: ", ret);
     }
   }
 
@@ -94,7 +96,7 @@ extern "C" int MyAppMain() {
 
     if (mf.H != nf.H) ERROR("mismatching text '", mf.H, "' != '", nf.H, "'");
 
-    Matrix *A=mf.F, *B=nf.F;
+    Matrix *A=mf.F.get(), *B=nf.F.get();
     if (A->M != B->M || A->N != B->N) return ERRORv(-1, "dim mismatch ", A->M, " != ", B->M, " || ", A->N, " != ", B->N);
 
     MatrixIter(A) {

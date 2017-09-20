@@ -1,5 +1,5 @@
 /*
- * $Id: voice.h 1306 2014-09-04 07:13:16Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -31,7 +31,7 @@ struct VoiceModel {
   } unit[LFL_PHONES];
 
   int Read(const char *dir);
-  RingSampler *Synth(const char *text, int start=0);
+  RingSampler *Synth(AssetLoading*, const char *text, int start=0);
 
   int NextPhone(int phone, int lastphone, int lastphoneindex);
 };

@@ -1,5 +1,5 @@
 /*
- * $Id: gmmem.h 1306 2014-09-04 07:13:16Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -24,15 +24,14 @@ namespace LFL {
 struct GMMEM {
   struct Mode { enum { Means=1, Cov=2 }; int m; };
   GMM *mixture;
-  Matrix *accums, *newmeans;
-  double *denoms, totalprob;
-  int count, mode;
+  unique_ptr<Matrix> accums, newmeans;
+  vector<double> denoms, posteriors, featscaled, diff, xv;
+  double totalprob;
+  int count, mode=0;
   bool full_variance;
   const char *name;
-
-  ~GMMEM() { delete accums; delete newmeans; delete [] denoms; }
-  GMMEM(GMM *m, bool fv=0, const char *n="") : mixture(m), accums(new Matrix(mixture->mean.M, mixture->mean.N)),
-  newmeans(new Matrix(accums->M, accums->N)), denoms(new double[accums->M]), mode(0), full_variance(fv), name(n) { Reset(); }
+  GMMEM(GMM *m, bool fv=0, const char *n="") : mixture(m), accums(make_unique<Matrix>(mixture->mean.M, mixture->mean.N)),
+  newmeans(make_unique<Matrix>(accums->M, accums->N)), denoms(accums->M, 0), full_variance(fv), name(n) { Reset(); }
 
   void Reset() {
     MatrixRowIter(accums) {
@@ -51,34 +50,34 @@ struct GMMEM {
 
   void AddFeature(double *feature) { 
     int K = newmeans->M, D = newmeans->N;
-    double *posteriors = (double*)alloca(K*sizeof(double));
-    double prob = mixture->PDF(feature, posteriors);
+    posteriors.resize(K);
+    double prob = mixture->PDF(feature, posteriors.data());
 
     if (mode == Mode::Means) {
-      double *featscaled=(double*)alloca(D*sizeof(double));
+      featscaled.resize(D);
 
       MatrixRowIter(&mixture->mean) {
-        Vector::Mult(feature, exp(posteriors[i]), featscaled, D);
-        Vector::Add(newmeans->row(i), featscaled, D);
+        Vector::Mult(feature, exp(posteriors[i]), &featscaled[0], D);
+        Vector::Add(newmeans->row(i), featscaled.data(), D);
 
         LogAdd(&denoms[i], posteriors[i]);
 
         if (!full_variance) {
-          Vector::Mult(featscaled, feature, D);
-          Vector::Add(accums->row(i), featscaled, D);
+          Vector::Mult(&featscaled[0], feature, D);
+          Vector::Add(accums->row(i), featscaled.data(), D);
         }
       }
       count++;
       totalprob += prob;
     }
     else if (mode == Mode::Cov) {
-      double *diff=(double*)alloca(D*sizeof(double));
+      diff.resize(D);
 
       MatrixRowIter(newmeans) {
-        Vector::Sub(newmeans->row(i), feature, diff, D);
-        Vector::Mult(diff, diff, D);
-        Vector::Mult(diff, exp(posteriors[i]), D);
-        Vector::Add(accums->row(i), diff, D);
+        Vector::Sub(newmeans->row(i), feature, &diff[0], D);
+        Vector::Mult(&diff[0], diff.data(), D);
+        Vector::Mult(&diff[0], exp(posteriors[i]), D);
+        Vector::Add(accums->row(i), diff.data(), D);
       }
       if (!full_variance) FATAL("incompatible modes ", -1);
     }
@@ -99,7 +98,6 @@ struct GMMEM {
     }
     else if (mode == Mode::Cov) {
       int D = newmeans->N;
-      double *x = (double*)alloca(D*sizeof(double));
       MatrixRowIter(accums) {
         double dn = exp(denoms[i]);
         if (dn < FLAGS_CovarFloor) dn = FLAGS_CovarFloor;
@@ -113,8 +111,9 @@ struct GMMEM {
         Vector::Div(accums->row(i), dn, mixture->diagcov.row(i), N); /* update covariance */
 
         if (!full_variance) {
-          Vector::Mult(mixture->mean.row(i), mixture->mean.row(i), x, D);
-          Vector::Sub(mixture->diagcov.row(i), x, D);
+          xv.resize(D);
+          Vector::Mult(mixture->mean.row(i), mixture->mean.row(i), &xv[0], D);
+          Vector::Sub(mixture->diagcov.row(i), xv.data(), D);
         }
 
         MatrixColIter(&mixture->diagcov) if (mixture->diagcov.row(i)[j] < FLAGS_CovarFloor) mixture->diagcov.row(i)[j] = FLAGS_CovarFloor;

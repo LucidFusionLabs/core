@@ -695,19 +695,6 @@ template struct StringWordIterT<char16_t>;
 template struct StringLineIterT<char16_t>;
 template struct StringWordIterT<DrawableBox>;
 
-const char *IterWordIter::Next() {
-  if (!iter) return 0;
-  const char *w = word.in.buf ? word.Next() : 0;
-  while (!w) {
-    first_count++;
-    const char *line = iter->Next();
-    if (!line) return 0;
-    word = StringWordIter(line, iter->CurrentLength(), word.IsSpace);
-    w = word.Next();
-  }
-  return w;
-}    
-
 template <class X> int IsNewline(const X *line) {
   if (!*line) return 0;
   if (*line == '\n') return 1;

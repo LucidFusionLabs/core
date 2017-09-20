@@ -330,7 +330,7 @@ Clipboard::Clipboard() {
 /* Application */
 
 Application::Application(int ac, const char* const* av) :
-  ThreadDispatcher(this), AssetLoading(this, this), MouseFocus(this),
+  ThreadDispatcher(this), AssetLoading(this, this, this), MouseFocus(this),
   system_toolkit(Singleton<SystemToolkit>::Set()) {
   initialized = 0;
   pid = 0;

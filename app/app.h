@@ -355,8 +355,8 @@ namespace LFL {
 ::std::ostream& operator<<(::std::ostream& os, const Box   &x);
 }; // namespace LFL
 
-#include "core/app/file.h"
 #include "core/app/types/types.h"
+#include "core/app/file.h"
 
 namespace LFL {
 struct Flag {

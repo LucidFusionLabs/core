@@ -1,5 +1,5 @@
 /*
- * $Id: lp.h 1306 2014-11-16 07:13:16Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -30,7 +30,7 @@ struct LinearProgram {
   struct Result { enum { Final=1, Unbounded=2, Infeasible=3 }; };
 
   LinearProgram(File *f) {
-    IterWordIter words(new FileLineIter(f), true);
+    IterWordIter words(make_unique<FileLineIter>(f), true);
     words.ScanN(&M, 1);
     words.ScanN(&N, 1);
     basic    .resize(M);

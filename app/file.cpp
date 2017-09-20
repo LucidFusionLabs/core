@@ -790,42 +790,15 @@ MatrixArchiveOutputFile::~MatrixArchiveOutputFile() { Close(); }
 MatrixArchiveOutputFile::MatrixArchiveOutputFile(const string &name) { if (name.size()) Open(name); }
 void MatrixArchiveOutputFile::Close() { file.reset(); }
 int MatrixArchiveOutputFile::Open(const string &name) { file = make_unique<LocalFile>(name, "w"); if (file->Opened()) return 0; Close(); return -1; }
-int MatrixArchiveOutputFile::Write(Matrix *m, const string &hdr, const string &name) { return MatrixFile(m, hdr).Write(file.get(), name); } 
+int MatrixArchiveOutputFile::Write(Matrix *m, const string &hdr, const string &name) { return MatrixFile(m, hdr).Write(file.get(), name); }
 
 MatrixArchiveInputFile::~MatrixArchiveInputFile() { Close(); }
 MatrixArchiveInputFile::MatrixArchiveInputFile(const string &name) { if (name.size()) Open(name); }
 void MatrixArchiveInputFile::Close() { file.reset(); index=0; }
-int MatrixArchiveInputFile::Open(const string &name) { auto lfi = make_unique<LocalFileLineIter>(name); bool v = lfi->f.Opened(); file = make_unique<IterWordIter>(lfi.release(), true); return !v; }
+int MatrixArchiveInputFile::Open(const string &name) { auto lfi = make_unique<LocalFileLineIter>(name); bool v = lfi->f.Opened(); file = make_unique<IterWordIter>(unique_ptr<StringIter>(lfi.release())); return !v; }
 int MatrixArchiveInputFile::Read(unique_ptr<Matrix> *out, string *hdrout) { index++; return MatrixFile::Read(file.get(), out, hdrout); }
 int MatrixArchiveInputFile::Skip() { index++; return MatrixFile().Read(file.get(), 1); }
 string MatrixArchiveInputFile::Filename() { if (!file) return ""; return ""; } // file->file->f.filename(); }
 int MatrixArchiveInputFile::Count(const string &name) { MatrixArchiveInputFile a(name); int ret=0; while (a.Skip() != -1) ret++; return ret; }
-
-/* GraphVizFileFile */
-
-string GraphVizFile::Footer() { return "}\r\n"; }
-string GraphVizFile::DigraphHeader(const string &name) {
-  return StrCat("digraph ", name, " {\r\n"
-                "rankdir=LR;\r\n"
-                "size=\"8,5\"\r\n"
-                "node [style = solid];\r\n"
-                "node [shape = circle];\r\n");
-}
-
-string GraphVizFile::NodeColor(const string &s) { return StrCat("node [color = ", s, "];\r\n"); }
-string GraphVizFile::NodeShape(const string &s) { return StrCat("node [shape = ", s, "];\r\n"); }
-string GraphVizFile::NodeStyle(const string &s) { return StrCat("node [style = ", s, "];\r\n"); }
-
-void GraphVizFile::AppendNode(string *out, const string &n1, const string &label) {
-  StrAppend(out, "\"", n1, "\"",
-            (label.size() ? StrCat(" [ label = \"", label, "\" ] ") : ""),
-            ";\r\n");
-}
-
-void GraphVizFile::AppendEdge(string *out, const string &n1, const string &n2, const string &label) {
-  StrAppend(out, "\"", n1, "\" -> \"", n2, "\"",
-            (label.size() ? StrCat(" [ label = \"", label, "\" ] ") : ""),
-            ";\r\n");
-}
 
 }; // namespace LFL

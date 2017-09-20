@@ -1,5 +1,5 @@
 /*
- * $Id: kmeans.h 1306 2014-09-04 07:13:16Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -24,14 +24,19 @@ DECLARE_FLAG(CovarFloor, double);
 DECLARE_FLAG(PriorFloor, double);
 
 struct KMeans {
-  int K, D, *count;
-  Matrix *means, *accums, *prior;
+  int K, D;
+  vector<int> count;
+  unique_ptr<Matrix> means, accums, prior;
   double totaldist;
 
-  KMeans(int k, int d) : K(k), D(d), count(new int[K]), means(new Matrix(K,D)), accums(new Matrix(K,D)), prior(new Matrix(K,1)) { Reset(); }
-  ~KMeans() { delete []count; delete means; delete accums; delete prior; }
+  KMeans(int k, int d) : K(k), D(d), count(0, K), means(make_unique<Matrix>(K,D)),
+  accums(make_unique<Matrix>(K,D)), prior(make_unique<Matrix>(K,1)) { Reset(); }
 
-  void Reset() { memset(accums->m,0,accums->bytes); memset(count,0,K*sizeof(int)); totaldist=0; }
+  void Reset() {
+    memset(accums->m, 0, accums->bytes);
+    memset(&count[0], 0, K*sizeof(int));
+    totaldist = 0; 
+  }
 
   void AddFeatures(Matrix *features) {
     if (!DimCheck("KMeans", features->N, D)) return;
@@ -40,7 +45,7 @@ struct KMeans {
 
   void AddFeature(double *feature) {
     double mindist; int minindex;
-    NearestNeighbor(means, feature, &minindex, &mindist);
+    NearestNeighbor(means.get(), feature, &minindex, &mindist);
 
     Vector::Add(accums->row(minindex), feature, D);
     count[minindex]++;
@@ -74,10 +79,10 @@ struct KMeans {
 
 struct KMeansInit {
   KMeans *kmeans;
-  int features, count, *pick;
+  vector<int> pick;
+  int features, count=0;
 
-  ~KMeansInit() { delete [] pick; }
-  KMeansInit(KMeans *out, int feats) : kmeans(out), features(feats), count(0), pick(new int[kmeans->K]) {
+  KMeansInit(KMeans *out, int feats) : kmeans(out), pick(kmeans->K, 0), features(feats) {
     if (!features) {
       ERROR("KMeans::Init called with ", features, " features");
       for (int k=0; k<kmeans->K; k++) Vector::Assign(kmeans->means->row(k), 0.0, kmeans->D);

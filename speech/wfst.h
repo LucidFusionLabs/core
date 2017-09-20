@@ -1,5 +1,5 @@
 /*
- * $Id: wfst.h 1309 2014-10-10 19:20:55Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -23,7 +23,6 @@ namespace LFL {
 /* Weighted Finite State Transducer */
 struct WFST {
   enum { NULL1=0, BLOCK=-2, NULL2=-3 }; /* labels */
-  Semiring *K;
 
   struct IOAlphabet {
     virtual int Id(string s) const = 0;
@@ -45,7 +44,7 @@ struct WFST {
       }
       return false;
     }
-  } *A, *B;
+  };
 
   struct AlphabetBuilder : public IOAlphabet {
     typedef map<string, int> AMap;
@@ -76,14 +75,14 @@ struct WFST {
   };
 
   struct StringFileAlphabet : public IOAlphabet {
-    vector<string> *str;
+    unique_ptr<vector<string>> str;
     HashMatrix map;
     IOAlphabet *aux;
 
     static const int HashBuckets = 5, HashValues = 2;
     StringFileAlphabet(vector<string> *S=0, Matrix *M=0, IOAlphabet *Aux=0) : str(S), map(M, HashValues), aux(Aux) {}
     virtual ~StringFileAlphabet() { Reset(); }
-    void Reset() { delete str; delete map.map; str=0; map.map=0; }
+    void Reset() { str.reset(); map.map.reset(); }
 
     int Id(string s) const { return Id(fnv32(s.c_str(), s.size())); }
     int Id(unsigned hash) const { const double *row = map.Get(hash); return row ? row[1] : -1; }
@@ -97,8 +96,10 @@ struct WFST {
     void Next(Iterator *iter) const { if ((iter->id = iter->impl++) >= str->size()) iter->done = 1; else iter->name = (*str)[iter->id].c_str(); }
 
     int Read(const char *dir, const char *name1, const char *name2, int iteration) {
+      unique_ptr<Matrix> mapdata;
       if (StringFile::ReadVersioned(dir, name1, name2, &str,     0, iteration)<0) { ERROR(name2, ".", iteration, ".in.string"); return -1; }
-      if (MatrixFile::ReadVersioned(dir, name1, name2, &map.map, 0, iteration)<0) { ERROR(name2, ".", iteration, ".in.matrix"); return -1; }
+      if (MatrixFile::ReadVersioned(dir, name1, name2, &mapdata, 0, iteration)<0) { ERROR(name2, ".", iteration, ".in.matrix"); return -1; }
+      map.map = move(mapdata);
       return 0;
     }
 
@@ -116,7 +117,7 @@ struct WFST {
         if (!he) FATAL("Matrix hash collision: ", name);
         he[1] = i;
       }
-      if (MatrixFile(map.map).WriteVersioned(dir, name1, name2, iteration) < 0) { ERROR(name1, " write map"); return -1; }
+      if (MatrixFile(map.map.get()).WriteVersioned(dir, name1, name2, iteration) < 0) return ERRORv(-1, name1, " write map");
       return 0;
     }
   };
@@ -159,7 +160,7 @@ struct WFST {
     virtual void Clear() = 0;
     virtual void Add(int state) = 0;
     virtual void Join(vector<int> &merged) = 0;
-  } *I, *F;
+  };
 
   struct Statevec : public vector<int>, StateSet {
     Statevec() {}
@@ -195,10 +196,9 @@ struct WFST {
   };
 
   struct StateSetMatrix : public StateSet {
-    Matrix *set;
-
-    virtual ~StateSetMatrix() { delete set; }
-    StateSetMatrix(Matrix *S) : set(S) {}
+    unique_ptr<Matrix> set;
+    StateSetMatrix(unique_ptr<Matrix> S) : set(move(S)) {}
+    virtual ~StateSetMatrix() {}
 
     int States() { return set ? set->M : 0; }
     int State(int ind) {
@@ -298,23 +298,27 @@ struct WFST {
     struct InNullFilter  : public Filter { bool operator()(Edge &e) { return !e.in; } };
     struct OutNullFilter : public Filter { bool operator()(Edge &e) { return !e.out; } };
     struct NullFilter    : public Filter { bool operator()(Edge &e) { return !e.in && !e.out && !e.weight; } };
+
     struct InvertFilter  : public Filter {
       Filter *F;
       InvertFilter(Filter *f) : F(f) {}
       bool operator()(Edge &e) { return !(*F)(e); }
     }; 
+
     struct SetFilter     : public Filter {
       StateSet *S; bool match;
       SetFilter(StateSet *s) : S(s) {}
       void Begin(int state) { match = S->Find(state) >= 0; }
       bool operator()(Edge &e) { return match; }
     };
+
     struct F2NotIFilter  : public Filter {
       StateSet *I, *F; bool final;
       F2NotIFilter(StateSet *i, StateSet *f) : I(i), F(f) {}
       void Begin(int state) { final = F->Find(state) >= 0; }
       bool operator()(Edge &e) { return final && I->Find(e.nextState) < 0; }
     };
+
     struct ShiftInputFilter : public Filter {
       StateSet *S; bool match; int from, to;
       ShiftInputFilter(StateSet *s, int F, int T) : S(s), from(F), to(T) {}
@@ -351,15 +355,15 @@ struct WFST {
 
     virtual void Compact(Semiring *K, StateSet *I=0, StateSet *F=0) = 0;
     virtual void Join(vector<int> &merged, Semiring *K, StateSet *I=0, StateSet *F=0) = 0;
-  } *E;
+  };
 
   struct TransitMapMatrix : public TransitMap {
-    Matrix *state, *transit;
+    unique_ptr<Matrix> state, transit;
     static const int HashBuckets = 5, HashValues = 2, StateValues = 4;
     static const int rowsize = sizeof(double) * Edge::Cols;
 
-    virtual ~TransitMapMatrix() { delete state; delete transit; }
-    TransitMapMatrix(Matrix *State, Matrix *Transit) : state(State), transit(Transit) {}
+    TransitMapMatrix(unique_ptr<Matrix> State, unique_ptr<Matrix> Transit) :
+      state(move(State)), transit(move(Transit)) {}
 
     static int SourceInputRowSort(const void *R1, const void *R2) { 
       const double *r1 = static_cast<const double*>(R1), *r2 = static_cast<const double*>(R2);
@@ -669,6 +673,7 @@ struct WFST {
       SetFilter(StateSet *s) : S(s) {}
       bool operator()(int state) { return S->Find(state) >= 0; }
     };
+
     struct ChainFilter : public Filter {
       TransitMap *E;
       ChainFilter(TransitMap *e) : E(e) {}
@@ -678,11 +683,13 @@ struct WFST {
         return true;
       }
     };
+
     struct InvertFilter : public Filter {
       Filter *F;
       InvertFilter(Filter *f) : F(f) {}
       bool operator()(int state) { return !(*F)(state); }
     };
+
     struct OrFilter : public Filter {
       Filter *A, *B;
       OrFilter(Filter *a, Filter *b) : A(a), B(b) {}
@@ -692,15 +699,24 @@ struct WFST {
     struct LabelSet {
       virtual string Name(int id) { return StrCat("S", id); }
     };
+
     struct LabelMap : public LabelSet, public map<int, string> {
       virtual string Name(int id) { map<int, string>::iterator it = find(id); return it != end() ? (*it).second.c_str() : ""; }
     };
   };
 
-  virtual ~WFST() { Reset(); }
-  WFST(Semiring *k, IOAlphabet *a=0, IOAlphabet *b=0, StateSet *i=0, StateSet *f=0, TransitMap *e=0) : K(k), A(a), B(b), I(i), F(f), E(e) {}
-  void Replace(TransitMap *e, StateSet *i, StateSet *f) { Reset(); E=e; I=i; F=f; }
-  void Reset() { delete E; delete I; delete F; E=0; I=F=0; }
+  Semiring *K;
+  IOAlphabet *A, *B;
+  unique_ptr<StateSet> I, F;
+  unique_ptr<TransitMap> E;
+
+  virtual ~WFST() {}
+  WFST(Semiring *k, IOAlphabet *a=0, IOAlphabet *b=0, unique_ptr<StateSet> i=unique_ptr<StateSet>(),
+       unique_ptr<StateSet> f=unique_ptr<StateSet>(), unique_ptr<TransitMap> e=unique_ptr<TransitMap>()) : 
+    K(k), A(a), B(b), I(move(i)), F(move(f)), E(move(e)) {}
+
+  void Reset() { E.reset(); I.reset(); F.reset(); }
+  void Replace(unique_ptr<TransitMap> e, unique_ptr<StateSet> i, unique_ptr<StateSet> f) { E=move(e); I=move(i); F=move(f); }
 
   void Print(const char *name) {
     INFO("WFST ", name, ": ");
@@ -719,26 +735,26 @@ struct WFST {
   string ToStrGraphViz(State::LabelSet *label=0) {
     State::LabelSet defaultLabel;
     if (!label) label = &defaultLabel;
-    string v = GraphVizFile::DigraphHeader("WFST");
+    string v = GraphViz::DigraphHeader("WFST");
 
-    for (int i=0, l=I->States(); i<l; i++) GraphVizFile::AppendNode(&v, label->Name(I->State(i)));
+    for (int i=0, l=I->States(); i<l; i++) GraphViz::AppendNode(&v, label->Name(I->State(i)));
 
-    v += GraphVizFile::NodeStyle("solid");
-    v += GraphVizFile::NodeShape("doublecircle");
+    v += GraphViz::NodeStyle("solid");
+    v += GraphViz::NodeShape("doublecircle");
 
-    for (int i=0, l=F->States(); i<l; i++) GraphVizFile::AppendNode(&v, label->Name(F->State(i)));
+    for (int i=0, l=F->States(); i<l; i++) GraphViz::AppendNode(&v, label->Name(F->State(i)));
 
-    v += GraphVizFile::NodeShape("circle");
+    v += GraphViz::NodeShape("circle");
 
     for (int i=0, l=E->States(); i<l; i++) {
       TransitMap::Iterator edge;
       for (E->Begin(&edge, i); !edge.done; E->Next(&edge)) 
-        GraphVizFile::AppendEdge(&v, label->Name(edge.prevState), label->Name(edge.nextState),
+        GraphViz::AppendEdge(&v, label->Name(edge.prevState), label->Name(edge.nextState),
                                  StrCat(A->Name(edge.in), " : ", B->Name(edge.out), " / ",
                                         StringPrintf("%.2f", edge.weight)));
     }
 
-    return v + GraphVizFile::Footer();
+    return v + GraphViz::Footer();
   }
 
   void PrintGraphViz() { string v = ToStrGraphViz(); printf("%s", v.c_str()); fflush(stdout); }
@@ -751,32 +767,33 @@ struct WFST {
   int Read(const char *name, const char *dir, int lastiter=-1) {
     Reset();
 
-    Matrix *state=0, *transit=0;
+    unique_ptr<Matrix> state, transit;
     lastiter = MatrixFile::ReadVersioned(dir, name, "state", &state, 0, lastiter);
     if (!state) { ERROR("no WFST: ", name); return -1; }
     if (MatrixFile::ReadVersioned(dir, name, "transition", &transit, 0, lastiter)<0) { ERROR(name, ".", lastiter, ".transition.matrix"); return -1; }
-    E = new TransitMapMatrix(state, transit);
+    E = make_unique<TransitMapMatrix>(move(state), move(transit));
 
-    Matrix *initial=0, *final=0;
+    unique_ptr<Matrix> initial, final;
     if (MatrixFile::ReadVersioned(dir, name, "initial", &initial, 0, lastiter)<0) { ERROR(name, ".", lastiter, ".initial.matrix"); return -1; }
     if (MatrixFile::ReadVersioned(dir, name, "final",   &final,   0, lastiter)<0) { ERROR(name, ".", lastiter, ".final.matrix"  ); return -1; }
-    I = new StateSetMatrix(initial);
-    F = new StateSetMatrix(final);
+    I = make_unique<StateSetMatrix>(move(initial));
+    F = make_unique<StateSetMatrix>(move(final));
     return lastiter;
   }
 
   static int Write(WFST *t, const char *name, const char *dir, int iteration, bool wA=true, bool wB=true) {
     if (wA && StringFileAlphabet::Write(t->A, dir, name, "in", iteration)) return -1;
     if (wB && StringFileAlphabet::Write(t->B, dir, name, "out", iteration)) return -1;
-    if (StateSetMatrix::Write(t->I, dir, name, "initial", iteration)) return -1;
-    if (StateSetMatrix::Write(t->F, dir, name, "final", iteration)) return -1;
-    if (TransitMapMatrix::Write(t->E, dir, name, iteration)) return -1;
+    if (StateSetMatrix::Write(t->I.get(), dir, name, "initial", iteration)) return -1;
+    if (StateSetMatrix::Write(t->F.get(), dir, name, "final", iteration)) return -1;
+    if (TransitMapMatrix::Write(t->E.get(), dir, name, iteration)) return -1;
     return 0;
   }
 
   static void EdgeFilter(WFST *t, Edge::Filter *filter, TransitMapBuilder::Edgevec *filtered=0) {
-    TransitMapBuilder *E = new TransitMapBuilder();
-    Statevec *I = new Statevec(t->I), *F = new Statevec(t->F);
+    auto E = make_unique<TransitMapBuilder>();
+    auto I = make_unique<Statevec>(t->I.get());
+    auto F = make_unique<Statevec>(t->F.get());
     for (int i=0, l=t->E->States(); i<l; i++) {
       filter->Begin(i);
       TransitMap::Iterator edge;
@@ -785,7 +802,7 @@ struct WFST {
         else if (filtered) filtered->push_back(edge);
     }
     E->Sort();
-    t->Replace(E, I, F);
+    t->Replace(move(E), move(I), move(F));
   }
 
   struct ShortestDistance {
@@ -827,7 +844,8 @@ struct WFST {
   static void ShortestDistance(ShortestDistance::PathMap &reachable, Semiring *K, TransitMap *E, int S,
                                State::Filter *sfilter=0, Edge::Filter *efilter=0, vector<int> *in=0, int flag=0, int maxiter=0)
   {
-    Statevec SS; SS.push_back(S);
+    Statevec SS;
+    SS.push_back(S);
     ShortestDistanceMapPtr search(K, &reachable);
     ShortestDistance(&search, K, E, &SS, sfilter, efilter, in, flag, maxiter);
   }
@@ -890,12 +908,11 @@ struct WFST {
   }
 
   struct Builder {
-    TransitMapBuilder *E;
-    Statevec *I, *F;
-    Builder(bool open=true) { if (open) Open(); else Clear(); }
-    void Open() { E = new TransitMapBuilder(); I = new Statevec(); F = new Statevec(); }
-    void Free() { delete E; delete I; delete F; Clear(); }
-    void Clear() { E=0; I=F=0; }
+    unique_ptr<TransitMapBuilder> E;
+    unique_ptr<Statevec> I, F;
+    Builder(bool open=true) { if (open) Open(); }
+    void Open() { E = make_unique<TransitMapBuilder>(); I = make_unique<Statevec>(); F = make_unique<Statevec>(); }
+    void Free() { E.reset(); I.reset(); F.reset(); }
     void Reopen() { Free(); Open(); }
   };
 
@@ -921,7 +938,7 @@ struct WFST {
     const static int defaultflag = T1MatchNull | T2MatchNull | FreeT1 | FreeT2;
 
     Composer() { Clear(); }
-    void Clear() { T1=0; T2=0; label=0; out.Clear(); reachable=0; nextid=0; flag=0; transition_filter=0; }
+    void Clear() { T1=0; T2=0; label=0; out.Free(); reachable=0; nextid=0; flag=0; transition_filter=0; }
 
     struct SingleSourceNullClosure : public Reachable {
       WFST *T1, *T2;
@@ -943,7 +960,7 @@ struct WFST {
           for (int i=0, l=t1->E->States(); i<l; i++) {
             States out_reachable;
             Edge::OutNullFilter onf;
-            NullClosure(t1->E, i, &onf, &out_reachable);
+            NullClosure(t1->E.get(), i, &onf, &out_reachable);
             R1.push_back(out_reachable);
           }
         }
@@ -952,7 +969,7 @@ struct WFST {
           for (int i=0, l=t2->E->States(); i<l; i++) {
             States in_reachable;
             Edge::InNullFilter inf;
-            NullClosure(t2->E, i, &inf, &in_reachable);
+            NullClosure(t2->E.get(), i, &inf, &in_reachable);
             R2.push_back(in_reachable);
           }
         }
@@ -961,7 +978,7 @@ struct WFST {
       static void NullClosure(TransitMap *E, int source, Edge::Filter *filter, States *out) {
         Edge::InvertFilter ifilter(filter);
         ShortestDistance::PathMap dist;
-        ShortestDistance(dist, Singleton<TropicalSemiring>::Get(), E, source, 0, &ifilter);
+        ShortestDistance(dist, Singleton<TropicalSemiring>::Set(), E, source, 0, &ifilter);
         for (ShortestDistance::PathMap::iterator it = dist.begin(); it != dist.end(); it++)
           out->push_back(State((*it).first, (*it).second.D));
       }
@@ -1011,7 +1028,7 @@ struct WFST {
       }
       int operator()(int r2s, int r2i, int matches, Edge *singleMatchOut=0) {
         if (r2s || !r2i) return SingleSourceNullClosure::operator()(r2s, r2i, matches, singleMatchOut);
-        TransitMapMatrix *E = static_cast<TransitMapMatrix*>(T2->E);
+        TransitMapMatrix *E = static_cast<TransitMapMatrix*>(T2->E.get());
         TransitMap::Iterator edge2;
         E->Begin(&edge2, r2s);
         double *row = E->transit->row(edge2.impl1 + r2i - 2);
@@ -1065,7 +1082,7 @@ struct WFST {
       return tid;
     }
 
-    WFST *Compose(WFST *t1, WFST *t2, string filter, Reachable *R=0, State::LabelMap *L=0, int Flag=0) {
+    unique_ptr<WFST> Compose(WFST *t1, WFST *t2, string filter, Reachable *R=0, State::LabelMap *L=0, int Flag=0) {
       out.Reopen();
       T1=t1; T2=t2; reachable=R; label=L; flag=Flag?Flag:defaultflag;
       if (!T1->E->States() || !T2->E->States()) return Complete();
@@ -1113,8 +1130,8 @@ struct WFST {
         S.pop_front();
         int qid = TripId(q);
 
-        if (ComposedStateMember(q, T1->I, T2->I, i3)) out.I->push_back(qid);
-        if (ComposedStateMember(q, T1->F, T2->F, Q3)) out.F->push_back(qid);
+        if (ComposedStateMember(q, T1->I.get(), T2->I.get(), i3)) out.I->push_back(qid);
+        if (ComposedStateMember(q, T1->F.get(), T2->F.get(), Q3)) out.F->push_back(qid);
 
         Compose(q, qid);
         if (flag & T1MatchNull) ComposeNullLeft(q, qid);
@@ -1168,8 +1185,8 @@ struct WFST {
       if (done.find(p) == done.end()) { done.insert(p); S.push_back(p); }
     }
 
-    WFST *Complete() {
-      WFST *ret = new WFST(T2->K, T1->A, T2->B, out.I, out.F, out.E);
+    unique_ptr<WFST> Complete() {
+      auto ret = make_unique<WFST>(T2->K, T1->A, T2->B, move(out.I), move(out.F), move(out.E));
       if (flag & FreeT1) delete T1;
       if (flag & FreeT2) delete T2;
       Clear();
@@ -1204,17 +1221,17 @@ struct WFST {
     E->Join(merged, K, I, F);
   }
 
-  static WFST *ConCat(WFST *t1, WFST *t2) { /* add_edge(x,y) : t1.F X t2.I */ return 0; }
+  static unique_ptr<WFST> ConCat(WFST *t1, WFST *t2) { /* add_edge(x,y) : t1.F X t2.I */ return 0; }
 
-  static WFST *Compose(WFST *t1, WFST *t2, string filter="label-reachability", Composer::Reachable *R=0, State::LabelMap *label=0, int flag=0) {
+  static unique_ptr<WFST> Compose(WFST *t1, WFST *t2, string filter="label-reachability", Composer::Reachable *R=0, State::LabelMap *label=0, int flag=0) {
     Composer::SingleSourceNullClosure reachable;
     return Composer().Compose(t1, t2, filter, R ? R : &reachable, label, flag);
   }
 
   /* Weighted Transducer Determinization from p-Subsequentiable Transducers http://www.cs.nyu.edu/~mohri/pub/psub2.ps */
   static void Determinize(WFST *t, Semiring *K=0) {
-    TransitMapBuilder *E = new TransitMapBuilder();
-    Statevec *I = new Statevec(), *F = new Statevec();
+    unique_ptr<TransitMapBuilder> E = make_unique<TransitMapBuilder>();
+    unique_ptr<Statevec> I = make_unique<Statevec>(), F = make_unique<Statevec>();
     int startid = t->E->States(), nextid = startid;
     if (!K) K = t->K;
 
@@ -1332,20 +1349,20 @@ struct WFST {
 
     E->SubtractIDs(startid); I->SubtractIDs(startid); F->SubtractIDs(startid);
     E->Sort(); I->Sort(); F->Sort();
-    t->Replace(E, I, F);
+    t->Replace(move(E), move(I), move(F));
   }
 
   /* Speech Recognition With Weighted Finite-State Transducers http://www.cs.nyu.edu/~mohri/pub/hbka.pdf */
   static void PushWeights(Semiring *K, WFST *t, StateSet *startFrom, bool sourcereset=false) {
-    TransitMapBuilder *E = new TransitMapBuilder(t->E);
-    Statevec *I = new Statevec(t->I), *F = new Statevec(t->F);
+    unique_ptr<TransitMapBuilder> E = make_unique<TransitMapBuilder>(t->E.get());
+    unique_ptr<Statevec> I = make_unique<Statevec>(t->I.get()), F = make_unique<Statevec>(t->F.get());
 
     E->reverse = true;
     E->Sort();
 
     ShortestDistanceVector search(K, t->E->States());
     int flag = ShortestDistance::Reverse | (sourcereset ? ShortestDistance::SourceReset : 0);
-    ShortestDistance(&search, K, E, startFrom, 0, 0, 0, flag);
+    ShortestDistance(&search, K, E.get(), startFrom, 0, 0, 0, flag);
 
     for (TransitMapBuilder::Edgevec::iterator it = E->transits.begin(); it != E->transits.end(); it++) {
       double dp = search.path[(*it).prevState].D, dn = search.path[(*it).nextState].D;
@@ -1357,7 +1374,7 @@ struct WFST {
     E->reverse = false;
     E->Sort();
 
-    t->Replace(E, I, F);
+    t->Replace(move(E), move(I), move(F));
   }
 
   int Minimize() { /* XXX Hopcroft Algorithm is O(|I|*n*log(n)) while this (due to the pathological case) is O(n^2*log(n)) */
@@ -1380,7 +1397,7 @@ struct WFST {
       for (int i=0, l=E->States(); i<l; i++) if (i+1<l && tx[i].first == tx[i+1].first) { merged[tx[i+1].second] = merged[tx[i].second]; mergecount++; }
       if (!mergecount) return iter;
 
-      E->Join(merged, K, I, F);
+      E->Join(merged, K, I.get(), F.get());
     } 
   }
 
@@ -1390,8 +1407,8 @@ struct WFST {
     if (!t->E->States()) return;
     Edge::InvertFilter ifilter(filter);
 
-    TransitMapBuilder *E = new TransitMapBuilder();
-    Statevec *I = new Statevec(t->I);
+    unique_ptr<TransitMapBuilder> E = make_unique<TransitMapBuilder>();
+    unique_ptr<Statevec> I = make_unique<Statevec>(t->I.get());
     set<int> final;
     for (int i=0, l=t->F->States(); i<l; i++) final.insert(t->F->State(i));
 
@@ -1404,7 +1421,7 @@ struct WFST {
           E->Add(iter.prevState, iter.nextState, iter.in, iter.out, iter.weight);
 
       ShortestDistance::PathMap dist;
-      ShortestDistance(dist, Singleton<TropicalSemiring>::Get(), t->E, i, 0, &ifilter);
+      ShortestDistance(dist, Singleton<TropicalSemiring>::Set(), t->E.get(), i, 0, &ifilter);
       for (ShortestDistance::PathMap::iterator it = dist.begin(); it != dist.end(); it++) {
         if ((*it).first == i) continue;
         if (!finalState && final.find((*it).first) != final.end()) { final.insert(i); finalState = true; }
@@ -1416,15 +1433,15 @@ struct WFST {
       }
     }
 
-    Statevec *F = new Statevec(final);
-    E->Compact(t->K, I, F);
-    t->Replace(E, I, F);
+    auto F = make_unique<Statevec>(final);
+    E->Compact(t->K, I.get(), F.get());
+    t->Replace(move(E), move(I), move(F));
   }
 
   /* cross between determinize and removeNulls */
   static void NormalizeInput(WFST *t) {
-    TransitMapBuilder *E = new TransitMapBuilder();
-    Statevec *I = new Statevec(), *F = new Statevec();
+    unique_ptr<TransitMapBuilder> E = make_unique<TransitMapBuilder>();
+    unique_ptr<Statevec> I = make_unique<Statevec>(), F = make_unique<Statevec>();
     int startid = t->E->States(), nextid = startid;
 
     deque<ResidualSubset> S;
@@ -1467,7 +1484,7 @@ struct WFST {
 
       /* same as removeNulls */
       ShortestDistance::PathMap dist;
-      ShortestDistance(dist, Singleton<TropicalSemiring>::Get(), t->E, source, 0, &ifilter, 0, ShortestDistance::Transduce);
+      ShortestDistance(dist, Singleton<TropicalSemiring>::Set(), t->E.get(), source, 0, &ifilter, 0, ShortestDistance::Transduce);
       for (ShortestDistance::PathMap::iterator it = dist.begin(); it != dist.end(); it++) {
         if ((*it).first == source) continue;
 
@@ -1497,15 +1514,15 @@ struct WFST {
 
     E->SubtractIDs(startid); I->SubtractIDs(startid); F->SubtractIDs(startid);
     E->Sort(); I->Sort(); F->Sort();
-    t->Replace(E, I, F);
+    t->Replace(move(E), move(I), move(F));
   }
 
   /* remove any state with all outgoing null inputs and all incoming null outputs - introduces non-determinism */
   static void NormalizeTail(WFST *t) {
     if (!t->E->States()) return;
 
-    TransitMapBuilder *E = new TransitMapBuilder(t->E);
-    Statevec *I = new Statevec(t->I), *F = new Statevec(t->F);
+    unique_ptr<TransitMapBuilder> E = make_unique<TransitMapBuilder>(t->E.get());
+    unique_ptr<Statevec> I = make_unique<Statevec>(t->I.get()), F = make_unique<Statevec>(t->F.get());
 
     vector<int> merged;
     E->Realloc(merged);
@@ -1536,22 +1553,22 @@ struct WFST {
     }
 
     E->reverse = false;
-    E->Join(merged, t->K, I, F);
-    t->Replace(E, I, F);
+    E->Join(merged, t->K, I.get(), F.get());
+    t->Replace(move(E), move(I), move(F));
   }
 
   static void RemoveNonCoAccessible(WFST *t) { return RemoveNonAccessible(t, true); }
   static void RemoveNonAccessible(WFST *t, bool reverse=false) {
     if (!t->E->States()) return;
 
-    TransitMapBuilder *E = new TransitMapBuilder(t->E);
-    Statevec *I = new Statevec(t->I), *F = new Statevec(t->F);
-    StateSet *startFrom = t->I;
-    if (reverse) { startFrom = t->F; E->reverse = true; E->Sort(); }
+    unique_ptr<TransitMapBuilder> E = make_unique<TransitMapBuilder>(t->E.get());
+    unique_ptr<Statevec> I = make_unique<Statevec>(t->I.get()), F = make_unique<Statevec>(t->F.get());
+    StateSet *startFrom = t->I.get();
+    if (reverse) { startFrom = t->F.get(); E->reverse = true; E->Sort(); }
 
-    ShortestDistanceVector search(Singleton<TropicalSemiring>::Get(), t->E->States());
+    ShortestDistanceVector search(Singleton<TropicalSemiring>::Set(), t->E->States());
     int flag = reverse ? ShortestDistance::Reverse : 0;
-    ShortestDistance(&search, Singleton<TropicalSemiring>::Get(), E, startFrom, 0, 0, 0, flag);
+    ShortestDistance(&search, Singleton<TropicalSemiring>::Set(), E.get(), startFrom, 0, 0, 0, flag);
 
     vector<int> accessible;
     accessible.resize(t->E->States(), -1);
@@ -1559,19 +1576,19 @@ struct WFST {
       accessible[(*i)] = (*i);
 
     if (reverse) { E->reverse = false; E->Sort(); }
-    E->Join(accessible, t->K, I, F);
-    t->Replace(E, I, F);
+    E->Join(accessible, t->K, I.get(), F.get());
+    t->Replace(move(E), move(I), move(F));
   }
 
   static void RemoveSelfLoops(WFST *t) { Edge::LoopFilter loopf; EdgeFilter(t, &loopf); }
-  static void RemoveNonInitialFinalTransitions(WFST *t) { Edge::F2NotIFilter f2nif(t->I, t->F); EdgeFilter(t, &f2nif); }
-  static void RemoveFinalTransitions(WFST *t, TransitMapBuilder::Edgevec *out=0) { Edge::SetFilter sf(t->F); EdgeFilter(t, &sf, out); }
-  static void ShiftFinalTransitions(WFST *t, int from, int to) { Edge::ShiftInputFilter sf(t->F, from, to); EdgeFilter(t, &sf); }
+  static void RemoveNonInitialFinalTransitions(WFST *t) { Edge::F2NotIFilter f2nif(t->I.get(), t->F.get()); EdgeFilter(t, &f2nif); }
+  static void RemoveFinalTransitions(WFST *t, TransitMapBuilder::Edgevec *out=0) { Edge::SetFilter sf(t->F.get()); EdgeFilter(t, &sf, out); }
+  static void ShiftFinalTransitions(WFST *t, int from, int to) { Edge::ShiftInputFilter sf(t->F.get(), from, to); EdgeFilter(t, &sf); }
 
   /* G = grammar */
-  static WFST *Grammar(Semiring *K, IOAlphabet *A, LanguageModel *LM, StringIter *vocab) {
-    TransitMapBuilder *E = new TransitMapBuilder();
-    Statevec *I = new Statevec(), *F = new Statevec();
+  static unique_ptr<WFST> Grammar(Semiring *K, IOAlphabet *A, LanguageModel *LM, StringIter *vocab) {
+    unique_ptr<TransitMapBuilder> E = make_unique<TransitMapBuilder>();
+    unique_ptr<Statevec> I = make_unique<Statevec>(), F = make_unique<Statevec>();
     map<unsigned, int> idmap;
     int state = 0;
     I->push_back(state++);
@@ -1606,13 +1623,13 @@ struct WFST {
       }
     }
     E->Sort();
-    return new WFST(K, A, A, I, F, E);
+    return make_unique<WFST>(K, A, A, move(I), move(F), move(E));
   }
 
   /* L = pronunciation lexicon */
-  static WFST *PronunciationLexicon(Semiring *K, IOAlphabet *A, AlphabetBuilder *B, AlphabetBuilder *aux, PronunciationDict *dict, StringIter *vocab, LanguageModel *LM=0) {
-    TransitMapBuilder *E = new TransitMapBuilder();
-    Statevec *I = new Statevec(), *F = new Statevec();
+  static unique_ptr<WFST> PronunciationLexicon(Semiring *K, IOAlphabet *A, AlphabetBuilder *B, AlphabetBuilder *aux, PronunciationDict *dict, StringIter *vocab, LanguageModel *LM=0) {
+    unique_ptr<TransitMapBuilder> E = make_unique<TransitMapBuilder>();
+    unique_ptr<Statevec> I = make_unique<Statevec>(), F = make_unique<Statevec>();
     map<string, int> homophone;
     int state = 0, max_homophones = 0, id;
 
@@ -1644,14 +1661,14 @@ struct WFST {
       F->push_back(state++);
     }
 
-    WFST *L = new WFST(K, A, B, I, F, E);
+    auto L = make_unique<WFST>(K, A, B, move(I), move(F), move(E));
     INFOf("pronunciation WFST contains %d states (%d initial, %d final) and %d transits", L->E->States(), L->I->States(), L->F->States(), L->E->Transitions());
     return L;
   }
 
-  static WFST *TestPronunciationLexicon(Semiring *K, IOAlphabet *A, IOAlphabet *B) {
-    TransitMapBuilder *E = new TransitMapBuilder();
-    Statevec *I = new Statevec(), *F = new Statevec();
+  static unique_ptr<WFST> TestPronunciationLexicon(Semiring *K, IOAlphabet *A, IOAlphabet *B) {
+    unique_ptr<TransitMapBuilder> E = make_unique<TransitMapBuilder>();
+    unique_ptr<Statevec> I = make_unique<Statevec>(), F = make_unique<Statevec>();
     int aux1 = IOAlphabet::AuxiliarySymbolId(1);
     int word1=B->Id("cat"), word2=B->Id("dog");
     I->push_back(0); I->push_back(1);
@@ -1662,14 +1679,13 @@ struct WFST {
     E->Add(4, 6, aux1,  0, K->One());
     E->Add(5, 7, aux1,  0, K->One());
     F->push_back(6); F->push_back(7);
-    return new WFST(K, A, B, I, F, E);
+    return make_unique<WFST>(K, A, B, move(I), move(F), move(E));
   }
 
   /* C = context dependency transducer */
-  static WFST *ContextDependencyTransducer(Semiring *K, IOAlphabet *A, AlphabetBuilder *B, IOAlphabet *aux=0) {
-    TransitMapBuilder *E = new TransitMapBuilder();
-    Statevec *I = new Statevec(), *F = new Statevec();
-    WFST *C = new WFST(K, A, B, I, F, E);
+  static unique_ptr<WFST> ContextDependencyTransducer(Semiring *K, IOAlphabet *A, AlphabetBuilder *B, IOAlphabet *aux=0) {
+    unique_ptr<TransitMapBuilder> E = make_unique<TransitMapBuilder>();
+    unique_ptr<Statevec> I = make_unique<Statevec>(), F = make_unique<Statevec>();
 
     for (int i=1; i<LFL_PHONES; i++) {
       for (int j=0; j<LFL_PHONES; j++) {
@@ -1688,11 +1704,11 @@ struct WFST {
     E->Sort();
     F->Sort();
     I->push_back(0);
-    return C;
+    return make_unique<WFST>(K, A, B, move(I), move(F), move(E));
   }
 
   static void ContextDependencyRebuildFinal(WFST *t) {
-    Statevec *F = new Statevec();
+    auto F = make_unique<Statevec>();
     for (int i=0; i<t->E->States(); i++) {
       TransitMap::Iterator iter;
       for (t->E->Begin(&iter, i); !iter.done; t->E->Next(&iter)) {
@@ -1701,8 +1717,7 @@ struct WFST {
       }
     }
     F->Sort();
-    delete t->F;
-    t->F = F;
+    t->F = move(F);
   }
 
   /* auxiliary symbols */
@@ -1737,9 +1752,9 @@ struct WFST {
   }
 
   /* H = hidden markov model transducer */
-  static WFST *HMMTransducer(Semiring *K, AcousticModelAlphabet *A, IOAlphabet *B, vector<int> *reachable=0) {
-    TransitMapBuilder *E = new TransitMapBuilder();
-    Statevec *I = new Statevec(), *F = new Statevec();
+  static unique_ptr<WFST> HMMTransducer(Semiring *K, AcousticModelAlphabet *A, IOAlphabet *B, vector<int> *reachable=0) {
+    unique_ptr<TransitMapBuilder> E = make_unique<TransitMapBuilder>();
+    unique_ptr<Statevec> I = make_unique<Statevec>(), F = make_unique<Statevec>();
     IOAlphabet::Iterator iter;
     int state = 0;
     if (reachable) reachable->resize(B->Size());
@@ -1762,13 +1777,13 @@ struct WFST {
     }
 
     if (reachable) sort(reachable->begin(), reachable->end());
-    return new WFST(K, A, B, I, F, E);
+    return make_unique<WFST>(K, A, B, move(I), move(F), move(E));
   }
 
   /* HW = hidden markov model weight transducer */
-  static WFST *HMMWeightTransducer(Semiring *K, AcousticModelAlphabet *A) {
-    TransitMapBuilder *E = new TransitMapBuilder();
-    Statevec *I = new Statevec(), *F = new Statevec();
+  static unique_ptr<WFST> HMMWeightTransducer(Semiring *K, AcousticModelAlphabet *A) {
+    unique_ptr<TransitMapBuilder> E = make_unique<TransitMapBuilder>();
+    unique_ptr<Statevec> I = make_unique<Statevec>(), F = make_unique<Statevec>();
 
     for (int i=0, l=A->AM->states; i<l; i++) {
       HMM::ActiveStateIndex active(1,1,1);
@@ -1784,10 +1799,10 @@ struct WFST {
     }
 
     I->push_back(0);
-    E->Compact(K, I);
+    E->Compact(K, I.get());
     for (int i=0, l=E->States(); i<l; i++) F->push_back(i);
 
-    return new WFST(K, A, A, I, F, E);
+    return make_unique<WFST>(K, A, A, move(I), move(F), move(E));
   }
 };
 

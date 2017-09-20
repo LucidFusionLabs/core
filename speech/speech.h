@@ -50,7 +50,7 @@ struct PronunciationDict {
   Map word_pronunciation;
   StringAlloc val;
 
-  static PronunciationDict *Instance();
+  static PronunciationDict *Instance(AssetLoading*);
   static int ReadDictionary(StringIter *in, PronunciationDict *out);
   static int ReadPronunciation(const char *in, int len, char *phoneIdOut, char *accentOut, int outlen);
 
@@ -63,8 +63,8 @@ struct Features {
   static double rastaB[5], rastaA[2];
 
   static Matrix *EqualLoudnessCurve(int outrows, double max);
-  static double *LifterMatrixROSA(int n, double L, bool inverse=false);
-  static double *LifterMatrixHTK(int n, double L, bool inverse=false);
+  static vector<double> LifterMatrixROSA(int n, double L, bool inverse=false);
+  static vector<double> LifterMatrixHTK(int n, double L, bool inverse=false);
   static Matrix *FFT2Bark(int outrows, double minfreq, double maxfreq, int fftlen, int samplerate);
   static Matrix *FFT2Mel(int outrows, double minfreq, double maxfreq, int fftlen, int samplerate);
   static Matrix *Mel2FFT(int outrows, double minfreq, double maxfreq, int fftlen, int samplerate);
@@ -115,7 +115,7 @@ struct AcousticModel {
     struct Val { int samples, emission_index; } val;
 
     ~State() {}
-    State() : alloc(Singleton<NullAllocator>::Get()), prior(-INFINITY), txself(-INFINITY) { val.samples=val.emission_index=0; }
+    State() : alloc(Singleton<NullAllocator>::Set()), prior(-INFINITY), txself(-INFINITY) { val.samples=val.emission_index=0; }
     unsigned Id() { return fnv32(name.c_str()); }
     void AssignPtr(State *s) {
       if (!s) FATAL("assign ", s);
@@ -193,9 +193,9 @@ struct AcousticModel {
   }
 
   static Compiled *FullyConnected(Compiled *model);
-  static Compiled *FromUtterance(Compiled *model, const char *transcript, bool UseTransit);
-  static Compiled *FromUtterance3(Compiled *model, const char *transcript, bool UseTransit);
-  static Compiled *FromUtterance1(Compiled *model, const char *transcript, bool UseTransit);
+  static Compiled *FromUtterance(AssetLoading *loader, Compiled *model, const char *transcript, bool UseTransit);
+  static Compiled *FromUtterance3(AssetLoading *loader, Compiled *model, const char *transcript, bool UseTransit);
+  static Compiled *FromUtterance1(AssetLoading *loader, Compiled *model, const char *transcript, bool UseTransit);
   static Compiled *FromModel1(StateCollection *model, bool rewriteTransitions);
 
   static void LoadFlags(const char *flags);
@@ -206,15 +206,15 @@ struct AcousticModel {
 };
 
 struct AcousticModelFile : public AcousticModel::Compiled {
-  Matrix *initial=0, *mean=0, *covar=0, *prior=0, *transit=0, *tied=0;
+  unique_ptr<Matrix> initial, mean, covar, prior, transit, tied;
+  unique_ptr<vector<string>> names;
   HashMatrix map;
-  vector<string> *names=0;
   AcousticModelFile() : map(0, 4) {}
   ~AcousticModelFile() { Reset(); }
-  void Reset() { delete initial; initial=0; delete mean; mean=0; delete covar; covar=0; delete prior; prior=0; delete transit; transit=0; delete map.map; map.map=0; delete tied; tied=0; delete names; names=0; }
+  void Reset() { initial.reset(); mean.reset(); covar.reset(); prior.reset(); transit.reset(); tied.reset(); names.reset(); map.map.reset(); }
   AcousticModel::State *GetState(unsigned hash) { double *he = GetHashEntry(hash); return he ? &state[int(he[1])] : 0; }
   double *GetHashEntry(unsigned hash) { return map.Get(hash); }
-  Matrix *TiedStates() { return tied; }
+  Matrix *TiedStates() { return tied.get(); }
   int Open(const char *name, const char *dir, int lastiter=-1, bool rebuildTransit=0);
 };
 
@@ -286,7 +286,7 @@ struct AcousticHMM {
 
     ~EmissionArray() { if (alloc) alloc->Free(emission); }
     EmissionArray(AcousticModel::Compiled *M, Matrix *Observed, bool UsePrior, Allocator *Alloc=0) : model(M),
-    observed(Observed), use_prior_prob(UsePrior), time_index(0), alloc(Alloc?Alloc:Singleton<MallocAllocator>::Get()),
+    observed(Observed), use_prior_prob(UsePrior), time_index(0), alloc(Alloc?Alloc:Singleton<MallocAllocator>::Set()),
     emission(static_cast<double*>(alloc->Malloc(sizeof(double)*model->states))) {}
 
     double *Observation(int t) { return observed->row(t); }
@@ -313,7 +313,7 @@ struct AcousticHMM {
 
     ~EmissionMatrix() { if (!alloc) return; alloc->Free(calcd); alloc->Free(cudaPosterior); }
     EmissionMatrix(AcousticModel::Compiled *M, Matrix *Observed, bool UsePrior, Allocator *Alloc=0) : model(M), observed(Observed), use_prior_prob(UsePrior),
-    K(model->state[0].emission.mean.M), time_index(0), alloc(Alloc?Alloc:Singleton<MallocAllocator>::Get()),
+    K(model->state[0].emission.mean.M), time_index(0), alloc(Alloc?Alloc:Singleton<MallocAllocator>::Set()),
     emission(observed->M, model->states, 0, 0, Alloc), emissionPosterior(observed->M, model->states*K, 0, 0, Alloc),
     calcd(static_cast<bool*>(alloc->Malloc(observed->M))), cudaPosterior(static_cast<double*>(alloc->Malloc(model->states*K*sizeof(double))))
     { memset(calcd, 0, observed->M);  }
@@ -363,9 +363,9 @@ struct FeatureSink {
 };
 
 struct Decoder {
-  static Matrix *DecodeFile(AcousticModel::Compiled *model, const char *filename, double beamWidth);
-  static Matrix *DecodeFeatures(AcousticModel::Compiled *model, Matrix *features, double beamWidth, int flag=0);
-  static void VisualizeFeatures(AcousticModel::Compiled *model, Matrix *features, Matrix *viterbi, double vprob, Time time, bool interactive);
+  static Matrix *DecodeFile(AssetLoading*, AcousticModel::Compiled *model, const char *filename, double beamWidth);
+  static Matrix *DecodeFeatures(AcousticModel::Compiled *model, Matrix *features, double beamWidth, int flag=0, Window *vis=0);
+  static void VisualizeFeatures(Window*, AcousticModel::Compiled *model, Matrix *features, Matrix *viterbi, double vprob, Time time, bool interactive);
 
   struct PhoneIter {
     const AcousticModel::Compiled *model;
@@ -454,13 +454,13 @@ struct PhoneticSegmentationGUI : public View {
 
     for (int i = 0; i < segments.size(); i++) {
       if (!segments[i].hover) continue;
-      font->Draw(segments[i].name, point(root->width * (!flip ? .85 : .15), root->height * (!flip ? .15 : .85)));
+      font->Draw(root->gd, segments[i].name, point(root->gl_w * (!flip ? .85 : .15), root->gl_h * (!flip ? .15 : .85)));
       break;
     }
   }
 
   void Play(int beg, int len) {
-    if (app->audio->Out.size()) return;
+    if (root->parent->audio->Out.size()) return;
     vector<string> args;
     args.push_back(sound_asset_name);
     args.push_back(StrCat(beg*FLAGS_feat_hop));

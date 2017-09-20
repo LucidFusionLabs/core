@@ -17,6 +17,7 @@
  */
 
 #include "core/app/gl/view.h"
+#include "core/app/shell.h"
 #include "core/ml/hmm.h"
 #include "speech.h"
 
@@ -88,7 +89,10 @@ DEFINE_int   (UseTransition,         1,           "Use transition probabilities 
 DEFINE_string(UttPathsInFile,        "",          "Viterbi paths input file");
 DEFINE_string(UttPathsOutFile,       "",          "Viterbi paths output file");
 
-void MyResynth(const vector<string> &args) { SoundAsset *sa=app->soundasset(args.size()?args[0]:"snap"); if (sa) { Resynthesize(app->audio.get(), sa); } }
+void MyResynth(Audio *audio, AssetLoading *loader, AssetStore *assets, const vector<string> &args) {
+  SoundAsset *sa = assets->soundasset(args.size() ? args[0] : "snap");
+  if (sa) { Resynthesize(audio, sa); }
+}
 
 struct Wav2Features {
   enum Target { File, Archive };
@@ -117,14 +121,16 @@ struct Wav2Features {
 };
 
 struct Features2Pronunciation {
+  AssetLoading *loader;
   CounterS words, phones;
   AcousticModel::Compiled *model;
   bool UseTransition;
 
-  Features2Pronunciation(AcousticModel::Compiled *M=0, bool useTransition=0) : model(M), UseTransition(useTransition) {}
+  Features2Pronunciation(AssetLoading *L, AcousticModel::Compiled *M=0, bool useTransition=0) :
+    loader(L), model(M), UseTransition(useTransition) {}
 
   void AddFeatures(const char *fn, Matrix *MFCC, Matrix *features, const char *transcript) {
-    PronunciationDict *dict = PronunciationDict::Instance();
+    PronunciationDict *dict = PronunciationDict::Instance(loader);
 
     StringWordIter worditer(transcript);
     for (string word = worditer.NextString(); !worditer.Done(); word = worditer.NextString()) {
@@ -133,7 +139,7 @@ struct Features2Pronunciation {
     }
     if (!model) return;
 
-    AcousticModel::Compiled *hmm = AcousticModel::FromUtterance(model, transcript, UseTransition);
+    AcousticModel::Compiled *hmm = AcousticModel::FromUtterance(loader, model, transcript, UseTransition);
     if (!hmm) { ERROR("compile utterance '", transcript, "' failed"); return; }
 
     for (int i=0; i<hmm->states; i++)
@@ -143,7 +149,7 @@ struct Features2Pronunciation {
   }
 
   void AddPath(AcousticModel::Compiled *hmm, Matrix *viterbi, double vprob, Time vtime, Matrix *MFCC, Matrix *features, const char *transcript) {
-    PronunciationDict *dict = PronunciationDict::Instance();
+    PronunciationDict *dict = PronunciationDict::Instance(loader);
 
     StringWordIter worditer(transcript);
     for (string word = worditer.NextString(); !worditer.Done(); word = worditer.NextString()) {
@@ -153,7 +159,7 @@ struct Features2Pronunciation {
     if (!model) return;
 
     if (hmm) ERROR("unexpected parameter ", hmm);
-    hmm = AcousticModel::FromUtterance(model, transcript, UseTransition);
+    hmm = AcousticModel::FromUtterance(loader, model, transcript, UseTransition);
     if (!hmm) { ERROR("compile utterance '", transcript, "' failed"); return; }
 
     if (viterbi->M != features->M) { ERROR("viterbi length mismatch ", viterbi->M, " != ", features->M); }
@@ -266,8 +272,8 @@ int Model3InitWrite(vector<string> &list, Matrix *siltrans, const char *modeldir
   return 0;
 }
 
-int Model3Init(const char *modeldir, AcousticModel::StateCollection *model1, int lastiter, const char *featdir, const char *vfn) {
-  PronunciationDict *dict = PronunciationDict::Instance();
+int Model3Init(AssetLoading *loader, const char *modeldir, AcousticModel::StateCollection *model1, int lastiter, const char *featdir, const char *vfn) {
+  PronunciationDict *dict = PronunciationDict::Instance(loader);
   string silname = AcousticModel::Name(Phoneme::SIL, 0);
 
   map<string, int> inventory;
@@ -288,9 +294,9 @@ int Model3Init(const char *modeldir, AcousticModel::StateCollection *model1, int
 
   /* from utterance corpus */
   if (featdir) {
-    Features2Pronunciation f2p;
+    Features2Pronunciation f2p(loader);
     f2p.Iter(featdir);
-    if (!app->run) return 0;
+    if (loader->lifetime && !loader->lifetime->run) return 0;
 
     for (CounterS::Count::iterator i = f2p.words.count.begin(); i != f2p.words.count.end(); i++) {
       const char *word = (*i).first.c_str();
@@ -383,16 +389,16 @@ int Model3TiedInit(const char *modeldir, Matrix *tiedstates, AcousticModel::Stat
   return Model3InitWrite(inventory, &sil->transition, modeldir, model1, lastiter);
 }
 
-int GrowDecisionTrees(const char *modeldir, AcousticModel::Compiled *model3, int lastiter, const char *featdir) {
+int GrowDecisionTrees(AssetLoading *loader, const char *modeldir, AcousticModel::Compiled *model3, int lastiter, const char *featdir) {
 
   /* get triphone occcurence counts from UttPathsIn */
-  Features2Pronunciation f2p(model3);
+  Features2Pronunciation f2p(loader, model3);
   if (!FLAGS_UttPathsInFile.size()) { ERROR("tie model states requires -UttPathsInFile: ", -1); return -1; }
 
   MatrixArchiveInputFile UttPathsIn;
   UttPathsIn.Open(modeldir + FLAGS_UttPathsInFile);
   PathCorpus::PathIter(featdir, &UttPathsIn, bind(&Features2Pronunciation::AddPath, f2p, _1, _2, _3, _4, _5, _6, _7));
-  if (!app->run) return 0;
+  if (loader->lifetime && !loader->lifetime->run) return 0;
 
   /* initialize a decision tree for each center phoneme state */
   const int trees = LFL_PHONES * AcousticModel::StatesPerPhone;
@@ -426,7 +432,7 @@ int GrowDecisionTrees(const char *modeldir, AcousticModel::Compiled *model3, int
     INFO(f->name, " count ", f->count, " prob ", PhoneticDecisionTree::SplitRanker::Likelihood(&feats, terminal));
   }
 
-  PhoneticDecisionTree::QuestionList *QL = PhoneticDecisionTree::QuestionList::Create();
+  auto QL = PhoneticDecisionTree::QuestionList::Create();
   PhoneticDecisionTree::SplitRanker ranker;
 
   /* grow trees */
@@ -435,7 +441,7 @@ int GrowDecisionTrees(const char *modeldir, AcousticModel::Compiled *model3, int
     int phone = i % LFL_PHONES, state = i / LFL_PHONES;
     INFO("growing tree for phone ", Phoneme::Name(phone), " state ", state);
 
-    CART::GrowTree(&feats, QL, &ranker, "t", root[i], 35, tree[i]);
+    CART::GrowTree(&feats, QL.get(), &ranker, "t", root[i], 35, tree[i]);
   }
 
   int leaves = 0;
@@ -445,7 +451,7 @@ int GrowDecisionTrees(const char *modeldir, AcousticModel::Compiled *model3, int
     INFO("writing tree for phone ", Phoneme::Name(phone), " state ", state);
 
     string n = StrCat("DecisionTree_", Phoneme::Name(phone), "_", state);
-    if (CART::WriteTree(tree[i], QL, n.c_str(), modeldir, lastiter)) FATAL("CART::write_tree: ", strerror(errno));
+    if (CART::WriteTree(tree[i], QL.get(), n.c_str(), modeldir, lastiter)) FATAL("CART::write_tree: ", strerror(errno));
     leaves += tree[i].leafname.size();
   }
 
@@ -460,7 +466,7 @@ int TieModelStates(const char *modeldir, AcousticModel::StateCollection *model3,
 
   const int trees = LFL_PHONES * AcousticModel::StatesPerPhone;
   CART::Tree tree[trees];
-  PhoneticDecisionTree::QuestionList *QL = PhoneticDecisionTree::QuestionList::Create();
+  auto QL = PhoneticDecisionTree::QuestionList::Create();
   vector<unsigned> leaves;
 
   for (int t=0; t<trees; t++) {
@@ -468,9 +474,9 @@ int TieModelStates(const char *modeldir, AcousticModel::StateCollection *model3,
     if (phone == Phoneme::SIL && state) continue;
     string n = StrCat("DecisionTree_", Phoneme::Name(phone), "_", state);
 
-    if (CART::Read(DTdir, n.c_str(), iteration, QL, &tree[t])) {
+    if (CART::Read(DTdir, n.c_str(), iteration, QL.get(), &tree[t])) {
       ERROR("read tree ", Phoneme::Name(phone), " ", state);
-      CART::Blank(QL, &tree[t], (double)fnv32(AcousticModel::Name(phone, state).c_str()));
+      CART::Blank(QL.get(), &tree[t], (double)fnv32(AcousticModel::Name(phone, state).c_str()));
     }
     if (!tree[t].namemap.map->M) tree[t].namemap.map->Open(5, CART::Tree::map_buckets*CART::Tree::map_values);
 
@@ -579,12 +585,13 @@ int GrowComponents(const char *modeldir, AcousticModel::StateCollection *model, 
   return 0;
 }
 
-int ViterbiTrain(const char *featdir, const char *modeldir) {
-  AcousticModelFile model; int lastiter;
-  if ((lastiter = model.Open("AcousticModel", modeldir))<0) { ERROR("read ", modeldir, " ", lastiter); return -1; }
+int ViterbiTrain(AssetLoading *loader, CUDA *cuda, Window *w, const char *featdir, const char *modeldir) {
+  AcousticModelFile model;
+  int lastiter;
+  if ((lastiter = model.Open("AcousticModel", modeldir))<0) return ERRORv(-1, "read ", modeldir, " ", lastiter);
   AcousticModel::ToCUDA(&model);
 
-  struct ViterbiTrain train(&model, FLAGS_BeamWidth, FLAGS_UsePrior, FLAGS_UseTransition, FLAGS_FullVariance, (!FLAGS_Initialize && !FLAGS_AcceptIncomplete), FLAGS_Initialize ? ViterbiTrain::KMeansAccum::Create : ViterbiTrain::GMMAccum::Create);
+  struct ViterbiTrain train(loader, cuda, w, &model, FLAGS_BeamWidth, FLAGS_UsePrior, FLAGS_UseTransition, FLAGS_FullVariance, (!FLAGS_Initialize && !FLAGS_AcceptIncomplete), FLAGS_Initialize ? ViterbiTrain::KMeansAccum::Create : ViterbiTrain::GMMAccum::Create);
   INFO("ViterbiTrain iter ", lastiter, ", BW=", FLAGS_BeamWidth, ", ", model.GetStateCount(), " states, Accum=", FLAGS_Initialize?"KMeans":"GMM");
 
   for (int i=0; i<FLAGS_MaxIterations; i++) {
@@ -602,14 +609,14 @@ int ViterbiTrain(const char *featdir, const char *modeldir) {
       for (int k=0; k<FLAGS_MeansIterations; k++) {
         train.mode = ViterbiTrain::Mode::Means;
         train.Run(modeldir, featdir, !j && !k, lastiter, innerIteration++, !i ? FLAGS_UttPathsInFile : "", !i && !j && !k ? FLAGS_UttPathsOutFile : "");
-        if (app->run) train.Complete(); else return 0;
+        if (!loader->lifetime || loader->lifetime->run) train.Complete(); else return 0;
         INFOf("ViterbiTrain means, totalprob=%f (PP=%f) accumprob=%f (PP=%f) (init=%d) iter=(%d,%d,%d)",
               train.totalprob, train.totalprob/-train.totalcount, train.accumprob, train.accumprob/-train.accumcount, init, i, j, k);
       }
 
       train.mode = ViterbiTrain::Mode::Cov;
       if (FLAGS_FullVariance) train.Run(modeldir, featdir, 0, lastiter, innerIteration++, !i ? FLAGS_UttPathsInFile : "", "");
-      if (app->run) train.Complete(); else return 0;
+      if (!loader->lifetime || loader->lifetime->run) train.Complete(); else return 0;
 
       train.mode = ViterbiTrain::Mode::UpdateModel;
       train.Complete();
@@ -624,13 +631,13 @@ int ViterbiTrain(const char *featdir, const char *modeldir) {
   return 0;
 }
 
-int BaumWelch(const char *featdir, const char *modeldir) {
+int BaumWelch(AssetLoading *loader, const char *featdir, const char *modeldir) {
   AcousticModelFile model; int lastiter;
   if ((lastiter = model.Open("AcousticModel", modeldir))<0) { ERROR("read ", modeldir, " ", lastiter); return -1; }
   model.phonetx = new Matrix(LFL_PHONES, LFL_PHONES);
   AcousticModel::ToCUDA(&model);
 
-  struct BaumWelch train(&model, FLAGS_BeamWidth, FLAGS_UsePrior, FLAGS_UseTransition, FLAGS_FullVariance);
+  struct BaumWelch train(loader, &model, FLAGS_BeamWidth, FLAGS_UsePrior, FLAGS_UseTransition, FLAGS_FullVariance);
   INFO("BaumWelch iter ", lastiter, ", BW=", FLAGS_BeamWidth, ", ", model.GetStateCount(), " states");
 
   for (int i=0; i<FLAGS_MaxIterations; i++) {
@@ -638,11 +645,11 @@ int BaumWelch(const char *featdir, const char *modeldir) {
 
     train.mode = BaumWelch::Mode::Means;
     train.Run(modeldir, featdir, lastiter, innerIteration++);
-    if (app->run) train.Complete(); else return 0;
+    if (loader->lifetime->run) train.Complete(); else return 0;
 
     train.mode = BaumWelch::Mode::Cov;
     if (FLAGS_FullVariance) train.Run(modeldir, featdir, lastiter, innerIteration++);
-    if (app->run) train.Complete(); else return 0;
+    if (loader->lifetime->run) train.Complete(); else return 0;
 
     if (AcousticModel::Write(&model, "AcousticModel", modeldir, lastiter+1, 0)) ERROR("BaumWelch iteration ", lastiter);
     INFO("BaumWelch iter ", lastiter, " completed wrote model iter ", lastiter+1);
@@ -652,97 +659,95 @@ int BaumWelch(const char *featdir, const char *modeldir) {
   return 0;
 }
 
-int CompileRecognitionNetwork(const char *modeldir, AcousticModel::Compiled *AM, LanguageModel *LM, int lastiter, const char *vfn) {
-  Semiring *K = Singleton<LogSemiring>::Get();
+int CompileRecognitionNetwork(AssetLoading *loader, const char *modeldir, AcousticModel::Compiled *AM, LanguageModel *LM, int lastiter, const char *vfn) {
+  Semiring *K = Singleton<LogSemiring>::Set();
   WFST::AlphabetBuilder words, aux, cd(&aux);
   WFST::PhonemeAlphabet phones(&aux);
   WFST::AcousticModelAlphabet ama(AM, &aux);
 
   /* L */
   LocalFileLineIter vocab(vfn);
-  WFST *L = WFST::PronunciationLexicon(K, &phones, &words, &aux, PronunciationDict::Instance(), &vocab);
-  WFST::Union(L->K, (WFST::TransitMapBuilder*)L->E, L->I, L->F);
-  WFST::Determinize(L, Singleton<TropicalSemiring>::Get());
-  WFST::RemoveNulls(L); /* only to remove 1 null */
-  WFST::RemoveNonAccessible(L);
-  WFST::Closure(L->K, (WFST::TransitMapBuilder*)L->E, L->I, L->F);
-  ((WFST::Statevec*)L->F)->push_back(0);
-  ((WFST::Statevec*)L->F)->Sort();
+  auto L = WFST::PronunciationLexicon(K, &phones, &words, &aux, PronunciationDict::Instance(loader), &vocab);
+  WFST::Union(L->K, (WFST::TransitMapBuilder*)L->E.get(), L->I.get(), L->F.get());
+  WFST::Determinize(L.get(), Singleton<TropicalSemiring>::Set());
+  WFST::RemoveNulls(L.get()); /* only to remove 1 null */
+  WFST::RemoveNonAccessible(L.get());
+  WFST::Closure(L->K, (WFST::TransitMapBuilder*)L->E.get(), L->I.get(), L->F.get());
+  ((WFST::Statevec*)L->F.get())->push_back(0);
+  ((WFST::Statevec*)L->F.get())->Sort();
   L->WriteGraphViz("aa1.gv");
 
   /* G */
   vocab.Reset();
-  WFST *G = WFST::Grammar(K, &words, LM, &vocab);
-  WFST::Write(G, "grammar", modeldir, lastiter, false, false);
-  delete G;
+  auto G = WFST::Grammar(K, &words, LM, &vocab);
+  WFST::Write(G.get(), "grammar", modeldir, lastiter, false, false);
 
   /* C */
-  WFST *C = WFST::ContextDependencyTransducer(K, &phones, &cd, &aux);
-  WFST::Determinize(C, Singleton<TropicalSemiring>::Get());
-  WFST::AddAuxiliarySymbols((WFST::TransitMapBuilder*)C->E, &aux, K->One());
-  WFST::Invert((WFST::TransitMapBuilder*)C->E, &C->A, &C->B);
-  WFST::ContextDependencyRebuildFinal(C);
-  ((WFST::Statevec*)C->F)->push_back(0);
-  ((WFST::Statevec*)C->F)->Sort();
+  auto C = WFST::ContextDependencyTransducer(K, &phones, &cd, &aux);
+  WFST::Determinize(C.get(), Singleton<TropicalSemiring>::Set());
+  WFST::AddAuxiliarySymbols((WFST::TransitMapBuilder*)C->E.get(), &aux, K->One());
+  WFST::Invert((WFST::TransitMapBuilder*)C->E.get(), &C->A, &C->B);
+  WFST::ContextDependencyRebuildFinal(C.get());
+  ((WFST::Statevec*)C->F.get())->push_back(0);
+  ((WFST::Statevec*)C->F.get())->Sort();
 
   /* C o L */
   WFST::State::LabelMap CoLL;
-  WFST *CoL = WFST::Compose(C, L, "label-reachability", 0, &CoLL, WFST::Composer::T2MatchNull | WFST::Composer::FreeT1 | WFST::Composer::FreeT2);
-  WFST::RemoveNonCoAccessible(CoL);
-  WFST::RemoveNulls(CoL);
-  WFST::NormalizeInput(CoL);
+  auto CoL = WFST::Compose(C.get(), L.get(), "label-reachability", 0, &CoLL, WFST::Composer::T2MatchNull | WFST::Composer::FreeT1 | WFST::Composer::FreeT2);
+  WFST::RemoveNonCoAccessible(CoL.get());
+  WFST::RemoveNulls(CoL.get());
+  WFST::NormalizeInput(CoL.get());
 
   /* H */
-  WFST *H = WFST::HMMTransducer(K, &ama, &cd);
-  WFST::Union(H->K, (WFST::TransitMapBuilder*)H->E, H->I, H->F);
-  WFST::RemoveNulls(H); /* only to remove 1 null */
-  WFST::RemoveNonAccessible(H);
-  WFST::Closure(H->K, (WFST::TransitMapBuilder*)H->E, H->I, H->F);
-  WFST::AddAuxiliarySymbols((WFST::TransitMapBuilder*)H->E, &aux, 0, K->One());
-  ((WFST::TransitMapBuilder*)H->E)->Sort();
+  auto H = WFST::HMMTransducer(K, &ama, &cd);
+  WFST::Union(H->K, (WFST::TransitMapBuilder*)H->E.get(), H->I.get(), H->F.get());
+  WFST::RemoveNulls(H.get()); /* only to remove 1 null */
+  WFST::RemoveNonAccessible(H.get());
+  WFST::Closure(H->K, (WFST::TransitMapBuilder*)H->E.get(), H->I.get(), H->F.get());
+  WFST::AddAuxiliarySymbols((WFST::TransitMapBuilder*)H->E.get(), &aux, 0, K->One());
+  ((WFST::TransitMapBuilder*)H->E.get())->Sort();
 
   /* H o C o L */
   WFST::State::LabelMap HoCoLL;
   WFST::Composer::SingleSourceNullClosure HoCoLR(true);
-  WFST *HoCoL = WFST::Compose(H, CoL, "epsilon-matching", &HoCoLR, &HoCoLL);
-  WFST::RemoveNonCoAccessible(HoCoL);
-  WFST::Determinize(HoCoL, Singleton<TropicalSemiring>::Get());
-  WFST::RemoveNulls(HoCoL);
-  WFST::NormalizeInput(HoCoL);
-  WFST::Closure(HoCoL->K, (WFST::TransitMapBuilder*)HoCoL->E, HoCoL->I, HoCoL->F);
+  auto HoCoL = WFST::Compose(H.get(), CoL.get(), "epsilon-matching", &HoCoLR, &HoCoLL);
+  WFST::RemoveNonCoAccessible(HoCoL.get());
+  WFST::Determinize(HoCoL.get(), Singleton<TropicalSemiring>::Set());
+  WFST::RemoveNulls(HoCoL.get());
+  WFST::NormalizeInput(HoCoL.get());
+  WFST::Closure(HoCoL->K, (WFST::TransitMapBuilder*)HoCoL->E.get(), HoCoL->I.get(), HoCoL->F.get());
 
   /* HW */
-  WFST *HW = WFST::HMMWeightTransducer(K, &ama); 
-  WFST::AddAuxiliarySymbols((WFST::TransitMapBuilder*)HW->E, &aux, K->One());
-  ((WFST::TransitMapBuilder*)HW->E)->Sort();
+  auto HW = WFST::HMMWeightTransducer(K, &ama); 
+  WFST::AddAuxiliarySymbols((WFST::TransitMapBuilder*)HW->E.get(), &aux, K->One());
+  ((WFST::TransitMapBuilder*)HW->E.get())->Sort();
 
   /* HW o H o C o L */
-  WFST *HWoHoCoL = WFST::Compose(HW, HoCoL, "epsilon-matching", 0, 0, WFST::Composer::T2MatchNull | WFST::Composer::FreeT1 | WFST::Composer::FreeT2);
-  WFST::RemoveSelfLoops(HWoHoCoL);
-  WFST::RemoveNonCoAccessible(HWoHoCoL);
+  auto HWoHoCoL = WFST::Compose(HW.get(), HoCoL.get(), "epsilon-matching", 0, 0, WFST::Composer::T2MatchNull | WFST::Composer::FreeT1 | WFST::Composer::FreeT2);
+  WFST::RemoveSelfLoops(HWoHoCoL.get());
+  WFST::RemoveNonCoAccessible(HWoHoCoL.get());
   HWoHoCoL->Minimize();
   HWoHoCoL->WriteGraphViz("aa92.gv");
 
   /* optimize */
-  WFST *final = HWoHoCoL;
-  WFST::ReplaceAuxiliarySymbols((WFST::TransitMapBuilder*)final->E); 
-  WFST::ShiftFinalTransitions(final, 0, WFST::IOAlphabet::AuxiliarySymbolId(1));
+  auto final = move(HWoHoCoL);
+  WFST::ReplaceAuxiliarySymbols((WFST::TransitMapBuilder*)final->E.get()); 
+  WFST::ShiftFinalTransitions(final.get(), 0, WFST::IOAlphabet::AuxiliarySymbolId(1));
   final->WriteGraphViz("aa93.gv");
-  WFST::RemoveNulls(final); 
-  WFST::NormalizeInput(final);
-  WFST::ReplaceAuxiliarySymbols((WFST::TransitMapBuilder*)final->E); 
-  WFST::PushWeights(Singleton<LogSemiring>::Get(), final, final->I, true);
+  WFST::RemoveNulls(final.get()); 
+  WFST::NormalizeInput(final.get());
+  WFST::ReplaceAuxiliarySymbols((WFST::TransitMapBuilder*)final->E.get()); 
+  WFST::PushWeights(Singleton<LogSemiring>::Set(), final.get(), final->I.get(), true);
   final->Minimize();
   final->WriteGraphViz("aa99.gv");
 
   /* finish */
-  WFST::Write(final, "recognition", modeldir, lastiter);
-  delete final;
+  WFST::Write(final.get(), "recognition", modeldir, lastiter);
   return 0;
 }
 
-int RecognizeQuery(RecognitionModel *model, const char *input) {
-  PronunciationDict *dict = PronunciationDict::Instance();
+int RecognizeQuery(AssetLoading *loader, RecognitionModel *model, const char *input) {
+  PronunciationDict *dict = PronunciationDict::Instance(loader);
   StringWordIter words(input);
   vector<int> query, query2;
   int pp = 0;
@@ -766,11 +771,11 @@ int RecognizeQuery(RecognitionModel *model, const char *input) {
     }
   }
 
-  WFST::ShortestDistanceMap search(Singleton<TropicalSemiring>::Get());
+  WFST::ShortestDistanceMap search(Singleton<TropicalSemiring>::Set());
   int flag = WFST::ShortestDistance::Transduce | WFST::ShortestDistance::SourceReset | WFST::ShortestDistance::Trace;
-  WFST::ShortestDistance(&search, Singleton<TropicalSemiring>::Get(), model->recognition_network.E, model->recognition_network.I, 0, 0, &query, flag);
+  WFST::ShortestDistance(&search, Singleton<TropicalSemiring>::Set(), model->recognition_network.E.get(), model->recognition_network.I.get(), 0, 0, &query, flag);
   vector<int> successful;
-  search.Successful(model->recognition_network.F, successful);
+  search.Successful(model->recognition_network.F.get(), successful);
   INFO("recognition: ", successful.size(), " successful");
 
   if (1) {
@@ -787,8 +792,8 @@ int RecognizeQuery(RecognitionModel *model, const char *input) {
   }
 
   search.Clear(); successful.clear();
-  WFST::ShortestDistance(&search, Singleton<TropicalSemiring>::Get(), model->grammar.E, model->grammar.I, 0, 0, &query2, flag);
-  search.Successful(model->grammar.F, successful);
+  WFST::ShortestDistance(&search, Singleton<TropicalSemiring>::Set(), model->grammar.E.get(), model->grammar.I.get(), 0, 0, &query2, flag);
+  search.Successful(model->grammar.F.get(), successful);
   INFO("grammar: ", successful.size(), " successful");
 
   if (1) {
@@ -808,8 +813,12 @@ int RecognizeQuery(RecognitionModel *model, const char *input) {
 }
 
 struct RecognizeCorpus {
-  RecognitionModel *recognize; double WER; int total;
-  RecognizeCorpus(RecognitionModel *model) : recognize(model), WER(0), total(0) {}
+  RecognitionModel *recognize;
+  Window *visualize;
+  double WER=0;
+  int total=0;
+  RecognizeCorpus(RecognitionModel *model, Window *V) : recognize(model), visualize(V) {}
+
   void AddFeatures(const char *fn, Matrix *MFCC, Matrix *features, const char *transcript) {
     INFO("IN = '", transcript, "'");
     Timer vtime; double vprob = 0;
@@ -820,13 +829,14 @@ struct RecognizeCorpus {
     double wer = Recognizer::WordErrorRate(recognize, transcript, decodescript);
     WER += wer; total++;
     INFO("OUT = '", decodescript, "' WER=", wer, " (total ", WER/total, ")");
-    if (FLAGS_enable_video) Visualize(recognize, MFCC, viterbi, vprob, time);
+    if (FLAGS_enable_video) Visualize(visualize, recognize, MFCC, viterbi, vprob, time);
     delete viterbi;
   }
-  static void Visualize(RecognitionModel *recognize, Matrix *MFCC, matrix<HMM::Token> *viterbi, double vprob, Time time) {
+
+  static void Visualize(Window *w, RecognitionModel *recognize, Matrix *MFCC, matrix<HMM::Token> *viterbi, double vprob, Time time) {
     Matrix path(viterbi->M, 1);
     AcousticModel::Compiled *hmm = Recognizer::DecodedAcousticModel(recognize, viterbi, &path);
-    Decoder::VisualizeFeatures(hmm, MFCC, &path, vprob, time, FLAGS_interactive);
+    Decoder::VisualizeFeatures(w, hmm, MFCC, &path, vprob, time, FLAGS_interactive);
     delete hmm;
   }
 };
@@ -840,12 +850,15 @@ struct Wav2Segments {
     Out(const char *basename) : lf(StrCat(basename, ".wav"), "w"), wav(&lf), index(StrCat(basename, ".mat").c_str()), count(0), samples(0) {}
   };
 
+  AssetLoading *loader;
   AcousticModel::Compiled *model;
+  Window *visualize;
   Out **out;
-  int HMMFlag;
+  int HMMFlag=0;
 
   ~Wav2Segments() { for (int i=0; i<LFL_PHONES; i++) delete out[i]; delete [] out; }
-  Wav2Segments(AcousticModel::Compiled *M, const char *dir) : model(M), out(new Out *[LFL_PHONES]), HMMFlag(0) {
+  Wav2Segments(AssetLoading *L, AcousticModel::Compiled *M, const char *dir, Window *V) :
+    loader(L), model(M), visualize(V), out(new Out *[LFL_PHONES]) {
     int len = 0;
     for (int i=0; i<LFL_PHONES; i++) out[len++] = new Out(StrCat(dir, "seg", Phoneme::Name(i)).c_str());
   }
@@ -854,13 +867,13 @@ struct Wav2Segments {
     Matrix *MFCC = Features::FromAsset(wav, Features::Flag::Storable);
     Matrix *features = Features::FromFeat(MFCC->Clone(), Features::Flag::Full);
 
-    AcousticModel::Compiled *hmm = AcousticModel::FromUtterance1(model, transcript, HMMFlag & AcousticHMM::Flag::UseTransit);
+    AcousticModel::Compiled *hmm = AcousticModel::FromUtterance1(loader, model, transcript, HMMFlag & AcousticHMM::Flag::UseTransit);
     if (!hmm) return DEBUG("utterance decode failed");
     if (!DimCheck("Wav2Segments", features->N, hmm->state[0].emission.mean.N)) return;
 
     Matrix viterbi(features->M, 1); Timer vtime;
     double vprob = AcousticHMM::Viterbi(hmm, features, &viterbi, 2, FLAGS_BeamWidth, HMMFlag);
-    if (FLAGS_enable_video) Decoder::VisualizeFeatures(hmm, MFCC, &viterbi, vprob, vtime.GetTime(), FLAGS_interactive);
+    if (FLAGS_enable_video) Decoder::VisualizeFeatures(visualize, hmm, MFCC, &viterbi, vprob, vtime.GetTime(), FLAGS_interactive);
 
     int transitions=0, longrun=0;
     for (Decoder::PhoneIter iter(hmm, &viterbi); !iter.Done(); iter.Next()) {
@@ -895,17 +908,20 @@ struct Wav2Segments {
   }
 };
 
+Application *app;
+
 }; // namespace LFL
 using namespace LFL;
 
-extern "C" void MyAppCreate(int argc, const char* const* argv) {
+extern "C" LFApp *MyAppCreate(int argc, const char* const* argv) {
   FLAGS_enable_audio = FLAGS_enable_video = FLAGS_enable_input = FLAGS_visualize;
 #ifdef _WIN32
   open_console = 1;
 #endif
-  app = new Application(argc, argv);
-  app->focused = Window::Create();
+  app = CreateApplication(argc, argv).release();
+  app->focused = CreateWindow(app).release();
   app->name = "trainer";
+  return app;
 }
 
 extern "C" int MyAppMain() {
@@ -913,19 +929,20 @@ extern "C" int MyAppMain() {
   INFO("LFL_PHONES=", LFL_PHONES);
   if (app->Init()) return -1;
 
-  app->asset.Add(Asset("snap", 0, 0, 0, 0, 0, 0, 0, 0));
+  app->asset.Add(Asset(app, "snap", 0, 0, 0, 0, 0, 0, 0, 0));
   app->asset.Load();
 
-  app->soundasset.Add(SoundAsset("snap", 0, new RingSampler(FLAGS_sample_rate*FLAGS_sample_secs), 1, FLAGS_sample_rate, FLAGS_sample_secs));
+  app->soundasset.Add(SoundAsset(app, "snap", 0, new RingSampler(FLAGS_sample_rate*FLAGS_sample_secs), 1, FLAGS_sample_rate, FLAGS_sample_secs));
   app->soundasset.Load();
   
-  app->focused->shell = make_unique<Shell>(app->focused);
+  app->focused->shell = make_unique<Shell>(app->focused, app, app, app, app, app, app->net.get(),
+                                           app, app, app->audio.get(), app, app, app->fonts.get());
   BindMap *binds = app->focused->AddInputController(make_unique<BindMap>());
   binds->Add(Bind(Key::Backquote, Bind::CB(bind([&](){ app->focused->shell->console(vector<string>()); }))));
   binds->Add(Bind(Key::Escape,    Bind::CB(bind(&Shell::quit,   app->focused->shell.get(), vector<string>()))));
   binds->Add(Bind(Key::F5,        Bind::CB(bind(&Shell::play,   app->focused->shell.get(), vector<string>(1, "snap")))));
   binds->Add(Bind(Key::F6,        Bind::CB(bind(&Shell::snap,   app->focused->shell.get(), vector<string>(1, "snap")))));
-  binds->Add(Bind(Key::F7,        Bind::CB(bind(&MyResynth,                                vector<string>(1, "snap")))));
+  binds->Add(Bind(Key::F7,        Bind::CB(bind(&MyResynth,  app->audio.get(), app, app,   vector<string>(1, "snap")))));
   binds->Add(Bind(Key::F8,        Bind::CB(bind(&Shell::sinth,  app->focused->shell.get(), vector<string>(1, "440" )))));
 
   string wavdir=FLAGS_homedir, featdir=FLAGS_homedir, modeldir=FLAGS_homedir, dtdir=FLAGS_homedir;
@@ -945,13 +962,13 @@ extern "C" int MyAppMain() {
   if (FLAGS_wav2feats) {
     INFO("wav2features begin (wavdir='", wavdir, "', featdir='", featdir, "')");
     Wav2Features w2f(featdir, Wav2Features::Target::Archive);
-    WavCorpus wav(bind(&Wav2Features::AddFeatures, &w2f, _1, _2, _3));
+    WavCorpus wav(app, bind(&Wav2Features::AddFeatures, &w2f, _1, _2, _3));
     wav.Run(wavdir);
     INFO("wav2features end");
   }
   if (FLAGS_feats2cluster) {
     INFO("cluster begin (featdir='", featdir, "', modeldir='", modeldir, "')");
-    Features2Cluster(featdir.c_str(), modeldir.c_str(), ClusterAlgorithm::GMMEM);
+    Features2Cluster(app, featdir.c_str(), modeldir.c_str(), ClusterAlgorithm::GMMEM);
     INFO("cluster end");
   }
   if (FLAGS_samplemean) {
@@ -959,24 +976,24 @@ extern "C" int MyAppMain() {
   if (FLAGS_viterbitrain) {
     if (FLAGS_Initialize) Model1Init(modeldir.c_str(), FLAGS_MixtureComponents, FLAGS_Initialize);
     INFO("train begin (featdir='", featdir, "', modeldir='", modeldir, "')");
-    ViterbiTrain(featdir.c_str(), modeldir.c_str());
+    ViterbiTrain(app, app->cuda.get(), app->focused, featdir.c_str(), modeldir.c_str());
     INFO("train end");
   }
   if (FLAGS_baumwelch) {
     INFO("train begin (featdir='", featdir, "', modeldir='", modeldir, "')");
-    BaumWelch(featdir.c_str(), modeldir.c_str());
+    BaumWelch(app, featdir.c_str(), modeldir.c_str());
     INFO("train end");
   }
   if (FLAGS_feats2pronounce) {
     LOAD_ACOUSTIC_MODEL(model, lastiter);
-    Features2Pronunciation f2p(&model);
+    Features2Pronunciation f2p(app, &model);
     f2p.Iter(featdir.c_str());
     f2p.Print();
   }
   if (FLAGS_clonetriphone) {
     LOAD_ACOUSTIC_MODEL(model1, lastiter);
     INFO("model3init begin (vocab='", FLAGS_vocab, "')");
-    Model3Init(modeldir.c_str(), &model1, lastiter, !FLAGS_vocab.size() ? featdir.c_str() : 0, FLAGS_vocab.size() ? FLAGS_vocab.c_str() : 0);
+    Model3Init(app, modeldir.c_str(), &model1, lastiter, !FLAGS_vocab.size() ? featdir.c_str() : 0, FLAGS_vocab.size() ? FLAGS_vocab.c_str() : 0);
     INFO("model3init end (vocab='", FLAGS_vocab, "')");
   }
   if (FLAGS_clonetied.size()) {
@@ -985,13 +1002,13 @@ extern "C" int MyAppMain() {
     tied.Read(FLAGS_clonetied.c_str());
     if (!tied.F || !tied.F->m) FATAL("read ", FLAGS_clonetied, " failed");
     INFO("model3init begin (vocab='", FLAGS_vocab, "')");
-    Model3TiedInit(modeldir.c_str(), tied.F, &model1, lastiter);
+    Model3TiedInit(modeldir.c_str(), tied.F.get(), &model1, lastiter);
     INFO("model3init end (vocab='", FLAGS_vocab, "')");
   }
   if (FLAGS_triphone2tree) {
     LOAD_ACOUSTIC_MODEL(model, lastiter);
     INFO("growDecisionTrees begin ", lastiter);
-    GrowDecisionTrees(modeldir.c_str(), &model, lastiter, featdir.c_str());
+    GrowDecisionTrees(app, modeldir.c_str(), &model, lastiter, featdir.c_str());
     INFO("growDecisionTrees end ", lastiter);
   }
   if (FLAGS_tiestates) {
@@ -1015,8 +1032,8 @@ extern "C" int MyAppMain() {
   if (FLAGS_wav2segs) {
     LOAD_ACOUSTIC_MODEL(model, lastiter);
     INFO("segmentation begin (wavdir='", wavdir, "', modeldir='", modeldir, "')");
-    Wav2Segments w2s(&model, modeldir.c_str());
-    WavCorpus wav(bind(&Wav2Segments::AddWAV, &w2s, _1, _2, _3));
+    Wav2Segments w2s(app, &model, modeldir.c_str(), app->focused);
+    WavCorpus wav(app, bind(&Wav2Segments::AddWAV, &w2s, _1, _2, _3));
     wav.Run(wavdir);
     INFO("segmentation end (", wavdir, ")");
   }
@@ -1026,7 +1043,7 @@ extern "C" int MyAppMain() {
 
     /* compile */
     INFO("compile recognition network (modeldir='", modeldir, "')");
-    CompileRecognitionNetwork(modeldir.c_str(), &am, &lm, amiter, FLAGS_vocab.size() ? FLAGS_vocab.c_str() : 0);
+    CompileRecognitionNetwork(app, modeldir.c_str(), &am, &lm, amiter, FLAGS_vocab.size() ? FLAGS_vocab.c_str() : 0);
     INFO("compile recognition network end (modeldir='", modeldir, "')");
   }
   if (FLAGS_rewritemodel) {
@@ -1040,7 +1057,7 @@ extern "C" int MyAppMain() {
   }
   if (FLAGS_uttmodel.size()) {
     LOAD_ACOUSTIC_MODEL(model, lastiter);
-    AcousticModel::Compiled *hmm = AcousticModel::FromUtterance(&model, FLAGS_uttmodel.c_str(), FLAGS_UseTransition);
+    AcousticModel::Compiled *hmm = AcousticModel::FromUtterance(app, &model, FLAGS_uttmodel.c_str(), FLAGS_UseTransition);
     if (!hmm) FATAL("compiled utterance for transcript '", FLAGS_uttmodel, "' failed");
     AcousticHMM::PrintLattice(hmm, &model);
   }
@@ -1050,7 +1067,7 @@ extern "C" int MyAppMain() {
     if (!hmm) { ERROR("hmm create failed ", hmm); break; }
 
     INFO("decode(", FLAGS_decodefile, ") begin");
-    Matrix *viterbi = Decoder::DecodeFile(hmm, FLAGS_decodefile.c_str(), FLAGS_BeamWidth);
+    Matrix *viterbi = Decoder::DecodeFile(app, hmm, FLAGS_decodefile.c_str(), FLAGS_BeamWidth);
     HMM::PrintViterbi(viterbi, &model.nameCB);
     string transcript = Decoder::Transcript(hmm, viterbi);
     INFO("decode(", FLAGS_decodefile, ") end");
@@ -1063,7 +1080,7 @@ extern "C" int MyAppMain() {
     RecognitionModel recognize;
     if (recognize.Read("RecognitionNetwork", modeldir.c_str(), FLAGS_WantIter)) FATAL("open RecognitionNetwork ", modeldir);
     AcousticModel::ToCUDA(&recognize.acoustic_model);
-    RecognizeQuery(&recognize, FLAGS_recognizequery.c_str());
+    RecognizeQuery(app, &recognize, FLAGS_recognizequery.c_str());
   }
 
   if (FLAGS_recognizecorpus) {
@@ -1071,7 +1088,7 @@ extern "C" int MyAppMain() {
     if (recognize.Read("RecognitionNetwork", modeldir.c_str(), FLAGS_WantIter)) FATAL("open RecognitionNetwork ", modeldir);
     AcousticModel::ToCUDA(&recognize.acoustic_model);
 
-    RecognizeCorpus tester(&recognize);
+    RecognizeCorpus tester(&recognize, app->focused);
     INFO("begin RecognizeCorpus ", 0);
     int count = FeatCorpus::FeatIter(featdir.c_str(), bind(&RecognizeCorpus::AddFeatures, tester, _1, _2, _3, _4));
     INFO("end RecognizeCorpus ", count);
@@ -1085,7 +1102,7 @@ extern "C" int MyAppMain() {
     do {
       INFO("recognize(", FLAGS_recognizefile, ") begin");
       Matrix *MFCC=0; double vprob=0; Timer vtimer;
-      matrix<HMM::Token> *viterbi = Recognizer::DecodeFile(&recognize, FLAGS_recognizefile.c_str(), FLAGS_BeamWidth,
+      matrix<HMM::Token> *viterbi = Recognizer::DecodeFile(app, &recognize, FLAGS_recognizefile.c_str(), FLAGS_BeamWidth,
                                                            FLAGS_UseTransition, &vprob, &MFCC,
                                                            FLAGS_loglevel >= LFApp::Log::Debug ? &recognize.nameCB : 0);
       string transcript = Recognizer::Transcript(&recognize, viterbi);
@@ -1093,7 +1110,7 @@ extern "C" int MyAppMain() {
       HMM::Token::PrintViterbi(viterbi, &recognize.nameCB);
       if (!transcript.size()) { ERROR("decode failed ", transcript.size()); break; }
       INFO("vprob = ", vprob, " : '", transcript, "'");
-      if (FLAGS_enable_video) RecognizeCorpus::Visualize(&recognize, MFCC, viterbi, vprob, vtimer.GetTime());
+      if (FLAGS_enable_video) RecognizeCorpus::Visualize(app->focused, &recognize, MFCC, viterbi, vprob, vtimer.GetTime());
       delete viterbi;
       delete MFCC;
     } while (app->run && FLAGS_visualize && FLAGS_interactive);

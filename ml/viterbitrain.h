@@ -1,5 +1,5 @@
 /*
- * $Id: viterbitrain.h 1306 2014-09-04 07:13:16Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -41,14 +41,12 @@ struct ViterbiTrain {
   };
 
   struct KMeansAccum : public Accum {
-    KMeans *means;
-    SampleCovariance *covs;
-    KMeansInit *init;
-    int stage, feats;
-
-    ~KMeansAccum() { delete covs; delete means; delete init; }
-    KMeansAccum(KMeans *KM) : means(KM), covs(new SampleCovariance(KM->means)), init(0), stage(means->K == 1 ? 2 : 0), feats(0) {}
-    static Accum *Create(GMM *m, bool, const char *name) { return new KMeansAccum(new KMeans(m->mean.M, m->mean.N)); }
+    unique_ptr<KMeans> means;
+    unique_ptr<SampleCovariance> covs;
+    unique_ptr<KMeansInit> init;
+    int stage, feats=0;
+    KMeansAccum(unique_ptr<KMeans> KM) : means(move(KM)),
+    covs(make_unique<SampleCovariance>(means->means.get())), stage(means->K == 1 ? 2 : 0) {}
 
     void AddMean(double *feature) {
       if      (stage == 0) feats++;
@@ -56,7 +54,7 @@ struct ViterbiTrain {
       else if (stage == 2) means->AddFeature(feature);
     }
     void CompleteMean() {
-      if      (stage == 0) { init=new KMeansInit(means, feats); stage++; }
+      if      (stage == 0) { init = make_unique<KMeansInit>(means.get(), feats); stage++; }
       else if (stage == 1) { stage++; }
       else if (stage == 2) { means->Complete(); }
     }
@@ -64,19 +62,19 @@ struct ViterbiTrain {
     void CompleteCov () { covs->Complete(); }
     void ResetMean() { means->Reset(); }
     void ResetCov () { covs->Reset(); }
-    Matrix *Mean() const { return means->means; }
-    Matrix *Cov () const { return covs->diagnol; }
-    Matrix *Prior() const { return means->prior; }
+    Matrix *Mean() const { return means->means.get(); }
+    Matrix *Cov () const { return covs->diagnol.get(); }
+    Matrix *Prior() const { return means->prior.get(); }
     int Count() const { int ret=0; for (int i=0; i<means->K; i++) ret+=means->count[i]; return ret; }
     double Prob() const { return means->totaldist; }
+
+    static unique_ptr<Accum> Create(GMM *m, bool, const char *name) { return make_unique<KMeansAccum>(make_unique<KMeans>(m->mean.M, m->mean.N)); }
   };
 
   struct GMMAccum : public Accum {
     GMM mixture;
     GMMEM EM;
-
     GMMAccum(Matrix *M, Matrix *V, Matrix *P, bool full_variance, const char *Name) : mixture(M, V, P), EM(&mixture, full_variance, Name) { EM.mode = GMMEM::Mode::Means; }
-    static Accum *Create(GMM *m, bool full_variance, const char *name) { return new GMMAccum(&m->mean, &m->diagcov, &m->prior, full_variance, name); }
 
     void AddMean(double *feature) { EM.AddFeature(feature); } 
     void AddCov (double *feature) { EM.AddFeature(feature); }
@@ -89,29 +87,30 @@ struct ViterbiTrain {
     Matrix *Prior() const { return &EM.mixture->prior; }
     int Count() const { return EM.count; }
     double Prob() const { return isnan(EM.totalprob) ? 0 : EM.totalprob; }
+
+    static unique_ptr<Accum> Create(GMM *m, bool full_variance, const char *name) { return make_unique<GMMAccum>(&m->mean, &m->diagcov, &m->prior, full_variance, name); }
   };
 
-  typedef Accum *(*AccumFactory)(GMM *m, bool full_variance, const char *name);
+  typedef unique_ptr<Accum> (*AccumFactory)(GMM *m, bool full_variance, const char *name);
   typedef double (*ViterbF)(AcousticModel::Compiled *utterance, Matrix *observations, Matrix *path, int InitMax, double beamWidth, int flag);
 
-  int mode;
+  AssetLoading *loader;
+  CUDA *cuda;
+  Window *visualize;
+
   AcousticModel::Compiled *model;
-  ViterbF viterbF;
+  ViterbF viterbF=0;
 
   MatrixArchiveInputFile utt_paths_in;
   MatrixArchiveOutputFile utt_paths_out;
 
-  double totalprob, accumprob, beamwidth;
-  int totalcount, accumcount;
-
+  int mode=0, totalcount=0, accumcount=0, hmm_flag=0;
   bool use_prior, use_transition, full_variance, must_reach_final;
-  int hmm_flag;
-  Accum **accum;
+  double totalprob=0, accumprob=0, beamwidth;
+  vector<unique_ptr<Accum>> accum;
 
-  ~ViterbiTrain() { for(int i=0; i<model->states; i++) delete accum[i]; delete [] accum; }
-  ViterbiTrain(AcousticModel::Compiled *m, double bw, bool up=0, bool ut=0, bool fv=0, double mrf=0, AccumFactory accum_create=GMMAccum::Create)
-    : model(m), mode(0), use_prior(up), use_transition(ut), full_variance(fv), must_reach_final(mrf), hmm_flag(0), viterbF(0), accumprob(0), accumcount(0), beamwidth(bw), accum(new Accum*[model->states])
-  {
+  ViterbiTrain(AssetLoading *L, CUDA *C, Window *V, AcousticModel::Compiled *m, double bw, bool up=0, bool ut=0, bool fv=0, double mrf=0, AccumFactory accum_create=GMMAccum::Create)
+    : loader(L), cuda(C), visualize(V), model(m), use_prior(up), use_transition(ut), full_variance(fv), must_reach_final(mrf), beamwidth(bw) {
     if (use_prior)      hmm_flag |= AcousticHMM::Flag::UsePrior;
     if (use_transition) hmm_flag |= AcousticHMM::Flag::UseTransit;
 
@@ -119,7 +118,7 @@ struct ViterbiTrain {
       AcousticModel::State *s = &model->state[i];
       if (s->val.emission_index != i) FATAL("ViterbiTrain emission_index mismatch ", s->val.emission_index, " != ", i);
 
-      accum[i] = accum_create(&s->emission, full_variance, s->name.c_str());
+      accum.emplace_back(accum_create(&s->emission, full_variance, s->name.c_str()));
     }
     Reset();
   }
@@ -129,7 +128,8 @@ struct ViterbiTrain {
       accum[i]->ResetMean();
       accum[i]->ResetCov();
     }
-    totalprob=0; totalcount=0;
+    totalprob=0;
+    totalcount=0;
   }
 
   void Run(const char *modeldir, const char *featdir, int write, int iterO, int iterI, string utt_paths_in_file, string utt_paths_out_file) {
@@ -174,8 +174,8 @@ struct ViterbiTrain {
 
   void AddFeatures(const char *fn, Matrix *MFCC, Matrix *features, const char *transcript) {
     /* build utterance model from transcript */
-    AcousticModel::Compiled *hmm = AcousticModel::FromUtterance(model, transcript, use_transition);
-    return AddUtterance(hmm, fn, MFCC, features, transcript);
+    unique_ptr<AcousticModel::Compiled> hmm(AcousticModel::FromUtterance(loader, model, transcript, use_transition));
+    return AddUtterance(hmm.get(), fn, MFCC, features, transcript);
   }
 
   void AddUtterance(AcousticModel::Compiled *hmm, const char *fn, Matrix *MFCC, Matrix *features, const char *transcript) {
@@ -188,29 +188,31 @@ struct ViterbiTrain {
     /* find viterbi path */
     Matrix viterbi(features->M, 1); Timer vtime;
     double vprob = viterbF(hmm, features, &viterbi, 2, beamwidth, hmm_flag);
-    if (!isfinite(vprob)) { ERROR(vprob, " vprob for '", transcript, "', skipping (processed=", totalcount, ")"); delete hmm; return; }
+    if (!isfinite(vprob)) return ERROR(vprob, " vprob for '", transcript, "', skipping (processed=", totalcount, ")");
 
     if (must_reach_final) {
       int finalstate = viterbi.lastrow()[0];
-      if (finalstate < hmm->states-2) { ERRORf("final state not reached (%d < %d) for '%s', skipping (processed=%d)", finalstate, hmm->states-2, transcript, totalcount); delete hmm; return; }
+      if (finalstate < hmm->states-2) return ERRORf("final state not reached (%d < %d) for '%s', skipping (processed=%d)", finalstate, hmm->states-2, transcript, totalcount);
     }
 
     /* write & process path */
     if (utt_paths_out.file) PathCorpus::AddPath(&utt_paths_out, &viterbi, fn);
     AddPath(hmm, &viterbi, vprob, vtime.GetTime(), MFCC, features, transcript);
-    delete hmm;
   }
 
   void AddPath(AcousticModel::Compiled *hmm, Matrix *viterbi, double vprob, Time vtime, Matrix *MFCC, Matrix *features, const char *transcript) {
     if (viterbi->M != features->M) { ERROR("viterbi length mismatch ", viterbi->M, " != ", features->M); }
 
     /* optionally build utterance model from transcript */
-    AcousticModel::Compiled *myhmm = 0;
-    if (!hmm) hmm = myhmm = AcousticModel::FromUtterance(model, transcript, use_transition);
+    unique_ptr<AcousticModel::Compiled> myhmm;
+    if (!hmm) {
+      myhmm.reset(AcousticModel::FromUtterance(loader, model, transcript, use_transition));
+      hmm = myhmm.get();
+    }
     if (!hmm) return ERROR("utterance decode failed: ", transcript);
 
     /* visualize viterbi path as spectogram segmentation */
-    if (FLAGS_enable_video) Decoder::VisualizeFeatures(hmm, MFCC, viterbi, vprob, vtime, FLAGS_interactive);
+    if (visualize) Decoder::VisualizeFeatures(visualize, hmm, MFCC, viterbi, vprob, vtime, FLAGS_interactive);
 
     /* for each viterbi state occupancy and observation */
     MatrixRowIter(viterbi) {
@@ -226,7 +228,6 @@ struct ViterbiTrain {
     }
 
     if (mode == Mode::Means) { totalprob += vprob; totalcount++; }
-    delete myhmm;
   }
 
   void Complete() {
@@ -256,7 +257,7 @@ struct ViterbiTrain {
         s->val.samples = accum[i]->Count();
       }
     }
-    if (app->cuda && mode == Mode::UpdateModel) AcousticModel::ToCUDA(model);
+    if (cuda && mode == Mode::UpdateModel) AcousticModel::ToCUDA(model);
   }
 };
 

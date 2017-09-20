@@ -23,22 +23,23 @@ namespace LFL {
 struct LanguageModel {
   static const int map_values=3, col_prior=1, col_transit=2;
   HashMatrix map;
-  Matrix *prior=0, *transit=0;
-  vector<string> *names=0;
+  unique_ptr<Matrix> prior, transit, map_data;
+  unique_ptr<vector<string>> names;
   double total=0;
 
   ~LanguageModel() { Reset(); }
   LanguageModel() : map(0, map_values) {}
 
-  void Reset() { delete map.map; delete prior; delete transit; delete names; map.map=0; prior=0; transit=0; names=0; total=0; }
+  void Reset() { prior.reset(); transit.reset(); map_data.reset(); names.reset(); total=0; }
   int Open(const char *name, const char *dir) {
     string flags;
     int lastiter = MatrixFile::ReadVersioned(dir, name, "transition", &transit, &flags);
     if (!transit) { ERROR("no language model: ", name); return -1; }
-    if (MatrixFile::ReadVersioned(dir, name, "prior", &prior,   0, lastiter) < 0) { ERROR(name, ".", lastiter, ".prior"); return -1; }
-    if (MatrixFile::ReadVersioned(dir, name, "map",   &map.map, 0, lastiter) < 0) { ERROR(name, ".", lastiter, ".map"  ); return -1; }
-    if (StringFile::ReadVersioned(dir, name, "name",  &names,   0, lastiter) < 0) { ERROR(name, ".", lastiter, ".name" ); return -1; }
+    if (MatrixFile::ReadVersioned(dir, name, "prior", &prior,    0, lastiter) < 0) { ERROR(name, ".", lastiter, ".prior"); return -1; }
+    if (MatrixFile::ReadVersioned(dir, name, "map",   &map_data, 0, lastiter) < 0) { ERROR(name, ".", lastiter, ".map"  ); return -1; }
+    if (StringFile::ReadVersioned(dir, name, "name",  &names,    0, lastiter) < 0) { ERROR(name, ".", lastiter, ".name" ); return -1; }
     MatrixRowIter(prior) total += prior->row(i)[0];
+    map.map = map_data.get();
     return lastiter;
   }
 
@@ -151,7 +152,7 @@ struct BigramLanguageModelBuilder {
       }
     }
 
-    MatrixFile out(map.map, flagtext);
+    MatrixFile out(map.map.get(), flagtext);
     if (out.WriteVersioned(VersionedFileName(dir.c_str(), name.c_str(), "map"), iteration) < 0)
       ERROR(name, " write map");
   }

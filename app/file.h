@@ -291,16 +291,16 @@ struct FlatFile : public ContainerFile {
 };
 
 struct StringFile {
-  unique_ptr<vector<string>> F;
+  optional_ptr<vector<string>> F;
   string H;
   StringFile() {}
-  StringFile(vector<string> *f, const string &h=string()) : F(f), H(h) {}
+  StringFile(optional_ptr<vector<string>> f, const string &h=string()) : F(move(f)), H(h) {}
 
   void Clear() { F.reset(); H.clear(); }
   void Print(const string &name, bool nl=1);
   int Lines() const { return F ? F->size() : 0; }
   string Line(int i) const { return (F && i < F->size()) ? (*F)[i] : ""; }
-  void AssignTo(vector<string> **Fo, string *Ho) { if (Fo) *Fo=F.get(); if (Ho) *Ho=H; Clear(); }
+  void MoveTo(unique_ptr<vector<string>> *Fo, string *Ho) { if (Fo) *Fo=F.release(); if (Ho) *Ho=H; Clear(); }
 
   int ReadVersioned (const VersionedFileName &fn, ApplicationLifetime *life=0, int iter=-1);
   int WriteVersioned(const VersionedFileName &fn, int iter, const string &hdr=string());
@@ -314,11 +314,11 @@ struct StringFile {
   int Write(const string &path, const string &name);
   static int WriteRow(File *file, const string &rowval);
 
-  static int Read(const string &fn, vector<string> **F, string *H)
-  { StringFile f; int ret=f.Read(fn); f.AssignTo(F, H); return ret; }
-  static int ReadVersioned(const VersionedFileName &fn, vector<string> **F, string *H, int iter=-1)
-  { StringFile f; int ret=f.ReadVersioned(fn); f.AssignTo(F, H); return ret; }
-  static int ReadVersioned(const char *D, const char *C, const char *V, vector<string> **F, string *H, int iter=-1)
+  static int Read(const string &fn, unique_ptr<vector<string>> *F, string *H)
+  { StringFile f; int ret=f.Read(fn); f.MoveTo(F, H); return ret; }
+  static int ReadVersioned(const VersionedFileName &fn, unique_ptr<vector<string>> *F, string *H, int iter=-1)
+  { StringFile f; int ret=f.ReadVersioned(fn); f.MoveTo(F, H); return ret; }
+  static int ReadVersioned(const char *D, const char *C, const char *V, unique_ptr<vector<string>> *F, string *H, int iter=-1)
   { return ReadVersioned(VersionedFileName(D, C, V), F, H, iter); }
 };
 
@@ -337,14 +337,14 @@ struct MatrixFile {
   struct Header { enum { NONE=0, DIM_PLUS=1, DIM=2 }; };
   struct BinaryHeader{ int magic, M, N, name, transcript, data, unused1, unused2; };
 
-  unique_ptr<Matrix> F;
+  optional_ptr<Matrix> F;
   string H;
   MatrixFile() { Clear(); }
-  MatrixFile(Matrix *f, const string &h=string()) : F(f), H(h) {}
+  MatrixFile(optional_ptr<Matrix> f, const string &h=string()) : F(move(f)), H(h) {}
 
   void Clear() { F.reset(); H.clear(); }
   const char *Text() { return H.c_str(); }
-  void AssignTo(unique_ptr<Matrix> *Fo, string *Ho) { if (Fo) *Fo=move(F); if (Ho) *Ho=H; Clear(); }
+  void MoveTo(unique_ptr<Matrix> *Fo, string *Ho) { if (Fo) *Fo=F.release(); if (Ho) *Ho=H; Clear(); }
 
   int ReadVersioned       (const VersionedFileName &fn, ApplicationLifetime *life=0, int iteration=-1);
   int WriteVersioned      (const VersionedFileName &fn, int iteration);
@@ -375,11 +375,11 @@ struct MatrixFile {
   static int WriteRow         (File *file, const double *row, int N, bool lastrow=0);
 
   static int Read(IterWordIter *fd, unique_ptr<Matrix> *F, string *H)
-  { MatrixFile f; int ret=f.Read(fd); f.AssignTo(F, H); return ret; }
+  { MatrixFile f; int ret=f.Read(fd); f.MoveTo(F, H); return ret; }
   static int Read(const string &fn, unique_ptr<Matrix> *F, string *H)
-  { MatrixFile f; int ret=f.Read(fn); f.AssignTo(F, H); return ret; }
+  { MatrixFile f; int ret=f.Read(fn); f.MoveTo(F, H); return ret; }
   static int ReadVersioned(const VersionedFileName &fn, unique_ptr<Matrix> *F, string *H, int iter=-1)
-  { MatrixFile f; int ret=f.ReadVersioned(fn); f.AssignTo(F, H); return ret; }
+  { MatrixFile f; int ret=f.ReadVersioned(fn); f.MoveTo(F, H); return ret; }
   static int ReadVersioned(const char *D, const char *C, const char *V, unique_ptr<Matrix> *F, string *H=0, int iter=-1)
   { return ReadVersioned(VersionedFileName(D, C, V), F, H, iter); }
 };
@@ -393,7 +393,7 @@ struct MatrixArchiveInputFile {
   void Close();
   int Open(const string &name);
   int Read(unique_ptr<Matrix> *out, string *hdrout);
-  int Read(MatrixFile *f) { return Read(&f->F, &f->H); }
+  int Read(MatrixFile *f) { unique_ptr<Matrix> x; int v=Read(&x, &f->H); f->F=move(x); return v; }
   int Skip();
   string Filename();
   static int Count(const string &name);
@@ -412,20 +412,22 @@ struct MatrixArchiveOutputFile {
 
 template <class X, void (*Assign)(double *, X), bool (*Equals)(const double*, X)>
 struct HashMatrixT {
-  Matrix *map;
+  optional_ptr<Matrix> map;
   int VPE;
-  HashMatrixT(Matrix *M=0, int vpe=0) : map(M), VPE(vpe) {}
+  HashMatrixT(optional_ptr<Matrix> M=optional_ptr<Matrix>(), int vpe=0) : map(move(M)), VPE(vpe) {}
 
   const double *Get(X hash) const {
     const double *hashrow = map->row(hash % map->M);
     for (int k=0, l=map->N/VPE; k<l; k++) if (Equals(&hashrow[k*VPE], hash)) return &hashrow[k*VPE];
     return 0;
   }
+
   double *Get(X hash) {
     double *hashrow = map->row(hash % map->M);
     for (int k=0, l=map->N/VPE; k<l; k++) if (Equals(&hashrow[k*VPE], hash)) return &hashrow[k*VPE];
     return 0;
   }
+
   double *Set(X hash) {
     long long ind = hash % map->M;
     double *hashrow = map->row(ind);
@@ -476,8 +478,8 @@ struct HashMatrixF {
   static void Assign(/**/  double *hashrow, unsigned hash) { if (1) hashrow[0] =  hash; }
   static bool Equals(const double *hashrow, unsigned hash) { return hashrow[0] == hash; }
 };
-struct HashMatrix     : public HashMatrixT    <unsigned, &HashMatrixF::Assign, &HashMatrixF::Equals> { HashMatrix(Matrix *M=0, int vpe=0) : HashMatrixT(M,vpe) {} };
-struct HashMatrixFile : public HashMatrixFileT<unsigned, &HashMatrixF::Assign, &HashMatrixF::Equals> {};
+struct HashMatrix     : public HashMatrixT    <unsigned, &HashMatrixF::Assign, &HashMatrixF::Equals> { using HashMatrixT::HashMatrixT; };
+struct HashMatrixFile : public HashMatrixFileT<unsigned, &HashMatrixF::Assign, &HashMatrixF::Equals> { using HashMatrixFileT::HashMatrixFileT; };
 
 struct HashMatrix64F {
   static void Assign(double *hashrow, unsigned long long hash) {
@@ -490,16 +492,6 @@ struct HashMatrix64F {
 };
 struct HashMatrix64     : public HashMatrixT    <unsigned long long, &HashMatrix64F::Assign, &HashMatrix64F::Equals> {};
 struct HashMatrix64File : public HashMatrixFileT<unsigned long long, &HashMatrix64F::Assign, &HashMatrix64F::Equals> {};
-
-struct GraphVizFile {
-  static string DigraphHeader(const string &name);
-  static string NodeColor(const string &s);
-  static string NodeShape(const string &s);
-  static string NodeStyle(const string &s);
-  static string Footer();
-  static void AppendNode(string *out, const string &n1, const string &label=string());
-  static void AppendEdge(string *out, const string &n1, const string &n2, const string &label=string());
-};
 
 }; // namespace LFL
 #endif // LFL_CORE_APP_FILE_H__

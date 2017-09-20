@@ -1,5 +1,5 @@
 /*
- * $Id: aed.h 1330 2014-11-06 03:04:15Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -70,14 +70,14 @@ struct RecognitionModel {
   }
 
   int Predict(int source) {
-    WFST::State::ChainFilter cfilter(recognition_network.E);
+    WFST::State::ChainFilter cfilter(recognition_network.E.get());
     WFST::State::InvertFilter cifilter(&cfilter);
 
     WFST::ShortestDistance::PathMap dist;
-    WFST::ShortestDistance(dist, Singleton<TropicalSemiring>::Get(), recognition_network.E,
+    WFST::ShortestDistance(dist, Singleton<TropicalSemiring>::Set(), recognition_network.E.get(),
                            source, &cifilter, 0, 0, WFST::ShortestDistance::Transduce, 32);
 
-    Semiring *K = Singleton<TropicalSemiring>::Get();
+    Semiring *K = Singleton<TropicalSemiring>::Set();
     int out=0; double val=K->Zero(); 
     for (WFST::ShortestDistance::PathMap::iterator i = dist.begin(); i != dist.end(); i++)
       if ((*i).second.out.size() == 1 && K->Add((*i).second.D, val) != val) { 
@@ -179,7 +179,7 @@ struct RecognitionHMM {
     ~Emission() { if (alloc) alloc->Free(emission); }
     Emission(RecognitionModel *M, HMM::ObservationInterface *O, TransitMap *T, Allocator *Alloc=0, bool UP=false) :
       model(M), observed(O), transit(T), use_prior_prob(UP),
-      alloc(Alloc?Alloc:Singleton<MallocAllocator>::Get()), beam(model->emissions, 1, model->emissions, 0, alloc),
+      alloc(Alloc?Alloc:Singleton<MallocAllocator>::Set()), beam(model->emissions, 1, model->emissions, 0, alloc),
       emission(static_cast<double*>(alloc->Malloc(model->emissions*sizeof(double)))) {}
 
     double *Observation(int t) { return observed->Observation(t); }
@@ -275,9 +275,9 @@ struct RecognitionHMM {
 };
 
 struct Recognizer {
-  static matrix<HMM::Token> *DecodeFile(RecognitionModel *model, const char *fn, double beam_width=0,
+  static matrix<HMM::Token> *DecodeFile(AssetLoading *loader, RecognitionModel *model, const char *fn, double beam_width=0,
                                         bool use_transit=0, double *vprobout=0, Matrix **MFCCout=0, TokenNameCB<HMM::Token> *nameCB=0) {
-    SoundAsset input("input", fn, 0, 0, 0, 0);
+    SoundAsset input(loader, "input", fn, 0, 0, 0, 0);
     input.Load();
     if (!input.wav) { ERROR(fn, " not found"); return 0; }
 

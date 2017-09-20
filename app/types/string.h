@@ -356,23 +356,6 @@ template <int ChunkSize, class X> struct StringChunkIterT : public StringIterT<X
   }
 };
 
-struct IterWordIter : public StringIter {
-  StringIter *iter;
-  StringWordIter word;
-  int first_count=0;
-  bool own_iter=0;
-  ~IterWordIter() { if (own_iter) delete iter; }
-  IterWordIter(StringIter *i, bool owner=0) : iter(i), own_iter(owner) {};
-  void Reset() { if (iter) iter->Reset(); first_count=0; }
-  bool Done() const { return iter->Done(); }
-  const char *Next();
-  const char *Begin() const { return iter->Begin(); }
-  const char *Current() const { return word.Current(); }
-  int CurrentOffset() const { return iter->CurrentOffset() + word.CurrentOffset(); }
-  int CurrentLength() const { return word.CurrentLength(); }
-  int TotalLength() const { return iter->TotalLength(); }
-};
-
 #undef isspace
 #undef isascii
 #undef isalpha

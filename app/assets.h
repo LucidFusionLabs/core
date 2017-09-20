@@ -84,10 +84,11 @@ typedef AssetMapT<MovieAsset> MovieAssetMap;
 
 struct AssetLoading {
   ApplicationInfo *appinfo;
+  ApplicationLifetime *lifetime;
   WindowHolder *window;
   unique_ptr<AssetLoader> asset_loader;
   unordered_map<string, StringPiece> asset_cache;
-  AssetLoading(ApplicationInfo *A, WindowHolder *W) : appinfo(A), window(W) {}
+  AssetLoading(ApplicationInfo *A, ApplicationLifetime *L, WindowHolder *W) : appinfo(A), lifetime(L), window(W) {}
   void LoadTexture(const string &asset_fn, Texture *out, VideoAssetLoader *l=0, int flag=VideoAssetLoader::Flag::Default);
   void LoadTexture(const void *from_buf, const char *fn, int size, Texture *out, int flag=VideoAssetLoader::Flag::Default);
   void LoadTextureArray(const string &fmt, const string &prefix, const string &suffix, int N, TextureArray*out, int flag=VideoAssetLoader::Flag::Default);

@@ -1,5 +1,5 @@
 /*
- * $Id: corpus.h 1336 2014-12-08 09:29:59Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -25,17 +25,18 @@ struct WavCorpus : public Corpus {
   typedef function<void(const string&, SoundAsset*, const char*)> WavCB;
 
   WavCB wav_cb;
-  WavCorpus(const WavCB &cb) : wav_cb(cb) {}
+  AssetLoading *loader;
+  WavCorpus(AssetLoading *l, const WavCB &cb) : wav_cb(cb), loader(l) {}
 
   void RunFile(const string &fn);
   void RunBuf(const string &srcdir, const string &afn, const char *adata, int adatalen, const char *transcript) {
-    SoundAsset wav;
+    SoundAsset wav(loader);
     wav.filename = afn;
     wav.Load(adata, adatalen, afn.c_str(), MaxSecs);
     RunWAV(srcdir, &wav, transcript);
   }
   void RunFile(const string &srcdir, const string &afn, const char *transcript) {
-    SoundAsset wav;
+    SoundAsset wav(loader);
     wav.filename = afn;
     wav.Load(MaxSecs);
     RunWAV(srcdir, &wav, transcript);
@@ -54,10 +55,10 @@ struct VoxForgeTgzFile {
   map<string, string> wav2transcript;
   VoxForgeTgzFile(WavCorpus *wc) : wav_corpus(wc) {}
 
-  void Run(const string &file) {
+  void Run(const string &file, ApplicationLifetime *lifetime=0) {
     ArchiveIter a(file.c_str());
     if (!a.impl) return;
-    for (const char *afn = a.Next(); app->run && afn; afn = a.Next()) {
+    for (const char *afn = a.Next(); (!lifetime || lifetime->run) && afn; afn = a.Next()) {
       if (SuffixMatch(afn, "etc/prompts", false)) HandlePrompts(       a.buf.data(), a.buf.size());
       else if (BaseDir(afn, "wav"))               HandleWAV(file, afn, a.buf.data(), a.buf.size());
     }
@@ -89,10 +90,10 @@ struct VoxForgeTgzFile {
 struct FeatCorpus {
   typedef function<void(const char*, Matrix*, Matrix*, const char*)> FeatCB;
 
-  static int FeatIter(const char *featdir, const FeatCB &cb) {
+  static int FeatIter(const char *featdir, const FeatCB &cb, ApplicationLifetime *lifetime=0) {
     DirectoryIter d(featdir); int count=0;
 
-    for (const char *fn = d.Next(); app->run && fn; fn = d.Next()) {
+    for (const char *fn = d.Next(); (!lifetime || lifetime->run) && fn; fn = d.Next()) {
       bool matrixF=SuffixMatch(fn, ".feat", false), txtF=SuffixMatch(fn, ".txt", false), listF=SuffixMatch(fn, ".featlist", false);
       string pn = string(featdir) + fn;
 
@@ -109,12 +110,12 @@ struct FeatCorpus {
     return 1;
   }
 
-  static int FeatIterMatList(const char *fn, const FeatCB &cb) {
+  static int FeatIterMatList(const char *fn, const FeatCB &cb, ApplicationLifetime *lifetime=0) {
     MatrixArchiveInputFile featlist;
     featlist.Open(fn);
     int count=0;
 
-    while (app->run) {
+    while (!lifetime || lifetime->run) {
       MatrixFile feat;
       featlist.Read(&feat);
       if (!feat.F) break;
@@ -127,11 +128,10 @@ struct FeatCorpus {
   }
 
   static void AddFeature(MatrixFile *feat, const char *pn, const FeatCB &cb) {
-    Matrix *orig = feat->F->Clone();
-    feat->F = Features::FromFeat(feat->F, Features::Flag::Full);
+    unique_ptr<Matrix> orig(feat->F->Clone());
+    feat->F = unique_ptr<Matrix>(Features::FromFeat(feat->F.get(), Features::Flag::Full));
     DEBUG("processing %s : %s", pn,  feat->Text());
-    cb(pn, orig, feat->F, feat->Text());
-    delete orig;
+    cb(pn, orig.get(), feat->F.get(), feat->Text());
   }
 
   static string ArchiveFilename(const char *fn, int index) { return StrCat(fn, ",", index); }
@@ -152,10 +152,10 @@ struct PathCorpus {
     f.Clear();
   }
 
-  static int PathIter(const char *featdir, MatrixArchiveInputFile *paths, PathCB cb) {
+  static int PathIter(const char *featdir, MatrixArchiveInputFile *paths, PathCB cb, ApplicationLifetime *lifetime=0) {
     MatrixArchiveInputFile utts; string lastarchive; int listfile, count=0;
 
-    while (app->run) {
+    while (!lifetime || lifetime->run) {
       Timer vtime;
       MatrixFile path, utt;
 
@@ -184,10 +184,9 @@ struct PathCorpus {
       if (path.F->M != utt.F->M) { ERROR("path/utt mismatch offset ", uttindex, " len ", path.F->M, " != ", utt.F->M, " transcript='", utt.Text(), "' file=", uttfilename); continue; }
 
       DEBUG("processing %s", uttfilename.c_str());
-      Matrix *orig = utt.F->Clone();
-      utt.F = Features::FromFeat(utt.F, Features::Flag::Full);
-      cb(0, path.F, 0, vtime.GetTime(), orig, utt.F, utt.Text());
-      delete orig;
+      unique_ptr<Matrix> orig(utt.F->Clone());
+      utt.F = unique_ptr<Matrix>(Features::FromFeat(utt.F.get(), Features::Flag::Full));
+      cb(0, path.F.get(), 0, vtime.GetTime(), orig.get(), utt.F.get(), utt.Text());
       count++;
     }
     return count;

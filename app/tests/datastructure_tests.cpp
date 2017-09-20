@@ -278,17 +278,17 @@ template <class K, class V, class Node = AVLTreeNode<K,V>, class Zipper = AVLTre
   }
 
   virtual string DebugString(const string &name=string()) const {
-    string ret = GraphVizFile::DigraphHeader(StrCat("AVLTree", name.size()?"_":"", name));
+    string ret = GraphViz::DigraphHeader(StrCat("AVLTree", name.size()?"_":"", name));
     PrintNodes(head, &ret);
     PrintEdges(head, &ret);
-    return ret + GraphVizFile::Footer();
+    return ret + GraphViz::Footer();
   }
 
   virtual void PrintNodes(int ind, string *out) const {
     if (!ind) return;
     const Node *n = &node[ind-1];
     PrintNodes(n->left, out);
-    GraphVizFile::AppendNode(out, StrCat(n->key), StrCat(n->key, " ", n->val));
+    GraphViz::AppendNode(out, StrCat(n->key), StrCat(n->key, " ", n->val));
     PrintNodes(n->right, out);
   }
 

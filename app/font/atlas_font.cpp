@@ -152,7 +152,7 @@ void AtlasFontEngine::WriteGlyphFile(ApplicationInfo *appinfo, const string &nam
   unique_ptr<Matrix> gm = make_unique<Matrix>(glyph_count, 10);
   for (auto &i : f->glyph->table) if (i.       tex.width && i.       tex.height) i.       ToArray(gm->row(glyph_out++), gm->N);
   for (auto &i : f->glyph->index) if (i.second.tex.width && i.second.tex.height) i.second.ToArray(gm->row(glyph_out++), gm->N);
-  MatrixFile(gm.release(), "").
+  MatrixFile(move(gm), "").
     WriteVersioned(VersionedFileName(appinfo->assetdir.c_str(), name.c_str(), "glyphs"), 0);
 }
 

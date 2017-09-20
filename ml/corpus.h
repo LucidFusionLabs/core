@@ -1,5 +1,5 @@
 /*
- * $Id: corpus.h 1306 2014-09-04 07:13:16Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -24,12 +24,13 @@ struct Corpus {
   Callback start_cb, finish_cb;
   virtual ~Corpus() {}
   virtual void RunFile(const string &filename) {}
-  virtual void Run(const string &file_or_dir) {
+  virtual void Run(const string &file_or_dir, ApplicationLifetime *lifetime=0) {
     if (start_cb) start_cb();
     if (!file_or_dir.empty() && !LocalFile::IsDirectory(file_or_dir)) RunFile(file_or_dir);
     else {
       DirectoryIter iter(file_or_dir, -1);
-      for (const char *fn = iter.Next(); app->run && fn; fn = iter.Next()) Run(StrCat(file_or_dir, fn));
+      for (auto fn = iter.Next(); (!lifetime || lifetime->run) && fn; fn = iter.Next()) 
+        Run(StrCat(file_or_dir, fn));
     }
     if (finish_cb) finish_cb();
   }  

@@ -17,6 +17,7 @@
  */
 
 #include "core/app/app.h"
+#include "core/app/shell.h"
 #include "core/ml/hmm.h"
 #include "core/web/dom.h"
 #include "core/web/css.h"
@@ -61,16 +62,17 @@ char Phoneme::Id(const char *in, int len) {
   return -1;
 }
 
-PronunciationDict *PronunciationDict::Instance() {
-  static PronunciationDict *inst = 0;
-  if (inst) return inst;
-  inst = new PronunciationDict();
+PronunciationDict *PronunciationDict::Instance(AssetLoading *loader) {
+  static unique_ptr<PronunciationDict> inst;
+  if (inst) return inst.get();
+  inst = make_unique<PronunciationDict>();
 
-  LocalFileLineIter file(StrCat(app->assetdir, "cmudict.txt"));
-  if (!file.f.Opened()) { ERROR("no ", app->assetdir, "cmudict.txt"); return 0; }    
+  string fn = loader->FileName("cmudict.txt");
+  LocalFileLineIter file(fn);
+  if (!file.f.Opened()) return ERRORv(inst.get(), "no ", fn);
 
-  ReadDictionary(&file, inst);
-  return inst;
+  ReadDictionary(&file, inst.get());
+  return inst.get();
 }
 
 int PronunciationDict::ReadDictionary(StringIter *in, PronunciationDict *out) {
@@ -163,8 +165,8 @@ Matrix *Features::EqualLoudnessCurve(int outrows, double max) {
   return ret.get();
 }
 
-double *Features::LifterMatrixROSA(int n, double L, bool inverse) {
-  double *dm = new double[n];
+vector<double> Features::LifterMatrixROSA(int n, double L, bool inverse) {
+  vector<double> dm(n);
   for (int i = 0; i < n; i++) {
     dm[i] = !i ? 1 : pow(i, L);
     if (inverse) dm[i] = 1 / dm[i];
@@ -172,8 +174,8 @@ double *Features::LifterMatrixROSA(int n, double L, bool inverse) {
   return dm;
 }
 
-double *Features::LifterMatrixHTK(int n, double L, bool inverse) {
-  double *dm = new double[n];
+vector<double> Features::LifterMatrixHTK(int n, double L, bool inverse) {
+  vector<double> dm(n);
   for (int i = 0; i < n; i++) {
     dm[i] = !i ? 1 : (1+L/2*sin(i*M_PI/L));
     if (inverse) dm[i] = 1 / dm[i];
@@ -246,7 +248,7 @@ Matrix *Features::Mel2FFT(int outrows, double minfreq, double maxfreq, int fftle
 Matrix *Features::PLP(const RingSampler::Handle *in, Matrix *out,
                       vector<StatefulFilter> *rastaFilters, Allocator *alloc) {
   /* http://seed.ucsd.edu/mediawiki/images/5/5c/PLP.pdf */
-  if (!alloc) alloc = Singleton<MallocAllocator>::Get();
+  if (!alloc) alloc = Singleton<MallocAllocator>::Set();
 
   /* plp = melfcc(x, sr, 'lifterexp', -22, 'nbands', 21, 'maxfreq', sr/2, 'fbtype', 'bark', 'modelorder', 12, 'usecmp',1, 'wintime', 512/sr, 'hoptime', 256/sr, 'preemph', 0, 'dcttype', 1) */
   static const Matrix *barktrans = FFT2Bark(barkbands, FLAGS_feat_minfreq, FLAGS_feat_maxfreq, FLAGS_feat_window, FLAGS_sample_rate)->Transpose(mDelA);
@@ -337,28 +339,28 @@ Matrix *Features::PLP(const RingSampler::Handle *in, Matrix *out,
   }
 
   /* lifter */
-  static double *lifter = LifterMatrixROSA(ceps, 0.6); // lifterMatrixHTK(ceps, 22);
-  out->MultdiagR(lifter, ceps);
+  static vector<double> lifter = LifterMatrixROSA(ceps, 0.6); // lifterMatrixHTK(ceps, 22);
+  out->MultdiagR(lifter.data(), ceps);
 
   return out;
 }
 
 RingSampler *Features::InvPLP(const Matrix *in, int samplerate, Allocator *alloc) {
   /* [dr,aspec,spec] = invmelfcc() */
-  if (!alloc) alloc = Singleton<MallocAllocator>::Get();
+  if (!alloc) alloc = Singleton<MallocAllocator>::Set();
   Matrix plpcc(in->M, in->N, 0.0, 0, alloc);
   plpcc.AssignL(in);
 
   int ceps = lpccoefs+1;
-  static double *unlifter = LifterMatrixHTK(ceps, 22, true); // lifterMatrixROSA(ceps, 0.6, true);
-  plpcc.MultdiagR(unlifter, ceps);
+  static vector<double> unlifter = LifterMatrixHTK(ceps, 22, true); // lifterMatrixROSA(ceps, 0.6, true);
+  plpcc.MultdiagR(unlifter.data(), ceps);
   Matrix::Print(&plpcc, "sec plp");
 
   return 0;
 }
 
 Matrix *Features::MFCC(const RingSampler::Handle *in, Matrix *out, Allocator *alloc) {
-  if (!alloc) alloc = Singleton<MallocAllocator>::Get();
+  if (!alloc) alloc = Singleton<MallocAllocator>::Set();
 
   /* [mm,aspc,pspc] = melfcc(y/32768, sr, 'maxfreq', sr/2, 'numcep', 20, 'nbands', 40, 'fbtype', 'htkmel', 'dcttype', 3, 'usecmp', 0, 'wintime', 512/44100, 'hoptime', 256/44100, 'dither', 0, 'lifterexp', 0) */
   static const Matrix *meltrans = FFT2Mel(FLAGS_feat_melbands, FLAGS_feat_minfreq, FLAGS_feat_maxfreq, FLAGS_feat_window, FLAGS_sample_rate)->Transpose(mDelA);
@@ -652,7 +654,7 @@ void AcousticModel::State::Assign(State *out, int *outind, int outsize, StateCol
     if (tied) {
       static unsigned silhash = fnv32("Model_SIL_State_00");
 
-      out[ind].alloc = Singleton<MallocAllocator>::Get();
+      out[ind].alloc = Singleton<MallocAllocator>::Set();
       out[ind].name = n;
 
       MatrixIter(&out[ind].transition) { out[ind].transition.row(i)[TC_Self] = ohash; }
@@ -813,7 +815,7 @@ int AcousticModel::Write(StateCollection *model, const char *name, const char *d
   }
 
   /* write map & tied */
-  if (1                   && MatrixFile(map.map,             flagtext).WriteVersioned(VersionedFileName(dir, name, "map"),        iteration) < 0) { ERROR(name, " write map");     ret=-1; }
+  if (1                   && MatrixFile(map.map.get(),       flagtext).WriteVersioned(VersionedFileName(dir, name, "map"),        iteration) < 0) { ERROR(name, " write map");     ret=-1; }
   if (model->TiedStates() && MatrixFile(model->TiedStates(), flagtext).WriteVersioned(VersionedFileName(dir, name, "tiedstates"), iteration) < 0) { ERROR(name, " write tied");    ret=-1; }
   if (model->PhoneTx()    && MatrixFile(model->PhoneTx(),    flagtext).WriteVersioned(VersionedFileName(dir, name, "phonetx"),    iteration) < 0) { ERROR(name, " write phonetx"); ret=-1; }
 
@@ -852,15 +854,15 @@ AcousticModel::Compiled *AcousticModel::FullyConnected(Compiled *model) {
   return hmm;
 }
 
-AcousticModel::Compiled *AcousticModel::FromUtterance(Compiled *model, const char *transcript, bool UseTransit) {
-  return FLAGS_triphone_model ? FromUtterance3(model, transcript, UseTransit) : FromUtterance1(model, transcript, UseTransit);
+AcousticModel::Compiled *AcousticModel::FromUtterance(AssetLoading *loader, Compiled *model, const char *transcript, bool UseTransit) {
+  return FLAGS_triphone_model ? FromUtterance3(loader, model, transcript, UseTransit) : FromUtterance1(loader, model, transcript, UseTransit);
 }
 
 /* context independent utterance model */
-AcousticModel::Compiled *AcousticModel::FromUtterance1(AcousticModel::Compiled *model, const char *transcript, bool UseTransit) {
+AcousticModel::Compiled *AcousticModel::FromUtterance1(AssetLoading *loader, AcousticModel::Compiled *model, const char *transcript, bool UseTransit) {
   /* get pronunciation */
   static const int maxwords=1024;
-  PronunciationDict *dict = PronunciationDict::Instance();
+  PronunciationDict *dict = PronunciationDict::Instance(loader);
   const char *w[maxwords], *wa[maxwords]; int words, phones, len=0;
   if ((words = dict->Pronounce(transcript, w, wa, &phones, maxwords)) <= 0) return 0;
   Compiled *hmm = new Compiled(phones*StatesPerPhone+words+1);
@@ -916,9 +918,9 @@ AcousticModel::Compiled *AcousticModel::FromUtterance1(AcousticModel::Compiled *
 }
 
 /* triphone utterance model */
-AcousticModel::Compiled *AcousticModel::FromUtterance3(AcousticModel::Compiled *model, const char *transcript, bool UseTransit) {
+AcousticModel::Compiled *AcousticModel::FromUtterance3(AssetLoading *loader, AcousticModel::Compiled *model, const char *transcript, bool UseTransit) {
   /* get pronunciation */
-  PronunciationDict *dict = PronunciationDict::Instance();
+  PronunciationDict *dict = PronunciationDict::Instance(loader);
   static const int maxwords=1024;
   const char *w[maxwords], *wa[maxwords];
   int words, phones, len=0, depth=0, prevPhonesInWord=0, prevEndWordPhone=0;
@@ -1115,13 +1117,15 @@ int AcousticModelFile::Open(const char *name, const char *dir, int lastiter, boo
 
   if (flags.size()) AcousticModel::LoadFlags(flags.c_str());
 
+  unique_ptr<Matrix> mapdata;
   if (MatrixFile::ReadVersioned(dir, name, "prior",      &initial, 0, lastiter)<0) { ERROR(name, ".", lastiter, ".prior"  ); return -1; }
   if (MatrixFile::ReadVersioned(dir, name, "emMeans",    &mean,    0, lastiter)<0) { ERROR(name, ".", lastiter, ".emMean" ); return -1; }
   if (MatrixFile::ReadVersioned(dir, name, "emCov",      &covar,   0, lastiter)<0) { ERROR(name, ".", lastiter, ".emCov"  ); return -1; }
   if (MatrixFile::ReadVersioned(dir, name, "emPrior",    &prior,   0, lastiter)<0) { ERROR(name, ".", lastiter, ".emPrior"); return -1; }
-  if (MatrixFile::ReadVersioned(dir, name, "map",        &map.map, 0, lastiter)<0) { ERROR(name, ".", lastiter, ".map"    ); return -1; }
+  if (MatrixFile::ReadVersioned(dir, name, "map",        &mapdata, 0, lastiter)<0) { ERROR(name, ".", lastiter, ".map"    ); return -1; }
   if (StringFile::ReadVersioned(dir, name, "name",       &names,   0, lastiter)<0) { ERROR(name, ".", lastiter, ".name"   ); return -1; }
   if (MatrixFile::ReadVersioned(dir, name, "tiedstates", &tied,    0, lastiter)<0) { ERROR(name, ".", lastiter, ".tied"   );       /**/ }
+  map.map = move(mapdata);
 
   if (prior->M != names->size()) { ERROR("mismatch ", prior->M, " != ", names->size()); return -1; }
   int M=prior->M, K=prior->N, N=mean->N, transind=0;
@@ -1223,7 +1227,7 @@ double AcousticHMM::Viterbi(AcousticModel::Compiled *model, Matrix *observations
   HMM::ActiveStateIndex active(N, NBest, beamWidth, InitMax);
   HMM::BeamMatrix beam(&lambda, &backtrace, NBest);
 
-  int endstate = HMM::Forward(&active, &transit, &emit, &beam, Singleton<HMM::Algorithm::Viterbi>::Get()) / NBest;
+  int endstate = HMM::Forward(&active, &transit, &emit, &beam, Singleton<HMM::Algorithm::Viterbi>::Set()) / NBest;
   HMM::TracePath(path, &backtrace, endstate, M);
   return lambda.row(M-1)[endstate];
 #endif
@@ -1303,8 +1307,8 @@ void AcousticHMM::EmissionArray::Calc(AcousticModel::Compiled *model, HMM::Activ
 
 /* decoder */
 
-Matrix *Decoder::DecodeFile(AcousticModel::Compiled *model, const char *fn, double beamWidth) {
-  SoundAsset input("input", fn, 0, 0, 0, 0);
+Matrix *Decoder::DecodeFile(AssetLoading *loader, AcousticModel::Compiled *model, const char *fn, double beamWidth) {
+  SoundAsset input(loader, "input", fn, 0, 0, 0, 0);
   input.Load();
   if (!input.wav) { ERROR(fn, " not found"); return 0; }
 
@@ -1314,13 +1318,13 @@ Matrix *Decoder::DecodeFile(AcousticModel::Compiled *model, const char *fn, doub
   return ret;
 }
 
-Matrix *Decoder::DecodeFeatures(AcousticModel::Compiled *model, Matrix *features, double beamWidth, int flag) {
+Matrix *Decoder::DecodeFeatures(AcousticModel::Compiled *model, Matrix *features, double beamWidth, int flag, Window *visualize) {
   if (!DimCheck("DecodeFeatures", features->N, model->state[0].emission.mean.N)) return 0;
   if (FLAGS_speech_recognition_debug) AcousticHMM::PrintLattice(model);
 
   Matrix *viterbi = new Matrix(features->M, 1); Timer vtime;
   double vprob = AcousticHMM::Viterbi(model, features, viterbi, 0, beamWidth, flag);
-  if (flag & AcousticHMM::Flag::Visualize) Decoder::VisualizeFeatures(model, features, viterbi, vprob, vtime.GetTime(), flag & AcousticHMM::Flag::Interactive);
+  if (visualize) Decoder::VisualizeFeatures(visualize, model, features, viterbi, vprob, vtime.GetTime(), flag & AcousticHMM::Flag::Interactive);
 
   return viterbi;
 }
@@ -1335,16 +1339,16 @@ string Decoder::Transcript(const AcousticModel::Compiled *model, const Matrix *v
   return ret;
 }
 
-void Decoder::VisualizeFeatures(AcousticModel::Compiled *model, Matrix *MFCC, Matrix *viterbi, double vprob, Time vtime, bool interactive) {
-  static PhoneticSegmentationGUI *segments = 0;
+void Decoder::VisualizeFeatures(Window *w, AcousticModel::Compiled *model, Matrix *MFCC, Matrix *viterbi, double vprob, Time vtime, bool interactive) {
+  static unique_ptr<PhoneticSegmentationGUI> segments; 
   static bool interactive_done;
 
-  delete segments;
-  segments = new PhoneticSegmentationGUI(app->focused, model, viterbi, "visbuf");
+  auto app = w->parent;
+  segments = make_unique<PhoneticSegmentationGUI>(w, model, viterbi, "visbuf");
   interactive_done = 0;
 
   GraphicsContext gc(segments->root->gd);
-  SoundAsset sa;
+  SoundAsset sa(app);
   sa.name = "visbuf";
   sa.Load();
   sa.channels = 1;
@@ -1370,22 +1374,22 @@ void Decoder::VisualizeFeatures(AcousticModel::Compiled *model, Matrix *MFCC, Ma
 
     int levels=10;
     float percent = 1-float(app->audio->Out.size())/app->audio->outlast;
-    font->Draw(StringPrintf("time=%d vprob=%f percent=%f next=%d", vtime.count(), vprob, percent, interactive_done), point(10, 440));
+    font->Draw(gc.gd, StringPrintf("time=%d vprob=%f percent=%f next=%d", vtime.count(), vprob, percent, interactive_done), point(10, 440));
 
     percent -= Audio::VisualDelay()*FLAGS_sample_rate*FLAGS_chans_out/app->audio->outlast;
     if (percent >= 0 && percent <= 1) {
-      for (int i=1; i<=levels; i++) font->Draw("|", point(wcc.x+percent*wcc.w, wcc.y-30*i));
+      for (int i=1; i<=levels; i++) font->Draw(gc.gd, "|", point(wcc.x+percent*wcc.w, wcc.y-30*i));
     }
 
     int count=0;
     for (Decoder::PhoneIter iter(model, viterbi); !iter.Done(); iter.Next()) {
       if (!iter.phone) continue;
       int r = count++%levels+1;
-      font->Draw(Phoneme::Name(iter.phone), point(wcc.x+float(iter.beg)*wcc.w/viterbi->M, wcc.y-r*30));
+      font->Draw(gc.gd, Phoneme::Name(iter.phone), point(wcc.x+float(iter.beg)*wcc.w/viterbi->M, wcc.y-r*30));
     }
 
     if (interactive) {
-      static Font *norm = app->fonts->Get(FLAGS_font, "", 12, Color::grey70);
+      static Font *norm = app->fonts->Get(w->gl_h, FLAGS_font, "", 12, Color::grey70);
       segments->Frame(wcc, norm);
 
       // gui.mouse.Activate();

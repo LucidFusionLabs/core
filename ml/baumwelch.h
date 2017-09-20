@@ -1,5 +1,5 @@
 /*
- * $Id: baumwelch.h 1306 2014-09-04 07:13:16Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -35,6 +35,7 @@ struct BaumWelch : public HMM::BaumWelchAccum {
     Accum(int K, int D) : mixture(K, D) {}
   };
 
+  AssetLoading *loader;
   AcousticModel::Compiled *model;
 
   int K, D;
@@ -42,16 +43,17 @@ struct BaumWelch : public HMM::BaumWelchAccum {
   static const int minposterior = -16;
 
   int mode;
-  Accum **accum;
+  vector<unique_ptr<Accum>> accum;
+  vector<double> posterior, featscaled, diff, xv;
 
   bool use_prior, use_transition, full_variance;
   int hmm_flag;
 
   Matrix phonetx, phonetxtotal;
 
-  BaumWelch(AcousticModel::Compiled *m, double bw, bool up=0, bool ut=0, bool fv=0) :
-    model(m), K(model->state[0].emission.mean.M), D(model->state[0].emission.mean.N), beamwidth(bw), mode(0),
-    accum(new Accum*[model->states]), use_prior(up), use_transition(ut), full_variance(fv), hmm_flag(0),
+  BaumWelch(AssetLoading *L, AcousticModel::Compiled *m, double bw, bool up=0, bool ut=0, bool fv=0) :
+    loader(L), model(m), K(model->state[0].emission.mean.M), D(model->state[0].emission.mean.N), beamwidth(bw), mode(0),
+    use_prior(up), use_transition(ut), full_variance(fv), hmm_flag(0),
     phonetx(LFL_PHONES, LFL_PHONES), phonetxtotal(LFL_PHONES, 1)
   {
     if (use_prior)      hmm_flag |= AcousticHMM::Flag::UsePrior;
@@ -60,15 +62,14 @@ struct BaumWelch : public HMM::BaumWelchAccum {
     for (int i=0; i<model->states; i++) {
       AcousticModel::State *s = &model->state[i];
       if (s->val.emission_index != i) FATAL("BaumWelch emission_index mismatch ", s->val.emission_index, " != ", i);
-      accum[i] = new Accum(K, D);
+      accum.emplace_back(make_unique<Accum>(K, D));
     }
     Reset();
   }
-  ~BaumWelch() { for(int i=0; i<model->states; i++) delete accum[i]; delete [] accum; }
 
   void Reset() { 
     for (int i=0; i<model->states; i++) {
-      Accum *a = accum[i];
+      Accum *a = accum[i].get();
       MatrixIter(&a->mixture.mean) a->mixture.mean.row(i)[j] = 0;
       MatrixIter(&a->mixture.diagcov) a->mixture.diagcov.row(i)[j] = 0;
       MatrixIter(&a->mixture.prior) a->mixture.prior.row(i)[j] = -INFINITY;
@@ -92,41 +93,39 @@ struct BaumWelch : public HMM::BaumWelchAccum {
   void AddFeatures(const char *fn, Matrix *MFCC, Matrix *features, const char *transcript) {
     if (!DimCheck("BW", features->N, D)) return;
 
-    AcousticModel::Compiled *hmm = AcousticModel::FromUtterance(model, transcript, use_transition);
+    unique_ptr<AcousticModel::Compiled> hmm(AcousticModel::FromUtterance(loader, model, transcript, use_transition));
     if (!hmm) return DEBUG("utterance construct failed: ", transcript);
 
-    double prob = AcousticHMM::ForwardBackward(hmm, features, 2, beamwidth, this);
+    double prob = AcousticHMM::ForwardBackward(hmm.get(), features, 2, beamwidth, this);
     if (mode == Mode::Means) totalprob += prob;
-
-    delete hmm;
   }
 
   void AddPrior(int state, double pi) {
     if (state < 0 || state >= model->states) FATAL("OOB emission index ", state);
-    Accum *a = accum[state];
+    Accum *a = accum[state].get();
     LogAdd(&a->prior, pi);
   }
 
   void AddEmission(int state, const double *feature, const double *emissionPosterior, double emissionTotal, double gamma) {
     if (gamma < minposterior) return;
     if (state < 0 || state >= model->states) FATAL("OOB emission index ", state);
-    Accum *a = accum[state];
+    Accum *a = accum[state].get();
 
-    double *posterior = (double*)alloca(K*sizeof(double));
+    posterior.resize(K);
     for (int i=0; i<K; i++) posterior[i] = emissionPosterior[i] + gamma;
     emissionTotal += gamma;
 
     if (mode == Mode::Means) {
-      double *featscaled = (double*)alloca(D*sizeof(double));
+      featscaled.resize(D);
       for (int i=0; i<K; i++) {
         if (emissionPosterior[i] < minposterior) continue;
-        Vector::Mult(feature, exp(posterior[i]), featscaled, D);
-        Vector::Add(a->mixture.mean.row(i), featscaled, D);
+        Vector::Mult(&feature[0], exp(posterior[i]), featscaled.data(), D);
+        Vector::Add(a->mixture.mean.row(i), featscaled.data(), D);
         LogAdd(&a->mixture.prior.row(i)[0], posterior[i]);
 
         if (!full_variance) {
-          Vector::Mult(featscaled, feature, D);
-          Vector::Add(a->mixture.diagcov.row(i), featscaled, D);
+          Vector::Mult(&featscaled[0], feature, D);
+          Vector::Add(a->mixture.diagcov.row(i), featscaled.data(), D);
         }
       }
       a->count++;
@@ -134,13 +133,13 @@ struct BaumWelch : public HMM::BaumWelchAccum {
       accumprob += emissionTotal;
     }
     else if (mode == Mode::Cov) {
-      double *diff = (double*)alloca(D*sizeof(double));
+      diff.resize(D);
       for (int i=0; i<K; i++) {
         if (emissionPosterior[i] < minposterior) continue;
-        Vector::Sub(a->mixture.mean.row(i), feature, diff, D);
-        Vector::Mult(diff, diff, D);
-        Vector::Mult(diff, exp(posterior[i]), D);
-        Vector::Add(a->mixture.diagcov.row(i), diff, D);
+        Vector::Sub(a->mixture.mean.row(i), feature, diff.data(), D);
+        Vector::Mult(&diff[0], diff.data(), D);
+        Vector::Mult(&diff[0], exp(posterior[i]), D);
+        Vector::Add(a->mixture.diagcov.row(i), diff.data(), D);
       }
       if (!full_variance) FATAL("incompatible modes ", -1);
     }
@@ -150,7 +149,7 @@ struct BaumWelch : public HMM::BaumWelchAccum {
     if (mode != Mode::Means || !isfinite(xi)) return;
     if (Lstate < 0 || Lstate >= model->states) FATAL("OOB emission index ", Lstate);
     if (Rstate < 0 || Rstate >= model->states) FATAL("OOB emission index ", Rstate);
-    Accum *a = accum[Lstate];
+    Accum *a = accum[Lstate].get();
 
     Accum::XiMap::iterator i = a->transit.find(Rstate);
     if (i == a->transit.end()) {
@@ -173,7 +172,7 @@ struct BaumWelch : public HMM::BaumWelchAccum {
   void Complete() {
     if (mode == Mode::Means) {
       for (int si=0; si<model->states; si++) {
-        Accum *a = accum[si];
+        Accum *a = accum[si].get();
         for (int i=0; i<K; i++) {
           double sum = a->mixture.prior.row(i)[0];
           double dn = exp(sum);
@@ -182,10 +181,9 @@ struct BaumWelch : public HMM::BaumWelchAccum {
         }
       }
     } else if (mode == Mode::Cov) {
-      double *x = (double*)alloca(D*sizeof(double));
       double totalprior = -INFINITY;
       for (int si=0; si<model->states; si++) {
-        Accum *a = accum[si];
+        Accum *a = accum[si].get();
         LogAdd(&totalprior, a->prior);
       }
 
@@ -195,7 +193,7 @@ struct BaumWelch : public HMM::BaumWelchAccum {
 
       for (int si=0; si<model->states; si++) {
         AcousticModel::State *s = &model->state[si];
-        Accum *a = accum[si];
+        Accum *a = accum[si].get();
         double lc = log((float)a->count);
 
         for (int i=0; i<K; i++) {
@@ -208,8 +206,9 @@ struct BaumWelch : public HMM::BaumWelchAccum {
           Vector::Assign(s->emission.diagcov.row(i), a->mixture.diagcov.row(i), D);
 
           if (!full_variance) {
-            Vector::Mult(s->emission.mean.row(i), s->emission.mean.row(i), x, D);
-            Vector::Sub(s->emission.diagcov.row(i), x, D);
+            xv.resize(D);
+            Vector::Mult(s->emission.mean.row(i), s->emission.mean.row(i), &xv[0], D);
+            Vector::Sub(s->emission.diagcov.row(i), xv.data(), D);
           }
 
           MatrixColIter(&s->emission.diagcov)

@@ -1,5 +1,5 @@
 /*
- * $Id: counter.h 1306 2014-09-04 07:13:16Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -21,8 +21,7 @@
 namespace LFL {
 
 struct Count {
-  int total, good, bad;
-  Count() : total(0), good(0), bad(0) {}
+  int total=0, good=0, bad=0;
   bool Add(bool which) { if (which) good++; else bad++; total++; return which; }
   Count& operator+=(const Count& x) { total+=x.total; good+=x.good; bad+=x.bad; return *this; }
 
@@ -38,11 +37,10 @@ struct Count {
 struct Counter {
   typedef map<int, int> Count;
   Count count;
-  int incrs, seen;
+  int incrs=0, seen=0;
 
-  Counter() : incrs(0), seen(0) {}
-  Counter(int n) : incrs(0), seen(0) { Incr(n); }
-  Counter(const Counter& copy) : count(copy.count), incrs(copy.incrs), seen(copy.seen) {}
+  Counter() {}
+  Counter(int n) { Incr(n); }
 
   void Incr(int n) {
     incrs++;

@@ -1,5 +1,5 @@
 /*
- * $Id: hmm.h 1306 2014-09-04 07:13:16Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -30,7 +30,8 @@ template <class X> struct TokenNameCB {
 
 struct HMM {
   template <class T> struct SortPairT {
-    T val; int ind;
+    T val;
+    int ind;
     SortPairT() : val(-INFINITY), ind(-1) {}
 
     bool operator<(const SortPairT &r) const {
@@ -68,7 +69,7 @@ struct HMM {
     int NumStates, NBest, BeamWidth, time_index;
     Allocator *alloc;
 
-    ActiveState(int NS, int NB, int BW, Allocator *Alloc) : NumStates(NS), NBest(NB), BeamWidth(BW), time_index(-1), alloc(Alloc ? Alloc : Singleton<MallocAllocator>::Get()) {}
+    ActiveState(int NS, int NB, int BW, Allocator *Alloc) : NumStates(NS), NBest(NB), BeamWidth(BW), time_index(-1), alloc(Alloc ? Alloc : Singleton<MallocAllocator>::Set()) {}
     virtual ~ActiveState() {}
 
     struct Iterator {
@@ -322,7 +323,7 @@ struct HMM {
 
     virtual ~TokenPasser() { if (alloc) { alloc->Free(active); alloc->Free(nextActive); } }
     TokenPasser(int NS, int NB, int BW, TokenBacktrace<T> *BT, int Scale=100, Allocator *Alloc=0) : ActiveState(NS, NB, BW, Alloc), backtrace(BT), num(BeamWidth*Scale),
-    count(0), nextCount(0), viterbi(Singleton<Algorithm::Viterbi>::Get()), active(static_cast<T*>(alloc->Malloc(sizeof(T)*num))), nextActive(static_cast<T*>(alloc->Malloc(sizeof(T)*num))) {
+    count(0), nextCount(0), viterbi(Singleton<Algorithm::Viterbi>::Set()), active(static_cast<T*>(alloc->Malloc(sizeof(T)*num))), nextActive(static_cast<T*>(alloc->Malloc(sizeof(T)*num))) {
       if (!active) FATAL("alloc failed");
       ClearNext();
     }
@@ -430,7 +431,7 @@ struct HMM {
     TransitMapMatrix transit(transition);
     EmissionMatrix emit(emission);
     BeamMatrix beam(lambda, backtrace, NBest);
-    return Forward(&active, &transit, &emit, &beam, Singleton<Algorithm::Viterbi>::Get(), nameCB);
+    return Forward(&active, &transit, &emit, &beam, Singleton<Algorithm::Viterbi>::Set(), nameCB);
   }
 
   struct BaumWelchAccum {
@@ -480,7 +481,7 @@ struct HMM {
 
     /* go forward */
     BeamMatrix beam(alpha, 0, active->NBest);
-    int final_state = Forward(active, transit, emission, &beam, Singleton<Algorithm::Forward>::Get());
+    int final_state = Forward(active, transit, emission, &beam, Singleton<Algorithm::Forward>::Set());
 
     double forwardTotal = -INFINITY, backwardTotal = -INFINITY;
     for (int j=0; j<NumStates; j++) LogAdd(&forwardTotal, alpha->row(len-1)[j]);

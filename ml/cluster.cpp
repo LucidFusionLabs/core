@@ -1,5 +1,5 @@
 /*
- * $Id: cluster.cpp 1306 2014-09-04 07:13:16Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -68,18 +68,15 @@ int WritePloticus(string tofile, const Matrix *in, vector<string> *l, int *indma
   return f.Write(v.data(), v.size()) == v.size();
 }
 
-int *indexmap1D(const Matrix *in) {
-  double *vals = new double [in->M];
-  MatrixRowIter(in) vals[i] = in->row(i)[0];
+vector<int> indexmap1D(const Matrix *in) {
+  vector<double> vals;
+  MatrixRowIter(in) val.push_back(in->row(i)[0]);
 
-  HMM::SortPair *sortMap = new HMM::SortPair[in->M];
+  vector<HMM::SortPair> sortMap(HMM::SortPair(), in->M);
   HMM::SortPairs(vals, 0, sortMap, in->M);
 
-  int *ret = new int[in->M];
-  MatrixRowIter(in) ret[i] = sortMap[i].ind;
-
-  delete [] sortMap;
-  delete [] vals;
+  vector<int> ret;
+  MatrixRowIter(in) ret.push_back(sortMap[i].ind);
   return ret;
 }
 
@@ -121,9 +118,10 @@ string tostrPloticus1D(const Matrix *in, vector<string> *l, int *indexmap) {
 }; // namespace LFL
 using namespace LFL;
 
-extern "C" void MyAppCreate(int argc, const char* const* argv) {
-  app = new Application(argc, argv);
-  app->focused = Window::Create();
+extern "C" LFApp *MyAppCreate(int argc, const char* const* argv) {
+  app = CreateApplication(argc, argv).release();
+  app->focused = CreateWindow(app).release();
+  return app;
 }
 
 extern "C" int MyAppMain() {
@@ -180,7 +178,7 @@ extern "C" int MyAppMain() {
 
   if (FLAGS_pca) {
     Matrix projected(in->M, in->N);
-    double *variance = (double*)alloca(in->N * sizeof(double));
+    vector<double> variance(in->N, 0);
     Matrix *pca = PCA(in, &projected, variance);
     int *indexmap = indexmap1D(&projected);
 

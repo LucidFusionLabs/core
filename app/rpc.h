@@ -150,7 +150,7 @@ namespace LFL {
 
 #else /* LFL_IPC */
 #define MakeIPC(t, ...) FlatBufferPiece()
-#define IPC_TABLE_BEGIN(name) typedef name Parent; void HandleIPC(Connection *c, int fm=0) {}
+#define IPC_TABLE_BEGIN(name) typedef name Parent; void HandleIPCMessage(const IPC::Header&, const StringPiece&, int) {}
 #define IPC_TABLE_CLIENT_CALL(name)
 #define IPC_TABLE_SERVER_CALL(name)
 #define IPC_TABLE_CLIENT_QXBC(name, mpv)
@@ -254,12 +254,11 @@ struct InterProcessComm {
   InterProcessComm(ApplicationInfo *A, ThreadDispatcher *D, SocketServices *N, const string &n) : app_info(A), dispatcher(D), net(N), ipc_name(n) {}
   virtual ~InterProcessComm() {}
 
-  bool StartServerProcess(const string &server_program, const vector<string> &arg=vector<string>());
-  bool OpenSocket(const string &socket_name);
-
-  virtual void HandleIPC(Connection *c, int filter_msg=0);
   virtual void HandleIPCMessage(const IPC::Header&, const StringPiece&, int) = 0;
 
+  bool StartServerProcess(const string &server_program, const vector<string> &arg=vector<string>());
+  bool OpenSocket(const string &socket_name);
+  void HandleIPC(Connection *c, int filter_msg=0);
   void HandleMessagesLoop() { while (dispatcher->run) if (!HandleMessages()) break; }
   bool HandleMessages(int filter_msg=0) {
     if (!NBReadable(conn->socket, dispatcher, -1)) return true;

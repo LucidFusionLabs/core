@@ -1,5 +1,5 @@
 /*
- * $Id: voice.cpp 1330 2014-11-06 03:04:15Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -36,12 +36,11 @@ int VoiceModel::Read(const char *dir) {
     unit[phoneme].sample = static_cast<Unit::Sample*>(calloc(sizeof(Unit::Sample), samples));
 
     MatrixArchiveInputFile index(pn.c_str());
-    Matrix *m;
+    unique_ptr<Matrix> m;
     for (err = index.Read(&m, &hdr); err != -1; err = index.Read(&m, &hdr)) {
       int beg = m->row(0)[0], end = m->row(0)[1];
       unit[phoneme].sample[count].offset = beg;
       unit[phoneme].sample[count].len = end - beg;
-      delete m;
       count++;
     }
 
@@ -52,8 +51,8 @@ int VoiceModel::Read(const char *dir) {
   return 0;
 };
 
-RingSampler *VoiceModel::Synth(const char *text, int start) {
-  PronunciationDict *dict = PronunciationDict::Instance();
+RingSampler *VoiceModel::Synth(AssetLoading *loader, const char *text, int start) {
+  PronunciationDict *dict = PronunciationDict::Instance(loader);
   const char *w[1024], *wa[1024]; int words, phones;
   words = dict->Pronounce(text, w, wa, &phones, 1024);
   if (words == -1) return 0;

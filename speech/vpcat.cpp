@@ -1,5 +1,5 @@
 /*
- * $Id: vpcat.cpp 1306 2014-09-04 07:13:16Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -33,15 +33,18 @@ DEFINE_bool  (amtx,        false,       "Print acoustic model transit");
 
 void Path(AcousticModel::Compiled *, Matrix *viterbi, double vprob, Time vtime, Matrix *MFCC, Matrix *features, const char *transcript) {}
 
+Application *app;
+
 }; // namespace LFL
 using namespace LFL;
 
-extern "C" void MyAppCreate(int argc, const char* const* argv) {
+extern "C" LFApp* MyAppCreate(int argc, const char* const* argv) {
 #ifdef _WIN32
   open_console = 1;
 #endif
-  app = new Application(argc, argv);
-  app->focused = Window::Create();
+  app = CreateApplication(argc, argv).release();
+  app->focused = CreateWindow(app).release();
+  return app;
 }
 
 extern "C" int MyAppMain() {

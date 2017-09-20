@@ -43,6 +43,34 @@ template <typename X, typename Y, Y (X::*Z)> struct MemberGreaterThanCompare {
   bool operator()(const X &a, const X &b) { return a.*Z > b.*Z; }
 };
 
+template <typename T> class optional_ptr {
+  public:
+    optional_ptr()                    : v(0),           owner(false) {}
+    optional_ptr(T*                x) : v(x),           owner(false) {}
+    optional_ptr(unique_ptr<T>     x) : v(x.release()), owner(true) {}
+    optional_ptr(optional_ptr<T>&& x) : v(x.get()),     owner(x.owns()) { x.forget(); }
+    optional_ptr(const optional_ptr<T>&) = delete;
+    ~optional_ptr() { reset(); }
+
+    operator bool() const noexcept { return v; }
+    T& operator* () const noexcept { return *v; }
+    T* operator->() const noexcept { return v; }
+    T* get()        const noexcept { return v; }
+    bool owns()     const noexcept { return owner; }
+
+    void forget() { owner=false; v=nullptr; }
+    void reset() { reset(nullptr); }
+    void reset(T*                x) { if (owner && v) delete v; owner=false;    v=x;           }
+    void reset(unique_ptr<T>     x) { if (owner && v) delete v; owner=true;     v=x.release(); }
+    void reset(optional_ptr<T>&& x) { if (owner && v) delete v; owner=x.owns(); v=x.get(); x.forget(); }
+    unique_ptr<T> release() { auto x = owner ? unique_ptr<T>(v) : unique_ptr<T>(); forget(); return x; }
+    optional_ptr<T>& operator=(optional_ptr<T> &&x) { reset(move(x)); x.reset(); return *this; }
+
+  private:
+    T *v;
+    bool owner; 
+};
+
 class VoidPtr {
   protected:
     void *v;
@@ -108,6 +136,21 @@ struct RefSet {
   unordered_set<RefCounter*> refs;
   virtual ~RefSet() { for (auto i : refs) i->DelRef(); }
   void Insert(RefCounter *x) { auto i = refs.insert(x); if (i.second) x->AddRef(); }
+};
+
+struct IterWordIter : public StringIter {
+  optional_ptr<StringIter> iter;
+  StringWordIter word;
+  int first_count=0;
+  IterWordIter(optional_ptr<StringIter> i) : iter(move(i)) {};
+  void Reset() { if (iter) iter->Reset(); first_count=0; }
+  bool Done() const { return iter->Done(); }
+  const char *Next();
+  const char *Begin() const { return iter->Begin(); }
+  const char *Current() const { return word.Current(); }
+  int CurrentOffset() const { return iter->CurrentOffset() + word.CurrentOffset(); }
+  int CurrentLength() const { return word.CurrentLength(); }
+  int TotalLength() const { return iter->TotalLength(); }
 };
 
 template <class I1, class I2> struct IterPair {
@@ -339,26 +382,31 @@ template <class X> void VectorErase(X* v, int ind) {
   CHECK_RANGE(ind, 0, v->size());
   v->erase(v->begin()+ind, v->begin()+ind+1);
 }
+
 template <class X, class I> I VectorEraseIterSwapBack(X* v, I i) {
   bool last = (i+1) == v->end();
   if (!last) swap(*i, v->back());
   v->pop_back();
   return last ? v->end() : i;
 }
+
 template <class X> void VectorEraseSwapBack(X* v, int ind) {
   CHECK_RANGE(ind, 0, v->size());
   VectorEraseIterSwapBack(v, v->begin()+ind);
 }
+
 template <class X> int VectorEraseByValue(vector<X> *v, const X& x) {
   int orig_size = v->size();
   v->erase(LFL_STL_NAMESPACE::remove(v->begin(), v->end(), x), v->end());
   return orig_size - v->size();
 }
+
 template <class X> int VectorRemoveUnique(vector<unique_ptr<X>> *v, const X* x) {
   for (auto i = v->begin(), e = v->end(); i != e; ++i)
     if (i->get() == x) { unique_ptr<X> y; i->swap(y); v->erase(i); return 1; }
   return 0;
 }
+
 template <class X, class Y> X* VectorAddUnique(Y *v, unique_ptr<X> x) {
   X *ret = x.get();
   v->emplace_back(move(x));
@@ -1021,6 +1069,17 @@ template <class X> struct CategoricalVariable {
   void On()  { ind = 1; }
   void Off() { ind = 0; }
 };
+
+struct GraphViz {
+  static string DigraphHeader(const string &name);
+  static string NodeColor(const string &s);
+  static string NodeShape(const string &s);
+  static string NodeStyle(const string &s);
+  static string Footer();
+  static void AppendNode(string *out, const string &n1, const string &label=string());
+  static void AppendEdge(string *out, const string &n1, const string &n2, const string &label=string());
+};
+
 }; // namespace LFL
 
 #include "core/app/types/tree.h"

@@ -1,5 +1,5 @@
 /*
- * $Id: sample.h 1306 2014-09-04 07:13:16Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -22,17 +22,14 @@ namespace LFL {
 
 struct SampleExtent {
   int D=0, count=0;
-  double *vec_min=0, *vec_max=0;
+  vector<double> vec_min, vec_max;
 
-  SampleExtent() {}
-  ~SampleExtent() { delete vec_min; delete vec_max; }
   void Complete() {}
-
   void AddFeatures(Matrix *features) {
-    if (!vec_min) {
+    if (!vec_min.size()) {
       D = features->N;
-      vec_min = new double[D]; Vector::Assign(vec_min, INFINITY, D);
-      vec_max = new double[D]; Vector::Assign(vec_max, -INFINITY, D);
+      vec_min = vector<double>(D, INFINITY);
+      vec_max = vector<double>(D, -INFINITY);
     }
     if (!DimCheck("SampleExtents", features->N, D)) return;
 
@@ -45,16 +42,13 @@ struct SampleExtent {
 };
 
 struct SampleMean {
-  int D, count;
-  double *vec;
+  int D=0, count=0;
+  vector<double> vec;
 
-  SampleMean() : D(0), count(0), vec(0) {}
-  ~SampleMean() { delete vec; }
-
-  void Complete() { Vector::Div(vec, count, D); }
+  void Complete() { Vector::Div(&vec[0], count, D); }
 
   void AddFeatures(Matrix *features) {
-    if (!vec) { D = features->N; vec = new double[D](); }
+    if (!vec.size()) { D = features->N; vec = vector<double>(D, 0); }
     if (!DimCheck("SampleMean", features->N, D)) return;
 
     MatrixIter(features) { vec[j] += features->row(i)[j]; }
@@ -63,13 +57,16 @@ struct SampleMean {
 };
 
 struct SampleCovariance {
-  int K, D, *count;
-  Matrix *model, *accums, *diagnol;
+  int K, D;
+  unique_ptr<Matrix> accums, diagnol;
+  vector<int> count;
+  vector<double> diff;
+  Matrix *model;
 
-  ~SampleCovariance() { delete []count; delete accums; delete diagnol; }
-  SampleCovariance(Matrix *M) : K(M->M), D(M->N), count(new int[K]), model(M), accums(new Matrix(K, D)), diagnol(0) { Reset(); }
+  SampleCovariance(Matrix *M) : K(M->M), D(M->N), count(K, 0), model(M),
+  accums(make_unique<Matrix>(K, D)) { Reset(); }
 
-  void Reset() { memset(accums->m,0,accums->bytes); memset(count,0,K*sizeof(int)); }
+  void Reset() { memset(accums->m, 0, accums->bytes); memset(&count[0], 0, K*sizeof(int)); }
 
   void AddFeatures(Matrix *features) {
     if (!DimCheck("SampleCovariance", features->N, D)) return;
@@ -78,29 +75,30 @@ struct SampleCovariance {
 
 #if 1
   void AddFeature(double *feature) {
-    int minindex; double mindist, *diff=(double*)alloca(D*sizeof(double));
+    int minindex;
+    double mindist;
+    diff.resize(D);
     KMeans::NearestNeighbor(model, feature, &minindex, &mindist);
 
-    Vector::Sub(model->row(minindex), feature, diff, D);
-    Vector::Mult(diff, diff, D);
-    Vector::Add(accums->row(minindex), diff, D);
+    Vector::Sub(model->row(minindex), feature, diff.data(), D);
+    Vector::Mult(&diff[0], diff.data(), D);
+    Vector::Add(accums->row(minindex), diff.data(), D);
     count[minindex]++;
   }
 #else
   void AddFeature(double *feature) {
-    double *diff=(double*)alloca(D*sizeof(double));
+    diff.resize(D);
     for (int i=0; i<K; i++) {
-      Vector::sub(model->row(i), feature, diff, D);
-      Vector::mult(diff, diff, D);
-      Vector::add(accums->row(i), diff, D);
+      Vector::sub(model->row(i), feature, diff.get(), D);
+      Vector::mult(&diff[0], diff.get(), D);
+      Vector::add(accums->row(i), diff.get(), D);
       count[i]++;
     }
   }
 #endif
 
   void Complete() {
-    if (diagnol) delete diagnol;
-    diagnol = new Matrix(model->M, model->N);
+    diagnol = make_unique<Matrix>(model->M, model->N);
 
     for (int k=0; k<K; k++) {
       if (!count[k]) { Vector::Assign(accums->row(k), FLAGS_CovarFloor, D); continue; }
@@ -114,8 +112,6 @@ struct SampleCovariance {
 struct SampleProb {
   Matrix *means, *diagcovar;
   double prob;
-
-  ~SampleProb() {}
   SampleProb(Matrix *Means, Matrix *Var) : means(Means), diagcovar(Var) { Reset(); }
 
   void Reset() { prob=-INFINITY; }

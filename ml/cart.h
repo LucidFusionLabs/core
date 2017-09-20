@@ -1,5 +1,5 @@
 /*
- * $Id: cart.h 1309 2014-10-10 19:20:55Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -22,7 +22,7 @@ namespace LFL {
 
 /* classification and regression tree */
 struct CART {
-  struct Feature { int ind, count; string name; }; 
+  struct Feature { int ind=0, count=0; string name; }; 
 
   struct FeatureSet {
     virtual int Size() const = 0;
@@ -44,10 +44,9 @@ struct CART {
   struct Tree {
     static const int map_buckets=5, map_values=2;
     QuestionList *inventory;
-    Matrix questions, namemap_data, leafnamemap_data;
+    unique_ptr<Matrix> questions;
+    unique_ptr<vector<string>> name;
     HashMatrix namemap, leafnamemap;
-    vector<string> name;
-    Tree() : namemap(&namemap_data, map_values), leafnamemap(&leafnamemap_data, map_values) {}
   };
 
   static const double *Query(const Tree *model, const Feature *f) {
@@ -56,7 +55,7 @@ struct CART {
       const double *he = model->namemap.Get(fnv32(node.c_str()));
       if (!he) break;
 
-      int ind = he[1], qind = model->questions.row(ind)[0];
+      int ind = he[1], qind = model->questions->row(ind)[0];
       const Question *q = model->inventory->Get(qind);
       node += q->Answer(f) ? "l" : "r";
     }
@@ -66,12 +65,13 @@ struct CART {
 
   static int Read(const char *dir, const char *name, int lastiter, QuestionList *inventory, Tree *out) {
     out->inventory = inventory;
-    Matrix *outp[] = { &out->questions, out->namemap.map, out->leafnamemap.map };
-    vector<string> *outs[] = { &out->name };
-    if (MatrixFile::ReadVersioned(dir, name, "questions",   &outp[0], 0, lastiter)<0) { ERROR(name, ".", lastiter, ".questions"  ); return -1; }
-    if (MatrixFile::ReadVersioned(dir, name, "namemap",     &outp[1], 0, lastiter)<0) { ERROR(name, ".", lastiter, ".namemap"    ); return -1; }
-    if (MatrixFile::ReadVersioned(dir, name, "leafnamemap", &outp[2], 0, lastiter)<0) { ERROR(name, ".", lastiter, ".leafnamemap"); return -1; }
-    if (StringFile::ReadVersioned(dir, name, "name",        &outs[0], 0, lastiter)<0) { ERROR(name, ".", lastiter, ".name"       ); return -1; }
+    unique_ptr<Matrix> namemap_data, leafnamemap_data;
+    if (MatrixFile::ReadVersioned(dir, name, "questions",   &out->questions,   0, lastiter)<0) return ERRORv(-1, name, ".", lastiter, ".questions"  );
+    if (MatrixFile::ReadVersioned(dir, name, "namemap",     &namemap_data,     0, lastiter)<0) return ERRORv(-1, name, ".", lastiter, ".namemap"    );
+    if (MatrixFile::ReadVersioned(dir, name, "leafnamemap", &leafnamemap_data, 0, lastiter)<0) return ERRORv(-1, name, ".", lastiter, ".leafnamemap");
+    if (StringFile::ReadVersioned(dir, name, "name",        &out->name,        0, lastiter)<0) return ERRORv(-1, name, ".", lastiter, ".name"       );
+    out->namemap     = HashMatrix(move(namemap_data),     Tree::map_values);
+    out->leafnamemap = HashMatrix(move(leafnamemap_data), Tree::map_values);
     return 0;
   }
 
@@ -188,21 +188,20 @@ struct CART {
       he[1] = v;
     }
 
-    if (MatrixFile(namemap.map,     flagtext).WriteVersioned(dir, name,     "namemap", iteration)<0) { ERROR(name, " write namemap"    ); return -1; }
-    if (MatrixFile(leafnamemap.map, flagtext).WriteVersioned(dir, name, "leafnamemap", iteration)<0) { ERROR(name, " write leafnamemap"); return -1; }
+    if (MatrixFile(namemap.map.get(),     flagtext).WriteVersioned(dir, name,     "namemap", iteration)<0) { ERROR(name, " write namemap"    ); return -1; }
+    if (MatrixFile(leafnamemap.map.get(), flagtext).WriteVersioned(dir, name, "leafnamemap", iteration)<0) { ERROR(name, " write leafnamemap"); return -1; }
 
     return 0;
   }
 };
 
 struct PhoneticDecisionTree {
-  struct Feature : public CART::Feature { int D; double *mean, *covar; };
+  struct Feature : public CART::Feature { int D=0; double *mean=0, *covar=0; };
 
   struct FeatureSet : public CART::FeatureSet {
-    int N; Feature *S;
-
-    FeatureSet(int n) : N(n), S(new Feature[N]) {}
-    ~FeatureSet() { delete [] S; }
+    int N;
+    vector<Feature> S;
+    FeatureSet(int n) : N(n), S(N, Feature()) {}
 
     int Size() const { return N; }
     CART::Feature *Get(int ind) { return (ind>=0 && ind<N) ? &S[ind] : 0; }
@@ -224,15 +223,14 @@ struct PhoneticDecisionTree {
   };
 
   struct QuestionList : public CART::QuestionList {
-    int N; Question *L;
-
-    QuestionList(int n) : N(n), L(new Question[N]) { name="PhoneticDecisionTree::QuestionList"; }
-    ~QuestionList() { delete [] L; }
+    int N;
+    vector<Question> L;
+    QuestionList(int n) : N(n), L(N, Question()) { name="PhoneticDecisionTree::QuestionList"; }
 
     int Size() const { return N; }
     CART::Question *Get(int ind) { return (ind>=0 && ind<N) ? &L[ind] : 0; }
 
-    static QuestionList *Create() {
+    static unique_ptr<QuestionList> Create() {
       int count=0;
 #     undef  XX
 #     define XX(x) count++;
@@ -240,7 +238,7 @@ struct PhoneticDecisionTree {
 #     define YY(x)
 #     include "core/speech/phonics.h"
 
-      QuestionList *QL = new QuestionList(count);
+      auto QL = make_unique<QuestionList>(count);
       Question *q;
       int phone=-1, ind=0;
 #     undef  XX
@@ -268,47 +266,43 @@ struct PhoneticDecisionTree {
 
     static double Likelihood(CART::FeatureSet *pool, const vector<int> &node) {
       int D = ((Feature *)pool->Get(0))->D;
-      double *mean = (double *)alloca(D*sizeof(double));
-      double *covar = (double *)alloca(D*sizeof(double));
-      double *x = (double *)alloca(D*sizeof(double));
+      vector<double> mean(D, 0), covar(D, 0), x(D, 0);
       double denom = 0;
 
       /* determine node mean */
-      memset(mean, 0, D*sizeof(double));
       for (int i=0; i<node.size(); i++) {
         Feature *f = (Feature *)pool->Get(node[i]);
 
-        Vector::Assign(x, f->mean, D);
-        Vector::Mult(x, f->count, D);
-        Vector::Add(mean, x, D);
+        Vector::Assign(&x[0], f->mean, D);
+        Vector::Mult(&x[0], f->count, D);
+        Vector::Add(&mean[0], x.data(), D);
 
         denom += f->count;
       }
-      Vector::Div(mean, denom, D);
+      Vector::Div(&mean[0], denom, D);
 
       /* determine node covariance */
       denom = 0;
-      memset(covar, 0, D*sizeof(double));
       for (int i=0; i<node.size(); i++) {
         Feature *f = (Feature *)pool->Get(node[i]);
 
-        Vector::Assign(x, f->mean, D);
-        Vector::Mult(x, x, D);
-        Vector::Add(x, f->covar, D);
-        Vector::Mult(x, f->count, D);
-        Vector::Add(covar, x, D);
+        Vector::Assign(&x[0], f->mean, D);
+        Vector::Mult(&x[0], x.data(), D);
+        Vector::Add(&x[0], f->covar, D);
+        Vector::Mult(&x[0], f->count, D);
+        Vector::Add(&covar[0], x.data(), D);
 
         denom += f->count;
       }
-      Vector::Div(covar, denom, D);
+      Vector::Div(&covar[0], denom, D);
 
-      Vector::Assign(x, mean, D);
-      Vector::Mult(x, x, D);
+      Vector::Assign(&x[0], mean.data(), D);
+      Vector::Mult(&x[0], x.data(), D);
 
-      Vector::Sub(covar, x, D);
+      Vector::Sub(&covar[0], x.data(), D);
 
       /* determine node likelihood */ 
-      return -0.5 * ((1 + log(2*M_PI))*D + DiagDet(covar, D)) * denom;
+      return -0.5 * ((1 + log(2*M_PI))*D + DiagDet(covar.data(), D)) * denom;
     }
   };
 };
