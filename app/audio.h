@@ -52,10 +52,11 @@ struct Audio : public Module {
   unique_ptr<Module> impl;
   Audio(ThreadDispatcher *D, AssetLoading *L) : dispatch(D), loader(L), Out(32768)  {}
 
-  int Init ();
-  int Start();
-  int Frame(unsigned);
-  int Free ();
+  int Init()          override;
+  int Start()         override;
+  int Frame(unsigned) override;
+  int Free()          override;
+
   void QueueMix(SoundAsset *sa, int flag=MixFlag::Reset, int offset=-1, int len=-1);
   void QueueMixBuf(const RingSampler::Handle *L, int channels=1, int flag=0);
   int Snapshot(SoundAsset *sa);
@@ -75,7 +76,7 @@ double HighPassFilter(int n, int i, int minfreq);
 inline vector<double> PreEmphasisFilter(double fv) { vector<double> v { 1, fv }; return v; }
 float PseudoEnergy(const RingSampler::Handle *in, int window, int offset);
 int ZeroCrossings(const RingSampler::Handle *in, int window, int offset);
-RingSampler *Decimate(const RingSampler::Handle *in, int factor);
+unique_ptr<RingSampler> Decimate(const RingSampler::Handle *in, int factor);
 int CrossCorrelateTDOA(const RingSampler::Handle *a, const RingSampler::Handle *b, int window, int offset, int samps);
 
 struct AudioResamplerInterface {
@@ -120,11 +121,11 @@ int IFFT(const Complex *in, int i, int window, int hop, int fftlen, RingSampler:
 void FFTFilterCompile(int n, double *filter);
 int FFTFilter(const RingSampler::Handle *in, RingSampler::Handle *out, int window, int hop, const double *filter);
 
-Matrix *Spectogram(const RingSampler::Handle *in, Matrix *out, int window, int hop, int fftlen,
-                   const vector<double> &preemph=vector<double>(), int pd=PowerDomain::dB, int scale=1);
-RingSampler *ISpectogram(const Matrix *in, int window, int hop, int fftlen, int samplerate);
+unique_ptr<Matrix> Spectogram(const RingSampler::Handle *in, Matrix *out, int window, int hop, int fftlen,
+                              const vector<double> &preemph=vector<double>(), int pd=PowerDomain::dB, int scale=1);
+unique_ptr<RingSampler> ISpectogram(const Matrix *in, int window, int hop, int fftlen, int samplerate);
 
-Matrix *F0Stream(const RingSampler::Handle *in, Matrix *out, int window, int hop, int method=F0EstmMethod::Default);
+unique_ptr<Matrix> F0Stream(const RingSampler::Handle *in, Matrix *out, int window, int hop, int method=F0EstmMethod::Default);
 float FundamentalFrequency(const RingSampler::Handle *in, int window, int offset, int method=F0EstmMethod::Default);
 
 unique_ptr<AudioResamplerInterface> CreateAudioResampler();

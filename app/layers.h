@@ -196,13 +196,13 @@ template<class CB, class CBL, class CBLI, class CBLCA> struct TilesT : public Ti
     return *ret;
   }
 
-  void ContextOpen() {
+  void ContextOpen() override {
     TilesMatrixIter(&mat) { if (tile->cb.dirty) tile->dirty = 1; tile->cb.dirty = 0; }
     if (++context_depth < prepend.size()) { prepend[context_depth]->cb.Clear(); append[context_depth]->cb.Clear(); }
     else { prepend.push_back(new Tile(ca)); append.push_back(new Tile(ca)); CHECK_LT(context_depth, prepend.size()); }
   }
 
-  void ContextClose() {
+  void ContextClose() override {
     CHECK_GE(context_depth, 0);
     TilesMatrixIter(&mat) {
       if (tile->cb.dirty) tile->dirty = 1;
@@ -215,7 +215,7 @@ template<class CB, class CBL, class CBLI, class CBLCA> struct TilesT : public Ti
     context_depth--;
   }
 
-  void Run(int flag) {
+  void Run(int flag) override {
     bool clear_empty = (flag & RunFlag::ClearEmpty);
     Select();
     TilesMatrixIter(&mat) {
@@ -251,7 +251,7 @@ template<class CB, class CBL, class CBLI, class CBLCA> struct TilesT : public Ti
 
   void Release() { fb.Release(); }
 
-  void Draw(const Box &viewport, const point &docp) {
+  void Draw(const Box &viewport, const point &docp) override {
     auto gd = fb.parent->GD();
     int x1, x2, y1, y2, sx, sy;
     point doc_to_view = docp - viewport.Position();
@@ -276,17 +276,17 @@ template<class CB, class CBL, class CBLI, class CBLCA> struct TilesT : public Ti
 struct Tiles : public TilesT<Callback, CallbackList, CallbackList, Void> {
   const Drawable::Attr *attr=0;
   Tiles(ProcessAPI*, ThreadDispatcher*, GraphicsDeviceHolder *d, int l, int w=256, int h=256) : TilesT(d, nullptr, l, w, h) {}
-  void SetAttr           (const Drawable::Attr *a) { attr=a; }
-  void InitDrawBox       (const point&);
-  void InitDrawBackground(const point&);
-  void DrawBox           (GraphicsContext*, const Drawable*, const Box&);
-  void DrawBackground    (GraphicsDevice*,  const Box&);
-  void AddScissor        (const Box&);
+  void SetAttr           (const Drawable::Attr *a) override { attr=a; }
+  void InitDrawBox       (const point&) override;
+  void InitDrawBackground(const point&) override;
+  void DrawBox           (GraphicsContext*, const Drawable*, const Box&) override;
+  void DrawBackground    (GraphicsDevice*,  const Box&) override;
+  void AddScissor        (const Box&) override;
 };
 
 template <class X> struct LayersT : public LayersInterface {
   using LayersInterface::LayersInterface;
-  void Init(ProcessAPI *A, ThreadDispatcher *D, GraphicsDeviceHolder *G, int N=1) {
+  void Init(ProcessAPI *A, ThreadDispatcher *D, GraphicsDeviceHolder *G, int N=1) override {
     CHECK_EQ(this->layer.size(), 0);
     for (int i=0; i<N; i++) this->layer.emplace_back(make_unique<X>(A, D, G, i));
   }

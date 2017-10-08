@@ -72,14 +72,14 @@ struct MultiProcessFileResource : public SerializableProto {
   MultiProcessFileResource(ProcessAPI*, const string &b, const string &n, const string &t) :
     SerializableProto(Type), buf(b), name(n), type(t) {}
 
-  int HeaderSize() const { return sizeof(int) * 3; }
-  int Size() const { return HeaderSize() + 3 + buf.size() + name.size() + type.size(); }
+  int HeaderSize() const override { return sizeof(int) * 3; }
+  int Size() const override { return HeaderSize() + 3 + buf.size() + name.size() + type.size(); }
 
-  void Out(Serializable::Stream *o) const {
+  void Out(Serializable::Stream *o) const override {
     o->Htonl   (buf.size()); o->Htonl   (name.size()); o->Htonl   (type.size());
     o->NTString(buf);        o->NTString(name);        o->NTString(type);
   }
-  int In(const Serializable::Stream *i) {
+  int In(const Serializable::Stream *i) override {
     /**/      i->Ntohl(&buf.len); /**/         i->Ntohl(&name.len); /**/         i->Ntohl(&type.len);
     buf.buf = i->Get  ( buf.len+1); name.buf = i->Get  ( name.len+1); type.buf = i->Get  ( type.len+1);
     return i->Result();
@@ -96,15 +96,15 @@ struct MultiProcessTextureResource : public SerializableProto {
     SerializableProto(Type), width(t.width), height(t.height), pf(t.pf), linesize(t.LineSize()),
     buf(MakeSigned(t.buf), t.BufferSize()), parent(p) {}
 
-  int HeaderSize() const { return sizeof(int) * 4; }
-  int Size() const { return HeaderSize() + buf.size(); }
+  int HeaderSize() const override { return sizeof(int) * 4; }
+  int Size() const override { return HeaderSize() + buf.size(); }
 
-  void Out(Serializable::Stream *o) const {
+  void Out(Serializable::Stream *o) const override {
     CHECK_EQ(linesize * height, buf.len);
     o->Htonl(width); o->Htonl(height); o->Htonl(pf); o->Htonl(linesize);
     o->String(buf);
   }
-  int In(const Serializable::Stream *i) {
+  int In(const Serializable::Stream *i) override {
     i->Ntohl(&width); i->Ntohl(&height); i->Ntohl(&pf); i->Ntohl(&linesize);
     buf.buf = i->Get((buf.len = linesize * height));
     return i->Result();
@@ -145,10 +145,10 @@ struct MultiProcessPaintResource : public SerializableProto {
   ProcessAPI *parent;
   MultiProcessPaintResource(ProcessAPI *p) : SerializableProto(Type), parent(p) {}
 
-  void Out(Serializable::Stream *o) const { o->BString(data.buf); }
-  int In(const Serializable::Stream *i) { i->ReadString(&data.buf); return i->Result(); }
-  int Size() const { return HeaderSize() + data.buf.size(); }
-  int HeaderSize() const { return sizeof(int); }
+  void Out(Serializable::Stream *o) const override { o->BString(data.buf); }
+  int In(const Serializable::Stream *i) override { i->ReadString(&data.buf); return i->Result(); }
+  int Size() const override { return HeaderSize() + data.buf.size(); }
+  int HeaderSize() const override { return sizeof(int); }
   int Run(GraphicsDevice*, const Box&) const;
 
   static int CmdSize(int n) {
@@ -185,11 +185,11 @@ struct MultiProcessLayerTree : public SerializableProto {
   MultiProcessLayerTree(ProcessAPI*, const vector<LayersInterface::Node> &n, const vector<LayersInterface::Child> &c) :
     SerializableProto(Type), node_data(&n[0], n.size()), child_data(&c[0], c.size()) {}
 
-  void Out(Serializable::Stream *o) const { o->AString(node_data); o->AString(child_data); }
-  int In(const Serializable::Stream *i)
+  void Out(Serializable::Stream *o) const override { o->AString(node_data); o->AString(child_data); }
+  int In(const Serializable::Stream *i) override
   { i->ReadUnalignedArray(&node_data); i->ReadUnalignedArray(&child_data); return i->Result(); }
-  int Size() const { return HeaderSize() + node_data.Bytes() + child_data.Bytes(); }
-  int HeaderSize() const { return sizeof(int)*2; }
+  int Size() const override { return HeaderSize() + node_data.Bytes() + child_data.Bytes(); }
+  int HeaderSize() const override { return sizeof(int)*2; }
   void AssignTo(LayersInterface *layers) const {
     layers->node .assign(node_data .data(), node_data .data() + node_data .size());
     layers->child.assign(child_data.data(), child_data.data() + child_data.size());
@@ -201,12 +201,12 @@ struct TilesIPC : public TilesT<MultiProcessPaintResource::Cmd, MultiProcessPain
   ThreadDispatcher *dispatch;
   TilesIPC(ProcessAPI *P, ThreadDispatcher *D, GraphicsDeviceHolder *d, int l, int w=256, int h=256) :
     TilesT(d, P, l, w, h), dispatch(D) {}
-  void SetAttr           (const Drawable::Attr*);
-  void InitDrawBox       (const point&);
-  void InitDrawBackground(const point&);
-  void DrawBox           (GraphicsContext*, const Drawable*, const Box&);
-  void DrawBackground    (GraphicsDevice*,  const Box&);
-  void AddScissor        (const Box&);
+  void SetAttr           (const Drawable::Attr*) override;
+  void InitDrawBox       (const point&) override;
+  void InitDrawBackground(const point&) override;
+  void DrawBox           (GraphicsContext*, const Drawable*, const Box&) override;
+  void DrawBackground    (GraphicsDevice*,  const Box&) override;
+  void AddScissor        (const Box&) override;
 };
 
 struct TilesIPCServer : public TilesIPC { using TilesIPC::TilesIPC; };

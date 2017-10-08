@@ -1,5 +1,5 @@
 /*
- * $Id: scene.h 1335 2014-12-02 04:13:46Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -103,7 +103,7 @@ struct Entity {
 
 struct Scene {
   typedef vector<Entity*> EntityVector;
-  typedef map<string, Entity*> EntityMap;
+  typedef map<string, unique_ptr<Entity>> EntityMap;
   typedef map<string, EntityVector> EntityAssetMap;
 
   struct EntityFilter { virtual bool Filter(Entity *e) = 0; };
@@ -132,9 +132,9 @@ struct Scene {
   EntityVector zsort;
   Scene() : cam(v3(5.54, 1.70, 4.39), v3(-.51, -.03, -.49), v3(-.03, 1, -.03)) {}
 
-  Entity *Get(const string &n) { return FindOrNull(entity, n); }
-  Entity *Add(Entity *e) { return Add(e->name, e); }
-  Entity *Add(const string &name, Entity *);
+  Entity *Get(const string &n) { return FindUniqueOrNull(entity, n); }
+  Entity *Add(unique_ptr<Entity> e) { return Add(e->name, move(e)); }
+  Entity *Add(const string &name, unique_ptr<Entity>);
   bool ChangeAsset(const string &entity_name, Asset *new_asset);
   bool ChangeAsset(Entity *e, Asset *new_asset);
   void Del(const string &name);

@@ -330,18 +330,18 @@ struct ToolkitInterface {
 };
 
 struct SystemToolkit : public ToolkitInterface {
-  unique_ptr<AlertViewInterface> CreateAlert(Window*, AlertItemVec items);
-  unique_ptr<PanelViewInterface> CreatePanel(Window*, const Box&, const string &title, PanelItemVec);
-  unique_ptr<ToolbarViewInterface> CreateToolbar(Window*, const string &theme, MenuItemVec items, int flag);
-  unique_ptr<MenuViewInterface> CreateMenu(Window*, const string &title, MenuItemVec items);
-  unique_ptr<MenuViewInterface> CreateEditMenu(Window*, MenuItemVec items);
+  unique_ptr<AlertViewInterface> CreateAlert(Window*, AlertItemVec items) override;
+  unique_ptr<PanelViewInterface> CreatePanel(Window*, const Box&, const string &title, PanelItemVec) override;
+  unique_ptr<ToolbarViewInterface> CreateToolbar(Window*, const string &theme, MenuItemVec items, int flag) override;
+  unique_ptr<MenuViewInterface> CreateMenu(Window*, const string &title, MenuItemVec items) override;
+  unique_ptr<MenuViewInterface> CreateEditMenu(Window*, MenuItemVec items) override;
   unique_ptr<CollectionViewInterface> CreateCollectionView
-    (Window*, const string &title, const string &style, const string &theme, vector<CollectionItem> items);
+    (Window*, const string &title, const string &style, const string &theme, vector<CollectionItem> items) override;
   unique_ptr<TableViewInterface> CreateTableView
-    (Window*, const string &title, const string &style, const string &theme, TableItemVec items);
-  unique_ptr<TextViewInterface> CreateTextView(Window*, const string &title, File *file);
-  unique_ptr<TextViewInterface> CreateTextView(Window*, const string &title, const string &text);
-  unique_ptr<NavigationViewInterface> CreateNavigationView(Window*, const string &style, const string &theme);
+    (Window*, const string &title, const string &style, const string &theme, TableItemVec items) override;
+  unique_ptr<TextViewInterface> CreateTextView(Window*, const string &title, File *file) override;
+  unique_ptr<TextViewInterface> CreateTextView(Window*, const string &title, const string &text) override;
+  unique_ptr<NavigationViewInterface> CreateNavigationView(Window*, const string &style, const string &theme) override;
 
   static void DisableAdvertisingCrashReporting();
   static unique_ptr<TimerInterface> CreateTimer(Callback cb);

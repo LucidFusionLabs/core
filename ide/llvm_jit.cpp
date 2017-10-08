@@ -106,13 +106,16 @@ struct JIT {
     fprintf(stderr, "MyAppMain returns %d\n", ret);
     return ret;
   }
-} *my_jit;
+};
+
+unique_ptr<JIT> my_jit;
 
 }; // namespace LFL
 using namespace LFL;
 
-extern "C" void MyAppCreate(int argc, const char* const* argv) {
-  my_jit = new JIT(argc, argv);
+extern "C" LFApp *MyAppCreate(int argc, const char* const* argv) {
+  my_jit = make_unique<JIT>(argc, argv);
+  return nullptr;
 }
 
 extern "C" int MyAppMain() {

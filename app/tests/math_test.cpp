@@ -101,14 +101,14 @@ TEST(MatrixTest, Multipy) {
   { double *r = B.row(1); r[0] = 1; r[1] =  2; }
   { double *r = B.row(2); r[0] = 6; r[1] =  1; }
 
-  EXPECT_EQ(&C, Matrix::Mult(&A, &B, &C));
+  EXPECT_EQ(true, Matrix::Mult(&A, &B, &C));
   { double *r = C.row(0); EXPECT_EQ(11, r[0]); EXPECT_EQ( 0, r[1]); }
   { double *r = C.row(1); EXPECT_EQ(35, r[0]); EXPECT_EQ(20, r[1]); }
 }
 
 TEST(MatrixTest, Convolve) {
   Matrix A(10, 10, 1), B(3, 3, 1), C(A.M, A.N);
-  EXPECT_EQ(&C, Matrix::Convolve(&A, &B, &C));
+  EXPECT_EQ(true, Matrix::Convolve(&A, &B, &C));
   MatrixIter(&C) {
     bool border_i = (i == 0 || i == C.M-1), border_j = (j == 0 || j == C.N-1);
     if      (border_i && border_j) EXPECT_EQ(4, C.row(i)[j]);

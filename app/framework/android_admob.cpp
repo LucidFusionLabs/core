@@ -19,7 +19,7 @@
 #include "core/app/framework/android_toolkit.h"
 
 namespace LFL {
-static JNI *jni = Singleton<JNI>::Get();
+static JNI *jni = Singleton<JNI>::Set();
 
 struct AndroidAdvertisingView : public AdvertisingViewInterface {
   GlobalJNIObject impl;

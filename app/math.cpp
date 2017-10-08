@@ -1,5 +1,5 @@
 /*
- * $Id: math.cpp 1335 2014-12-02 04:13:46Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -353,8 +353,8 @@ double fft_abs2(int fftlen, int index, float r, float i) {
 double fft_abs2(const float  *a, int fftlen, int index) { return fft_abs2(fftlen, index, fft_r(a, fftlen, index), fft_i(a, fftlen, index)); }
 double fft_abs2(const double *a, int fftlen, int index) { return fft_abs2(fftlen, index, fft_r(a, fftlen, index), fft_i(a, fftlen, index)); }
 
-Matrix *IDFT(int rows, int cols) {
-  Matrix *m = new Matrix(rows, cols);
+unique_ptr<Matrix> IDFT(int rows, int cols) {
+  auto m = make_unique<Matrix>(rows, cols);
   MatrixIter(m) {
     m->row(i)[j] = !j ? 1.0 : cos(M_PI * i * j / (cols-1)) * (j == cols-1 ? 1 : 2);
   }
@@ -362,8 +362,8 @@ Matrix *IDFT(int rows, int cols) {
 }
 
 /* DCT3 is transpose of DCT2 */
-Matrix *DCT2(int rows, int cols) {
-  Matrix *m = new Matrix(rows, cols);
+unique_ptr<Matrix> DCT2(int rows, int cols) {
+  auto m = make_unique<Matrix>(rows, cols);
   MatrixIter(m) { 
     m->row(i)[j] = cos(M_PI * i * (-1+(j+1)*2) / (2*cols)) * sqrt(2.0/cols);	
   }
@@ -411,14 +411,13 @@ double GmmPdfEval(const Matrix *means, const Matrix *diagcovar,
 }
 
 void MeanNormalizeRows(const Matrix *in, Matrix *out) {
-  double *mean = new double[in->N];
+  vector<double> mean(in->N);
   MatrixIter(in) mean[j] += in->row(i)[j];
   MatrixColIter(in) mean[j] /= in->M;
   MatrixIter(out) out->row(i)[j] = in->row(i)[j] - mean[j];
-  delete [] mean;
 }
 
-Matrix *PCA(const Matrix *obv, Matrix *projected, double *var) {
+unique_ptr<Matrix> PCA(const Matrix *obv, Matrix *projected, double *var) {
   Matrix A(obv->M, obv->N), D(obv->N, 1), U(obv->M, obv->M), V(obv->N, obv->N);
   MeanNormalizeRows(obv, &A);
 

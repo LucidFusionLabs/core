@@ -716,7 +716,7 @@ bool OSXWindow::Reshape(int w, int h) {
 }
 
 void ThreadDispatcher::RunCallbackInMainThread(Callback cb) {
-  message_queue.Write(new Callback(move(cb)));
+  message_queue.Write(make_unique<Callback>(move(cb)).release());
   if (!FLAGS_target_fps) wakeup->Wakeup();
 }
 

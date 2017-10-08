@@ -93,31 +93,47 @@ struct BufferFile : public File {
   BufferFile(const StringPiece &s, const char *FN=0) : ptr(s), fn(FN?FN:""), owner(0) {}
   ~BufferFile() { Close(); }
 
-  bool Opened() const { return true; }
-  bool Open(const string &path, const string &mode, bool pre_create=0) { return false; }
-  const char *Filename() const { return fn.c_str(); }
-  int Size() { return owner ? buf.size() : ptr.len; }
-  void Reset() { rdo=wro=0; }
-  void Close() { ptr.assign(0,0); buf.clear(); Reset(); }
+  bool Opened() const override { return true; }
+  bool Open(const string &path, const string &mode, bool pre_create=0) override { return false; }
+  const char *Filename() const override { return fn.c_str(); }
+  int Size() override { return owner ? buf.size() : ptr.len; }
+  void Reset() override { rdo=wro=0; }
+  void Close() override { ptr.assign(0,0); buf.clear(); Reset(); }
 
-  long long Seek(long long pos, int whence);
-  int Read(void *out, size_t size);
-  int Write(const void *in, size_t size=-1);
+  long long Seek(long long pos, int whence) override;
+  int Read(void *out, size_t size) override;
+  int Write(const void *in, size_t size=-1) override;
 
-  unique_ptr<File> Create();
-  bool ReplaceWith(unique_ptr<File>);
+  unique_ptr<File> Create() override;
+  bool ReplaceWith(unique_ptr<File>) override;
 };
 
 struct LocalFile : public File {
+  static const char Slash, ExecutableSuffix[];
+
   void *impl;
   string fn;
   bool writable;
   virtual ~LocalFile() { Close(); }
   LocalFile() : impl(0), writable(0) {}
   LocalFile(const string &path, const string &mode, bool pre_create=0) : impl(0) { Open(path, mode, pre_create); }
-  static int WhenceMap(int n);
 
-  static const char Slash, ExecutableSuffix[];
+  bool Opened() const override { return impl; }
+  bool Open(const string &path, const string &mode, bool pre_create=0) override;
+  const char *Filename() const override { return fn.c_str(); }
+  int Size() override;
+  void Reset() override;
+  void Close() override;
+
+  long long Seek(long long pos, int whence) override;
+  int Read(void *buf, size_t size) override;
+  int Write(const void *buf, size_t size=-1) override;
+  bool Flush() override;
+
+  unique_ptr<File> Create() override;
+  bool ReplaceWith(unique_ptr<File>) override;
+
+  static int WhenceMap(int n);
   static bool mkdir(const string &dir, int mode);
   static bool unlink(const string &fn);
   static int IsFile(const string &localfilename);
@@ -132,21 +148,6 @@ struct LocalFile : public File {
     LocalFile file(path, "w");
     return file.Opened() ? file.Write(sp.data(), sp.size()) : -1;
   }
-
-  bool Opened() const { return impl; }
-  bool Open(const string &path, const string &mode, bool pre_create=0);
-  const char *Filename() const { return fn.c_str(); }
-  int Size();
-  void Reset();
-  void Close();
-
-  long long Seek(long long pos, int whence);
-  int Read(void *buf, size_t size);
-  int Write(const void *buf, size_t size=-1);
-  bool Flush();
-
-  unique_ptr<File> Create();
-  bool ReplaceWith(unique_ptr<File>);
 };
 
 struct SearchPaths {
@@ -159,42 +160,42 @@ struct FileLineIter : public StringIter {
   File *f;
   NextRecordReader nr;
   FileLineIter(File *F, int fo=0) : f(F), nr(f, fo) {}
-  const char *Next() { return nr.NextLine(); }
-  void Reset() { f->Reset(); nr.Reset(); }
-  bool Done() const { return nr.buf_offset < 0; }
-  const char *Begin() const { return 0; }
-  const char *Current() const { return nr.buf.c_str() + nr.record_offset; }
-  int CurrentOffset() const { return nr.file_offset; }
-  int CurrentLength() const { return nr.record_len; }
-  int TotalLength() const { return 0; }
+  const char *Next() override { return nr.NextLine(); }
+  void Reset() override { f->Reset(); nr.Reset(); }
+  bool Done() const override { return nr.buf_offset < 0; }
+  const char *Begin() const override { return 0; }
+  const char *Current() const override { return nr.buf.c_str() + nr.record_offset; }
+  int CurrentOffset() const override { return nr.file_offset; }
+  int CurrentLength() const override { return nr.record_len; }
+  int TotalLength() const override { return 0; }
 };
 
 struct LocalFileLineIter : public StringIter {
   LocalFile f;
   NextRecordReader nr;
   LocalFileLineIter(const string &path) : f(path, "r"), nr(&f) {};
-  const char *Next() { return nr.NextLine(); }
-  void Reset() { f.Reset(); nr.Reset(); }
-  bool Done() const { return nr.buf_offset < 0; }
-  const char *Begin() const { return 0; }
-  const char *Current() const { return nr.buf.c_str() + nr.record_offset; }
-  int CurrentOffset() const { return nr.file_offset; }
-  int CurrentLength() const { return nr.record_len; }
-  int TotalLength() const { return 0; }
+  const char *Next() override { return nr.NextLine(); }
+  void Reset() override { f.Reset(); nr.Reset(); }
+  bool Done() const override { return nr.buf_offset < 0; }
+  const char *Begin() const override { return 0; }
+  const char *Current() const override { return nr.buf.c_str() + nr.record_offset; }
+  int CurrentOffset() const override { return nr.file_offset; }
+  int CurrentLength() const override { return nr.record_len; }
+  int TotalLength() const override { return 0; }
 };
 
 struct BufferFileLineIter : public StringIter {
   BufferFile f;
   NextRecordReader nr;
   BufferFileLineIter(const string &s) : f(s), nr(&f) {};
-  const char *Next() { return nr.NextLine(); }
-  void Reset() { f.Reset(); nr.Reset(); }
-  bool Done() const { return nr.buf_offset < 0; }
-  const char *Begin() const { return 0; }
-  const char *Current() const { return nr.buf.c_str() + nr.record_offset; }
-  int CurrentOffset() const { return nr.file_offset; }
-  int CurrentLength() const { return nr.record_len; }
-  int TotalLength() const { return 0; }
+  const char *Next() override { return nr.NextLine(); }
+  void Reset() override { f.Reset(); nr.Reset(); }
+  bool Done() const override { return nr.buf_offset < 0; }
+  const char *Begin() const override { return 0; }
+  const char *Current() const override { return nr.buf.c_str() + nr.record_offset; }
+  int CurrentOffset() const override { return nr.file_offset; }
+  int CurrentLength() const override { return nr.record_len; }
+  int TotalLength() const override { return 0; }
 };
 
 struct DirectoryIter {

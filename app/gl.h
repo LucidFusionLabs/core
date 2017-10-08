@@ -142,7 +142,7 @@ struct Drawable {
     AttrSource *source=0;
     RefSet font_refs;
     AttrVec() {}
-    const Attr *GetAttr(int attr_id) const { return source ? source->GetAttr(attr_id) : &(*this)[attr_id-1]; }
+    const Attr *GetAttr(int attr_id) const override { return source ? source->GetAttr(attr_id) : &(*this)[attr_id-1]; }
     int GetAttrId(const Attr &v) { CHECK(!source); if (empty() || this->back() != v) Insert(v); return size(); }
     void Insert(const Attr &v);
   };
@@ -176,7 +176,7 @@ struct GraphicsContext {
 };
 
 struct DrawableNop : public Drawable {
-  void Draw(GraphicsContext*, const LFL::Box &B) const {}
+  void Draw(GraphicsContext*, const LFL::Box &B) const override {}
 };
 
 struct Texture : public Drawable {
@@ -194,7 +194,7 @@ struct Texture : public Drawable {
   virtual ~Texture() { Clear(); }
 
   void Bind() const;
-  int TexId() const { return ID; }
+  int TexId() const override { return ID; }
   string CoordString() const { return StrCat("[", coord[0], ", ", coord[1], ", ", coord[2], ", ", coord[3], "]"); } 
   string DebugString() const { return StrCat("Texture(", ID, ": ", width, ", ", height, ", ", Pixel::Name(pf), ", ", CoordString(), ")"); }
   string HexDump() const { string v; for (int ls=LineSize(), i=0; i<height; i++) StrAppend(&v, Vec<unsigned char>::Str(buf+i*ls, ls, "%02x"), "\n"); return v; }
@@ -238,10 +238,10 @@ struct Texture : public Drawable {
   void UpdateGL() { UpdateGL(LFL::Box(0, 0, width, height)); }
   void LoadGL(int flag=0) { LoadGL(buf, point(width, height), pf, LineSize(), flag); }
 
-  virtual int Id() const { return 0; }
-  virtual int LayoutAtPoint(const point &p, LFL::Box *out) const { *out = LFL::Box(p, width, height); return width; } 
-  virtual void Draw(GraphicsContext *gc, const LFL::Box &b) const { Bind(); gc->DrawTexturedBox(b, coord); }
+  int Id() const override { return 0; }
+  void Draw(GraphicsContext *gc, const LFL::Box &b) const override { Bind(); gc->DrawTexturedBox(b, coord); }
   virtual void DrawCrimped(GraphicsDevice *d, const LFL::Box &b, int ort, float sx, float sy) const { Bind(); GraphicsContext::DrawCrimpedBox1(d, b, coord, ort, sx, sy); }
+  virtual int LayoutAtPoint(const point &p, LFL::Box *out) const { *out = LFL::Box(p, width, height); return width; } 
 
 #ifdef LFL_APPLE
   CGContextRef CGBitMap();

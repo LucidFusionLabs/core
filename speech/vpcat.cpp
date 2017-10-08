@@ -71,7 +71,7 @@ extern "C" int MyAppMain() {
     LOAD_ACOUSTIC_MODEL(model, FLAGS_lastiter);
     if (FLAGS_lastiter < 0) FATAL("no acoustic model: ", FLAGS_lastiter);
 
-    for (int i=0; i<model.states; i++) {
+    for (int i=0; i<model.state.size(); i++) {
       HMM::ActiveStateIndex active(1,1,1);
       HMM::ActiveState::Iterator src(i);
       AcousticModel::State *s1 = &model.state[i];

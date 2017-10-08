@@ -47,7 +47,7 @@ struct View : public Drawable {
   void UpdateBoxY(int y, int draw_box_ind, int input_box_ind);
   void IncrementBoxY(int y, int draw_box_ind, int input_box_ind);
 
-  virtual bool Activate()   { if ( active) return 0; active = 1; return 1; }
+  virtual bool Activate() { if ( active) return 0; active = 1; return 1; }
   virtual bool Deactivate() { if (!active) return 0; active = 0; return 1; }
   virtual bool NotActive(const point &p) const { return !active; }
   virtual bool ToggleActive() { if ((active = !active)) Activate(); else Deactivate(); return active; }
@@ -55,7 +55,7 @@ struct View : public Drawable {
   virtual void SetLayoutDirty() { child_box.Clear(); }
   virtual void LayoutBox(const Box &b) { box=b; Layout(); }
   virtual void Layout() {}
-  virtual void Draw(GraphicsContext*, const LFL::Box&) const { const_cast<View*>(this)->Draw(); }
+  virtual void Draw(GraphicsContext*, const LFL::Box&) const override { const_cast<View*>(this)->Draw(); }
   virtual void Draw();
   virtual void ResetGL(int flag) {}
   virtual void HandleTextMessage(const string &s) {}
@@ -167,7 +167,7 @@ struct TextBox : public View, public TextboxController {
     Colors *colors=0;
     mutable Drawable::Attr last_attr;
     Style(const FontRef &F) : font(F) {}
-    virtual const Drawable::Attr *GetAttr(int attr) const;
+    virtual const Drawable::Attr *GetAttr(int attr) const override;
   };
 
   struct Control : public Widget::Interface {
@@ -244,9 +244,9 @@ struct TextBox : public View, public TextboxController {
     function<void(Line&, Line&)> move_cb, movep_cb;
     Lines(TextBox *P, int N);
 
-    void Resize(int s);
+    void Resize(int s) override;
     void SetAttrSource(Drawable::AttrSource *s);
-    Line *PushFront() { Line *l = RingVector::PushFront(); l->Clear(); return l; }
+    Line *PushFront() override { Line *l = RingVector::PushFront(); l->Clear(); return l; }
     Line *InsertAt(int dest_line, int lines=1, int dont_move_last=0);
     static int GetBackLineLines(const Lines &l, int i) { return l[-i-1].Lines(); }
   };
@@ -259,7 +259,7 @@ struct TextBox : public View, public TextboxController {
     bool align_top_or_bot=1, partial_last_line=1, wrap=0, only_grow=0;
     LinesFrameBuffer(GraphicsDeviceHolder *d) : RingFrameBuffer(d) {}
     LinesFrameBuffer *Attach(LinesFrameBuffer **last_fb);
-    virtual int SizeChanged(int W, int H, Font *font, ColorDesc bgc);
+    virtual int SizeChanged(int W, int H, Font *font, ColorDesc bgc) override;
     tvirtual void Clear(Line *l) { RingFrameBuffer::Clear(l, Box(w, l->Lines() * font_height), true); }
     tvirtual void Update(Line *l, int flag=0);
     tvirtual void Update(Line *l, const point &p, int flag=0) { l->p=p; Update(l, flag); }
@@ -327,24 +327,24 @@ struct TextBox : public View, public TextboxController {
   TextBox(Window *W, const FontRef &F=FontRef(), int LC=10);
   virtual ~TextBox() { if (root) Deactivate(); }
 
-  virtual point RelativePosition(const point&) const;
-  virtual int CommandLines() const { return 0; }
+  virtual point RelativePosition(const point&) const override;
   virtual void Run(const string &cmd) { if (runcb) runcb(cmd); }
-  virtual bool NotActive(const point &p) const { return !box.within(p) && mouse.drag.empty(); }
+  virtual int CommandLines() const { return 0; }
+  virtual bool NotActive(const point &p) const override { return !box.within(p) && mouse.drag.empty(); }
   virtual bool Active() const { return root->active_textbox == this; }
-  virtual bool Activate()   { if ( Active()) return 0; if (auto g = dynamic_cast<View*>(root->active_textbox)) g->Deactivate(); root->active_textbox = this; return 1; }
-  virtual bool Deactivate() { if (!Active()) return 0; root->active_textbox = root->default_textbox(); return 1; }
-  virtual bool ToggleActive() { if (!Active()) Activate(); else Deactivate(); return Active(); }
-  virtual void Input(char k) { cmd_line.UpdateText(cursor.i.x++, String16(1, *MakeUnsigned<char>(&k)), cursor.attr); UpdateCommandFB(); UpdateCursor(); }
-  virtual void Erase()       { if (!cursor.i.x) return; cmd_line.Erase(--cursor.i.x, 1); UpdateCommandFB(); UpdateCursor(); }
-  virtual void CursorRight() { UpdateCursorX(min(cursor.i.x+1, cmd_line.Size())); }
-  virtual void CursorLeft()  { UpdateCursorX(max(cursor.i.x-1, 0)); }
-  virtual void Home()        { UpdateCursorX(0); }
-  virtual void End()         { UpdateCursorX(cmd_line.Size()); }
-  virtual void HistUp()      { if (int c=cmd_last.ring.count) { AssignInput(cmd_last[cmd_last_ind]); cmd_last_ind=max(cmd_last_ind-1, -c); } }
-  virtual void HistDown()    { if (int c=cmd_last.ring.count) { AssignInput(cmd_last[cmd_last_ind]); cmd_last_ind=min(cmd_last_ind+1, -1); } }
-  virtual void Enter();
-  virtual void Tab() {}
+  virtual bool Activate() override { if ( Active()) return 0; if (auto g = dynamic_cast<View*>(root->active_textbox)) g->Deactivate(); root->active_textbox = this; return 1; }
+  virtual bool Deactivate() override { if (!Active()) return 0; root->active_textbox = root->default_textbox(); return 1; }
+  virtual bool ToggleActive() override { if (!Active()) Activate(); else Deactivate(); return Active(); }
+  virtual void Input(char k) override { cmd_line.UpdateText(cursor.i.x++, String16(1, *MakeUnsigned<char>(&k)), cursor.attr); UpdateCommandFB(); UpdateCursor(); }
+  virtual void Erase()       override { if (!cursor.i.x) return; cmd_line.Erase(--cursor.i.x, 1); UpdateCommandFB(); UpdateCursor(); }
+  virtual void CursorRight() override { UpdateCursorX(min(cursor.i.x+1, cmd_line.Size())); }
+  virtual void CursorLeft()  override { UpdateCursorX(max(cursor.i.x-1, 0)); }
+  virtual void Home()        override { UpdateCursorX(0); }
+  virtual void End()         override { UpdateCursorX(cmd_line.Size()); }
+  virtual void HistUp()      override { if (int c=cmd_last.ring.count) { AssignInput(cmd_last[cmd_last_ind]); cmd_last_ind=max(cmd_last_ind-1, -c); } }
+  virtual void HistDown()    override { if (int c=cmd_last.ring.count) { AssignInput(cmd_last[cmd_last_ind]); cmd_last_ind=min(cmd_last_ind+1, -1); } }
+  virtual void Enter()       override;
+  virtual void Tab()         override {}
 
   virtual String16 Text16() const { return cmd_line.Text16(); }
   virtual void AssignInput(const string &text) { cmd_line.AssignText(text); UpdateCommandFB(); UpdateCursorX(cmd_line.Size()); }
@@ -352,12 +352,12 @@ struct TextBox : public View, public TextboxController {
 
   virtual const LinesFrameBuffer *GetFrameBuffer() const { return &cmd_fb; }
   virtual       LinesFrameBuffer *GetFrameBuffer()       { return &cmd_fb; }
-  virtual void ResetGL(int flag) { cmd_fb.ResetGL(flag); needs_redraw=true; }
+  virtual void ResetGL(int flag) override { cmd_fb.ResetGL(flag); needs_redraw=true; }
   virtual void UpdateCursorX(int x) { cursor.i.x = x; UpdateCursor(); }
   virtual void UpdateCursor() { cursor.p = cmd_line.data->glyphs.Position(cursor.i.x) + point(0, style.font->Height()); }
   virtual void UpdateCommandFB() { UpdateLineFB(&cmd_line, &cmd_fb); }
   virtual void UpdateLineFB(Line *L, LinesFrameBuffer *fb, int flag=0);
-  virtual void Draw(GraphicsContext*, const LFL::Box &b) const { const_cast<TextBox*>(this)->Draw(b); }
+  virtual void Draw(GraphicsContext*, const LFL::Box &b) const override { const_cast<TextBox*>(this)->Draw(b); }
   virtual void Draw(const Box &b);
   virtual void DrawCursor(point p, Shader *shader=0);
   virtual void UpdateToken(Line*, int word_offset, int word_len, int update_type, const TokenProcessor<DrawableBox>*);
@@ -371,7 +371,7 @@ struct TextBox : public View, public TextboxController {
 
 struct UnbackedTextBox : public TextBox {
   UnbackedTextBox(Window *W, const FontRef &F=FontRef()) : TextBox(W, F) {}
-  virtual void UpdateCommandFB() {}
+  virtual void UpdateCommandFB() override {}
 };
 
 struct TiledTextBox : public TextBox {
@@ -398,8 +398,8 @@ struct TextArea : public TextBox {
   /// Write() is thread-safe.
   virtual void Write(const StringPiece &s, bool update_fb=true, bool release_fb=true);
   virtual void WriteCB(const string &s, bool update_fb, bool release_fb) { return Write(s, update_fb, release_fb); }
-  virtual void PageUp  () { AddVScroll(-scroll_inc); }
-  virtual void PageDown() { AddVScroll( scroll_inc); }
+  virtual void PageUp  () override { AddVScroll(-scroll_inc); }
+  virtual void PageDown() override { AddVScroll( scroll_inc); }
   virtual void ScrollUp  () { PageUp(); }
   virtual void ScrollDown() { PageDown(); }
   virtual void SetDimension(int w, int h);
@@ -412,9 +412,9 @@ struct TextArea : public TextBox {
   virtual void UpdateVScrolled(int dist, bool reverse, int first_ind, int first_offset, int first_len);
   virtual int UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int *first_len);
   virtual int WrappedLines() const { return line.wrapped_lines; }
-  virtual const LinesFrameBuffer *GetFrameBuffer() const { return &line_fb; }
-  virtual       LinesFrameBuffer *GetFrameBuffer()       { return &line_fb; }
-  virtual void ResetGL(int flag) { line_fb.ResetGL(flag); TextBox::ResetGL(flag); }
+  virtual const LinesFrameBuffer *GetFrameBuffer() const override { return &line_fb; }
+  virtual       LinesFrameBuffer *GetFrameBuffer()       override { return &line_fb; }
+  virtual void ResetGL(int flag) override { line_fb.ResetGL(flag); TextBox::ResetGL(flag); }
   void ChangeColors(Colors *C);
 
   struct DrawFlag { enum { DrawCursor=1, CheckResized=2, Default=DrawCursor|CheckResized }; };
@@ -446,8 +446,8 @@ struct TextView : public TextArea {
   int last_fb_width=0, last_fb_lines=0, last_first_line=0, last_update_mapping_flag=0;
   TextView(Window *W, const FontRef &F=FontRef()) : TextArea(W, F, 0, 0) { reverse_line_fb=1; }
 
-  virtual int WrappedLines() const { return wrapped_lines; }
-  virtual int UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int *first_len);
+  virtual int WrappedLines() const override { return wrapped_lines; }
+  virtual int UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int *first_len) override;
   virtual int RefreshLines() { last_fb_lines=0; return UpdateLines(last_v_scrolled, 0, 0, 0); }
   virtual void Reload() { last_fb_width=0; wrapped_lines=0; RefreshLines(); }
 
@@ -489,25 +489,25 @@ struct PropertyView : public TextView {
   virtual       Node* GetNode(Id)       = 0;
   virtual const Node* GetNode(Id) const = 0;
 
-  virtual bool Empty() const { return !property_line.size(); }
+  virtual bool Empty() const override { return !property_line.size(); }
   virtual void Clear() { property_line.Clear(); root_id=0; selected_line_no=-1; }
-  virtual bool Deactivate() { bool ret = TextBox::Deactivate(); selected_line_no=-1; return ret; }
+  virtual bool Deactivate() override { bool ret = TextBox::Deactivate(); selected_line_no=-1; return ret; }
   virtual void SetRoot(Id id) { GetNode((root_id = id))->expanded = true; }
-  virtual void Draw(const Box &w, int flag=DrawFlag::Default, Shader *shader=0);
+  virtual void Draw(const Box &w, int flag=DrawFlag::Default, Shader *shader=0) override;
   virtual void VisitExpandedChildren(Id id, const Node::Visitor &cb, int depth=0);
   virtual void HandleCollapsed(Id id) {}
-  virtual void Input(char k) {}
-  virtual void Erase()       {}
-  virtual void CursorRight() {}
-  virtual void CursorLeft()  {}
-  virtual void Home()        {}
-  virtual void End()         {}
-  virtual void HistUp()      {}
-  virtual void HistDown()    {}
-  virtual void Enter()       {}
+  virtual void Input(char k) override {}
+  virtual void Erase()       override {}
+  virtual void CursorRight() override {}
+  virtual void CursorLeft()  override {}
+  virtual void Home()        override {}
+  virtual void End()         override {}
+  virtual void HistUp()      override {}
+  virtual void HistDown()    override {}
+  virtual void Enter()       override {}
 
-  void UpdateMapping(int width, int flag=0);
-  int UpdateMappedLines(pair<int, int>, bool, bool, bool, bool, bool);
+  void UpdateMapping(int width, int flag=0) override;
+  int UpdateMappedLines(pair<int, int>, bool, bool, bool, bool, bool) override;
   void LayoutLine(Line *L, const NodeIndex &n, const point &p);
   void HandleNodeControlClicked(Id id, int b, point p, point d, int down);
   void SelectionCB(const Selection::Point &p);
@@ -517,9 +517,9 @@ struct PropertyTree : public PropertyView {
   FreeListVector<Node> tree;
   using PropertyView::PropertyView;
 
-  /**/  Node* GetNode(Id id)       { return &tree[id-1]; }
-  const Node* GetNode(Id id) const { return &tree[id-1]; }
-  void Clear() { PropertyView::Clear(); tree.Clear(); }
+  /**/  Node* GetNode(Id id)       override { return &tree[id-1]; }
+  const Node* GetNode(Id id) const override { return &tree[id-1]; }
+  void Clear() override { PropertyView::Clear(); tree.Clear(); }
   template <class... Args> Id AddNode(Args&&... args) { return 1+tree.Insert(Node(forward<Args>(args)...)); }
 };
 
@@ -528,8 +528,8 @@ struct DirectoryTree : public PropertyTree {
   void Open(const string &p) { tree.Clear(); SetRoot(AddDir(p)); Reload(); }
   Id AddDir (const string &p) { return AddNode(menuicon_white->FindGlyph(13), BaseName(StringPiece(p.data(), p.size()?p.size()-1:0)), p); }
   Id AddFile(const string &p) { return AddNode(menuicon_white->FindGlyph(14), BaseName(p), p, 0); }
-  virtual void VisitExpandedChildren(Id id, const Node::Visitor &cb, int depth=0);
-  virtual void HandleCollapsed(Id id) { tree.Erase(id-1); }
+  virtual void VisitExpandedChildren(Id id, const Node::Visitor &cb, int depth=0) override;
+  virtual void HandleCollapsed(Id id) override { tree.Erase(id-1); }
 };
 
 struct Console : public TextArea {
@@ -546,14 +546,14 @@ struct Console : public TextArea {
                                    Color::clear, FLAGS_console_font_flag)), C) {}
 
   virtual ~Console() {}
-  virtual int CommandLines() const { return cmd_line.Lines(); }
-  virtual void Run(const string &in);
-  virtual void PageUp  () { TextArea::PageDown(); }
-  virtual void PageDown() { TextArea::PageUp(); }
-  virtual bool Activate()   { bool ret = TextBox::Activate();   StartAnimating(); return ret; }
-  virtual bool Deactivate() { bool ret = TextBox::Deactivate(); StartAnimating(); return ret; }
-  virtual void Draw(const Box &b, int flag=DrawFlag::Default, Shader *shader=0);
-  virtual void Draw();
+  virtual int CommandLines() const override { return cmd_line.Lines(); }
+  virtual void Run(const string &in) override;
+  virtual void PageUp  () override { TextArea::PageDown(); }
+  virtual void PageDown() override { TextArea::PageUp(); }
+  virtual bool Activate()   override { bool ret = TextBox::Activate();   StartAnimating(); return ret; }
+  virtual bool Deactivate() override { bool ret = TextBox::Deactivate(); StartAnimating(); return ret; }
+  virtual void Draw(const Box &b, int flag=DrawFlag::Default, Shader *shader=0) override;
+  virtual void Draw() override;
   void StartAnimating();
 };
 
@@ -571,8 +571,8 @@ struct Dialog : public View {
 
   Dialog(Window*, float w, float h, int flag=0);
   virtual ~Dialog() {}
-  virtual void Layout();
-  virtual void Draw();
+  virtual void Layout() override;
+  virtual void Draw() override;
   virtual void TakeFocus() {}
   virtual void LoseFocus() {}
 
@@ -617,10 +617,10 @@ template <class D=Dialog> struct TabbedDialog : public TabbedDialogInterface {
   void AddTab(D *t) { tabs.insert(t); tab_list.emplace_back(t); SelectTab(t); }
   void DelTab(D *t) { tabs.erase(t); VectorEraseByValue(&tab_list, DialogTab(t)); if (top == t) SelectTab(FirstTab()); }
   void SelectTab(D *t) { if (top) top->LoseFocus(); if ((top = t)) { view->child_view={t}; t->TakeFocus(); } }
-  void SelectTabIndex(size_t i) { CHECK_LT(i, tab_list.size()); SelectTab(dynamic_cast<D*>(tab_list[i].dialog)); }
+  void SelectTabIndex(size_t i) override { CHECK_LT(i, tab_list.size()); SelectTab(dynamic_cast<D*>(tab_list[i].dialog)); }
   void SelectNextTab() { if (top) SelectTabIndex(RingIndex::Wrap(TabIndex(top)+1, tab_list.size())); }
   void SelectPrevTab() { if (top) SelectTabIndex(RingIndex::Wrap(TabIndex(top)-1, tab_list.size())); }
-  void Draw() { TabbedDialogInterface::Draw(); if (top) top->Draw(); }
+  void Draw() override { TabbedDialogInterface::Draw(); if (top) top->Draw(); }
 };
 
 struct MessageBoxDialog : public Dialog {
@@ -628,15 +628,15 @@ struct MessageBoxDialog : public Dialog {
   Box message_size;
   MessageBoxDialog(Window *w, const string &m) :
     Dialog(w, .25, .2), message(m) { font->Size(message, &message_size); }
-  void Layout();
-  void Draw();
+  void Layout() override;
+  void Draw() override;
 };
 
 struct TextureBoxDialog : public Dialog {
   Texture tex;
   TextureBoxDialog(Window *w, const string &m) :
     Dialog(w, .33, .33), tex(w->parent) { tex.ID = ::atoi(m.c_str()); tex.owner = false; }
-  void Draw() { Dialog::Draw(); tex.DrawGD(root->gd, content + box.TopLeft()); }
+  void Draw() override { Dialog::Draw(); tex.DrawGD(root->gd, content + box.TopLeft()); }
 };
 
 struct SliderDialog : public Dialog {
@@ -646,8 +646,8 @@ struct SliderDialog : public Dialog {
   Widget::Slider slider;
   SliderDialog(Window *w, const string &title="", const UpdatedCB &cb=UpdatedCB(),
                float scrolled=0, float total=100, float inc=1);
-  void Layout() { Dialog::Layout(); slider.LayoutFixed(content); }
-  void Draw() { Dialog::Draw(); if (slider.dirty) { slider.Update(); if (updated) updated(&slider); } }
+  void Layout() override { Dialog::Layout(); slider.LayoutFixed(content); }
+  void Draw() override { Dialog::Draw(); if (slider.dirty) { slider.Update(); if (updated) updated(&slider); } }
 };
 
 struct FlagSliderDialog : public SliderDialog {
@@ -663,12 +663,12 @@ template <class X> struct TextViewDialogT  : public Dialog {
   TextViewDialogT(Window *W, const FontRef &F, float w=0.5, float h=.5, int flag=0) :
     Dialog(W, w, h, flag), view(W, F), v_scrollbar(this, Widget::Slider::Flag::AttachedNoCorner),
     h_scrollbar(this, Widget::Slider::Flag::AttachedHorizontalNoCorner) {}
-  void Layout() {
+  void Layout() override {
     Dialog::Layout();
     Widget::Slider::AttachContentBox(&content, &v_scrollbar, view.Wrap() ? nullptr : &h_scrollbar);
     child_view.push_back(&view);
   }
-  void Draw() { 
+  void Draw() override { 
     bool wrap = view.Wrap();
     if (1)     view.v_scrolled = v_scrollbar.AddScrollDelta(view.v_scrolled);
     if (!wrap) view.h_scrolled = h_scrollbar.AddScrollDelta(view.h_scrolled);
@@ -679,8 +679,8 @@ template <class X> struct TextViewDialogT  : public Dialog {
     if (1)     v_scrollbar.Update();
     if (!wrap) h_scrollbar.Update();
   }
-  void TakeFocus() { view.Activate(); }
-  void LoseFocus() { view.Deactivate(); }
+  void TakeFocus() override { view.Activate(); }
+  void LoseFocus() override { view.Deactivate(); }
 };
 
 struct PropertyTreeDialog : public TextViewDialogT<PropertyTree> {
@@ -704,9 +704,9 @@ struct HelperView : public View {
   };
   vector<Label> label;
   void AddLabel(const Box &w, const string &d, int h, const point &p) { label.emplace_back(w, d, h, font, p); }
-  bool Activate() { if (active) return 0; active=1; /* ForceDirectedLayout(); */ return 1; }
+  bool Activate() override { if (active) return 0; active=1; /* ForceDirectedLayout(); */ return 1; }
   void ForceDirectedLayout();
-  void Draw();
+  void Draw() override;
 };
 
 }; // namespace LFL

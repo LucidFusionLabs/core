@@ -179,9 +179,9 @@ int ZeroCrossings(const RingSampler::Handle *in, int window, int offset) {
   return zcr;
 }
 
-RingSampler *Decimate(const RingSampler::Handle *inh, int factor) {
-  const int SPS=inh->Rate(), SPB=inh->Len();
-  unique_ptr<RingSampler> outbuf = make_unique<RingSampler>(SPS/factor, SPB/factor);
+unique_ptr<RingSampler> Decimate(const RingSampler::Handle *inh, int factor) {
+  const int SPS = inh->Rate(), SPB = inh->Len();
+  auto outbuf = make_unique<RingSampler>(SPS/factor, SPB/factor);
   RingSampler::Handle out(outbuf.get());
 
   double sum = 0;
@@ -193,7 +193,7 @@ RingSampler *Decimate(const RingSampler::Handle *inh, int factor) {
       sum = 0;
     }
   }
-  return outbuf.release();
+  return outbuf;
 }
 
 int CrossCorrelateTDOA(const RingSampler::Handle *a, const RingSampler::Handle *b, int window, int offset, int samps) {
@@ -382,19 +382,19 @@ int FFTFilter(const RingSampler::Handle *in, RingSampler::Handle *out, int windo
   return 0;
 }
 
-Matrix *Spectogram(const RingSampler::Handle *in, Matrix *out, int window, int hop, int fftlen,
-                   const vector<double> &preemph, int pd, int scale) {
+unique_ptr<Matrix> Spectogram(const RingSampler::Handle *in, Matrix *out, int window, int hop, int fftlen,
+                              const vector<double> &preemph, int pd, int scale) {
   bool complex = (pd==PowerDomain::complex);
   int frames = (in->Len() - (window - hop)) / hop;
   vector<float> fftbuf(fftlen);
 
-  Matrix *m;
-  if (out) { m=out; if (m->M != frames || m->N != fftlen/2 || (m->flag&Matrix::Flag::Complex && !complex)) return 0; }
-  else m = new Matrix(frames, fftlen/2, 0.0, complex);
+  unique_ptr<Matrix> ret;
+  if (out) { if (out->M != frames || out->N != fftlen/2 || ((out->flag & Matrix::Flag::Complex) && !complex)) return 0; }
+  else out = (ret = make_unique<Matrix>(frames, fftlen/2, 0.0, complex)).get();
 
   for (int i=0; i<frames; i++) {
-    double *row = m->row(i);
-    if (FFT(in, i, window, hop, fftlen, &fftbuf[0], preemph, true, scale)) { if (!out) delete m; return 0; }
+    double *row = out->row(i);
+    if (FFT(in, i, window, hop, fftlen, &fftbuf[0], preemph, true, scale)) return nullptr;
 
     for (int j=0; j<fftlen/2; j++) {
       if (pd == PowerDomain::complex) {
@@ -409,31 +409,31 @@ Matrix *Spectogram(const RingSampler::Handle *in, Matrix *out, int window, int h
     }
   }
 
-  return m;
+  return ret;
 }
 
-RingSampler *ISpectogram(const Matrix *in, int window, int hop, int fftlen, int samplerate) {
-  unique_ptr<RingSampler> outbuf = make_unique<RingSampler>(samplerate, fftlen + hop * (in->M-1));
+unique_ptr<RingSampler> ISpectogram(const Matrix *in, int window, int hop, int fftlen, int samplerate) {
+  auto outbuf = make_unique<RingSampler>(samplerate, fftlen + hop * (in->M-1));
   RingSampler::Handle out(outbuf.get());
 
   for (int i=0; i<in->M; i++) {
     if (IFFT(in->crow(i), i, window, hop, fftlen, &out)) return nullptr;
   }
-  return outbuf.release();
+  return outbuf;
 }
 
-Matrix *F0Stream(const RingSampler::Handle *in, Matrix *out, int window, int hop, int method) {
+unique_ptr<Matrix> F0Stream(const RingSampler::Handle *in, Matrix *out, int window, int hop, int method) {
   int frames = (in->Len() - (window - hop)) / hop;
 
-  Matrix *m;
-  if (out) { m=out; if (m->M != frames || m->N != 1) return 0; }
-  else m = new Matrix(frames, 1);
+  unique_ptr<Matrix> ret;
+  if (out) { if (out->M != frames || out->N != 1) return 0; }
+  else out = (ret = make_unique<Matrix>(frames, 1)).get();
 
   for (int i=0; i<frames; i++) {
-    double *row = m->row(i); 
+    double *row = out->row(i); 
     row[0] = FundamentalFrequency(in, window, i*hop, method);
   }
-  return m;
+  return ret;
 }
 
 float FundamentalFrequency(const RingSampler::Handle *in, int window, int offset, int method) {

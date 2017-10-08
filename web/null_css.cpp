@@ -20,6 +20,8 @@
 #include "core/web/dom.h"
 #include "core/web/css.h"
 
+extern "C" typedef struct css_stylesheet_params { int unused; } css_stylesheet_params;
+
 namespace LFL {
 namespace DOM {
 const int BackgroundAttachment::Fixed  = 1;
@@ -222,8 +224,8 @@ const int WhiteSpace::Nowrap  = 5;
 #include "core/web/css_common.h"
 }; // namespace DOM
 
-StyleSheet *StyleSheet::Default() { static StyleSheet ret(0); return &ret; }
 StyleSheet::~StyleSheet() {}
+StyleSheet *StyleSheet::Default() { static StyleSheet ret(0); return &ret; }
 StyleSheet::StyleSheet(LFL::DOM::Document *D, const char *U, const char *T, bool in_line, bool quirks, const char *Content) : ownerDocument(D) {}
 void StyleSheet::Parse(const char *content, int content_len) {}
 void StyleSheet::Done() {}

@@ -23,15 +23,13 @@ namespace LFL {
 /* unit database */
 struct VoiceModel {
   struct Unit {
-    struct Sample { int offset, len; } *sample;
+    struct Sample { int offset=0, len=0; };
+    vector<Sample> sample;
     WavReader wav;
-    int samples;
-    Unit() : samples(0), sample(0) {}
-    ~Unit() { delete wav.f; free(sample); }
   } unit[LFL_PHONES];
 
   int Read(const char *dir);
-  RingSampler *Synth(AssetLoading*, const char *text, int start=0);
+  unique_ptr<RingSampler> Synth(AssetLoading*, const char *text, int start=0);
 
   int NextPhone(int phone, int lastphone, int lastphoneindex);
 };

@@ -104,9 +104,9 @@ struct IPV4EndpointSource {
 struct SingleIPV4Endpoint : public IPV4EndpointSource {
   IPV4Endpoint val;
   SingleIPV4Endpoint(IPV4::Addr A, int P) : val(A, P) {}
-  void Get(IPV4::Addr *A, int *P) { *A=val.addr; *P=val.port; }
-  void Get(IPV4::Addr  A, int *P) { if (A == val.addr) *P=val.port; }
-  void Close(IPV4::Addr A, int P) { CHECK_EQ(A, val.addr); CHECK_EQ(P, val.port); }
+  void Get(IPV4::Addr *A, int *P) override { *A=val.addr; *P=val.port; }
+  void Get(IPV4::Addr  A, int *P) override { if (A == val.addr) *P=val.port; }
+  void Close(IPV4::Addr A, int P) override { CHECK_EQ(A, val.addr); CHECK_EQ(P, val.port); }
 };
 
 struct IPV4EndpointPool : public IPV4EndpointSource {
@@ -114,10 +114,10 @@ struct IPV4EndpointPool : public IPV4EndpointSource {
   vector<IPV4::Addr> source_addrs;
   vector<string> source_ports;
   IPV4EndpointPool(const string &ip_csv);
-  bool Available() const;
-  void Close(IPV4::Addr addr, int port);
-  void Get(IPV4::Addr *addr, int *port); 
-  void Get(IPV4::Addr addr, int *port);
+  bool Available() const override;
+  void Close(IPV4::Addr addr, int port) override;
+  void Get(IPV4::Addr *addr, int *port) override; 
+  void Get(IPV4::Addr addr, int *port) override;
   bool GetPort(int ind, int *port);
 };
 
@@ -125,11 +125,11 @@ struct IPV4EndpointPoolFilter : public IPV4EndpointSource {
   set<IPV4::Addr> filter;
   IPV4EndpointPool *wrap;
   IPV4EndpointPoolFilter(IPV4EndpointPool *W) : wrap(W) {}
-  bool Available() const { return wrap->Available(); }
-  void Close(IPV4::Addr addr, int port) { return wrap->Close(addr, port); }
-  void Get(IPV4::Addr addr, int *port) { return wrap->Get(addr, port); }
+  bool Available() const override { return wrap->Available(); }
+  void Close(IPV4::Addr addr, int port) override { return wrap->Close(addr, port); }
+  void Get(IPV4::Addr addr, int *port) override { return wrap->Get(addr, port); }
   bool GetPort(int ind, int *port) { return wrap->GetPort(ind, port); }
-  void Get(IPV4::Addr *addr, int *port);
+  void Get(IPV4::Addr *addr, int *port) override;
 };
 
 struct SystemNetwork {
@@ -197,14 +197,14 @@ struct SelectSocketSet : public SocketSet {
   fd_set rfds, wfds, xfds;
   SocketSet *mirror=0;
 
-  int Select(int wait_time);
-  void Del(Socket fd)                    { socket.erase(fd);                if (mirror) mirror->Del(fd); }
-  void Add(Socket fd, int flag, void *v) { socket[fd] = make_pair(flag, v); if (mirror) mirror->Add(fd, flag, v); }
-  void Set(Socket fd, int flag, void *v) { socket[fd] = make_pair(flag, v); if (mirror) mirror->Set(fd, flag, v); }
+  int Select(int wait_time) override;
+  void Del(Socket fd)                    override { socket.erase(fd);                if (mirror) mirror->Del(fd); }
+  void Add(Socket fd, int flag, void *v) override { socket[fd] = make_pair(flag, v); if (mirror) mirror->Add(fd, flag, v); }
+  void Set(Socket fd, int flag, void *v) override { socket[fd] = make_pair(flag, v); if (mirror) mirror->Set(fd, flag, v); }
   int Get(Socket fd, fd_set *set) { return FD_ISSET(fd, set); } 
-  int GetReadable(Socket fd) { return Get(fd, &rfds); }
-  int GetWritable(Socket fd) { return Get(fd, &wfds); }
-  int GetException(Socket fd) { return Get(fd, &xfds); }
+  int GetReadable(Socket fd) override { return Get(fd, &rfds); }
+  int GetWritable(Socket fd) override { return Get(fd, &wfds); }
+  int GetException(Socket fd) override { return Get(fd, &xfds); }
   string DebugString() const {
     string ret="SelectSocketSet={";
     for (auto &s : socket) StrAppend(&ret, s.first, ", ");
@@ -221,18 +221,18 @@ struct WFMOSocketSet : public SocketSet {
   Socket cur_fd=-1;
   WFMOSocketSet() { sockets.reserve(max_sockets); }
 
-  int Select(int wait_time) {
+  int Select(int wait_time) override {
     int ret = WaitForMultipleObjects(sockets.size(), sockets.data(), FALSE, ToMilliseconds(wait_time));
     if (ret == WAIT_FAILED) return ERRORv(-1, "WFMO ", GetLastError());
     num_events = ret != WAIT_TIMEOUT;
     return 0;
   }
-  void Del(Socket fd) {}
-  void Add(Socket fd, int flag, void *val) {}
-  void Set(Socket fd, int flag, void *val) {}
-  int GetReadable(Socket fd) { return 0; }
-  int GetWritable(Socket fd) { return 0; }
-  int GetException(Socket fd) { return 0; }
+  void Del(Socket fd) override {}
+  void Add(Socket fd, int flag, void *val) override {}
+  void Set(Socket fd, int flag, void *val) override {}
+  int GetReadable(Socket fd) override { return 0; }
+  int GetWritable(Socket fd) override { return 0; }
+  int GetException(Socket fd) override { return 0; }
 };
 typedef WFMOSocketSet LFLSocketSet;
 
@@ -245,7 +245,7 @@ template <int S> struct EPollSocketSet : public SocketSet {
   EPollSocketSet() : epollfd(epoll_create(S)) {}
   virtual ~EPollSocketSet() { close(epollfd); }
 
-  int Select(int wait_time) {
+  int Select(int wait_time) override {
     if ((num_events = epoll_wait(epollfd, events, S, ToMilliseconds(wait_time))) == -1) ERROR("epoll_wait() ", strerror(errno));
     return 0;
   }
@@ -256,13 +256,13 @@ template <int S> struct EPollSocketSet : public SocketSet {
     ev.events = ((flag & READABLE) ? EPOLLIN : 0) | ((flag & WRITABLE) ? EPOLLOUT : 0);
     if (epoll_ctl(epollfd, op, fd, &ev) == -1) ERROR("epoll_ctl(", epollfd, ", ", op, ", ", events, "): ", strerror(errno)); 
   }
-  void Del(Socket fd)                      { Change(fd, EPOLL_CTL_DEL, READABLE|WRITABLE, 0);   }
-  void Add(Socket fd, int flag, void *val) { Change(fd, EPOLL_CTL_ADD, flag,              val); }
-  void Set(Socket fd, int flag, void *val) { Change(fd, EPOLL_CTL_MOD, flag,              val); }
-  int GetReadable(Socket fd) { return Get(fd)->events & (EPOLLIN  | EPOLLERR | EPOLLHUP); }
-  int GetWritable(Socket fd) { return Get(fd)->events & (EPOLLOUT | EPOLLERR | EPOLLHUP); }
-  int GetException(Socket fd) { return 0; }
-  epoll_event *Get(Socket fd) {
+  void Del(Socket fd)                      override { Change(fd, EPOLL_CTL_DEL, READABLE|WRITABLE, 0);   }
+  void Add(Socket fd, int flag, void *val) override { Change(fd, EPOLL_CTL_ADD, flag,              val); }
+  void Set(Socket fd, int flag, void *val) override { Change(fd, EPOLL_CTL_MOD, flag,              val); }
+  int GetReadable(Socket fd) override { return Get(fd)->events & (EPOLLIN  | EPOLLERR | EPOLLHUP); }
+  int GetWritable(Socket fd) override { return Get(fd)->events & (EPOLLOUT | EPOLLERR | EPOLLHUP); }
+  int GetException(Socket fd) override { return 0; }
+  epoll_event *Get(Socket fd) override {
     CHECK_EQ(fd, cur_fd);
     CHECK(cur_event >= 0 && cur_event < S);
     return &events[cur_event];
@@ -289,9 +289,9 @@ struct SocketWakeupThread : public SocketSet {
     window(W), dispatch(D), frame_mutex(FM), wait_mutex(WM),
     thread(bind(&SocketWakeupThread::ThreadProc, this)) { pipe[0] = pipe[1] = -1; }
 
-  void Add(Socket s, int f, void *v) { { ScopedMutex m(sockets_mutex); sockets.Add(s, f, v); } Wakeup(); }
-  void Set(Socket s, int f, void *v) { { ScopedMutex m(sockets_mutex); sockets.Set(s, f, v); } Wakeup(); }
-  void Del(Socket s)                 { { ScopedMutex m(sockets_mutex); sockets.Del(s);       } Wakeup(); }
+  void Add(Socket s, int f, void *v) override { { ScopedMutex m(sockets_mutex); sockets.Add(s, f, v); } Wakeup(); }
+  void Set(Socket s, int f, void *v) override { { ScopedMutex m(sockets_mutex); sockets.Set(s, f, v); } Wakeup(); }
+  void Del(Socket s)                 override { { ScopedMutex m(sockets_mutex); sockets.Del(s);       } Wakeup(); }
   void Start();
   void Wait() { Wakeup(); thread.Wait(); }
   void Wakeup();
@@ -318,6 +318,7 @@ struct Connection {
     virtual int Flushed(Connection *c) { if (flushed_cb) flushed_cb(c); return 0; }
     virtual void Close(Connection *c) { if (close_cb) close_cb(c); }
   };
+  struct Data { virtual ~Data() {} };
 
   SocketService *svc;
   Time ct, rt, wt;
@@ -331,7 +332,7 @@ struct Connection {
   unique_ptr<Handler> handler;
   Connection *next=0;
   CB *detach;
-  void *data=0;
+  unique_ptr<Data> data;
 
   Connection(SocketService *s=0, int t=Error, unique_ptr<Handler> h=unique_ptr<Handler>(), CB *Detach=0) :
     svc(s), ct(Now()), rt(Now()), wt(Now()), state(t), rb(65536), wb(65536), self_reference(MakeTyped(this)), handler(move(h)), detach(Detach) {}
@@ -544,14 +545,14 @@ struct SocketServices : public Module {
   SocketServices(ThreadDispatcher*, WakeupHandle*);
   virtual ~SocketServices();
 
-  int Init();
+  int Init() override;
   int Enable(SocketService *svc);
   int Disable(SocketService *svc);
   int Shutdown(SocketService *svc);
   int Enable(const vector<SocketService*> &svc);
   int Disable(const vector<SocketService*> &svc);
   int Shutdown(const vector<SocketService*> &svc);
-  int Frame(unsigned);
+  int Frame(unsigned) override;
   void AcceptFrame(SocketService *svc, SocketListener *listener);
   void TCPConnectionFrame(SocketService *svc, SocketConnection *c, SocketServiceEndpointEraseList *removelist);
   void UDPConnectionFrame(SocketService *svc, SocketConnection *c, SocketServiceEndpointEraseList *removelist, const string &epk);
@@ -567,11 +568,11 @@ struct SocketServices : public Module {
   void UpdateActive(SocketConnection *c);
 };
 
-/// SocketServicesThread runs the SocketServices Module in a new thread with a multiplexed Callback queue
+/// SocketServicesThread runs the SocketServices Module in a thread with a multiplexed Callback queue
 struct SocketServicesThread {
   struct ConnectionHandler : public Connection::Handler {
-    void HandleMessage(Callback *cb);
-    int Read(Connection *c);
+    void HandleMessage(unique_ptr<Callback> cb);
+    int Read(Connection *c) override;
   };
 
   bool init=0;
@@ -581,7 +582,7 @@ struct SocketServicesThread {
   unique_ptr<Thread> thread;
   SocketServicesThread(SocketServices *N, bool Init);
 
-  void Write(Callback *x);
+  void Write(unique_ptr<Callback> x);
   void HandleMessagesLoop();
 };
 

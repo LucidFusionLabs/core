@@ -43,7 +43,8 @@ DEFINE_bool(google_crawl, false, "Crawl google");
 #include "google.h"
 
 namespace LFL {
-Crawler *crawler = 0;
+Application *app;
+unique_ptr<Crawler> crawler;
 
 DEFINE_bool(crawl, true, "Crawl");
 DEFINE_bool(scrape, true, "Scrape");
@@ -74,8 +75,8 @@ int Frame(LFL::Window *W, unsigned clicks, int flag) {
 using namespace LFL;
 
 extern "C" void MyAppCreate(int argc, const char* const* argv) {
-  app = new Application(argc, argv);
-  app->focused = Window::Create();
+  app = make_unique<Application>(argc, argv).release();
+  app->focused = CreateWindow(app).release();
   app->focused->frame_cb = Frame;
   app->focused->caption = "crawler";
   FLAGS_enable_network = 1;
@@ -95,33 +96,31 @@ extern "C" int MyAppMain() {
 
   /* forvo */
   if (FLAGS_forvo_init.size() || FLAGS_forvo_crawl || FLAGS_forvo_dump.size()) {
-    crawler = new ForvoApi();
+    crawler = make_unique<ForvoApi>();
     if (!crawler->Add("forvo.root.queue", "forvo.root")) return -1;
     if (!crawler->Add("forvo.mp3.queue", "forvo.mp3")) return -1;
 
-    if (FLAGS_forvo_init.size()) ((ForvoApi*)crawler)->Init(FLAGS_forvo_init.c_str());
+    if (FLAGS_forvo_init.size()) ((ForvoApi*)crawler.get())->Init(FLAGS_forvo_init.c_str());
 
-    if (FLAGS_forvo_dump.size()) ((ForvoApi*)crawler)->Dump(FLAGS_forvo_dump.c_str());
+    if (FLAGS_forvo_dump.size()) ((ForvoApi*)crawler.get())->Dump(FLAGS_forvo_dump.c_str());
 
-    if (!FLAGS_forvo_crawl) { delete crawler; crawler=0; }
+    if (!FLAGS_forvo_crawl) crawler.reset();
   }
 
   /* google */
   if (FLAGS_google_init.size() || FLAGS_google_crawl) {
-    crawler = new GoogleApi();
+    crawler = make_unique<GoogleApi>();
     if (!crawler->Add("google.search.queue", "google.search")) return -1;
     if (!crawler->Add("google.result.queue", "google.result")) return -1;
 
-    if (FLAGS_google_init.size()) ((GoogleApi*)crawler)->Init(FLAGS_google_init.c_str());
+    if (FLAGS_google_init.size()) ((GoogleApi*)crawler.get())->Init(FLAGS_google_init.c_str());
 
-    if (!FLAGS_google_crawl) { delete crawler; crawler=0; }
+    if (!FLAGS_google_crawl) crawler.reset();
   }
 
   /* main */
   if (!crawler) FATAL("no crawler: ", crawler);
   crawler->Validate();
 
-  int ret = app->Main();
-  delete crawler;
-  return ret;
+  return app->Main();
 }

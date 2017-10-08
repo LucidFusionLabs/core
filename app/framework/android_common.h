@@ -100,10 +100,10 @@ struct JNI {
   static jobject ToNativePickerItemCB(JNIEnv*, const PickerItem::CB &c);
   static void RunRunnable                    (JNIEnv *e, jobject runnable);
   static void RunRunnableOnUiThread          (JNIEnv *e, jobject runnable);
-  static void RunGlobalRunnable              (JNIEnv *e, GlobalJNIObject *runnable) { RunRunnable          (e, runnable->v); delete runnable; }
-  static void RunGlobalRunnableOnUiThread    (JNIEnv *e, GlobalJNIObject *runnable) { RunRunnableOnUiThread(e, runnable->v); delete runnable; }
-  static void MainThreadRunRunnable          (GlobalJNIObject* runnable);
-  static void MainThreadRunRunnableOnUiThread(GlobalJNIObject* runnable);
+  static void RunGlobalRunnable              (JNIEnv *e, GlobalJNIObject *x) { unique_ptr<GlobalJNIObject> r(x); RunRunnable          (e, x->v); }
+  static void RunGlobalRunnableOnUiThread    (JNIEnv *e, GlobalJNIObject *x) { unique_ptr<GlobalJNIObject> r(x); RunRunnableOnUiThread(e, x->v); }
+  static void MainThreadRunRunnable          (unique_ptr<GlobalJNIObject> runnable);
+  static void MainThreadRunRunnableOnUiThread(unique_ptr<GlobalJNIObject> runnable);
 
   unique_ptr<BufferFile> OpenAsset(const string &fn);
 };

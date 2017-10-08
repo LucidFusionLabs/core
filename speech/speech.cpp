@@ -27,7 +27,7 @@
 
 #ifdef LFL_CUDA
 #include "core/app/cuda/speech.h"
-CudaAcousticModel *CAM = 0;
+unique_ptr<CudaAcousticModel> CAM;
 #endif
 
 namespace LFL {
@@ -155,14 +155,14 @@ int Features::barkbands = 21;
 double Features::rastaB[5] = { .2, .1, 0, -.1, -.2 };
 double Features::rastaA[2] = { 1, -.94 };
 
-Matrix *Features::EqualLoudnessCurve(int outrows, double max) {
+unique_ptr<Matrix> Features::EqualLoudnessCurve(int outrows, double max) {
   double maxbark = HZToBark(max), stepbark = maxbark/(outrows-1);   
-  unique_ptr<Matrix> ret = make_unique<Matrix>(outrows, 1);
+  auto ret = make_unique<Matrix>(outrows, 1);
   MatrixIter(ret) {
     double bandcfhz = BarkToHZ(i*stepbark), fsq = pow(bandcfhz, 2);
     ret->row(i)[j] = pow(fsq/(fsq + 1.6e5), 2) * ((fsq + 1.44e6) / (fsq + 9.61e6));
   }
-  return ret.get();
+  return ret;
 }
 
 vector<double> Features::LifterMatrixROSA(int n, double L, bool inverse) {
@@ -183,8 +183,8 @@ vector<double> Features::LifterMatrixHTK(int n, double L, bool inverse) {
   return dm;
 }
 
-Matrix *Features::FFT2Bark(int outrows, double minfreq, double maxfreq, int fftlen, int samplerate) {
-  unique_ptr<Matrix> m = make_unique<Matrix>(outrows, fftlen/2);
+unique_ptr<Matrix> Features::FFT2Bark(int outrows, double minfreq, double maxfreq, int fftlen, int samplerate) {
+  auto m = make_unique<Matrix>(outrows, fftlen/2);
   double minbark = HZToBark(minfreq), maxbark = HZToBark(maxfreq);
   double nyqbark = maxbark - minbark, stepbark = nyqbark/(outrows-1);
 
@@ -201,10 +201,10 @@ Matrix *Features::FFT2Bark(int outrows, double minfreq, double maxfreq, int fftl
       row[j] = pow(10, min(0.0, min(hifreq, -2.5*lofreq)));
     }
   }
-  return m.release();
+  return m;
 }
 
-Matrix *Features::FFT2Mel(int outrows, double minfreq, double maxfreq, int fftlen, int samplerate) {
+unique_ptr<Matrix> Features::FFT2Mel(int outrows, double minfreq, double maxfreq, int fftlen, int samplerate) {
   unique_ptr<Matrix> m = make_unique<Matrix>(outrows, fftlen/2);
   double minmel = HZToMel(minfreq), maxmel = HZToMel(maxfreq);
 
@@ -223,18 +223,18 @@ Matrix *Features::FFT2Mel(int outrows, double minfreq, double maxfreq, int fftle
       row[j] = max(0.0, min(loslope, hislope));
     }
   }
-  return m.release();
+  return m;
 }
 
-Matrix *Features::Mel2FFT(int outrows, double minfreq, double maxfreq, int fftlen, int samplerate) {
-  Matrix *m = FFT2Mel(outrows, minfreq, maxfreq, fftlen, samplerate);
-  Matrix *w = Matrix::Mult(m, m, mTrnpA);
+unique_ptr<Matrix> Features::Mel2FFT(int outrows, double minfreq, double maxfreq, int fftlen, int samplerate) {
+  auto m = FFT2Mel(outrows, minfreq, maxfreq, fftlen, samplerate);
+  auto w = Matrix::Mult(m.get(), move(m), mTrnpA);
 
   float diagmean=0; int diagcount=0;
   for (int i=0; i<w->M && i<w->N; i++) { diagmean += w->row(i)[i]; diagcount++; }
   diagmean /= (diagcount+1);
 
-  m = Matrix::Transpose(m);
+  m = Matrix::Transpose(move(m));
   for (int i=0; i<m->M; i++) {
     double sum=0;
     for (int j=0; j<m->N; j++) sum += w->row(i)[j];
@@ -245,13 +245,13 @@ Matrix *Features::Mel2FFT(int outrows, double minfreq, double maxfreq, int fftle
   return m;
 };
 
-Matrix *Features::PLP(const RingSampler::Handle *in, Matrix *out,
-                      vector<StatefulFilter> *rastaFilters, Allocator *alloc) {
+unique_ptr<Matrix> Features::PLP(const RingSampler::Handle *in, Matrix *out,
+                                 vector<StatefulFilter> *rastaFilters, Allocator *alloc) {
   /* http://seed.ucsd.edu/mediawiki/images/5/5c/PLP.pdf */
   if (!alloc) alloc = Singleton<MallocAllocator>::Set();
 
   /* plp = melfcc(x, sr, 'lifterexp', -22, 'nbands', 21, 'maxfreq', sr/2, 'fbtype', 'bark', 'modelorder', 12, 'usecmp',1, 'wintime', 512/sr, 'hoptime', 256/sr, 'preemph', 0, 'dcttype', 1) */
-  static const Matrix *barktrans = FFT2Bark(barkbands, FLAGS_feat_minfreq, FLAGS_feat_maxfreq, FLAGS_feat_window, FLAGS_sample_rate)->Transpose(mDelA);
+  static unique_ptr<const Matrix> barktrans = Matrix::Transpose(FFT2Bark(barkbands, FLAGS_feat_minfreq, FLAGS_feat_maxfreq, FLAGS_feat_window, FLAGS_sample_rate));
 
   /* fft */
   int frames = (in->Len() - (FLAGS_feat_window - FLAGS_feat_hop)) / FLAGS_feat_hop;
@@ -262,7 +262,7 @@ Matrix *Features::PLP(const RingSampler::Handle *in, Matrix *out,
 
   /* to bark scale critcal bands */
   Matrix barkbuf(fftbuf.M, barktrans->N, 0.0, 0, alloc);
-  Matrix::Mult(&fftbuf, barktrans, &barkbuf);
+  Matrix::Mult(&fftbuf, barktrans.get(), &barkbuf);
 
   if (1) { /* rasta */
     MatrixIter(&barkbuf) barkbuf.row(i)[j] = log(barkbuf.row(i)[j] ? barkbuf.row(i)[j] : 1e7);
@@ -290,7 +290,7 @@ Matrix *Features::PLP(const RingSampler::Handle *in, Matrix *out,
     MatrixIter(&barkbuf) barkbuf.row(i)[j] = exp(rastabuf.row(i)[j]);
   }
 
-  static const Matrix *equalLoudnessCurve = EqualLoudnessCurve(barkbuf.N, FLAGS_sample_rate/2);
+  static unique_ptr<const Matrix> equalLoudnessCurve = EqualLoudnessCurve(barkbuf.N, FLAGS_sample_rate/2);
   MatrixIter(&barkbuf) {
     /* preemphasize = weight critical bands by equal loudness curve */
     barkbuf.row(i)[j] *= equalLoudnessCurve->row(j)[0];
@@ -304,9 +304,9 @@ Matrix *Features::PLP(const RingSampler::Handle *in, Matrix *out,
   }
 
   /* auto-correlation */
-  static Matrix *IDFTtrans = IDFT((barkbands-1)*2, barkbands)->Transpose(mDelA);
+  static unique_ptr<const Matrix> IDFTtrans = Matrix::Transpose(IDFT((barkbands-1)*2, barkbands));
   Matrix xcorr(barkbuf.M, IDFTtrans->N, 0.0, 0, alloc);
-  Matrix::Mult(&barkbuf, IDFTtrans, &xcorr);
+  Matrix::Mult(&barkbuf, IDFTtrans.get(), &xcorr);
   MatrixIter(&xcorr) xcorr.row(i)[j] /= IDFTtrans->N;
 
   /* levinson durbin recursion to LPC */
@@ -319,8 +319,9 @@ Matrix *Features::PLP(const RingSampler::Handle *in, Matrix *out,
   }
 
   /* prepare output */
-  if (out) { if (out->M != LPC.M || out->N != LPC.N) return 0; }
-  else out = new Matrix(LPC.M, LPC.N);
+  unique_ptr<Matrix> ret;
+  if (out) { if (out->M != LPC.M || out->N != LPC.N) return nullptr; }
+  else out = (ret = make_unique<Matrix>(LPC.M, LPC.N)).get();
 
   /* first cepstral coefficient is log(error) from levinson durbin recursion */
   MatrixRowIter(out) out->row(i)[0] = -log(LPC.row(i)[0]);
@@ -342,10 +343,10 @@ Matrix *Features::PLP(const RingSampler::Handle *in, Matrix *out,
   static vector<double> lifter = LifterMatrixROSA(ceps, 0.6); // lifterMatrixHTK(ceps, 22);
   out->MultdiagR(lifter.data(), ceps);
 
-  return out;
+  return ret;
 }
 
-RingSampler *Features::InvPLP(const Matrix *in, int samplerate, Allocator *alloc) {
+unique_ptr<RingSampler> Features::InvPLP(const Matrix *in, int samplerate, Allocator *alloc) {
   /* [dr,aspec,spec] = invmelfcc() */
   if (!alloc) alloc = Singleton<MallocAllocator>::Set();
   Matrix plpcc(in->M, in->N, 0.0, 0, alloc);
@@ -356,15 +357,15 @@ RingSampler *Features::InvPLP(const Matrix *in, int samplerate, Allocator *alloc
   plpcc.MultdiagR(unlifter.data(), ceps);
   Matrix::Print(&plpcc, "sec plp");
 
-  return 0;
+  return nullptr;
 }
 
-Matrix *Features::MFCC(const RingSampler::Handle *in, Matrix *out, Allocator *alloc) {
+unique_ptr<Matrix> Features::MFCC(const RingSampler::Handle *in, Matrix *out, Allocator *alloc) {
   if (!alloc) alloc = Singleton<MallocAllocator>::Set();
 
   /* [mm,aspc,pspc] = melfcc(y/32768, sr, 'maxfreq', sr/2, 'numcep', 20, 'nbands', 40, 'fbtype', 'htkmel', 'dcttype', 3, 'usecmp', 0, 'wintime', 512/44100, 'hoptime', 256/44100, 'dither', 0, 'lifterexp', 0) */
-  static const Matrix *meltrans = FFT2Mel(FLAGS_feat_melbands, FLAGS_feat_minfreq, FLAGS_feat_maxfreq, FLAGS_feat_window, FLAGS_sample_rate)->Transpose(mDelA);
-  static const Matrix *ceptrans = DCT2(FLAGS_feat_cepcoefs, FLAGS_feat_melbands)->Transpose(mDelA);
+  static unique_ptr<const Matrix> meltrans = Matrix::Transpose(FFT2Mel(FLAGS_feat_melbands, FLAGS_feat_minfreq, FLAGS_feat_maxfreq, FLAGS_feat_window, FLAGS_sample_rate));
+  static unique_ptr<const Matrix> ceptrans = Matrix::Transpose(DCT2(FLAGS_feat_cepcoefs, FLAGS_feat_melbands));
 
   /* fft */
   int frames = (in->Len() - (FLAGS_feat_window - FLAGS_feat_hop)) / FLAGS_feat_hop;
@@ -375,29 +376,31 @@ Matrix *Features::MFCC(const RingSampler::Handle *in, Matrix *out, Allocator *al
 
   /* to mel scale */
   Matrix melbuf(fftbuf.M, meltrans->N, 0.0, 0, alloc);
-  Matrix::Mult(&fftbuf, meltrans, &melbuf);
+  Matrix::Mult(&fftbuf, meltrans.get(), &melbuf);
 
   /* log */
   MatrixIter(&melbuf) melbuf.row(i)[j] = log(melbuf.row(i)[j]);
 
   /* prepare output */
-  if (out) { if (out->M != melbuf.M || out->N != ceptrans->N) return 0; }
-  else out = new Matrix(melbuf.M, ceptrans->N);
+  unique_ptr<Matrix> ret;
+  if (out) { if (out->M != melbuf.M || out->N != ceptrans->N) return nullptr; }
+  else out = (ret = make_unique<Matrix>(melbuf.M, ceptrans->N)).get();
 
   /* to cepstral coefs */
-  return Matrix::Mult(&melbuf, ceptrans, out);
+  Matrix::Mult(&melbuf, ceptrans.get(), out);
+  return ret;
 }
 
-RingSampler *Features::InvMFCC(const Matrix *in, int samplerate, const Matrix *f0) {
+unique_ptr<RingSampler> Features::InvMFCC(const Matrix *in, int samplerate, const Matrix *f0) {
   /* [dr,aspec,spec] = invmelfcc() */
-  Matrix *transform = DCT2(in->N, FLAGS_feat_melbands);
+  auto transform = DCT2(in->N, FLAGS_feat_melbands);
   for (int j=0; j<transform->N; j++) transform->row(0)[j] /= 2;
 
-  Matrix *m = Matrix::Mult(in, transform, mDelB);
+  auto m = Matrix::Mult(in, move(transform));
   MatrixIter(m) m->row(i)[j] = exp(m->row(i)[j]);
 
   transform = Mel2FFT(FLAGS_feat_melbands, FLAGS_feat_minfreq, FLAGS_feat_maxfreq, FLAGS_feat_window, samplerate);
-  m = Matrix::Mult(m, transform, mTrnpB|mDelB);
+  m = Matrix::Mult(move(m), move(transform), mTrnpB);
 
   if (0 && f0) {
     if (f0->M != in->M || m->M != in->M) return 0;
@@ -418,7 +421,7 @@ RingSampler *Features::InvMFCC(const Matrix *in, int samplerate, const Matrix *f
       }
     }
 
-    return outbuf.release();
+    return outbuf;
   }
   else {
     unique_ptr<RingSampler> outbuf = make_unique<RingSampler>(samplerate, FLAGS_feat_window + FLAGS_feat_hop * (m->M-1));
@@ -427,26 +430,23 @@ RingSampler *Features::InvMFCC(const Matrix *in, int samplerate, const Matrix *f
       double f = (2 * M_PI * 440) / out.Rate();
       for (int i=0; i<out.Len(); i++) out.Write(sin(f*i)/16 + Rand(-1.0,1.0)/2);
     }
-    unique_ptr<Matrix> spec(Spectogram(&out, 0, FLAGS_feat_window, FLAGS_feat_hop, FLAGS_feat_window, vector<double>(), PowerDomain::complex));
 
-    if (m->M != spec->M || m->N != spec->N) { delete m; return nullptr; }	
+    unique_ptr<Matrix> spec(Spectogram(&out, 0, FLAGS_feat_window, FLAGS_feat_hop, FLAGS_feat_window, vector<double>(), PowerDomain::complex));
+    if (m->M != spec->M || m->N != spec->N) return nullptr;
     MatrixIter(spec) {
       Complex v = {sqrt(m->row(i)[j]), 0}; 
       spec->crow(i)[j].Mult(v);
     }
-
-    delete m;
     return ISpectogram(spec.get(), FLAGS_feat_window, FLAGS_feat_hop, FLAGS_feat_window/2, samplerate);
   }
 }
 
-Matrix *Features::FilterZeroth(Matrix *features) {
-  Matrix *fz = new Matrix(features->M, features->N-1);
+unique_ptr<Matrix> Features::FilterZeroth(unique_ptr<Matrix> features) {
+  auto fz = make_unique<Matrix>(features->M, features->N - 1);
   MatrixRowIter(fz) {
-    double *in=features->row(i), *out=fz->row(i);
+    double *in = features->row(i), *out = fz->row(i);
     MatrixColIter(fz) out[j] = in[j+1];
   }
-  delete features;
   return fz;
 }
 
@@ -479,11 +479,10 @@ void Features::PatchDeltaDeltaCoefficients(int D, const double *in, double *out1
   Vector::Assign(out3, in, D);
 }
 
-Matrix *Features::DeltaCoefficients(Matrix *in, bool dd) {
-  int M=in->M, D=in->N;
-  Matrix *features = new Matrix(M, D*(2+dd));
-  features->AssignR(in);
-  delete in;
+unique_ptr<Matrix> Features::DeltaCoefficients(unique_ptr<Matrix> in, bool dd) {
+  int M = in->M, D = in->N;
+  auto features = make_unique<Matrix>(M, D*(2+dd));
+  features->AssignR(in.get());
 
   /* copy sphinx */
   MatrixRowIter(features) {
@@ -507,9 +506,9 @@ Matrix *Features::DeltaCoefficients(Matrix *in, bool dd) {
   return features;
 }
 
-Matrix *Features::FromFeat(Matrix *features, int flag, bool filterzeroth, bool deltas, bool deltadeltas, bool meannorm, bool varnorm) {
+unique_ptr<Matrix> Features::FromFeat(unique_ptr<Matrix> features, int flag, bool filterzeroth, bool deltas, bool deltadeltas, bool meannorm, bool varnorm) {
   if (flag == Flag::Full) {
-    if (filterzeroth) features = FilterZeroth(features);
+    if (filterzeroth) features = FilterZeroth(move(features));
 
     if (meannorm) {
       vector<double> mean(features->N);
@@ -533,31 +532,31 @@ Matrix *Features::FromFeat(Matrix *features, int flag, bool filterzeroth, bool d
       }            
     }
 
-    if (deltas) features = DeltaCoefficients(features, deltadeltas);
+    if (deltas) features = DeltaCoefficients(move(features), deltadeltas);
   }
   return features;
 }
 
-Matrix *Features::FromFeat(Matrix *features, int flag) {
-  return FromFeat(features, flag, filter_zeroth, deltas, deltadeltas, mean_normalization, variance_normalization);
+unique_ptr<Matrix> Features::FromFeat(unique_ptr<Matrix> features, int flag) {
+  return FromFeat(move(features), flag, filter_zeroth, deltas, deltadeltas, mean_normalization, variance_normalization);
 }
 
-Matrix *Features::FromAsset(SoundAsset *wav, int flag) {
+unique_ptr<Matrix> Features::FromAsset(SoundAsset *wav, int flag) {
   if (wav->channels > 1) ERROR("Features::fromAsset called on SoundAsset with ", wav->channels, " channels");
   RingSampler::Handle B(wav->wav.get());
-  Matrix *features = FromBuf(&B);
-  return FromFeat(features, flag);
+  auto features = FromBuf(&B);
+  return FromFeat(move(features), flag);
 }
 
-Matrix *Features::FromBuf(const RingSampler::Handle *in, Matrix *out, vector<StatefulFilter> *filter, Allocator *alloc) {
-  Matrix *features = 0;
+unique_ptr<Matrix> Features::FromBuf(const RingSampler::Handle *in, Matrix *out, vector<StatefulFilter> *filter, Allocator *alloc) {
+  unique_ptr<Matrix> features;
   if      (FLAGS_feat_type == "MFCC") features = MFCC(in, out, alloc);
   else if (FLAGS_feat_type == "PLP")  features = PLP(in, out, filter, alloc);
   return features;
 }
 
-RingSampler *Features::Reverse(const Matrix *in, int samplerate, const Matrix *f0, Allocator *alloc) {
-  RingSampler *wav = 0;
+unique_ptr<RingSampler> Features::Reverse(const Matrix *in, int samplerate, const Matrix *f0, Allocator *alloc) {
+  unique_ptr<RingSampler> wav;
   if      (FLAGS_feat_type == "MFCC") wav = InvMFCC(in, samplerate, f0);
   else if (FLAGS_feat_type == "PLP")  wav = InvPLP(in, samplerate, alloc);
   return wav;
@@ -573,7 +572,7 @@ int Features::Dimension() {
 
 double *AcousticModel::State::Transit(Compiled *model, Matrix *transit, State *Rstate, unsigned *toOut) {
   int toind = Rstate->val.emission_index;
-  if (toind < 0 || toind >= model->states) FATAL("OOB toind ", toind);
+  if (toind < 0 || toind >= model->state.size()) FATAL("OOB toind ", toind);
   unsigned to = model->state[toind].Id();
   if (toOut) *toOut = to;
   return AcousticModel::State::Transit(transit, to);
@@ -599,7 +598,7 @@ int AcousticModel::State::LocalizeTransitionMap(Matrix *transIn, Matrix *transOu
     int si = scopeState-1, skipped=-1;
     do {
       skipped++;
-      for (si++; si<scope->states; si++) {
+      for (si++; si<scope->state.size(); si++) {
         unsigned match = scope->state[si].Id();
         if (dubdref) {
           if (srcname) { 
@@ -609,12 +608,12 @@ int AcousticModel::State::LocalizeTransitionMap(Matrix *transIn, Matrix *transOu
           }
 
           int matchind = scope->state[si].val.emission_index;
-          if (matchind < 0 || matchind >= dubdref->states) FATAL("OOB matchind ", matchind);
+          if (matchind < 0 || matchind >= dubdref->state.size()) FATAL("OOB matchind ", matchind);
           match = dubdref->state[matchind].Id();
         }
         if (transIn->row(i)[TC_Edge] == match) break;
       }
-      if (si >= scope->states) { ERRORf("cant find %d %f dim(%d,%d) scope(%d,%d) skipped=%d", i, transIn->row(i)[TC_Edge], transIn->M, transIn->N, scopeState, minSamples, skipped); return -1; }
+      if (si >= scope->state.size()) { ERRORf("cant find %d %f dim(%d,%d) scope(%d,%d) skipped=%d", i, transIn->row(i)[TC_Edge], transIn->M, transIn->N, scopeState, minSamples, skipped); return -1; }
     }
     while (minSamples && scope->state[si].val.samples < minSamples);
 
@@ -826,8 +825,8 @@ int AcousticModel::ToCUDA(AcousticModel::Compiled *model) {
 #ifdef LFL_CUDA
   if (!app->cuda) return 0;
   int K=model->state[0].emission.mean.M, D=model->state[0].emission.mean.N, ret;
-  if (!CAM) CAM = new CudaAcousticModel(model->states, K, D);
-  if (K != CAM->K || D != CAM->D || model->states != CAM->states) FATALf("toCUDA mismatch %d != %d || %d != %d || %d != %d", K, CAM->K, D, CAM->D, model->states, CAM->states);
+  if (!CAM) CAM = make_unique<CudaAcousticModel>(model->state.size(), K, D);
+  if (K != CAM->K || D != CAM->D || model->state.size() != CAM->states) FATALf("toCUDA mismatch %d != %d || %d != %d || %d != %d", K, CAM->K, D, CAM->D, model->state.size(), CAM->states);
   if ((ret = CudaAcousticModel::load(CAM, model))) ERROR("CudaAcousticModel::load ret=", ret);
   return ret;
 #else
@@ -835,18 +834,18 @@ int AcousticModel::ToCUDA(AcousticModel::Compiled *model) {
 #endif
 }
 
-AcousticModel::Compiled *AcousticModel::FullyConnected(Compiled *model) {
-  Compiled *hmm = new Compiled(model->states);
-  Matrix tx(model->states, TransitCols);
-  double prob = log(1.0 / model->states);
-  for (int i=0; i<model->states; i++) {
+unique_ptr<AcousticModel::Compiled> AcousticModel::FullyConnected(Compiled *model) {
+  auto hmm = make_unique<Compiled>(model->state.size());
+  Matrix tx(model->state.size(), TransitCols);
+  double prob = log(1.0 / model->state.size());
+  for (int i=0; i<model->state.size(); i++) {
     hmm->state[i].AssignPtr(&model->state[i]);
     hmm->state[i].prior = prob;
     tx.row(i)[TC_Edge] = i;
     tx.row(i)[TC_Cost] = prob;
   }
   AcousticModel::State::SortTransitionMap(&tx);
-  for (int i=0; i<model->states; i++) {
+  for (int i=0; i<model->state.size(); i++) {
     AcousticModel::State *s = &hmm->state[i];
     s->transition = tx;
     MatrixRowIter(&s->transition) s->transition.row(i)[TC_Self] = s->Id();
@@ -854,39 +853,39 @@ AcousticModel::Compiled *AcousticModel::FullyConnected(Compiled *model) {
   return hmm;
 }
 
-AcousticModel::Compiled *AcousticModel::FromUtterance(AssetLoading *loader, Compiled *model, const char *transcript, bool UseTransit) {
+unique_ptr<AcousticModel::Compiled> AcousticModel::FromUtterance(AssetLoading *loader, Compiled *model, const char *transcript, bool UseTransit) {
   return FLAGS_triphone_model ? FromUtterance3(loader, model, transcript, UseTransit) : FromUtterance1(loader, model, transcript, UseTransit);
 }
 
 /* context independent utterance model */
-AcousticModel::Compiled *AcousticModel::FromUtterance1(AssetLoading *loader, AcousticModel::Compiled *model, const char *transcript, bool UseTransit) {
+unique_ptr<AcousticModel::Compiled> AcousticModel::FromUtterance1(AssetLoading *loader, AcousticModel::Compiled *model, const char *transcript, bool UseTransit) {
   /* get pronunciation */
   static const int maxwords=1024;
   PronunciationDict *dict = PronunciationDict::Instance(loader);
   const char *w[maxwords], *wa[maxwords]; int words, phones, len=0;
   if ((words = dict->Pronounce(transcript, w, wa, &phones, maxwords)) <= 0) return 0;
-  Compiled *hmm = new Compiled(phones*StatesPerPhone+words+1);
+  auto hmm = make_unique<Compiled>(phones*StatesPerPhone+words+1);
 
   /* assign states */
-  State::Assign(hmm->state, &len, hmm->states, model, 0, Phoneme::SIL, 0, 1);
+  State::Assign(&hmm->state[0], &len, hmm->state.size(), model, 0, Phoneme::SIL, 0, 1);
   for (int i=0; i<words; i++) {
-    for (int j=0, pl=strlen(w[i]); j<pl; j++) State::Assign(hmm->state, &len, hmm->states, model, 0, w[i][j], 0, StatesPerPhone);
-    State::Assign(hmm->state, &len, hmm->states, model, 0, Phoneme::SIL, 0, 1);
+    for (int j=0, pl=strlen(w[i]); j<pl; j++) State::Assign(&hmm->state[0], &len, hmm->state.size(), model, 0, w[i][j], 0, StatesPerPhone);
+    State::Assign(&hmm->state[0], &len, hmm->state.size(), model, 0, Phoneme::SIL, 0, 1);
   }
-  hmm->states = len;
+  hmm->state.resize(len);
 
   if (FLAGS_speech_recognition_debug) {
     INFO("lattice pre patch");
-    AcousticHMM::PrintLattice(hmm, model);
+    AcousticHMM::PrintLattice(hmm.get(), model);
   }
 
   /* patch & localize transitions */
-  for (int i=0; i<hmm->states; i++) {
+  for (int i=0; i<hmm->state.size(); i++) {
     AcousticModel::State *s = &hmm->state[i];
-    bool lastState = (i+1 == hmm->states);
+    bool lastState = (i+1 == hmm->state.size());
     bool nextStateSil = (!lastState && IsSilence(hmm->state[i+1].name));
-    bool addtx = nextStateSil && i+2<hmm->states;
-    Matrix *trans = new Matrix(2-lastState+addtx, TransitCols, s->Id());
+    bool addtx = nextStateSil && i+2<hmm->state.size();
+    auto trans = make_unique<Matrix>(2-lastState+addtx, TransitCols, s->Id());
 
     double mintx = INFINITY;
     for (int ti=0; ti<s->transition.M; ti++) if (s->transition.row(ti)[TC_Cost] < mintx) mintx = s->transition.row(ti)[TC_Cost];
@@ -912,23 +911,23 @@ AcousticModel::Compiled *AcousticModel::FromUtterance1(AssetLoading *loader, Aco
       trans->row(2)[TC_Cost] = trnext ? trnext[TC_Cost] : mintx;
     }
 
-    s->transition.Absorb(trans);
+    s->transition.Absorb(move(trans));
   }
   return hmm;
 }
 
 /* triphone utterance model */
-AcousticModel::Compiled *AcousticModel::FromUtterance3(AssetLoading *loader, AcousticModel::Compiled *model, const char *transcript, bool UseTransit) {
+unique_ptr<AcousticModel::Compiled> AcousticModel::FromUtterance3(AssetLoading *loader, AcousticModel::Compiled *model, const char *transcript, bool UseTransit) {
   /* get pronunciation */
   PronunciationDict *dict = PronunciationDict::Instance(loader);
   static const int maxwords=1024;
   const char *w[maxwords], *wa[maxwords];
   int words, phones, len=0, depth=0, prevPhonesInWord=0, prevEndWordPhone=0;
   if ((words = dict->Pronounce(transcript, w, wa, &phones, maxwords)) < 0) { DEBUG("pronounce '%s' failed", transcript); return 0; }
-  Compiled *hmm = new Compiled(phones*StatesPerPhone+words*4*StatesPerPhone+StatesPerPhone+1);
+  auto hmm = make_unique<Compiled>(phones*StatesPerPhone+words*4*StatesPerPhone+StatesPerPhone+1);
 
   /* assign states */
-  State::Assign(hmm->state, &len, hmm->states, model, 0, Phoneme::SIL, 0, 1, depth++);
+  State::Assign(&hmm->state[0], &len, hmm->state.size(), model, 0, Phoneme::SIL, 0, 1, depth++);
   for (int i=0; i<words; i++) {
     bool lastword = i == words-1;
     const char *pronunciation = w[i];
@@ -938,8 +937,8 @@ AcousticModel::Compiled *AcousticModel::FromUtterance3(AssetLoading *loader, Aco
       int pn = phonesInWord>1 ? pronunciation[1] : (!lastword ? w[i+1][0] : 0);
 
       /* paralell phoneme paths - no depth increase */
-      if (phonesInWord==1 || prevEndWordPhone)       State::Assign(hmm->state, &len, hmm->states, model, prevEndWordPhone, pronunciation[0], pn, StatesPerPhone, depth);
-      if (phonesInWord==1 && prevEndWordPhone && pn) State::Assign(hmm->state, &len, hmm->states, model, 0,                pronunciation[0], pn, StatesPerPhone, depth);
+      if (phonesInWord==1 || prevEndWordPhone)       State::Assign(&hmm->state[0], &len, hmm->state.size(), model, prevEndWordPhone, pronunciation[0], pn, StatesPerPhone, depth);
+      if (phonesInWord==1 && prevEndWordPhone && pn) State::Assign(&hmm->state[0], &len, hmm->state.size(), model, 0,                pronunciation[0], pn, StatesPerPhone, depth);
     }
 
     int lastphone=0; /* add inner word triphone states and begin/end diphone states */
@@ -947,7 +946,7 @@ AcousticModel::Compiled *AcousticModel::FromUtterance3(AssetLoading *loader, Aco
       int nextphone = j+1 < phonesInWord ? pronunciation[j+1] : 0;
       int phone = pronunciation[j];
 
-      State::Assign(hmm->state, &len, hmm->states, model, lastphone, phone, nextphone, StatesPerPhone, depth++);
+      State::Assign(&hmm->state[0], &len, hmm->state.size(), model, lastphone, phone, nextphone, StatesPerPhone, depth++);
       lastphone = phone;
     }
     depth--;
@@ -958,25 +957,25 @@ AcousticModel::Compiled *AcousticModel::FromUtterance3(AssetLoading *loader, Aco
       int pn = w[i+1][0];
 
       /* paralell phoneme paths - no depth increase */
-      if (phonesInWord==1 && pn && pp) State::Assign(hmm->state, &len, hmm->states, model, pp, p, 0,  StatesPerPhone, depth);
-      if (phonesInWord>1)              State::Assign(hmm->state, &len, hmm->states, model, pp, p, pn, StatesPerPhone, depth);
+      if (phonesInWord==1 && pn && pp) State::Assign(&hmm->state[0], &len, hmm->state.size(), model, pp, p, 0,  StatesPerPhone, depth);
+      if (phonesInWord>1)              State::Assign(&hmm->state[0], &len, hmm->state.size(), model, pp, p, pn, StatesPerPhone, depth);
     }
     depth++;
 
     /* add silence after word */
-    State::Assign(hmm->state, &len, hmm->states, model, 0, Phoneme::SIL, 0, 1, depth++);
+    State::Assign(&hmm->state[0], &len, hmm->state.size(), model, 0, Phoneme::SIL, 0, 1, depth++);
     prevPhonesInWord = phonesInWord;
     prevEndWordPhone = lastphone;
   }
-  hmm->states = len;
+  hmm->state.resize(len);
 
   if (FLAGS_speech_recognition_debug) {
     INFO("lattice pre patch");
-    AcousticHMM::PrintLattice(hmm, model);
+    AcousticHMM::PrintLattice(hmm.get(), model);
   }
 
   /* patch transitions */
-  for (int i=0; i<hmm->states-1; i++) {
+  for (int i=0; i<hmm->state.size()-1; i++) {
     State *s = &hmm->state[i];
     vector<pair<unsigned, float> > tx;
     int as, ap, an, a = ParseName(s->name, &as, &ap, &an);
@@ -990,7 +989,7 @@ AcousticModel::Compiled *AcousticModel::FromUtterance3(AssetLoading *loader, Aco
 
     if (a == Phoneme::SIL || as == StatesPerPhone-1) {
       /* determine matching next triphone states */
-      for (int j=i+1; j<hmm->states; j++) {
+      for (int j=i+1; j<hmm->state.size(); j++) {
         State *sj = &hmm->state[j];
 
         int bs, bp, bn, b = ParseName(sj->name, &bs, &bp, &bn);
@@ -1044,17 +1043,17 @@ AcousticModel::Compiled *AcousticModel::FromUtterance3(AssetLoading *loader, Aco
 
   if (FLAGS_speech_recognition_debug) {
     INFO("lattice pre localization");
-    AcousticHMM::PrintLattice(hmm, model);
+    AcousticHMM::PrintLattice(hmm.get(), model);
   }
 
   /* localize transitions */
-  for (int i=0; i<hmm->states-1; i++) {
+  for (int i=0; i<hmm->state.size()-1; i++) {
     State *s = &hmm->state[i];
     int as, ap, an, a = ParseName(s->name, &as, &ap, &an);
     bool patch = (a == Phoneme::SIL || as == StatesPerPhone-1);
 
     /* resolve to forward states using val.samples minSamples filter on paralell phoneme 'depth' */
-    if (State::LocalizeTransitionMap(&s->transition, &s->transition, hmm, i, s->val.samples + patch, model, patch ? s->name.c_str() : 0)) { ERROR("localize transition ", i, " ", s->name.c_str(), " '", transcript, "'"); return 0; }
+    if (State::LocalizeTransitionMap(&s->transition, &s->transition, hmm.get(), i, s->val.samples + patch, model, patch ? s->name.c_str() : 0)) { ERROR("localize transition ", i, " ", s->name.c_str(), " '", transcript, "'"); return 0; }
 
     /* transition to self for patched state */ 
     s->transition.M++;
@@ -1062,17 +1061,17 @@ AcousticModel::Compiled *AcousticModel::FromUtterance3(AssetLoading *loader, Aco
 
   if (FLAGS_speech_recognition_debug) {
     INFO("lattice post localization");
-    AcousticHMM::PrintLattice(hmm, model);
+    AcousticHMM::PrintLattice(hmm.get(), model);
   }
 
   return hmm;
 }
 
-AcousticModel::Compiled *AcousticModel::FromModel1(StateCollection *model, bool rewriteTransitions) {
+unique_ptr<AcousticModel::Compiled> AcousticModel::FromModel1(StateCollection *model, bool rewriteTransitions) {
   int states = model->GetStateCount(), len = 0;
   if (states <= 0) return 0;
 
-  Compiled *hmm = new Compiled(states);
+  auto hmm = make_unique<Compiled>(states);
   AcousticModel::StateCollection::Iterator iter;
   State *sil=0;
   for (model->BeginState(&iter); !iter.done; model->NextState(&iter)) {
@@ -1082,20 +1081,20 @@ AcousticModel::Compiled *AcousticModel::FromModel1(StateCollection *model, bool 
   }
   hmm->state[len++].AssignPtr(sil);
 
-  for (int i=0; i<hmm->states; i++) {
+  for (int i=0; i<hmm->state.size(); i++) {
     State *s = &hmm->state[i];
     s->transition.Absorb(s->transition.Clone());
-    if (State::LocalizeTransitionMap(&s->transition, &s->transition, hmm, 0)) { ERROR("localize transition ", i, " ", s->name); return 0; }
+    if (State::LocalizeTransitionMap(&s->transition, &s->transition, hmm.get(), 0)) { ERROR("localize transition ", i, " ", s->name); return 0; }
   }
 
   if (rewriteTransitions) {
     double tp = log(1.0/LFL_PHONES);
-    Matrix *trans = new Matrix(LFL_PHONES, TransitCols);
+    auto trans = make_unique<Matrix>(LFL_PHONES, TransitCols);
     MatrixRowIter(trans) {
       trans->row(i)[TC_Edge] = i*StatesPerPhone;
       trans->row(i)[TC_Cost] = tp;
     }
-    for (int i=0; i<hmm->states; i++) {
+    for (int i=0; i<hmm->state.size(); i++) {
       State *s = &hmm->state[i];
       string n = s->name;
       if (!IsSilence(s->name) && n.substr(n.size()-8) != "State_02") continue;
@@ -1103,7 +1102,6 @@ AcousticModel::Compiled *AcousticModel::FromModel1(StateCollection *model, bool 
       s->transition.Absorb(trans->Clone()); 
       MatrixRowIter(&s->transition) s->transition.row(i)[TC_Self] = s->Id();
     }
-    delete trans;
   }
 
   return hmm;
@@ -1147,7 +1145,7 @@ int AcousticModelFile::Open(const char *name, const char *dir, int lastiter, boo
   }
 
   AcousticModel::Compiled::Open(M);
-  for (int i=0; i<states; i++) {
+  for (int i=0; i<state.size(); i++) {
     state[i].name = (*names)[i];
     state[i].prior = initial->row(i)[0];
     state[i].emission.AssignDataPtr(K, N, mean->row(i*K), covar->row(i*K), prior->row(i));
@@ -1191,7 +1189,7 @@ int AcousticModelFile::Open(const char *name, const char *dir, int lastiter, boo
 /* AcousticHMM */
 
 double AcousticHMM::ForwardBackward(AcousticModel::Compiled *model, Matrix *observations, int InitMax, double beamWidth, HMM::BaumWelchAccum *BWaccum, int flag) {
-  int NBest=1, M=observations->M, N=model->states;
+  int NBest=1, M=observations->M, N=model->state.size();
   Matrix alpha(M, N, -INFINITY), beta(M, N, -INFINITY), gamma(M, N, -INFINITY), xi(N, N, -INFINITY);
 
   HMM::ActiveStateIndex active(N, NBest, beamWidth, InitMax);
@@ -1209,7 +1207,7 @@ double AcousticHMM::ForwardBackward(AcousticModel::Compiled *model, Matrix *obse
 }
 
 double AcousticHMM::Viterbi(AcousticModel::Compiled *model, Matrix *observations, Matrix *path, int InitMax, double beamWidth, int flag) {
-  int NBest=1, M=observations->M, N=model->states;
+  int NBest=1, M=observations->M, N=model->state.size();
   TransitMap transit(model, flag & Flag::UseTransit);
   EmissionArray emit(model, observations, flag & Flag::UsePrior);
 
@@ -1237,7 +1235,7 @@ double AcousticHMM::UniformViterbi(AcousticModel::Compiled *model, Matrix *obser
   if (!DimCheck("HMM::viterbi", viterbi->M, observations->M)) return -INFINITY;
 
   int obvs = observations->M, states=0;
-  for (int i=0; i<model->states; i++) {
+  for (int i=0; i<model->state.size(); i++) {
     if (AcousticModel::IsSilence(model->state[i].name)) continue;
     states++;
   }
@@ -1246,17 +1244,17 @@ double AcousticHMM::UniformViterbi(AcousticModel::Compiled *model, Matrix *obser
   int spm = int(spmF), len=0;
   spmF -= spm;
 
-  for (int i=0; i<model->states; i++) {
+  for (int i=0; i<model->state.size(); i++) {
     if (AcousticModel::IsSilence(model->state[i].name)) continue;
     for (int j=0; j<spm && len<obvs; j++) viterbi->row(len++)[0] = i;
     if (len<obvs && Rand(0.0, 1.0) < spmF) viterbi->row(len++)[0] = i;
   }
-  while (len<obvs) viterbi->row(len++)[0] = model->states-1;
+  while (len<obvs) viterbi->row(len++)[0] = model->state.size()-1;
   return 0;
 }
 
 void AcousticHMM::PrintLattice(AcousticModel::Compiled *hmm, AcousticModel::Compiled *model) {
-  for (int i=0; i<hmm->states; i++) {
+  for (int i=0; i<hmm->state.size(); i++) {
     AcousticModel::State *s = &hmm->state[i];
     string v = StringPrintf("%03d ", i);
     StrAppend(&v, s->name, " (", s->Id(), " ", model ? model->state[s->val.emission_index].Id() : 0, ")");
@@ -1307,24 +1305,23 @@ void AcousticHMM::EmissionArray::Calc(AcousticModel::Compiled *model, HMM::Activ
 
 /* decoder */
 
-Matrix *Decoder::DecodeFile(AssetLoading *loader, AcousticModel::Compiled *model, const char *fn, double beamWidth) {
+unique_ptr<Matrix> Decoder::DecodeFile(AssetLoading *loader, AcousticModel::Compiled *model, const char *fn, double beamWidth) {
   SoundAsset input(loader, "input", fn, 0, 0, 0, 0);
   input.Load();
   if (!input.wav) { ERROR(fn, " not found"); return 0; }
 
-  Matrix *features = Features::FromAsset(&input, Features::Flag::Full);
-  Matrix *ret = DecodeFeatures(model, features, beamWidth);
-  delete features;
-  return ret;
+  auto features = Features::FromAsset(&input, Features::Flag::Full);
+  return DecodeFeatures(model, features.get(), beamWidth);
 }
 
-Matrix *Decoder::DecodeFeatures(AcousticModel::Compiled *model, Matrix *features, double beamWidth, int flag, Window *visualize) {
+unique_ptr<Matrix> Decoder::DecodeFeatures(AcousticModel::Compiled *model, Matrix *features, double beamWidth, int flag, Window *visualize) {
   if (!DimCheck("DecodeFeatures", features->N, model->state[0].emission.mean.N)) return 0;
   if (FLAGS_speech_recognition_debug) AcousticHMM::PrintLattice(model);
 
-  Matrix *viterbi = new Matrix(features->M, 1); Timer vtime;
-  double vprob = AcousticHMM::Viterbi(model, features, viterbi, 0, beamWidth, flag);
-  if (visualize) Decoder::VisualizeFeatures(visualize, model, features, viterbi, vprob, vtime.GetTime(), flag & AcousticHMM::Flag::Interactive);
+  Timer vtime;
+  auto viterbi = make_unique<Matrix>(features->M, 1);
+  double vprob = AcousticHMM::Viterbi(model, features, viterbi.get(), 0, beamWidth, flag);
+  if (visualize) Decoder::VisualizeFeatures(visualize, model, features, viterbi.get(), vprob, vtime.GetTime(), flag & AcousticHMM::Flag::Interactive);
 
   return viterbi;
 }
@@ -1356,10 +1353,9 @@ void Decoder::VisualizeFeatures(Window *w, AcousticModel::Compiled *model, Matri
   sa.wav = unique_ptr<RingSampler>(Features::Reverse(MFCC, FLAGS_sample_rate));
   RingSampler::Handle B = RingSampler::Handle(sa.wav.get());
 
-  Matrix *spect = Spectogram(&B, 0, FLAGS_feat_window, FLAGS_feat_hop, FLAGS_feat_window, vector<double>(), PowerDomain::dB);
+  auto spect = Spectogram(&B, 0, FLAGS_feat_window, FLAGS_feat_hop, FLAGS_feat_window, vector<double>(), PowerDomain::dB);
   Asset *snap = app->asset("snap");
-  glSpectogram(gc.gd, spect, &snap->tex, 0);
-  delete spect;
+  glSpectogram(gc.gd, spect.get(), &snap->tex, 0);
 
   if (FLAGS_enable_audio) app->audio->QueueMixBuf(&B);
   INFO("vprob=", vprob, " vtime=", vtime.count());
@@ -1409,19 +1405,13 @@ void Decoder::VisualizeFeatures(Window *w, AcousticModel::Compiled *model, Matri
 int Resynthesize(Audio *s, const SoundAsset *sa) {
   if (!sa->wav) return -1;
   RingSampler::Handle B(sa->wav.get());
-  Matrix *m = Features::FromBuf(&B);
-  Matrix *f0 = F0Stream(&B, 0, FLAGS_feat_window, FLAGS_feat_hop);
-
-  int ret = -1;
-  RingSampler *resynth = Features::Reverse(m, B.Rate(), f0);
+  auto m = Features::FromBuf(&B);
+  auto f0 = F0Stream(&B, 0, FLAGS_feat_window, FLAGS_feat_hop);
+  auto resynth = Features::Reverse(m.get(), B.Rate(), f0.get());
   if (resynth) {
-    B = RingSampler::Handle(resynth);
+    B = RingSampler::Handle(resynth.get());
     s->QueueMixBuf(&B);	
   }
-
-  delete m;
-  delete f0;
-  delete resynth;
   return 0;
 }
 

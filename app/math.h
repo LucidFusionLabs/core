@@ -444,7 +444,7 @@ template <class X> struct Vec {
 };
 typedef Vec<double> Vector;
 
-enum { mTrnpA=1, mTrnpB=1<<1, mTrnpC=1<<2, mDelA=1<<3, mDelB=1<<4, mZeroOnly=1<<5, mNeg=1<<6 };
+enum { mTrnpA=1, mTrnpB=1<<1, mTrnpC=1<<2, mZeroOnly=1<<3, mNeg=1<<4 };
 #define MatrixRowIter(m) for(int i=0;i<(m)->M;i++)
 #define MatrixColIter(m) for(int j=0;j<(m)->N;j++)
 #define MatrixIter(m) MatrixRowIter(m) MatrixColIter(m)
@@ -502,16 +502,21 @@ template <class T=double> struct matrix {
   void Assign(int Mrows, int Ncols, long long Bytes, int Flag, Allocator *Alloc) { M=Mrows; N=Ncols; bytes=Bytes; flag=Flag; alloc=Alloc; }
   void AssignL(const matrix *m) { MatrixIter(this) row(i)[j] = m->row(i)[j]; }
   void AssignR(const matrix *m) { MatrixIter(m)    row(i)[j] = m->row(i)[j]; }
-  void AssignL(const matrix *m, int flag) { bool neg=flag&mNeg; MatrixIter(this) row(i)[j] = neg ? Negate(m->row(i)[j]) : m->row(i)[j]; CompleteOperation(m, 0, 0, flag); }
-  void AssignR(const matrix *m, int flag) { bool neg=flag&mNeg; MatrixIter(m)    row(i)[j] = neg ? Negate(m->row(i)[j]) : m->row(i)[j]; CompleteOperation(m, 0, 0, flag); }
+  void AssignL(const matrix *m, int f) { bool neg=f&mNeg; MatrixIter(this) row(i)[j] = neg ? Negate(m->row(i)[j]) : m->row(i)[j]; }
+  void AssignR(const matrix *m, int f) { bool neg=f&mNeg; MatrixIter(m)    row(i)[j] = neg ? Negate(m->row(i)[j]) : m->row(i)[j]; }
+  void AssignL(unique_ptr<matrix> m, int f) { return AssignL(m.get(), f); }
+  void AssignR(unique_ptr<matrix> m, int f) { return AssignR(m.get(), f); }
   void AssignDiagonal(double v) { MatrixRowIter(this) row(i)[i] = v; }
 
-  void Absorb(matrix *nm) { 
+  void MultdiagR(double *diagonalmatrix, int len=0) { /* this = this * diagnolmatrix */
+    if (len && len != N) FATAL("mismatch ", len, " != ", N);
+    MatrixIter(this) row(i)[j] *= diagonalmatrix[j];
+  }
+
+  void Absorb(unique_ptr<matrix> nm) { 
     if (m) { alloc->Free(m); m=0; }
     Assign(nm->M, nm->N, nm->M*nm->N*sizeof(T), nm->flag, nm->alloc);
     m = nm->m;
-    nm->m = 0;
-    delete nm;
   }
 
   void AssignDataPtr(int nm, int nn, T *nv, Allocator *Alloc=0) {
@@ -549,49 +554,52 @@ template <class T=double> struct matrix {
     bytes = 0;
   }
 
-  matrix *Clone() const {
-    matrix *ret = new matrix(M,N,flag);
+  unique_ptr<matrix> Clone() const {
+    auto ret = make_unique<matrix>(M, N, flag);
     MatrixIter(ret) { ret->row(i)[j] = row(i)[j]; }
     return ret;
   }
 
-  matrix *Transpose(int flag=0) const { return matrix::Transpose(this, flag); }
-  matrix *Mult(matrix *B, int flag=0) const { return matrix::Mult(this, B, flag); }
-  void MultdiagR(double *diagonalmatrix, int len=0) { /* this = this * diagnolmatrix */
-    if (len && len != N) FATAL("mismatch ", len, " != ", N);
-    MatrixIter(this) row(i)[j] *= diagonalmatrix[j];
-  }
-
-  static matrix *Transpose(const matrix *A, int flag=0) {
-    matrix *C = new matrix(A->N, A->M);
+  static unique_ptr<matrix> Transpose(unique_ptr<matrix> A, int flag=0) { return Transpose(A.get(), flag); }
+  static unique_ptr<matrix> Transpose(const matrix *A, int flag=0) {
+    auto C = make_unique<matrix>(A->N, A->M);
     MatrixIter(A) C->row(j)[i] = A->row(i)[j];
-    if (flag & mDelA) delete A;
     return C;
   }
 
-  static matrix *Add(const matrix *A, const matrix *B, matrix *C, int flag=0) {
-    if (A->M != B->M || B->M != C->M || A->N != B->N || B->N != C->N) { ERROR("add ", A->M, ", ", A->N, ", ", B->M, ", ", B->N, ", ", C->M, ", ", C->N); return 0; }
+  static bool Add(unique_ptr<matrix> A, const matrix*      B, matrix* C, int f=0) { return Add(A.get(), B, C, f); }
+  static bool Add(const matrix*      A, unique_ptr<matrix> B, matrix* C, int f=0) { return Add(A, B.get(), C, f); }
+  static bool Add(unique_ptr<matrix> A, unique_ptr<matrix> B, matrix* C, int f=0) { return Add(A.get(), B.get(), C, f); }
+  static bool Add(const matrix*      A, const matrix*      B, matrix* C, int f=0) {
+    if (A->M != B->M || B->M != C->M || A->N != B->N || B->N != C->N) return ERRORv(false, "add ", A->M, ", ", A->N, ", ", B->M, ", ", B->N, ", ", C->M, ", ", C->N);
     MatrixIter(A) C->row(i)[j] = A->row(i)[j] + B->row(i)[j];
-    return CompleteOperation(A, B, C, flag);
+    return true;
   }
 
-  static matrix *Sub(const matrix *A, const matrix *B, matrix *C, int flag=0) {
-    if (A->M != B->M || B->M != C->M || A->N != B->N || B->N != C->N) { ERROR("sub ", A->M, ", ", A->N, ", ", B->M, ", ", B->N, ", ", C->M, ", ", C->N); return 0; }
+  static bool Sub(unique_ptr<matrix> A, const matrix*      B, matrix* C, int f=0) { return Sub(A.get(), B, C, f); }
+  static bool Sub(const matrix*      A, unique_ptr<matrix> B, matrix* C, int f=0) { return Sub(A, B.get(), C, f); }
+  static bool Sub(unique_ptr<matrix> A, unique_ptr<matrix> B, matrix* C, int f=0) { return Sub(A.get(), B.get(), C, f); }
+  static bool Sub(const matrix*      A, const matrix*      B, matrix* C, int f=0) {
+    if (A->M != B->M || B->M != C->M || A->N != B->N || B->N != C->N) return ERRORv(false, "sub ", A->M, ", ", A->N, ", ", B->M, ", ", B->N, ", ", C->M, ", ", C->N);
     MatrixIter(A) C->row(i)[j] = A->row(i)[j] - B->row(i)[j];
-    return CompleteOperation(A, B, C, flag);
+    return true;
   }
 
-  static matrix *Mult(const matrix *A, const matrix *B, int flag=0) {
-    matrix *C = new matrix((flag & mTrnpA)?A->N:A->M, (flag & mTrnpB)?B->M:B->N);
-    return matrix::Mult(A, B, C, flag);
+  static unique_ptr<matrix> Mult(unique_ptr<matrix> A, const matrix*      B, int f=0) { return Mult(A.get(), B, f); }
+  static unique_ptr<matrix> Mult(const matrix*      A, unique_ptr<matrix> B, int f=0) { return Mult(A, B.get(), f); }
+  static unique_ptr<matrix> Mult(unique_ptr<matrix> A, unique_ptr<matrix> B, int f=0) { return Mult(A.get(), B.get(), f); }
+  static unique_ptr<matrix> Mult(const matrix*      A, const matrix*      B, int f=0) {
+    auto C = make_unique<matrix>((f & mTrnpA) ? A->N : A->M, (f & mTrnpB) ? B->M : B->N);
+    matrix::Mult(A, B, C.get(), f);
+    return C;
   }
 
-  static matrix *Mult(const matrix *A, const matrix *B, matrix *C, int flag=0) {
+  static bool Mult(const matrix *A, const matrix *B, matrix *C, int flag=0) {
     bool trnpA = flag & mTrnpA, trnpB = flag & mTrnpB, trnpC = flag & mTrnpC, neg = flag & mNeg;
     int AM = trnpA ? A->N : A->M, AN = trnpA ? A->M : A->N;
     int BM = trnpB ? B->N : B->M, BN = trnpB ? B->M : B->N;
     int CM = trnpC ? C->N : C->M, CN = trnpC ? C->M : C->N;
-    if (AN != BM || CM != AM || CN != BN) { ERROR("mult ", AM, ", ", AN, ", ", BM, ", ", BN, ", ", CM, ", ", CN); return 0; }
+    if (AN != BM || CM != AM || CN != BN) return ERRORv(false, "mult ", AM, ", ", AN, ", ", BM, ", ", BN, ", ", CM, ", ", CN);
 
     for (int i=0; i<AM; i++) {
       for (int j=0; j<BN; j++) {
@@ -605,11 +613,11 @@ template <class T=double> struct matrix {
         }
       }
     }
-    return CompleteOperation(A, B, C, flag);
+    return true;
   }
 
-  static matrix *Convolve(const matrix *A, const matrix *B, matrix *C, int flag=0) {
-    if (A->M != C->M || A->N != C->N || (B->M % 2) != 1 || (B->N % 2) != 1) { ERROR("convolve ", A->M, ", ", A->N, " ", B->M, ", ", B->N, " ", C->M, ", ", C->N); return 0; }
+  static bool Convolve(const matrix *A, const matrix *B, matrix *C, int flag=0) {
+    if (A->M != C->M || A->N != C->N || (B->M % 2) != 1 || (B->N % 2) != 1) return ERRORv(false, "convolve ", A->M, ", ", A->N, " ", B->M, ", ", B->N, " ", C->M, ", ", C->N);
     bool zero_only = flag & mZeroOnly;
     MatrixIter(A) {
       double ret = 0;
@@ -627,13 +635,7 @@ template <class T=double> struct matrix {
       }
       C->row(i)[j] = ret;
     }
-    return CompleteOperation(A, B, C, flag);
-  }
-
-  static matrix *CompleteOperation(const matrix *A, const matrix *B, matrix *C, int flag) {
-    if (flag & mDelA) delete A;
-    if (flag & mDelB) delete B;
-    return C;
+    return true;
   }
 
   static T Max(const matrix *A) {
@@ -752,10 +754,10 @@ double fft_abs2(const float *a, int fftlen, int index);
 double fft_abs2(const double *a, int fftlen, int index);
 
 /* inverse discrete fourier transform */
-Matrix *IDFT(int rows, int cols);
+unique_ptr<Matrix> IDFT(int rows, int cols);
 
 /* discrete cosine transform type 2 */
-Matrix *DCT2(int rows, int cols);
+unique_ptr<Matrix> DCT2(int rows, int cols);
 
 /* mahalanobis distance squared */ 
 double MahalDist2(const double *mean, const double *diagcovar, const double *vec, int D);
@@ -813,30 +815,30 @@ struct Semiring {
 };
 
 struct LogSemiring : public Semiring {
-  double Zero() { return INFINITY; }
-  double One () { return 0; }
-  double Add (double l, double r) { return -LogAdd(-l, -r); }
-  double Mult(double l, double r) { return l + r; }
-  double Div (double l, double r) { return l - r; }
-  bool ApproxEqual(double l, double r) { return Equal(l, r); }
+  double Zero() override { return INFINITY; }
+  double One () override { return 0; }
+  double Add (double l, double r) override { return -LogAdd(-l, -r); }
+  double Mult(double l, double r) override { return l + r; }
+  double Div (double l, double r) override { return l - r; }
+  bool ApproxEqual(double l, double r) override { return Equal(l, r); }
 };
 
 struct TropicalSemiring : public Semiring {
-  double Zero() { return INFINITY; }
-  double One () { return 0; }
-  double Add (double l, double r) { return min(l, r); }
-  double Mult(double l, double r) { return l + r; }
-  double Div (double l, double r) { return l - r; }
-  bool ApproxEqual(double l, double r) { return Equal(l, r); }
+  double Zero() override { return INFINITY; }
+  double One () override { return 0; }
+  double Add (double l, double r) override { return min(l, r); }
+  double Mult(double l, double r) override { return l + r; }
+  double Div (double l, double r) override { return l - r; }
+  bool ApproxEqual(double l, double r) override { return Equal(l, r); }
 };
 
 struct BooleanSemiring : public Semiring {
-  double Zero() { return 0; }
-  double One () { return 1; }
-  double Add (double l, double r) { return l || r; }
-  double Mult(double l, double r) { return l && r; }
-  double Div (double l, double r) { FATAL("not implemented: ", -1); }
-  bool ApproxEqual(double l, double r) { return l == r; }
+  double Zero() override { return 0; }
+  double One () override { return 1; }
+  double Add (double l, double r) override { return l || r; }
+  double Mult(double l, double r) override { return l && r; }
+  double Div (double l, double r) override { FATAL("not implemented: ", -1); }
+  bool ApproxEqual(double l, double r) override { return l == r; }
 };
 
 struct DiscreteDistribution {
@@ -871,7 +873,7 @@ void Invert(const Matrix *in, Matrix *out);
 void SVD(const Matrix *A, Matrix *D, Matrix *U, Matrix *V);
 
 /* principal components analysis */
-Matrix *PCA(const Matrix *obv, Matrix *projected, double *var=0);
+unique_ptr<Matrix> PCA(const Matrix *obv, Matrix *projected, double *var=0);
 
 }; // namespace LFL
 #endif // LFL_CORE_APP_MATH_H__

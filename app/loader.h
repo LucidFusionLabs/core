@@ -28,7 +28,7 @@ struct AudioAssetLoader {
     Handle(Handle &&x) : UniqueVoidPtr(move(x)), parent(x.parent), owner(x.owner) {}
     Handle(AudioAssetLoader *p=0, void *v=0, bool o=1) : UniqueVoidPtr(v), parent(p), owner(o) {}
     Handle &operator=(Handle &&x) { reset(x.release()); parent=x.parent; owner=x.owner; return *this; }
-    void reset(void *x) { if (owner && v) parent->UnloadAudioFile(*this); v=x; }
+    void reset(void *x) override { if (owner && v) parent->UnloadAudioFile(*this); v=x; }
   };
 
   virtual void UnloadAudioFile(Handle&) = 0;
@@ -47,7 +47,7 @@ struct VideoAssetLoader {
     Handle(Handle &&x) : UniqueVoidPtr(move(x)), parent(x.parent), owner(x.owner) {}
     Handle(VideoAssetLoader *p=0, void *v=0, bool o=1) : UniqueVoidPtr(v), parent(p), owner(o) {}
     Handle &operator=(Handle &&x) { reset(x.release()); parent=x.parent; owner=x.owner; return *this; }
-    void reset(void *x) { if (v) parent->UnloadVideoFile(*this); v=x; }
+    void reset(void *x) override { if (v) parent->UnloadVideoFile(*this); v=x; }
   };
 
   virtual void UnloadVideoFile(Handle&) = 0;
@@ -64,7 +64,7 @@ struct MovieAssetLoader {
     Handle(Handle &&x) : UniqueVoidPtr(move(x)), parent(x.parent), owner(x.owner) {}
     Handle(MovieAssetLoader *p=0, void *v=0, bool o=1) : UniqueVoidPtr(v), parent(p), owner(o) {}
     Handle &operator=(Handle &&x) { reset(x.release()); parent=x.parent; owner=x.owner; return *this; }
-    void reset(void *x) { if (v) parent->UnloadMovieFile(*this); v=x; }
+    void reset(void *x) override { if (v) parent->UnloadMovieFile(*this); v=x; }
   };
 
   virtual void UnloadMovieFile(Handle&) = 0;
@@ -75,9 +75,9 @@ struct MovieAssetLoader {
 };
 
 struct AssetLoaderInterface : public AudioAssetLoader, public VideoAssetLoader, public MovieAssetLoader {
-  virtual VideoAssetLoader *GetVideoAssetLoader(const char *fn) { return this; }
-  virtual AudioAssetLoader *GetAudioAssetLoader(const char *fn) { return this; }
-  virtual MovieAssetLoader *GetMovieAssetLoader(const char *fn) { return this; }
+  VideoAssetLoader *GetVideoAssetLoader(const char *fn) { return this; }
+  AudioAssetLoader *GetAudioAssetLoader(const char *fn) { return this; }
+  MovieAssetLoader *GetMovieAssetLoader(const char *fn) { return this; }
 };
 
 struct JpegReader {
@@ -110,21 +110,21 @@ UNALIGNED_struct WavHeader {
 UNALIGNED_END(WavHeader, WavHeader::Size);
 
 struct WavReader {
-  File *f;
+  optional_ptr<File> f;
   int last;
   ~WavReader() { Close(); }
-  WavReader(File *F=0) { Open(F); }
-  bool Open(File *F, WavHeader *H=0);
+  WavReader(optional_ptr<File> F=optional_ptr<File>()) { Open(move(F)); }
+  bool Open(optional_ptr<File> F, WavHeader *H=0);
   void Close() { if (f) f->Close(); }
   int Read(RingSampler::Handle *, int offset, int size);
 };
 
 struct WavWriter {
-  File *f;
+  optional_ptr<File> f;
   int wrote;
   ~WavWriter() { Flush(); }
-  WavWriter(File *F=0) { Open(F); }
-  void Open(File *F);
+  WavWriter(optional_ptr<File> F=optional_ptr<File>()) { Open(move(F)); }
+  void Open(optional_ptr<File> F);
   int Write(const RingSampler::Handle *, bool flush=true);
   int Flush();
 };
@@ -133,7 +133,7 @@ struct ZLibStream : public UniqueVoidPtr {
   ZLibStream();
   ZLibStream(ZLibStream &&x) : UniqueVoidPtr(move(x)) {}
   ~ZLibStream() { reset(0); }
-  void reset(void *x);
+  void reset(void *x) override;
 };
 
 struct ZLibReader {
@@ -172,7 +172,7 @@ struct AssetLoader : public Module {
   AssetLoading     *loading;
   AssetLoader(AssetLoading*);
   ~AssetLoader();
-  int Init();
+  int Init() override;
 };
 
 unique_ptr<AssetLoaderInterface> CreateAssetLoader(AssetLoading*);
@@ -185,22 +185,22 @@ struct SimpleAssetLoader : public AssetLoaderInterface {
   virtual void *LoadFileNamed(const string &filename);
   virtual void UnloadFile(void *h);
 
-  virtual void UnloadAudioFile(AudioAssetLoader::Handle &h);
-  virtual AudioAssetLoader::Handle LoadAudioFile(unique_ptr<File>);
-  virtual AudioAssetLoader::Handle LoadAudioFileNamed(const string &filename);
-  virtual void LoadAudio(AudioAssetLoader::Handle &h, SoundAsset *a, int seconds, int flag);
-  virtual int RefillAudio(SoundAsset *a, int reset);
+  void UnloadAudioFile(AudioAssetLoader::Handle &h) override;
+  AudioAssetLoader::Handle LoadAudioFile(unique_ptr<File>) override;
+  AudioAssetLoader::Handle LoadAudioFileNamed(const string &filename) override;
+  void LoadAudio(AudioAssetLoader::Handle &h, SoundAsset *a, int seconds, int flag) override;
+  int RefillAudio(SoundAsset *a, int reset) override;
 
-  virtual void UnloadVideoFile(VideoAssetLoader::Handle &h);
-  virtual VideoAssetLoader::Handle LoadVideoFile(unique_ptr<File>);
-  virtual VideoAssetLoader::Handle LoadVideoFileNamed(const string &filename);
-  virtual void LoadVideo(VideoAssetLoader::Handle &h, Texture *out, int load_flag=VideoAssetLoader::Flag::Default);
+  void UnloadVideoFile(VideoAssetLoader::Handle &h) override;
+  VideoAssetLoader::Handle LoadVideoFile(unique_ptr<File>) override;
+  VideoAssetLoader::Handle LoadVideoFileNamed(const string &filename) override;
+  void LoadVideo(VideoAssetLoader::Handle &h, Texture *out, int load_flag=VideoAssetLoader::Flag::Default) override;
 
-  virtual void UnloadMovieFile(MovieAssetLoader::Handle &h);
-  virtual MovieAssetLoader::Handle LoadMovieFile(unique_ptr<File>);
-  virtual MovieAssetLoader::Handle LoadMovieFileNamed(const string &filename);
-  virtual void LoadMovie(MovieAssetLoader::Handle &h, MovieAsset *a);
-  virtual int PlayMovie(MovieAsset *a, int seek) ;
+  void UnloadMovieFile(MovieAssetLoader::Handle &h) override;
+  MovieAssetLoader::Handle LoadMovieFile(unique_ptr<File>) override;
+  MovieAssetLoader::Handle LoadMovieFileNamed(const string &filename) override;
+  void LoadMovie(MovieAssetLoader::Handle &h, MovieAsset *a) override;
+  int PlayMovie(MovieAsset *a, int seek) override;
 };
 
 struct SimpleVideoResampler : public VideoResamplerInterface {

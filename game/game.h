@@ -110,15 +110,15 @@ struct Game {
     void Heartbeat(Connection *c);
   };
 
-  struct ConnectionData {
+  struct ConnectionData : public Connection::Data {
     Game::EntityID entityID=0;
     string playerName;
     unsigned short ping=0, team=0, seq=0, score=0;
     bool rcon_auth=0;
     Game::ReliableUDPNetwork retry;
     ConnectionData() : retry(UDPClient::Sendto) {}
-    static void Init(Connection *c) { CHECK_EQ(0, c->data); c->data = new ConnectionData(); }
-    static ConnectionData *Get(Connection *c) { return reinterpret_cast<ConnectionData*>(c->data); }
+    static void Init(Connection *c) { CHECK_EQ(nullptr, c->data.get()); c->data = make_unique<ConnectionData>(); }
+    static ConnectionData *Get(Connection *c) { return reinterpret_cast<ConnectionData*>(c->data.get()); }
   };
 
   struct Controller {
@@ -169,7 +169,7 @@ struct Game {
   int *TeamCount(int team) { CHECK(team >= 0 && team < sizeofarray(teamcount)); return &teamcount[team]; }
 
   EntityID NewID() { do { if (!++next_id) continue; } while (scene->Get(StrCat(next_id))); return next_id; }
-  Entity *Add(EntityID id, Entity *e) { e->SetName(StringPrintf("%05d", id)); return scene->Add(e); }
+  Entity *Add(EntityID id, unique_ptr<Entity> e) { e->SetName(StringPrintf("%05d", id)); return scene->Add(move(e)); }
   Entity *Get(EntityID id) { return scene->Get(StringPrintf("%05d", id)); }
   virtual void Del(EntityID id) { scene->Del(StringPrintf("%05d", id)); }
   static EntityID GetID(const Entity *e) { return atoi(e->name); }
@@ -228,53 +228,53 @@ struct GameServer : public Connection::Handler {
   ApplicationShutdown *shutdown;
   SocketServices *net;
   Game *world;
-  GameBots *bots;
+  GameBots *bots=0;
   Time timestep;
   int proto=0;
   vector<SocketService*> svc;
-  GameTCPServer *tcp_transport=0;
-  GameUDPServer *udp_transport=0;
-  GPlusServer *gplus_transport=0;
-  InProcessServer *inprocess_transport=0;
+  unique_ptr<GameTCPServer> tcp_transport;
+  unique_ptr<GameUDPServer> udp_transport;
+  unique_ptr<GPlusServer> gplus_transport;
+  unique_ptr<InProcessServer> inprocess_transport;
   string rcon_auth_passwd, master_sink_url, local_game_name, local_game_url;
   const vector<Asset> *assets;
   History last;
 
   GameServer(ApplicationShutdown *s, SocketServices *n, Game *w, unsigned ts, const string &name, const vector<Asset> *a) :
-    shutdown(s), net(n), world(w), bots(0), timestep(ts), local_game_name(name), assets(a) {}
+    shutdown(s), net(n), world(w), timestep(ts), local_game_name(name), assets(a) {}
 
   void InitTransport(SocketServices *net, int p, int port) {
     proto = p;
     if (proto == Protocol::TCP) {
       if (!tcp_transport) {
         local_game_url = StrCat(port);
-        tcp_transport = new GameTCPServer(net, port);
+        tcp_transport = make_unique<GameTCPServer>(net, port);
         tcp_transport->game_network = Singleton<Game::TCPNetwork>::Set();
         tcp_transport->handler = this;
-        svc.push_back(tcp_transport);
+        svc.push_back(tcp_transport.get());
       }
     } else if (proto == Protocol::UDP) {
       if (!udp_transport) {
         local_game_url = StrCat(port);
-        udp_transport = new GameUDPServer(net, port);
+        udp_transport = make_unique<GameUDPServer>(net, port);
         udp_transport->game_network = Singleton<Game::UDPNetwork>::Set();
         udp_transport->handler = this;
-        svc.push_back(udp_transport);
+        svc.push_back(udp_transport.get());
       }
 #ifdef LFL_ANDROID
       if (!gplus_transport) {
-        gplus_transport = new GameGPlusServer(net);
+        gplus_transport = make_unique<GameGPlusServer>(net);
         gplus_transport->game_network = Singleton<Game::GoogleMultiplayerNetwork>::Set();
         gplus_transport->handler = this;
-        svc.push_back(gplus_transport);
+        svc.push_back(gplus_transport.get());
       }
 #endif
     } else if (proto == Protocol::InProcess) {
       if (!inprocess_transport) {
-        inprocess_transport = new GameInProcessServer(net);
+        inprocess_transport = make_unique<GameInProcessServer>(net);
         inprocess_transport->game_network = Singleton<Game::InProcessNetwork>::Set();
         inprocess_transport->handler = this;
-        svc.push_back(inprocess_transport);
+        svc.push_back(inprocess_transport.get());
       }
     }
   }
@@ -539,7 +539,7 @@ struct GameClient {
   virtual void AnimationChange(Entity *, int NewID, int NewSeq) {}
   virtual void RconRequestCB(const string &cmd, const string &arg, int seq) {}
 
-  Entity *WorldAddEntity(int id) { return world->Add(id, new Entity()); }
+  Entity *WorldAddEntity(int id) { return world->Add(id, make_unique<Entity>()); }
   void WorldAddEntityFinish(Entity *e, int type) {
     CHECK(!e->asset);
     world->scene->ChangeAsset(e, assetstore->asset(assets[type]));

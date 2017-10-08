@@ -101,8 +101,8 @@ struct BindMap : public InputController {
   template <class... Args> void Add(Args&&... args) { AddBind(Bind(forward<Args>(args)...)); }
   void AddBind(const Bind &b) { data.insert(b); }
   void Repeat(unsigned clicks) { for (auto b : down) b.Run(clicks); }
-  void Button(InputEvent::Id event, bool d);
-  void Move(InputEvent::Id event, point p, point d) { if (move_cb) move_cb(p, d); }
+  void Button(InputEvent::Id event, bool d) override;
+  void Move(InputEvent::Id event, point p, point d) override { if (move_cb) move_cb(p, d); }
   string DebugString() const { string v="{ "; for (auto b : data) StrAppend(&v, b.key, " "); return v + "}"; }
 };
 
@@ -246,7 +246,7 @@ struct Input : public Module {
   bool MouseButton2Down() const { return mouse_but2_down; }
   void ClearButtonsDown();
 
-  int Init();
+  int Init() override;
   int DispatchQueuedInput(bool event_on_keyboard_input, bool event_on_mouse_input);
 
   int KeyPress(int key, int mod, bool down);

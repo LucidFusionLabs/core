@@ -59,7 +59,7 @@ struct BaumWelch : public HMM::BaumWelchAccum {
     if (use_prior)      hmm_flag |= AcousticHMM::Flag::UsePrior;
     if (use_transition) hmm_flag |= AcousticHMM::Flag::UseTransit;
 
-    for (int i=0; i<model->states; i++) {
+    for (int i=0; i<model->state.size(); i++) {
       AcousticModel::State *s = &model->state[i];
       if (s->val.emission_index != i) FATAL("BaumWelch emission_index mismatch ", s->val.emission_index, " != ", i);
       accum.emplace_back(make_unique<Accum>(K, D));
@@ -68,7 +68,7 @@ struct BaumWelch : public HMM::BaumWelchAccum {
   }
 
   void Reset() { 
-    for (int i=0; i<model->states; i++) {
+    for (int i=0; i<model->state.size(); i++) {
       Accum *a = accum[i].get();
       MatrixIter(&a->mixture.mean) a->mixture.mean.row(i)[j] = 0;
       MatrixIter(&a->mixture.diagcov) a->mixture.diagcov.row(i)[j] = 0;
@@ -101,14 +101,14 @@ struct BaumWelch : public HMM::BaumWelchAccum {
   }
 
   void AddPrior(int state, double pi) {
-    if (state < 0 || state >= model->states) FATAL("OOB emission index ", state);
+    if (state < 0 || state >= model->state.size()) FATAL("OOB emission index ", state);
     Accum *a = accum[state].get();
     LogAdd(&a->prior, pi);
   }
 
   void AddEmission(int state, const double *feature, const double *emissionPosterior, double emissionTotal, double gamma) {
     if (gamma < minposterior) return;
-    if (state < 0 || state >= model->states) FATAL("OOB emission index ", state);
+    if (state < 0 || state >= model->state.size()) FATAL("OOB emission index ", state);
     Accum *a = accum[state].get();
 
     posterior.resize(K);
@@ -147,8 +147,8 @@ struct BaumWelch : public HMM::BaumWelchAccum {
 
   void AddTransition(int Lstate, int Rstate, double xi) {
     if (mode != Mode::Means || !isfinite(xi)) return;
-    if (Lstate < 0 || Lstate >= model->states) FATAL("OOB emission index ", Lstate);
-    if (Rstate < 0 || Rstate >= model->states) FATAL("OOB emission index ", Rstate);
+    if (Lstate < 0 || Lstate >= model->state.size()) FATAL("OOB emission index ", Lstate);
+    if (Rstate < 0 || Rstate >= model->state.size()) FATAL("OOB emission index ", Rstate);
     Accum *a = accum[Lstate].get();
 
     Accum::XiMap::iterator i = a->transit.find(Rstate);
@@ -171,7 +171,7 @@ struct BaumWelch : public HMM::BaumWelchAccum {
 
   void Complete() {
     if (mode == Mode::Means) {
-      for (int si=0; si<model->states; si++) {
+      for (int si=0; si<model->state.size(); si++) {
         Accum *a = accum[si].get();
         for (int i=0; i<K; i++) {
           double sum = a->mixture.prior.row(i)[0];
@@ -182,7 +182,7 @@ struct BaumWelch : public HMM::BaumWelchAccum {
       }
     } else if (mode == Mode::Cov) {
       double totalprior = -INFINITY;
-      for (int si=0; si<model->states; si++) {
+      for (int si=0; si<model->state.size(); si++) {
         Accum *a = accum[si].get();
         LogAdd(&totalprior, a->prior);
       }
@@ -191,7 +191,7 @@ struct BaumWelch : public HMM::BaumWelchAccum {
         MatrixIter(model->phonetx) model->phonetx->row(i)[j] = phonetx.row(i)[j] - phonetxtotal.row(i)[0];
       }
 
-      for (int si=0; si<model->states; si++) {
+      for (int si=0; si<model->state.size(); si++) {
         AcousticModel::State *s = &model->state[si];
         Accum *a = accum[si].get();
         double lc = log((float)a->count);

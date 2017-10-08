@@ -122,7 +122,6 @@
   @property (nonatomic, assign) std::string style;
   @property (nonatomic, assign) int selected_section, selected_row;
   @property (nonatomic, assign) bool needs_reload;
-  - (id)initWithStyle: (UITableViewStyle)style;
 @end
 
 @interface IOSNavigation : UINavigationController<UINavigationControllerDelegate>

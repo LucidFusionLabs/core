@@ -1,5 +1,5 @@
 /*
- * $Id: crawler.h 1314 2014-10-16 04:43:45Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -21,16 +21,11 @@
 namespace LFL {
 
 struct Crawler {
-  virtual void Validate() { CHECK(queue.size()); }
-  virtual void Crawl() { Crawler::Crawl(0); }
-  virtual void Scrape() { Crawler::Scrape(0); }
-  virtual bool Scrape(int queue, const CrawlFileEntry *entry) = 0;
-
   struct Queue {
-    ProtoFile *in, *out;
-    bool crawl, scrape;
-    int outstanding, completed, scraped;
-    Queue(ProtoFile *In, ProtoFile *Out) : in(In), out(Out), crawl(1), scrape(1), outstanding(0), completed(0), scraped(0) {}
+    unique_ptr<ProtoFile> in, out;
+    bool crawl=1, scrape=1;
+    int outstanding=0, completed=0, scraped=0;
+    Queue(unique_ptr<ProtoFile> In, unique_ptr<ProtoFile> Out) : in(move(In)), out(move(Out)) {}
 
     bool Add(const string &url) {
       QueueFileEntry entry;
@@ -41,15 +36,26 @@ struct Crawler {
       entry.set_created(Now().count());
       return in->Add(&entry, QueueFileEntry::QUEUED);
     }
-  }; 
-  vector<Queue> queue;
+  };
 
-  virtual ~Crawler() {
-    for (int i=0; i<queue.size(); i++) {
-      delete queue[i].in;
-      delete queue[i].out;
-    }
-  }
+  struct FetchBuffer {
+    Crawler *parent;
+    int queue, qf_offset, content_length;
+
+    ContainerFileHeader hdr;
+    QueueFileEntry request;
+    string headers, content;
+
+    FetchBuffer(Crawler *P, int Q) : parent(P), queue(Q), qf_offset(-1), content_length(0)  {}
+  };
+  
+  vector<Queue> queue;
+  virtual ~Crawler() {}
+
+  virtual void Validate() { CHECK(queue.size()); }
+  virtual void Crawl() { Crawler::Crawl(0); }
+  virtual void Scrape() { Crawler::Scrape(0); }
+  virtual bool Scrape(int queue, const CrawlFileEntry *entry) = 0;
 
   bool CrawlDone(int above=0) {
     int i = above;
@@ -76,26 +82,15 @@ struct Crawler {
   }
 
   bool Add(const char *qfn, const char *cfn) {
-    ProtoFile *qf = new ProtoFile(qfn);
-    if (!qf->file->Opened()) { ERROR("crawler input open: ", qfn); delete qf; return false; }
+    auto qf = make_unique<ProtoFile>(qfn);
+    if (!qf->file->Opened()) return ERRORv(false, "crawler input open: ", qfn);
 
-    ProtoFile *cf = new ProtoFile(cfn);
-    if (!cf->file->Opened()) { ERROR("crawler output open: ", cfn); delete cf; return false; }
+    auto cf = make_unique<ProtoFile>(cfn);
+    if (!cf->file->Opened()) return ERRORv(false, "crawler output open: ", cfn);
 
-    queue.push_back(Queue(qf, cf));
+    queue.push_back(Queue(move(qf), move(cf)));
     return true;
   }
-
-  struct FetchBuffer {
-    Crawler *parent;
-    int queue, qf_offset, content_length;
-
-    ContainerFileHeader hdr;
-    QueueFileEntry request;
-    string headers, content;
-
-    FetchBuffer(Crawler *P, int Q) : parent(P), queue(Q), qf_offset(-1), content_length(0)  {}
-  };
 
   bool Scrape(int ind) {
     int offset, ret;

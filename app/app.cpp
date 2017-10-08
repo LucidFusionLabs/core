@@ -275,8 +275,8 @@ void Thread::ThreadProc() {
   ThreadLocalStorage::ThreadFree();
 }
 
-void ThreadPool::Write(Callback *cb) {
-  worker[round_robin_next].queue->Write(cb);
+void ThreadPool::Write(unique_ptr<Callback> cb) {
+  worker[round_robin_next].queue->Write(cb.release());
   round_robin_next = (round_robin_next + 1) % worker.size();
 }
 
@@ -499,7 +499,7 @@ int Application::Create(const char *source_filename) {
   Singleton<NullAllocator>::Get();
   Singleton<MallocAllocator>::Get();
 #ifdef LFL_ANDROID
-  JNI *jni = LFL::Singleton<LFL::JNI>::Get();
+  JNI *jni = LFL::Singleton<LFL::JNI>::Set();
   jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "getFilesDirCanonicalPath", "(Z)Ljava/lang/String;"));
 #endif
 
@@ -739,7 +739,7 @@ Application::~Application() {
   for (auto &i : windows) close_list.push_back(i.second);
   for (auto &i : close_list) CloseWindow(i);
   if (network_thread) {
-    network_thread->Write(new Callback([](){}));
+    network_thread->Write(make_unique<Callback>([](){}));
     network_thread->thread->Wait();
     network_thread->net->Free();
   }

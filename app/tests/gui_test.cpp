@@ -70,8 +70,8 @@ struct TextAreaTest : public TextArea {
 
 struct EditorTest : public Editor {
   LinesFrameBufferTest line_fb_test;
-  EditorTest(Window *W, const FontRef &F, File *I, bool Wrap=0) :
-    Editor(W, F, I), line_fb_test(W) { line_fb.wrap=line_fb_test.wrap=Wrap; }
+  EditorTest(Window *W, const FontRef &F, unique_ptr<File> I, bool Wrap=0) :
+    Editor(W, F, move(I)), line_fb_test(W) { line_fb.wrap=line_fb_test.wrap=Wrap; }
   virtual LinesFrameBuffer *GetFrameBuffer() override { return &line_fb_test; }
 };
 
@@ -507,7 +507,7 @@ TEST(GUITest, Editor) {
   Font *font = app->fonts->Fake();
   int fh = font->Height(), w = font->fixed_width;
   EXPECT_NE(0, fh); EXPECT_NE(0, w);
-  EditorTest e(app->focused, font, new BufferFile(string("1\n2 2 2\n3\n4 4\n5\n")), true);
+  EditorTest e(app->focused, font, make_unique<BufferFile>(string("1\n2 2 2\n3\n4 4\n5\n")), true);
   LinesFrameBufferTest *test_fb = &e.line_fb_test;
   Box b(w, 3*fh);
   e.Draw(b, TextArea::DrawFlag::CheckResized);
@@ -760,7 +760,7 @@ TEST(GUITest, EditorScrollFuzz) {
   int fh = font->Height(), fw = font->fixed_width, last_ind=0;
   CHECK(fh && fw);
   for (int mode=0; mode<2; mode++) {
-    Editor e(app->focused, font, new LocalFile(fn, "r"));
+    Editor e(app->focused, font, make_unique<LocalFile>(fn, "r"));
     if      (mode == 0) { e.CheckResized(Box(80*fw, 25*fh)); }
     else if (mode == 1) { e.CheckResized(Box(20*fw, 25*fh)); e.SetShouldWrap(true, true); }
 
@@ -794,7 +794,7 @@ TEST(GUITest, EditorUndoFuzz) {
   CHECK(fh && fw);
   for (int mode=0; mode<2; mode++) {
     BufferFile modified(string("")), undone(string("")), redone(string(""));
-    Editor e(app->focused, font, new LocalFile(fn, "r"));
+    Editor e(app->focused, font, make_unique<LocalFile>(fn, "r"));
     if      (mode == 0) { e.CheckResized(Box(80*fw, 25*fh)); }
     else if (mode == 1) { e.CheckResized(Box(20*fw, 25*fh)); e.SetShouldWrap(true, true); }
     for (int iters=0; iters<1000; iters++) {

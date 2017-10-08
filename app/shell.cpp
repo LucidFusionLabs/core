@@ -282,7 +282,7 @@ void Shell::f0(const vector<string> &arg) {
   }
   else {
     RingSampler::Handle I(sa->wav.get(), offset);
-    Matrix *f0 = F0Stream(&I, 0, 512, 256, method);
+    auto f0 = F0Stream(&I, 0, 512, 256, method);
     for (int i=0; i<f0->M; /**/) {
       char buf[1024]; int len=0;
       for (int j=0; j<20 && i<f0->M; j++,i++) len += sprint(buf+len, sizeof(buf)-len, "%.2f, ", f0->row(i)[0]);
@@ -339,7 +339,7 @@ void Shell::Edit(const vector<string> &a) {
   string s = loading->FileContents("default.vert");
   if (s.empty()) INFO("missing file default.vert");
   parent->AddDialog(make_unique<EditorDialog>(parent, FontRef(parent, FontDesc::Default()),
-                                              new BufferFile(s, "default.vert")));
+                                              make_unique<BufferFile>(s, "default.vert")));
 }
 
 void Shell::ClearDialogs(const vector<string>&) {

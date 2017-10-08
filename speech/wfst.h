@@ -143,11 +143,11 @@ struct WFST {
     int Id(string s) const { return Phoneme::Id(s.c_str(), s.size()); }
     string Name(int id) const {
       if (aux && IOAlphabet::AuxiliarySymbol(id)) return aux->Name(IOAlphabet::AuxiliarySymbolOffset(id));
-      return (id < 0 || id >= AM->states) ? "" : AM->state[id].name;
+      return (id < 0 || id >= AM->state.size()) ? "" : AM->state[id].name;
     }
-    int Size() const { return AM->states; }
+    int Size() const { return AM->state.size(); }
     void Begin(Iterator *iter) const { iter->impl = 0; iter->done = 0; Next(iter); }
-    void Next(Iterator *iter) const { if ((iter->id = iter->impl++) >= AM->states) iter->done = 1; else iter->name = Name(iter->id).c_str(); }
+    void Next(Iterator *iter) const { if ((iter->id = iter->impl++) >= AM->state.size()) iter->done = 1; else iter->name = Name(iter->id).c_str(); }
     const char *FactoryName() const { return "AcousticModel"; }
   };
 
@@ -1785,7 +1785,7 @@ struct WFST {
     unique_ptr<TransitMapBuilder> E = make_unique<TransitMapBuilder>();
     unique_ptr<Statevec> I = make_unique<Statevec>(), F = make_unique<Statevec>();
 
-    for (int i=0, l=A->AM->states; i<l; i++) {
+    for (int i=0, l=A->AM->state.size(); i<l; i++) {
       HMM::ActiveStateIndex active(1,1,1);
       HMM::ActiveState::Iterator src(i);
       AcousticHMM::TransitMap tm(A->AM, true);

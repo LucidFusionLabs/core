@@ -81,13 +81,13 @@ Editor::Base16DefaultDarkSyntaxColors::Base16DefaultDarkSyntaxColors() :
   }) {}
 
 Editor::~Editor() {}
-Editor::Editor(Window *W, const FontRef &F, File *I) : TextView(W, F),
+Editor::Editor(Window *W, const FontRef &F, unique_ptr<File> I) : TextView(W, F),
   file_line(&LineOffset::GetLines, &LineOffset::GetString),
   annotation_cb([](const LineMap::ConstIterator&, const String16&, bool, int cs, int){ static DrawableAnnotation a; return cs ? nullptr : &a; }) {
   cmd_color = Color(Color::black, .5);
   edits.free_func = [](String16 *v) { v->clear(); };
   selection_cb = bind(&Editor::SelectionCB, this, _1);
-  if (I) Init(I);
+  if (I) Init(move(I));
 }
 
 const String16 *Editor::ReadLine(const Editor::LineMap::Iterator &i, String16 *buf) {

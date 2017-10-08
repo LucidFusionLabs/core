@@ -94,24 +94,24 @@ int PngWriter::Write(const string &fn, const Texture &tex) {
   return PngWriter::Write(&lf, tex);
 }
 
-bool WavReader::Open(File *F, WavHeader *out) {
-  f = F;
+bool WavReader::Open(optional_ptr<File> F, WavHeader *out) {
+  f = move(F);
   last = WavHeader::Size;
-  return (f && out) ? File::SeekReadSuccess(f, 0, out, WavHeader::Size) : f != nullptr;
+  return (f && out) ? File::SeekReadSuccess(f.get(), 0, out, WavHeader::Size) : f;
 }
 
 int WavReader::Read(RingSampler::Handle *B, int off, int num) {
   if (!f->Opened()) return -1;
   basic_string<short> buf(num, 0);
   int offset = WavHeader::Size + off * sizeof(short);
-  if (!File::SeekReadSuccess(f, offset, &buf[0], buf.size()*2)) return -1;
+  if (!File::SeekReadSuccess(f.get(), offset, &buf[0], buf.size()*2)) return -1;
   for (int i=0; i<num; i++) B->Write(buf[i] / 32768.0);
   last = offset + buf.size()*2;
   return 0;
 }
 
-void WavWriter::Open(File *F) {
-  f = F;
+void WavWriter::Open(optional_ptr<File> F) {
+  f = move(F);
   wrote = WavHeader::Size;
   if (f && f->Opened()) Flush();
 }
@@ -120,7 +120,7 @@ int WavWriter::Write(const RingSampler::Handle *B, bool flush) {
   if (!f->Opened()) return -1;
   basic_string<short> buf(B->Len(), 0);
   for (int i=0, l=B?B->Len():0; i<l; ++i) buf[i] = short(B->Read(i) * 32768.0);
-  if (!File::WriteSuccess(f, &buf[0], buf.size()*2)) return -1;
+  if (!File::WriteSuccess(f.get(), &buf[0], buf.size()*2)) return -1;
   wrote += buf.size()*2;
   return flush ? Flush() : 0;
 }

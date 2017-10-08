@@ -114,7 +114,7 @@ struct ViterbiTrain {
     if (use_prior)      hmm_flag |= AcousticHMM::Flag::UsePrior;
     if (use_transition) hmm_flag |= AcousticHMM::Flag::UseTransit;
 
-    for (int i=0; i<model->states; i++) {
+    for (int i=0; i<model->state.size(); i++) {
       AcousticModel::State *s = &model->state[i];
       if (s->val.emission_index != i) FATAL("ViterbiTrain emission_index mismatch ", s->val.emission_index, " != ", i);
 
@@ -124,7 +124,7 @@ struct ViterbiTrain {
   }
 
   void Reset(bool free=0) { 
-    for (int i=0; i<model->states; i++) {
+    for (int i=0; i<model->state.size(); i++) {
       accum[i]->ResetMean();
       accum[i]->ResetCov();
     }
@@ -192,7 +192,7 @@ struct ViterbiTrain {
 
     if (must_reach_final) {
       int finalstate = viterbi.lastrow()[0];
-      if (finalstate < hmm->states-2) return ERRORf("final state not reached (%d < %d) for '%s', skipping (processed=%d)", finalstate, hmm->states-2, transcript, totalcount);
+      if (finalstate < hmm->state.size()-2) return ERRORf("final state not reached (%d < %d) for '%s', skipping (processed=%d)", finalstate, hmm->state.size()-2, transcript, totalcount);
     }
 
     /* write & process path */
@@ -206,7 +206,7 @@ struct ViterbiTrain {
     /* optionally build utterance model from transcript */
     unique_ptr<AcousticModel::Compiled> myhmm;
     if (!hmm) {
-      myhmm.reset(AcousticModel::FromUtterance(loader, model, transcript, use_transition));
+      myhmm = AcousticModel::FromUtterance(loader, model, transcript, use_transition);
       hmm = myhmm.get();
     }
     if (!hmm) return ERROR("utterance decode failed: ", transcript);
@@ -219,7 +219,7 @@ struct ViterbiTrain {
 
       /* get emission index from viterbi occupancy index in utterance model */
       int vind = viterbi->row(i)[0];
-      if (vind < 0 || vind >= hmm->states) FATAL("oob vind ", vind);
+      if (vind < 0 || vind >= hmm->state.size()) FATAL("oob vind ", vind);
       int emission_index = hmm->state[vind].val.emission_index;
 
       /* count */
@@ -233,7 +233,7 @@ struct ViterbiTrain {
   void Complete() {
     if (mode == Mode::Means) { accumprob=0; accumcount=0; }
 
-    for (int i=0; i<model->states; i++) {
+    for (int i=0; i<model->state.size(); i++) {
       if (mode == Mode::Means) {
         double prob = accum[i]->Prob();
         accumprob += prob;

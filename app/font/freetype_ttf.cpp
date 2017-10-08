@@ -40,8 +40,8 @@ void FreeTypeFontEngine::SetDefault() {
 bool FreeTypeFontEngine::Init(const FontDesc &d) {
   if (Contains(resource, d.name)) return true;
   string content = d.name.data()[0] == '/' ? LocalFile::FileContents(d.name) : parent->loader->FileContents(d.name);
-  if (Resource *r = OpenBuffer(d, &content)) {
-    resource[d.name] = shared_ptr<Resource>(r);
+  if (auto r = OpenBuffer(d, &content)) {
+    resource[d.name] = shared_ptr<Resource>(r.release());
     return true;
   }
   return false;
@@ -73,9 +73,9 @@ unique_ptr<FreeTypeFontEngine::Resource> FreeTypeFontEngine::OpenFile(const Font
 unique_ptr<FreeTypeFontEngine::Resource> FreeTypeFontEngine::OpenBuffer(const FontDesc &d, string *content) {
   Init();
   int error;
-  auto r = make_unique<Resource>(0, d.name, content);
-  if ((error = FT_New_Memory_Face(ft_library, (const FT_Byte*)r->content.data(), r->content.size(), 0, &r->face))) { ERROR("FT_New_Memory_Face: ", error); delete r; return 0; }
-  if ((error = FT_Select_Charmap(r->face, FT_ENCODING_UNICODE)))                                                   { ERROR("FT_Select_Charmap: ",  error); delete r; return 0; }
+  auto r = make_unique<Resource>(nullptr, d.name, content);
+  if ((error = FT_New_Memory_Face(ft_library, (const FT_Byte*)r->content.data(), r->content.size(), 0, &r->face))) return ERRORv(nullptr, "FT_New_Memory_Face: ", error);
+  if ((error = FT_Select_Charmap(r->face, FT_ENCODING_UNICODE))) return ERRORv(nullptr, "FT_Select_Charmap: ", error);
   FT_Library_SetLcdFilter(ft_library, FLAGS_subpixel_fonts ? FT_LCD_FILTER_LIGHT : FT_LCD_FILTER_NONE);
   return r;
 }

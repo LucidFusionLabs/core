@@ -1,5 +1,5 @@
 /*
- * $Id: css.h 1306 2014-09-04 07:13:16Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -698,7 +698,7 @@ struct CSSImportRule : public CSSRule {
 struct StyleSheet : public LFL::DOM::Object {
   LFL::DOM::Document *ownerDocument;
   css_stylesheet *sheet=0;
-  css_stylesheet_params *params=0;
+  unique_ptr<css_stylesheet_params> params;
   string content_url, character_set;
 
   ~StyleSheet();

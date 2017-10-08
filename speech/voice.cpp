@@ -32,8 +32,7 @@ int VoiceModel::Read(const char *dir) {
 
     string pn = string(dir) + fn, hdr;
     int samples = MatrixArchiveInputFile::Count(pn), err, count=0;
-    unit[phoneme].samples = samples;
-    unit[phoneme].sample = static_cast<Unit::Sample*>(calloc(sizeof(Unit::Sample), samples));
+    unit[phoneme].sample = vector<Unit::Sample>(samples, Unit::Sample());
 
     MatrixArchiveInputFile index(pn.c_str());
     unique_ptr<Matrix> m;
@@ -46,12 +45,12 @@ int VoiceModel::Read(const char *dir) {
 
     pn = pn.substr(0, pn.size() - post.size());
     pn += ".wav";
-    unit[phoneme].wav.Open(new LocalFile(pn, "r"));
+    unit[phoneme].wav.Open(optional_ptr<File>(make_unique<LocalFile>(pn, "r")));
   }
   return 0;
 };
 
-RingSampler *VoiceModel::Synth(AssetLoading *loader, const char *text, int start) {
+unique_ptr<RingSampler> VoiceModel::Synth(AssetLoading *loader, const char *text, int start) {
   PronunciationDict *dict = PronunciationDict::Instance(loader);
   const char *w[1024], *wa[1024]; int words, phones;
   words = dict->Pronounce(text, w, wa, &phones, 1024);
@@ -82,8 +81,8 @@ RingSampler *VoiceModel::Synth(AssetLoading *loader, const char *text, int start
   }
 
   int wrote=0;
-  RingSampler *ret = new RingSampler(FLAGS_sample_rate, samples);
-  RingSampler::Handle h(ret);
+  auto ret = make_unique<RingSampler>(FLAGS_sample_rate, samples);
+  RingSampler::Handle h(ret.get());
   for (int i=0; i<atoms; i++) {
     if (atom[i].phone) {
       int phone = atom[i].phone;
@@ -91,8 +90,7 @@ RingSampler *VoiceModel::Synth(AssetLoading *loader, const char *text, int start
       Unit::Sample *s = &unit[phone].sample[sample];
       if (unit[phone].wav.Read(&h, s->offset, s->len) < 0) {
         ERROR("error: synth ", Phoneme::Name(phone), " ", s->offset, ", ", s->len);
-        delete ret;
-        return 0;
+        return nullptr;
       }
       wrote += s->len;
     }
@@ -104,12 +102,11 @@ RingSampler *VoiceModel::Synth(AssetLoading *loader, const char *text, int start
     }
   }
   if (wrote != ret->ring.size) ERROR("VoiceModelSynth wrote ", wrote, " != ", ret->ring.size);
-
   return ret;
 }
 
 int VoiceModel::NextPhone(int phone, int lastphone, int lastphoneindex) {
-  return rand() % unit[phone].samples;
+  return rand() % unit[phone].sample.size();
 }
 
 }; // namespace LFL

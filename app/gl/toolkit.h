@@ -35,14 +35,14 @@ struct ToolbarView : public View, public ToolbarViewInterface {
   Color *selected_outline=0;
   ToolbarView(Window *w, const string &theme, MenuItemVec items, Font *F=0, Font *SF=0, Color *SO=0);
 
-  void Layout();
-  void Draw();
-  View *AppendFlow(Flow*);
+  void Layout() override;
+  void Draw() override;
+  View *AppendFlow(Flow*) override;
 
-  void Show(bool show_or_hide);
-  void ToggleButton(const string &n);
-  void SetTheme(const string &theme);
-  string GetTheme() { return theme; }
+  void Show(bool show_or_hide) override;
+  void ToggleButton(const string &n) override;
+  void SetTheme(const string &theme) override;
+  string GetTheme() override { return theme; }
 };
 
 struct CollectionView : public View, public CollectionViewInterface {
@@ -62,13 +62,13 @@ struct CollectionView : public View, public CollectionViewInterface {
   int row_height=0, decay_box_line=-1, decay_box_left=0, selected_section=-1, selected_row=-1, scrolled=0;
   CollectionView(Window *w, const string &title, const string &style, const string &theme, vector<CollectionItem> items);
 
-  void Layout();
-  void Draw();
+  void Layout() override;
+  void Draw() override;
   void OnClick(int, point, point, int);
   void CheckExists(int section, int row);
-  View *AppendFlow(Flow*);
-  void Show(bool show_or_hide);
-  void SetToolbar(ToolbarViewInterface*);
+  View *AppendFlow(Flow*) override;
+  void Show(bool show_or_hide) override;
+  void SetToolbar(ToolbarViewInterface*) override;
 };
 
 struct TableView : public View, public TableViewInterface {
@@ -91,42 +91,42 @@ struct TableView : public View, public TableViewInterface {
   int row_height=0, decay_box_line=-1, decay_box_left=0, selected_section=-1, selected_row=-1, scrolled=0;
   TableView(Window *w, const string &title, const string &style, const string &theme, TableItemVec items);
 
-  void Layout();
-  void Draw();
+  void Layout() override;
+  void Draw() override;
   void OnClick(int, point, point, int);
   void CheckExists(int section, int row);
-  View *AppendFlow(Flow*);
+  View *AppendFlow(Flow*) override;
 
-  void DelNavigationButton(int id);
-  void AddNavigationButton(int id, const TableItem &item);
-  void SetToolbar(ToolbarViewInterface*);
-  void Show(bool show_or_hide);
+  void DelNavigationButton(int id) override;
+  void AddNavigationButton(int id, const TableItem &item) override;
+  void SetToolbar(ToolbarViewInterface*) override;
+  void Show(bool show_or_hide) override;
 
-  string GetKey(int section, int row);
-  string GetValue(int section, int row);
-  int GetTag(int section, int row);
-  PickerItem *GetPicker(int section, int row);
-  StringPairVec GetSectionText(int section);
+  string GetKey(int section, int row) override;
+  string GetValue(int section, int row) override;
+  int GetTag(int section, int row) override;
+  PickerItem *GetPicker(int section, int row) override;
+  StringPairVec GetSectionText(int section) override;
 
-  void BeginUpdates();
-  void EndUpdates();
-  void AddRow(int section, TableItem item);
-  void SelectRow(int section, int row);
-  void ReplaceRow(int section, int row, TableItem item);
-  void ReplaceSection(int section, TableItem header, int flag, TableItemVec item);
-  void ApplyChangeList(const TableSectionInterface::ChangeList&);
-  void SetSectionValues(int section, const StringVec&);
-  void SetSectionColors(int seciton, const vector<Color>&);
-  void SetSectionEditable(int section, int start_row, int skip_last_rows, IntIntCB cb=IntIntCB());
-  void SetHeader(int section, TableItem header);
-  void SetKey(int secton, int row, const string &key);
-  void SetTag(int section, int row, int val);
-  void SetValue(int section, int row, const string &val);
-  void SetSelected(int section, int row, int selected);
-  void SetHidden(int section, int row, int val);
-  void SetColor(int section, int row, const Color &val);
-  void SetTitle(const string &title);
-  void SetTheme(const string &theme);
+  void BeginUpdates() override;
+  void EndUpdates() override;
+  void AddRow(int section, TableItem item) override;
+  void SelectRow(int section, int row) override;
+  void ReplaceRow(int section, int row, TableItem item) override;
+  void ReplaceSection(int section, TableItem header, int flag, TableItemVec item) override;
+  void ApplyChangeList(const TableSectionInterface::ChangeList&) override;
+  void SetSectionValues(int section, const StringVec&) override;
+  void SetSectionColors(int seciton, const vector<Color>&) override;
+  void SetSectionEditable(int section, int start_row, int skip_last_rows, IntIntCB cb=IntIntCB()) override;
+  void SetHeader(int section, TableItem header) override;
+  void SetKey(int secton, int row, const string &key) override;
+  void SetTag(int section, int row, int val) override;
+  void SetValue(int section, int row, const string &val) override;
+  void SetSelected(int section, int row, int selected) override;
+  void SetHidden(int section, int row, int val) override;
+  void SetColor(int section, int row, const Color &val) override;
+  void SetTitle(const string &title) override;
+  void SetTheme(const string &theme) override;
 };
 
 struct NavigationView : public View, public NavigationViewInterface {
@@ -134,33 +134,33 @@ struct NavigationView : public View, public NavigationViewInterface {
   vector<StackViewInterface*> stack;
   NavigationView(Window *w, const string &style, const string &theme);
 
-  View *AppendFlow(Flow*);
-  void Layout();
-  void Draw();
+  View *AppendFlow(Flow*) override;
+  void Layout() override;
+  void Draw() override;
 
-  TableViewInterface *Back();
-  void Show(bool show_or_hide);
-  void PushTableView(TableViewInterface*);
-  void PushTextView(TextViewInterface*);
-  void PopView(int num=1);
-  void PopToRoot();
-  void PopAll();
-  void SetTheme(const string &theme);
+  TableViewInterface *Back() override;
+  void Show(bool show_or_hide) override;
+  void PushTableView(TableViewInterface*) override;
+  void PushTextView(TextViewInterface*) override;
+  void PopView(int num=1) override;
+  void PopToRoot() override;
+  void PopAll() override;
+  void SetTheme(const string &theme) override;
 };
 
 struct Toolkit : public ToolkitInterface {
-  unique_ptr<AlertViewInterface> CreateAlert(Window*, AlertItemVec items);
-  unique_ptr<PanelViewInterface> CreatePanel(Window*, const Box&, const string &title, PanelItemVec);
-  unique_ptr<ToolbarViewInterface> CreateToolbar(Window*, const string &theme, MenuItemVec items, int flag);
-  unique_ptr<MenuViewInterface> CreateMenu(Window*, const string &title, MenuItemVec items);
-  unique_ptr<MenuViewInterface> CreateEditMenu(Window*, MenuItemVec items);
+  unique_ptr<AlertViewInterface> CreateAlert(Window*, AlertItemVec items) override;
+  unique_ptr<PanelViewInterface> CreatePanel(Window*, const Box&, const string &title, PanelItemVec) override;
+  unique_ptr<ToolbarViewInterface> CreateToolbar(Window*, const string &theme, MenuItemVec items, int flag) override;
+  unique_ptr<MenuViewInterface> CreateMenu(Window*, const string &title, MenuItemVec items) override;
+  unique_ptr<MenuViewInterface> CreateEditMenu(Window*, MenuItemVec items) override;
   unique_ptr<CollectionViewInterface> CreateCollectionView
-    (Window*, const string &title, const string &style, const string &theme, vector<CollectionItem> items);
+    (Window*, const string &title, const string &style, const string &theme, vector<CollectionItem> items) override;
   unique_ptr<TableViewInterface> CreateTableView
-    (Window*, const string &title, const string &style, const string &theme, TableItemVec items);
-  unique_ptr<TextViewInterface> CreateTextView(Window*, const string &title, File *file);
-  unique_ptr<TextViewInterface> CreateTextView(Window*, const string &title, const string &text);
-  unique_ptr<NavigationViewInterface> CreateNavigationView(Window*, const string &style, const string &theme);
+    (Window*, const string &title, const string &style, const string &theme, TableItemVec items) override;
+  unique_ptr<TextViewInterface> CreateTextView(Window*, const string &title, File *file) override;
+  unique_ptr<TextViewInterface> CreateTextView(Window*, const string &title, const string &text) override;
+  unique_ptr<NavigationViewInterface> CreateNavigationView(Window*, const string &style, const string &theme) override;
 };
 
 }; // namespace LFL

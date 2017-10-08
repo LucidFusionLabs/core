@@ -42,8 +42,8 @@ struct Editor : public TextView {
     vector<Color> color;
     unordered_map<string, int> style;
     SyntaxColors(const string &n, const vector<Rule>&);
-    virtual const Color *GetColor(int n) const { CHECK_RANGE(n, 0, color.size()); return &color[n]; }
-    virtual int GetSyntaxStyle(const string &n, int da) { return FindOrDefault(style, n, da); }
+    virtual const Color *GetColor(int n) const override { CHECK_RANGE(n, 0, color.size()); return &color[n]; }
+    virtual int GetSyntaxStyle(const string &n, int da) override { return FindOrDefault(style, n, da); }
     const Color *GetFGColor(const string &n) { return GetColor(Style::GetFGColorIndex(GetSyntaxStyle(n, SetDefaultAttr(0)))); }
     const Color *GetBGColor(const string &n) { return GetColor(Style::GetBGColorIndex(GetSyntaxStyle(n, SetDefaultAttr(0)))); }
   };
@@ -70,24 +70,24 @@ struct Editor : public TextView {
   int syntax_parsed_anchor=0, syntax_parsed_line_index=0;
   bool opened=0;
   virtual ~Editor();
-  Editor(Window *W, const FontRef &F=FontRef(), File *I=0);
+  Editor(Window *W, const FontRef &F=FontRef(), unique_ptr<File> I=unique_ptr<File>());
 
-  bool Init(File *I) { return (opened = (file = shared_ptr<File>(I)) && I->Opened()); }
-  void Input(char k)  { Modify(k,    false); }
-  void Enter()        { Modify('\n', false); }
-  void Erase()        { Modify(0,    true); }
-  void CursorLeft()   { UpdateCursorX(max(cursor.i.x-1, 0)); }
-  void CursorRight()  { UpdateCursorX(min(cursor.i.x+1, CursorGlyphsSize())); }
-  void Home()         { UpdateCursorX(0); }
-  void End()          { UpdateCursorX(CursorGlyphsSize()); }
-  void Tab()          { if (tab_cb) tab_cb(); }
-  void HistUp();
-  void HistDown();
+  bool Init(unique_ptr<File> I) { return (opened = (file = shared_ptr<File>(I.release())) && file->Opened()); }
+  void Input(char k) override { Modify(k,    false); }
+  void Enter()       override { Modify('\n', false); }
+  void Erase()       override { Modify(0,    true); }
+  void CursorLeft()  override { UpdateCursorX(max(cursor.i.x-1, 0)); }
+  void CursorRight() override { UpdateCursorX(min(cursor.i.x+1, CursorGlyphsSize())); }
+  void Home()        override { UpdateCursorX(0); }
+  void End()         override { UpdateCursorX(CursorGlyphsSize()); }
+  void Tab()         override { if (tab_cb) tab_cb(); }
+  void HistUp()      override;
+  void HistDown()    override;
   void SelectionCB(const Selection::Point&);
-  bool Empty() const { return !file_line.size(); }
-  void UpdateMapping(int width, int flag=0);
-  int UpdateMappedLines(pair<int, int>, bool, bool, bool, bool, bool);
-  int UpdateLines(float vs, int *first_ind, int *first_offset, int *first_len);
+  bool Empty() const override { return !file_line.size(); }
+  void UpdateMapping(int width, int flag=0) override;
+  int UpdateMappedLines(pair<int, int>, bool, bool, bool, bool, bool) override;
+  int UpdateLines(float vs, int *first_ind, int *first_offset, int *first_len) override;
 
   int CursorGlyphsSize() const { return cursor_glyphs ? cursor_glyphs->Size() : 0; }
   uint16_t CursorGlyph() const { String16 v = CursorLineGlyphs(cursor.i.x, 1); return v.empty() ? 0 : v[0]; }
@@ -96,9 +96,9 @@ struct Editor : public TextView {
   const String16 *ReadLine(const Editor::LineMap::Iterator &ui, String16 *buf);
   void SetWrapMode(const string &n);
   void SetShouldWrap(bool v, bool word_break);
-  void UpdateCursor();
+  void UpdateCursor() override;
   void UpdateCursorLine();
-  void UpdateCursorX(int x);
+  void UpdateCursorX(int x) override;
   int CursorLinesChanged(const String16 &b, int add_lines=0);
   int ModifyCursorLine();
   void Modify(char16_t, bool erase, bool undo_or_redo=false);
@@ -112,9 +112,9 @@ struct Editor : public TextView {
 
 struct EditorDialog : public TextViewDialogT<Editor> {
   struct Flag { enum { Wrap=Dialog::Flag::Next }; };
-  EditorDialog(Window *W, const FontRef &F, File *I, float w=.5, float h=.5, int flag=0) :
+  EditorDialog(Window *W, const FontRef &F, unique_ptr<File> I, float w=.5, float h=.5, int flag=0) :
     TextViewDialogT(W, F, w, h, flag) {
-    if (I) { title_text = BaseName(I->Filename()); view.Init(I); }
+    if (I) { title_text = BaseName(I->Filename()); view.Init(move(I)); }
     view.line_fb.wrap = flag & Flag::Wrap; 
   }
 };

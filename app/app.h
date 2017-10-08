@@ -306,9 +306,9 @@ struct Allocator {
 
 struct NullAllocator : public Allocator {
   const char *Name() { return "NullAllocator"; }
-  void *Malloc(int size) { return 0; }
-  void *Realloc(void *p, int size) { return 0; }
-  void Free(void *p) {}
+  void *Malloc(int size) override { return 0; }
+  void *Realloc(void *p, int size) override { return 0; }
+  void Free(void *p) override {}
 };
 
 struct ThreadLocalStorage {
@@ -395,9 +395,9 @@ template <class X> struct FlagOfType : public Flag {
   FlagOfType(const char *N, const char *D, const char *F, int L, X *V)
     : Flag(N, D, F, L), v(V) { Singleton<FlagMap>::Set()->Add(this); } 
 
-  string Get() const { return Printable(*v); }
-  bool IsBool() const { return TypeId<X>() == TypeId<bool>(); }
-  void Update(const char *text) { if (text) *v = Scannable::Scan(*v, text); }
+  string Get() const override { return Printable(*v); }
+  bool IsBool() const override { return TypeId<X>() == TypeId<bool>(); }
+  void Update(const char *text) override { if (text) *v = Scannable::Scan(*v, text); }
 };
 
 struct Thread {
@@ -435,7 +435,7 @@ struct ThreadPool {
   void Open(int num) { CHECK(worker.empty()); for (int i=0; i<num; i++) worker.emplace_back(); }
   void Start() { for (auto &w : worker) w.Start(); }
   void Stop()  { for (auto &w : worker) w.Stop(); }
-  void Write(Callback *cb);
+  void Write(unique_ptr<Callback> cb);
 };
 
 struct Timer {
@@ -553,7 +553,7 @@ struct LuaContext {
   static unique_ptr<LuaContext> Create();
 };
 
-struct CUDA : public Module { int Init(); };
+struct CUDA : public Module { int Init() override; };
 
 struct Window : public ::LFAppWindow, public GraphicsDeviceHolder, public WakeupHandle {
   typedef function<int(Window*, unsigned, int)> FrameCB;
@@ -589,7 +589,9 @@ struct Window : public ::LFAppWindow, public GraphicsDeviceHolder, public Wakeup
   virtual void SetResizeIncrements(float x, float y) = 0;
   virtual void SetTransparency(float v)              = 0;
   virtual bool Reshape(int w, int h)                 = 0;
-  virtual GraphicsDevice *GD() { return gd; };
+
+  GraphicsDevice *GD() override { return gd; };
+  void Wakeup(int flag=0) override;
 
   LFL::Box Box()                   const { return LFL::Box(gl_x, gl_y, gl_w, gl_h); }
   LFL::Box Box(float xs, float ys) const { return LFL::Box(gl_w*xs, gl_h*ys); }
@@ -605,7 +607,6 @@ struct Window : public ::LFAppWindow, public GraphicsDeviceHolder, public Wakeup
   int  Frame(unsigned clicks, int flag);
   void RenderToFrameBuffer(FrameBuffer *fb);
   void InitConsole(const Callback &animating_cb);
-  void Wakeup(int flag=0);
 
   template <class X> X* GetView(size_t i) { return i < view.size() ? dynamic_cast<X*>(view[i]) : nullptr; }
   template <class X> X* GetOwnView(size_t i) { return i < my_view.size() ? dynamic_cast<X*>(my_view[i].get()) : nullptr; }
@@ -663,8 +664,8 @@ struct WindowHolder : public GraphicsDeviceHolder, public WakeupHandle {
   Window *focused=0;
   virtual ~WindowHolder() {}
 
-  GraphicsDevice *GD() { return focused ? focused->gd : nullptr; }
-  void Wakeup(int flag=0) { if (focused) focused->Wakeup(flag); }
+  GraphicsDevice *GD() override { return focused ? focused->gd : nullptr; }
+  void Wakeup(int flag=0) override { if (focused) focused->Wakeup(flag); }
   Window *SetFocusedWindowByID(void *id);
   Window *SetFocusedWindow(Window *W);
   void MakeCurrentWindow(Window*);
@@ -692,11 +693,11 @@ struct ThreadDispatcher : public ApplicationLifetime {
     RunCallbackInMainThread(Callback(forward<Args>(args)...));
   }
   template <class... Args> void RunInNetworkThread(Args&&... args) {
-    if (auto nt = network_thread.get()) nt->Write(new Callback(forward<Args>(args)...));
+    if (auto nt = network_thread.get()) nt->Write(make_unique<Callback>(forward<Args>(args)...));
     else (Callback(forward<Args>(args)...))();
   }
   template <class... Args> void RunInThreadPool(Args&&... args) {
-    thread_pool.Write(new Callback(forward<Args>(args)...));
+    thread_pool.Write(make_unique<Callback>(forward<Args>(args)...));
   } 
 };
 

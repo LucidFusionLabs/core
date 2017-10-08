@@ -23,23 +23,22 @@ namespace LFL {
 struct LanguageModel {
   static const int map_values=3, col_prior=1, col_transit=2;
   HashMatrix map;
-  unique_ptr<Matrix> prior, transit, map_data;
+  unique_ptr<Matrix> prior, transit;
   unique_ptr<vector<string>> names;
   double total=0;
-
-  ~LanguageModel() { Reset(); }
   LanguageModel() : map(0, map_values) {}
 
-  void Reset() { prior.reset(); transit.reset(); map_data.reset(); names.reset(); total=0; }
+  void Reset() { prior.reset(); transit.reset(); map.map.reset(); names.reset(); total=0; }
   int Open(const char *name, const char *dir) {
     string flags;
+    unique_ptr<Matrix> map_data;
     int lastiter = MatrixFile::ReadVersioned(dir, name, "transition", &transit, &flags);
-    if (!transit) { ERROR("no language model: ", name); return -1; }
-    if (MatrixFile::ReadVersioned(dir, name, "prior", &prior,    0, lastiter) < 0) { ERROR(name, ".", lastiter, ".prior"); return -1; }
-    if (MatrixFile::ReadVersioned(dir, name, "map",   &map_data, 0, lastiter) < 0) { ERROR(name, ".", lastiter, ".map"  ); return -1; }
-    if (StringFile::ReadVersioned(dir, name, "name",  &names,    0, lastiter) < 0) { ERROR(name, ".", lastiter, ".name" ); return -1; }
+    if (!transit) return ERRORv(-1, "no language model: ", name);
+    if (MatrixFile::ReadVersioned(dir, name, "prior", &prior,    0, lastiter) < 0) return ERRORv(-1, name, ".", lastiter, ".prior");
+    if (MatrixFile::ReadVersioned(dir, name, "map",   &map_data, 0, lastiter) < 0) return ERRORv(-1, name, ".", lastiter, ".map"  );
+    if (StringFile::ReadVersioned(dir, name, "name",  &names,    0, lastiter) < 0) return ERRORv(-1, name, ".", lastiter, ".name" );
     MatrixRowIter(prior) total += prior->row(i)[0];
-    map.map = map_data.get();
+    map.map = move(map_data);
     return lastiter;
   }
 
@@ -119,8 +118,8 @@ struct BigramLanguageModelBuilder {
 
     INFO("writing LM of ", words.size(), " words");
     const char *flagtext = "LM";
-    Matrix *map_data = new Matrix(NextPrime(words.size()*4), 5*LanguageModel::map_values);
-    HashMatrix map(map_data, LanguageModel::map_values);
+    HashMatrix map(make_unique<Matrix>(NextPrime(words.size()*4), 5*LanguageModel::map_values),
+                   LanguageModel::map_values);
 
     LocalFile names  (string(dir) + MatrixFile::Filename(name, "name",       "string", iteration), "w");
     LocalFile prior  (string(dir) + MatrixFile::Filename(name, "prior",      "matrix", iteration), "w");

@@ -26,7 +26,7 @@ const char* Java::String = "Ljava/lang/String;";
 const char* Java::ArrayList = "Ljava/util/ArrayList;";
 const char* Java::MainActivity = "Lcom/lucidfusionlabs/app/MainActivity;";
   
-static JNI *jni = Singleton<JNI>::Get();
+static JNI *jni = Singleton<JNI>::Set();
 
 void JNI::Init(jobject a, bool first) {
   if      (1)           CHECK(activity  = env->NewGlobalRef(a));
@@ -281,12 +281,12 @@ void JNI::RunRunnableOnUiThread(JNIEnv *e, jobject runnable) {
   e->CallVoidMethod(jni->activity, mid, runnable);
 }
 
-void JNI::MainThreadRunRunnable(GlobalJNIObject* runnable) {
-  jni->app->RunCallbackInMainThread(bind(&JNI::RunGlobalRunnable, nullptr, runnable));
+void JNI::MainThreadRunRunnable(unique_ptr<GlobalJNIObject> runnable) {
+  jni->app->RunCallbackInMainThread(bind(&JNI::RunGlobalRunnable, nullptr, runnable.release()));
 }
 
-void JNI::MainThreadRunRunnableOnUiThread(GlobalJNIObject* runnable) {
-  jni->app->RunCallbackInMainThread(bind(&JNI::RunGlobalRunnableOnUiThread, nullptr, runnable));
+void JNI::MainThreadRunRunnableOnUiThread(unique_ptr<GlobalJNIObject> runnable) {
+  jni->app->RunCallbackInMainThread(bind(&JNI::RunGlobalRunnableOnUiThread, nullptr, runnable.release()));
 }
 
 unique_ptr<BufferFile> JNI::OpenAsset(const string &fn) {

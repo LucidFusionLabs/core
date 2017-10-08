@@ -18,6 +18,7 @@
 
 #include "core/app/gl/view.h"
 #include "core/app/types/trie.h"
+#include "core/app/shell.h"
 #include "core/ml/corpus.h"
 #include "core/ml/counter.h"
 #include "core/ml/hmm.h"
@@ -26,6 +27,11 @@
 #include "lm.h"
 
 namespace LFL {
+Application *app;
+unique_ptr<LanguageModel> lmquery_model;
+unique_ptr<BigramLanguageModelBuilder> lmbuilder_model;
+unique_ptr<CounterS> triebuilder_model;
+
 DEFINE_string(query,           "",                          "Query corpus");
 DEFINE_string(target,          "printer",                   "Handler [printer,lmbuilder,triebuilder]");
 DEFINE_string(modeldir,        "model/",                    "Model directory");
@@ -35,14 +41,16 @@ DEFINE_string(corpuspath,      "",                          "Corpus path");
 DEFINE_string(treecorpuspath,  "corpus/penn/combined/wsj/", "Treebank path");
 DEFINE_string(propcorpuspath,  "corpus/propbank/frames/",   "Propbank path");
 DEFINE_string(nomcorpuspath,   "corpus/nombank/frames/",    "Nombank path");
+
 }; // namespace LFL
 using namespace LFL;
 
-extern "C" void MyAppCreate(int argc, const char* const* argv) {
+extern "C" LFApp *MyAppCreate(int argc, const char* const* argv) {
   FLAGS_open_console = 1;
-  app = new Application(argc, argv);
-  app->focused = Window::Create();
+  app = CreateApplication(argc, argv).release();
+  app->focused = CreateWindow(app).release();
   app->name = "trainer";
+  return app;
 }
 
 extern "C" int MyAppMain() {
@@ -56,20 +64,22 @@ extern "C" int MyAppMain() {
       printf("%s\n", s->DebugString().c_str());
     };
   } else if (FLAGS_target == "lmbuilder") {
-    BigramLanguageModelBuilder *target =
-      new BigramLanguageModelBuilder(FLAGS_modeldir, "LanguageModel", 0, FLAGS_min_occurrences);
-    input_cb  = bind(&BigramLanguageModelBuilder::Input, target, _1, _2);
-    finish_cb = bind(&BigramLanguageModelBuilder::Done,  target);
+    lmbuilder_model = make_unique<BigramLanguageModelBuilder>
+      (FLAGS_modeldir, "LanguageModel", 0, FLAGS_min_occurrences);
+    input_cb  = bind(&BigramLanguageModelBuilder::Input, lmbuilder_model.get(), _1, _2);
+    finish_cb = bind(&BigramLanguageModelBuilder::Done,  lmbuilder_model.get());
   } else if (FLAGS_target == "lmquery") {
-    LanguageModel *lm = new LanguageModel();
-    lm->Open("LanguageModel", FLAGS_modeldir.c_str());
-    input_cb = [=](const string &fn, SentenceCorpus::Sentence *s) {
+    lmquery_model = make_unique<LanguageModel>();
+    lmquery_model->Open("LanguageModel", FLAGS_modeldir.c_str());
+    input_cb = [=, lm = lmquery_model.get()](const string &fn, SentenceCorpus::Sentence *s) {
       for (auto w : *s) printf("%s\n", lm->DebugString(tolower(w.text).c_str()).c_str());
     };
   } else if (FLAGS_target == "triebuilder") {
-    CounterS *words = new CounterS();
-    input_cb = [=](const string &fn, SentenceCorpus::Sentence *s) { for (auto w : *s) words->Incr(tolower(w.text)); };
-    finish_cb = [=]() {
+    triebuilder_model = make_unique<CounterS>();
+    input_cb = [=, words = triebuilder_model.get()](const string &fn, SentenceCorpus::Sentence *s) { 
+      for (auto w : *s) words->Incr(tolower(w.text));
+    };
+    finish_cb = [=, words = triebuilder_model.get()]() {
       PatriciaCompleter<char, int> trie(words->count.begin(), words->count.end());
       for (auto w : words->count) {
         auto n = trie.Query(w.first);
@@ -80,9 +90,9 @@ extern "C" int MyAppMain() {
     };
   } else { ERROR("unknown target ", FLAGS_target); return -1; }
 
-  SentenceCorpus *corpus = 0;
-  if      (!FLAGS_query.empty())   corpus = new QueryCorpus(input_cb, FLAGS_query);
-  else if (FLAGS_corpus == "text") corpus = new TextCorpus(input_cb);
+  unique_ptr<SentenceCorpus> corpus;
+  if      (!FLAGS_query.empty())   corpus = make_unique<QueryCorpus>(input_cb, FLAGS_query);
+  else if (FLAGS_corpus == "text") corpus = make_unique<TextCorpus>(input_cb);
   else { ERROR("unknown corpus ", FLAGS_corpus); return -1; }
 
   corpus->finish_cb = finish_cb;

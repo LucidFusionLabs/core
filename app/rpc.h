@@ -200,7 +200,7 @@ struct InterProcessComm {
   struct ConnectionHandler : public Connection::Handler {
     InterProcessComm *parent;
     ConnectionHandler(InterProcessComm *P) : parent(P) {}
-    int Read(Connection *c) { parent->HandleIPC(c); return 0; }
+    int Read(Connection *c) override { parent->HandleIPC(c); return 0; }
   };
 
   template <class Parent> struct Query {

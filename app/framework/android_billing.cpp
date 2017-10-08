@@ -19,7 +19,7 @@
 #include "core/app/app.h"
 
 namespace LFL {
-static JNI *jni = Singleton<JNI>::Get();
+static JNI *jni = Singleton<JNI>::Set();
 
 static jobject ToNativeProductCB(JNIEnv *env, PurchasesInterface::ProductCB c) {
   static jclass nativeproductcb_class = CheckNotNull(jclass(env->NewGlobalRef(env->FindClass("com/lucidfusionlabs/billing/NativeProductCB"))));

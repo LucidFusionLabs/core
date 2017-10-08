@@ -24,15 +24,17 @@ DECLARE_int(soundasset_seconds);
 DECLARE_float(shadertoy_blend);
 
 struct Geometry {
-  int vd, td, cd, primtype, count, material, color;
+  static const int TD=2, CD=4;
+
+  int vd, td, cd, primtype, count, material=0, color=0;
   Material mat;
   Color col;
   vector<float> vert, last_position;
-  int width, vert_ind, norm_offset, tex_offset, color_offset;
-  Geometry(int N=0, int V=0, int PT=0, int VD=0, int TD=0, int CD=0) : vd(VD), td(TD), cd(CD), primtype(PT), count(N),
-  material(0), color(0), vert(V), last_position(VD), width(VD), vert_ind(-1), norm_offset(-1), tex_offset(-1), color_offset(-1) {}
+  int width, vert_ind=-1, norm_offset=-1, tex_offset=-1, color_offset=-1;
 
-  static const int TD=2, CD=4;
+  Geometry(int N=0, int V=0, int PT=0, int VD=0, int TD=0, int CD=0) :
+    vd(VD), td(TD), cd(CD), primtype(PT), count(N), vert(V), last_position(VD), width(VD) {}
+
   template <class X> Geometry(int VD, int primtype, int num, X *v, v3 *norm, v2 *tex, const Color *vcol) :
     Geometry(num, num*VD*(1+(norm!=0)) + num*TD*(tex!=0) + num*CD*(vcol!=0) + 256, primtype, VD, TD, CD)
   {
@@ -47,6 +49,7 @@ struct Geometry {
       for (int j = 0; j<CD && vcol; j++, k++) vert[i*width + k] = vcol[i].x[j];
     }
   }
+
   template <class X> Geometry(int VD, int primtype, int num, X *v, v3 *norm, v2 *tex, const Color &vcol) :
     Geometry(VD, primtype, num, v, norm, tex, nullptr) { color=1; col=vcol; }
 
@@ -146,8 +149,8 @@ struct SoundAsset {
   unique_ptr<AudioResamplerInterface> resampler;
 
   SoundAsset(AssetLoading *L) : parent(L) {}
-  SoundAsset(AssetLoading *L, const string &N, const string &FN, RingSampler *W, int C, int SR, int S) :
-    parent(L), name(N), filename(FN), wav(W), channels(C), sample_rate(SR), seconds(S) {}
+  SoundAsset(AssetLoading *L, const string &N, const string &FN, unique_ptr<RingSampler> W, int C, int SR, int S) :
+    parent(L), name(N), filename(FN), wav(move(W)), channels(C), sample_rate(SR), seconds(S) {}
 
   void Load(AudioAssetLoader::Handle &handle, const char *FN, int Secs, int flag=0);
   void Load(const void *FromBuf, int size, const char *FileName, int Seconds=FLAGS_soundasset_seconds);
@@ -187,17 +190,17 @@ void glSpectogram(GraphicsDevice*, Matrix *m, unsigned char *data, int pf, int w
 void glSpectogram(GraphicsDevice*, Matrix *m, Texture *t, float *max=0, float clip=-INFINITY, int pd=PowerDomain::dB);
 void glSpectogram(GraphicsDevice*, const RingSampler::Handle *in, Texture *t, Matrix *transform=0, float *max=0, float clip=-INFINITY);
 
-struct BoxFilled             : public Drawable { void Draw(GraphicsContext*, const LFL::Box &b) const; };
-struct BoxOutline            : public Drawable { void Draw(GraphicsContext*, const LFL::Box &b) const; };
-struct BoxTopLeftOutline     : public Drawable { void Draw(GraphicsContext*, const LFL::Box &b) const; };
-struct BoxBottomRightOutline : public Drawable { void Draw(GraphicsContext*, const LFL::Box &b) const; };
+struct BoxFilled             : public Drawable { void Draw(GraphicsContext*, const LFL::Box &b) const override; };
+struct BoxOutline            : public Drawable { void Draw(GraphicsContext*, const LFL::Box &b) const override; };
+struct BoxTopLeftOutline     : public Drawable { void Draw(GraphicsContext*, const LFL::Box &b) const override; };
+struct BoxBottomRightOutline : public Drawable { void Draw(GraphicsContext*, const LFL::Box &b) const override; };
 
 struct Waveform : public Drawable {
   int width=0, height=0;
   unique_ptr<Geometry> geom;
   Waveform() {}
   Waveform(point dim, const Color *c, const Vec<float> *);
-  void Draw(GraphicsContext*, const LFL::Box &w) const;
+  void Draw(GraphicsContext*, const LFL::Box &w) const override;
   static Waveform Decimated(point dim, const Color *c, const RingSampler::Handle *, int decimateBy);
 };
 

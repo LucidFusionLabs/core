@@ -39,7 +39,7 @@ struct FontEngine {
   Fonts *parent;
   FontEngine(Fonts *p) : parent(p) {}
   virtual ~FontEngine() {}
-  virtual const char*      Name() = 0;
+  virtual const char*      Name() const = 0;
   virtual void             Shutdown() {}
   virtual void             SetDefault() {}
   virtual bool             Init(const FontDesc&) { return true; }
@@ -69,20 +69,21 @@ struct Glyph : public Drawable {
   void FromArray(const double *in,  int l);
   int  ToArray  (      double *out, int l);
 
-  virtual int  Id()    const { return id; }
-  virtual int  TexId() const { return tex.ID; }
-  virtual bool Wide()  const { return wide; }
-  virtual int  Baseline   (const LFL::Box *b, const Drawable::Attr *a=0) const;
-  virtual int  Ascender   (const LFL::Box *b, const Drawable::Attr *a=0) const;
-  virtual int  Advance    (const LFL::Box *b, const Drawable::Attr *a=0) const;
-  virtual int  LeftBearing(                   const Drawable::Attr *a=0) const;
-  virtual int  Layout     (      LFL::Box *b, const Drawable::Attr *a=0) const;
-  virtual void Draw       (GraphicsContext*,  const LFL::Box&)           const;
+  int  Id()    const override { return id; }
+  int  TexId() const override { return tex.ID; }
+  bool Wide()  const override { return wide; }
+
+  int  Baseline   (const LFL::Box *b, const Drawable::Attr *a=0) const override;
+  int  Ascender   (const LFL::Box *b, const Drawable::Attr *a=0) const override;
+  int  Advance    (const LFL::Box *b, const Drawable::Attr *a=0) const override;
+  int  LeftBearing(                   const Drawable::Attr *a=0) const override;
+  int  Layout     (      LFL::Box *b, const Drawable::Attr *a=0) const override;
+  void Draw       (GraphicsContext*,  const LFL::Box&)           const override;
 };
 
 struct FillColor : public Glyph {
   FillColor(GraphicsDeviceHolder *p, ColorDesc c) : Glyph(p) { internal.fillcolor.color = c; }
-  virtual void Draw(GraphicsContext*, const LFL::Box&) const;
+  virtual void Draw(GraphicsContext*, const LFL::Box&) const override;
 };
 
 struct GlyphMetrics {
@@ -211,15 +212,18 @@ struct Font {
 struct FakeFontEngine : public FontEngine {
   static const int size = 10, fixed_width = 8, ascender = 9, descender = 5;
   static const char16_t wide_glyph_begin = 0x1FC, wide_glyph_end = 0x1FD;
+
   // U+1FC = 'AE'; encoded: c7bc,  U+1FD = 'ae', encoded: c7bd
   FontDesc fake_font_desc;
   Font fake_font;
   FakeFontEngine(Fonts*);
-  virtual const char *Name() { return "FakeFontEngine"; }
-  virtual unique_ptr<Font> Open(const FontDesc&) { return make_unique<Font>(fake_font); }
-  virtual int LoadGlyphs(Font *f, const Glyph *g, int n) { return n; }
-  virtual int InitGlyphs(Font *f,       Glyph *g, int n);
-  virtual string DebugString(Font *f) const { return "FakeFontEngineFont"; }
+
+  const char *Name() const override { return "FakeFontEngine"; }
+  unique_ptr<Font> Open(const FontDesc&) override { return make_unique<Font>(fake_font); }
+  int LoadGlyphs(Font *f, const Glyph *g, int n) override { return n; }
+  int InitGlyphs(Font *f,       Glyph *g, int n) override;
+  string DebugString(Font *f) const override { return "FakeFontEngineFont"; }
+
   static const char *Filename() { return "__FakeFontFilename__"; }
 };
 
@@ -233,14 +237,14 @@ struct AtlasFontEngine : public FontEngine {
   bool in_init=0;
   AtlasFontEngine(Fonts *f);
 
-  virtual const char*      Name() { return "AtlasFontEngine"; }
-  virtual void             SetDefault();
-  virtual bool             Init(const FontDesc&);
-  virtual unique_ptr<Font> Open(const FontDesc&);
-  virtual bool             HaveGlyph (Font *f, char16_t) { return false; }
-  virtual int              InitGlyphs(Font *f,       Glyph *g, int n) { return n; }
-  virtual int              LoadGlyphs(Font *f, const Glyph *g, int n) { return n; }
-  virtual string           DebugString(Font *f) const;
+  const char*      Name() const override { return "AtlasFontEngine"; }
+  void             SetDefault() override;
+  bool             Init(const FontDesc&) override;
+  unique_ptr<Font> Open(const FontDesc&) override;
+  bool             HaveGlyph (Font *f, char16_t) override { return false; }
+  int              InitGlyphs(Font *f,       Glyph *g, int n) override { return n; }
+  int              LoadGlyphs(Font *f, const Glyph *g, int n) override { return n; }
+  string           DebugString(Font *f) const override;
 
   static unique_ptr<Font> OpenAtlas(Fonts*, const FontDesc&);
   static void WriteAtlas(ApplicationInfo*, const string &name, Font *glyphs, Texture *t);
@@ -263,13 +267,13 @@ struct FreeTypeFontEngine : public FontEngine {
   GlyphCache::FilterCB subpixel_filter = &FreeTypeFontEngine::SubPixelFilter;
   FreeTypeFontEngine(Fonts *p) : FontEngine(p) {}
 
-  virtual const char*      Name() { return "FreeTypeFontEngine"; }
-  virtual void             SetDefault();
-  virtual bool             Init(const FontDesc&);
-  virtual unique_ptr<Font> Open(const FontDesc&);
-  virtual int              InitGlyphs(Font *f,       Glyph *g, int n);
-  virtual int              LoadGlyphs(Font *f, const Glyph *g, int n);
-  virtual string           DebugString(Font *f) const;
+  const char*      Name() const override { return "FreeTypeFontEngine"; }
+  void             SetDefault() override;
+  bool             Init(const FontDesc&) override;
+  unique_ptr<Font> Open(const FontDesc&) override;
+  int              InitGlyphs(Font *f,       Glyph *g, int n) override;
+  int              LoadGlyphs(Font *f, const Glyph *g, int n) override;
+  string           DebugString(Font *f) const override;
 
   static void Init();
   static void SubPixelFilter(const Box &b, unsigned char *buf, int linesize, int pf);
@@ -290,12 +294,12 @@ struct CoreTextFontEngine : public FontEngine {
   unordered_map<string, shared_ptr<Resource>> resource;
   CoreTextFontEngine(Fonts *p) : FontEngine(p) {}
 
-  virtual const char*      Name() { return "CoreTextFontEngine"; }
-  virtual void             SetDefault();
-  virtual unique_ptr<Font> Open(const FontDesc&);
-  virtual int              InitGlyphs(Font *f,       Glyph *g, int n);
-  virtual int              LoadGlyphs(Font *f, const Glyph *g, int n);
-  virtual string           DebugString(Font *f) const;
+  const char*      Name() const override { return "CoreTextFontEngine"; }
+  void             SetDefault() override;
+  unique_ptr<Font> Open(const FontDesc&) override;
+  int              InitGlyphs(Font *f,       Glyph *g, int n) override;
+  int              LoadGlyphs(Font *f, const Glyph *g, int n) override;
+  string           DebugString(Font *f) const override;
 
   struct Flag { enum { WriteAtlas=1 }; };
   static Font *Open(const string &name, int size, Color c, int flag, int ct_flag);
@@ -321,13 +325,13 @@ struct GDIFontEngine : public FontEngine {
   GDIFontEngine(Fonts*);
   ~GDIFontEngine();
 
-  virtual const char*      Name() { return "GDIFontEngine"; }
-  virtual void             Shutdown();
-  virtual void             SetDefault();
-  virtual unique_ptr<Font> Open(const FontDesc&);
-  virtual int              InitGlyphs(Font *f, Glyph *g, int n);
-  virtual int              LoadGlyphs(Font *f, const Glyph *g, int n);
-  virtual string           DebugString(Font *f) const;
+  const char*      Name() const override { return "GDIFontEngine"; }
+  void             Shutdown() override;
+  void             SetDefault() override;
+  unique_ptr<Font> Open(const FontDesc&) override;
+  int              InitGlyphs(Font *f, Glyph *g, int n) override;
+  int              LoadGlyphs(Font *f, const Glyph *g, int n) override;
+  string           DebugString(Font *f) const override;
 
   struct Flag { enum { WriteAtlas = 1 }; };
   static Font *Open(const string &name, int size, Color c, int flag, int ct_flag);
@@ -347,13 +351,13 @@ struct FCFontEngine : public FontEngine {
   unordered_map<string, shared_ptr<Resource>> resource;
   FCFontEngine(Fonts *p) : FontEngine(p) {}
 
-  virtual const char*      Name() { return "FCFontEngine"; }
-  virtual void             Shutdown();
-  virtual void             SetDefault();
-  virtual unique_ptr<Font> Open(const FontDesc&);
-  virtual int              InitGlyphs(Font *f, Glyph *g, int n);
-  virtual int              LoadGlyphs(Font *f, const Glyph *g, int n);
-  virtual string           DebugString(Font *f) const;
+  const char*      Name() const override { return "FCFontEngine"; }
+  void             Shutdown() override;
+  void             SetDefault() override;
+  unique_ptr<Font> Open(const FontDesc&) override;
+  int              InitGlyphs(Font *f, Glyph *g, int n) override;
+  int              LoadGlyphs(Font *f, const Glyph *g, int n) override;
+  string           DebugString(Font *f) const override;
 
   unique_ptr<Font> OpenTTF(const FontDesc&);
   static void Init();
@@ -371,13 +375,13 @@ struct AndroidFontEngine : public FontEngine {
   unordered_map<string, shared_ptr<Resource>> resource;
   AndroidFontEngine(Fonts *p) : FontEngine(p) {}
 
-  virtual const char*      Name() { return "AndroidFontEngine"; }
-  virtual void             Shutdown();
-  virtual void             SetDefault();
-  virtual unique_ptr<Font> Open(const FontDesc&);
-  virtual int              InitGlyphs(Font *f, Glyph *g, int n);
-  virtual int              LoadGlyphs(Font *f, const Glyph *g, int n);
-  virtual string           DebugString(Font *f) const;
+  const char*      Name() const override { return "AndroidFontEngine"; }
+  void             Shutdown() override;
+  void             SetDefault() override;
+  unique_ptr<Font> Open(const FontDesc&) override;
+  int              InitGlyphs(Font *f, Glyph *g, int n) override;
+  int              LoadGlyphs(Font *f, const Glyph *g, int n) override;
+  string           DebugString(Font *f) const override;
 
   unique_ptr<Font> OpenTTF(const FontDesc&);
   static void Init();
@@ -390,22 +394,23 @@ struct IPCClientFontEngine : public FontEngine {
   struct Resource : public FontEngine::Resource { int id; Resource(int I=0) : id(I) {} };
   ThreadDispatcher *dispatch;
   IPCClientFontEngine(ThreadDispatcher *d, Fonts *p) : FontEngine(p), dispatch(d) {}
-  virtual const char *Name() { return "IPCClientFontEngine"; }
-  virtual unique_ptr<Font> Open(const FontDesc&);
-  virtual int InitGlyphs(Font *f, Glyph *g, int n);
-  virtual int LoadGlyphs(Font *f, const Glyph *g, int n);
-  string DebugString(Font *f) const;
+
+  const char *Name() const override { return "IPCClientFontEngine"; }
+  unique_ptr<Font> Open(const FontDesc&) override;
+  int InitGlyphs(Font *f, Glyph *g, int n) override;
+  int LoadGlyphs(Font *f, const Glyph *g, int n) override;
+  string DebugString(Font *f) const override;
   int OpenSystemFontResponse(Font *f, const IPC::OpenSystemFontResponse*, const MultiProcessBuffer&);
   static int GetId(Font *f);
 };
 
 struct IPCServerFontEngine : public FontEngine {
   IPCServerFontEngine(Fonts *p) : FontEngine(p) {}
-  virtual const char *Name() { return "IPCServerFontEngine"; }
-  virtual unique_ptr<Font> Open(const FontDesc&);
-  virtual int InitGlyphs(Font *f, Glyph *g, int n);
-  virtual int LoadGlyphs(Font *f, const Glyph *g, int n);
-  string DebugString(Font *f) const;
+  const char *Name() const override { return "IPCServerFontEngine"; }
+  unique_ptr<Font> Open(const FontDesc&) override;
+  int InitGlyphs(Font *f, Glyph *g, int n) override;
+  int LoadGlyphs(Font *f, const Glyph *g, int n) override;
+  string DebugString(Font *f) const override;
 };
 
 struct Fonts {

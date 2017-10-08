@@ -331,6 +331,12 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
     LFUIApplication *uiapp;
   }
 
+  - (id)initWithFrame:(CGRect)aRect {
+    if (!(self = [super initWithFrame:aRect])) return self;
+    uiapp = [LFUIApplication sharedAppDelegate];
+    return self;
+  }
+
   - (BOOL)hasText { return YES; }
   - (BOOL)canBecomeFirstResponder { return YES; }
   - (UITextAutocorrectionType)autocorrectionType { return UITextAutocorrectionTypeNo; }
@@ -364,10 +370,15 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
     LFUIApplication *uiapp;
   }
 
+  - (id)initWithNibName:(NSString *)nibNameOrNil bundle:(NSBundle *)nibBundleOrNil {
+    if (!(self = [super initWithNibName:nibNameOrNil bundle:nibBundleOrNil])) return self;
+    uiapp = [LFUIApplication sharedAppDelegate];
+    return self;
+  }
+
   - (void)viewWillAppear:(BOOL)animated { 
     [super viewWillAppear:animated];
     if (!LFL::FLAGS_target_fps) [self setPaused:YES];
-    uiapp = [LFUIApplication sharedAppDelegate];
   }
   
   - (void)viewDidLayoutSubviews {
@@ -414,6 +425,12 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
     CGPoint pinch_point;
   }
 
+  - (id)initWithNibName:(NSString *)nibNameOrNil bundle:(NSBundle *)nibBundleOrNil {
+    if (!(self = [super initWithNibName:nibNameOrNil bundle:nibBundleOrNil])) return self;
+    uiapp = [LFUIApplication sharedAppDelegate];
+    return self;
+  }
+
   - (BOOL)canBecomeFirstResponder { return YES; }
   - (BOOL)prefersStatusBarHidden { return status_bar_hidden; }
   // - (UIView*)inputAccessoryView { return _input_accessory_toolbar; }
@@ -436,7 +453,6 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
 
   - (void)viewWillAppear:(BOOL)animated { 
     [super viewWillAppear:animated];
-    uiapp = [LFUIApplication sharedAppDelegate];
   }
 
   - (void)viewDidLoad {
@@ -1016,19 +1032,19 @@ struct iOSFrameworkModule : public Module {
 
 struct iOSAssetLoader : public SimpleAssetLoader {
   iOSAssetLoader(AssetLoading *p) : SimpleAssetLoader(p) {}
-  virtual void UnloadAudioFile(void *h) {}
-  virtual void *LoadAudioFile(File*) { return 0; }
-  virtual void *LoadAudioFileNamed(const string &asset_fn) {
+  void UnloadAudioFile(AudioAssetLoader::Handle&) override {}
+  AudioAssetLoader::Handle LoadAudioFile(unique_ptr<File>) override { return 0; }
+  AudioAssetLoader::Handle LoadAudioFileNamed(const string &asset_fn) override {
     NSError *error;
     NSString *fn = [NSString stringWithCString:parent->FileName(asset_fn).c_str() encoding:NSASCIIStringEncoding];
     NSURL *url = [NSURL fileURLWithPath: fn];
     AVAudioPlayer *audio_player = [[AVAudioPlayer alloc] initWithContentsOfURL:url error:&error];
     if (audio_player == nil) ERRORf("iOS Asset Load %s: %s", [fn UTF8String], [[error description] UTF8String]);
-    return audio_player;
+    return AudioAssetLoader::Handle(this, audio_player);
   }
 
-  virtual void LoadAudio(void *handle, SoundAsset *a, int seconds, int flag) { a->handle = handle; }
-  virtual int RefillAudio(SoundAsset *a, int reset) { return 0; }
+  virtual void LoadAudio(void *handle, SoundAsset *a, int seconds, int flag) { /*a->handle = handle;*/ }
+  virtual int RefillAudio(SoundAsset *a, int reset) override { return 0; }
 };
 
 struct iOSAlertView : public AlertViewInterface {
@@ -1090,7 +1106,7 @@ void ThreadDispatcher::RunCallbackInMainThread(Callback cb) {
   [ocb performSelectorOnMainThread:@selector(runAndRelease) withObject:nil waitUntilDone:NO];
 #else
   message_queue.Write(new Callback(move(cb)));
-  if (!FLAGS_target_fps && !suspended) wakeup->Wakeup();
+  if (!FLAGS_target_fps && !scheduler.window->suspended) wakeup->Wakeup();
 #endif
 }
 
@@ -1221,8 +1237,8 @@ void FrameScheduler::DelMainWaitSocket(Window *w, Socket fd) {
   [[LFUIApplication sharedAppDelegate] delMainWaitSocket: fd];
 }
 
-Window *CreateWindow(Application *a) { return new iOSWindow(a); }
-Application *CreateApplication(int ac, const char* const* av) { return new Application(ac, av); }
+unique_ptr<Window> CreateWindow(Application *a) { return make_unique<iOSWindow>(a); }
+unique_ptr<Application> CreateApplication(int ac, const char* const* av) { return make_unique<Application>(ac, av); }
 unique_ptr<Module> CreateFrameworkModule(Application *a) { return make_unique<iOSFrameworkModule>(a); }
 unique_ptr<AssetLoaderInterface> CreateAssetLoader(AssetLoading *p) { return make_unique<iOSAssetLoader>(p); }
 unique_ptr<TimerInterface> SystemToolkit::CreateTimer(Callback cb) { return make_unique<AppleTimer>(move(cb)); }

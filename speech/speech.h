@@ -62,31 +62,31 @@ struct Features {
   static int filter_zeroth, deltas, deltadeltas, mean_normalization, variance_normalization, lpccoefs, barkbands;
   static double rastaB[5], rastaA[2];
 
-  static Matrix *EqualLoudnessCurve(int outrows, double max);
   static vector<double> LifterMatrixROSA(int n, double L, bool inverse=false);
   static vector<double> LifterMatrixHTK(int n, double L, bool inverse=false);
-  static Matrix *FFT2Bark(int outrows, double minfreq, double maxfreq, int fftlen, int samplerate);
-  static Matrix *FFT2Mel(int outrows, double minfreq, double maxfreq, int fftlen, int samplerate);
-  static Matrix *Mel2FFT(int outrows, double minfreq, double maxfreq, int fftlen, int samplerate);
-  static Matrix *PLP(const RingSampler::Handle *in, Matrix *out=0, vector<StatefulFilter> *rastaFilter=0, Allocator *alloc=0);
-  static RingSampler *InvPLP(const Matrix *in, int samplerate, Allocator *alloc=0);
-  static Matrix *MFCC(const RingSampler::Handle *in, Matrix *out=0, Allocator *alloc=0);
-  static RingSampler *InvMFCC(const Matrix *in, int samplerate, const Matrix *f0=0);
+  static unique_ptr<Matrix> EqualLoudnessCurve(int outrows, double max);
+  static unique_ptr<Matrix> FFT2Bark(int outrows, double minfreq, double maxfreq, int fftlen, int samplerate);
+  static unique_ptr<Matrix> FFT2Mel(int outrows, double minfreq, double maxfreq, int fftlen, int samplerate);
+  static unique_ptr<Matrix> Mel2FFT(int outrows, double minfreq, double maxfreq, int fftlen, int samplerate);
+  static unique_ptr<Matrix> PLP(const RingSampler::Handle *in, Matrix *out=0, vector<StatefulFilter> *rastaFilter=0, Allocator *alloc=0);
+  static unique_ptr<Matrix> MFCC(const RingSampler::Handle *in, Matrix *out=0, Allocator *alloc=0);
+  static unique_ptr<RingSampler> InvPLP(const Matrix *in, int samplerate, Allocator *alloc=0);
+  static unique_ptr<RingSampler> InvMFCC(const Matrix *in, int samplerate, const Matrix *f0=0);
 
-  static Matrix *FilterZeroth(Matrix *features);
+  static unique_ptr<Matrix> FilterZeroth(unique_ptr<Matrix> features);
   static void MeanAndVarianceNormalization(int D, double *feat, const double *mean, const double *var);
   static void DeltaCoefficients(int D, const double *n2, double *f, const double *p2);
   static void DeltaDeltaCoefficients(int D, const double *n3, const double *n1, double *f,  const double *p1, const double *p3);
   static void PatchDeltaCoefficients(int D, const double *in, double *out1, double *out2); 
   static void PatchDeltaDeltaCoefficients(int D, const double *in, double *out1, double *out2, double *out3);
-  static Matrix *DeltaCoefficients(Matrix *features, bool deltadelta=true);
+  static unique_ptr<Matrix> DeltaCoefficients(unique_ptr<Matrix> features, bool deltadelta=true);
 
   struct Flag { enum { Full=1, Storable=2 }; int f; };
-  static Matrix *FromAsset(SoundAsset *wav, int flag);
-  static Matrix *FromFeat(Matrix *features, int flag);
-  static Matrix *FromFeat(Matrix *features, int flag, bool FilterZeroth, bool Deltas, bool DeltaDeltas, bool MeanNorm, bool VarNorm);
-  static Matrix *FromBuf(const RingSampler::Handle *in, Matrix *out=0, vector<StatefulFilter> *filter=0, Allocator *alloc=0);
-  static RingSampler *Reverse(const Matrix *in, int samplerate, const Matrix *f0=0, Allocator *alloc=0);
+  static unique_ptr<Matrix> FromAsset(SoundAsset *wav, int flag);
+  static unique_ptr<Matrix> FromFeat(unique_ptr<Matrix> features, int flag);
+  static unique_ptr<Matrix> FromFeat(unique_ptr<Matrix> features, int flag, bool FilterZeroth, bool Deltas, bool DeltaDeltas, bool MeanNorm, bool VarNorm);
+  static unique_ptr<Matrix> FromBuf(const RingSampler::Handle *in, Matrix *out=0, vector<StatefulFilter> *filter=0, Allocator *alloc=0);
+  static unique_ptr<RingSampler> Reverse(const Matrix *in, int samplerate, const Matrix *f0=0, Allocator *alloc=0);
   static int Dimension();
 };
 
@@ -142,34 +142,34 @@ struct AcousticModel {
   };
 
   struct Compiled : public StateCollection {
-    State *state;
-    int states;
-    Matrix *tiedstates, *phonetx;
-
     struct NameCB : public LFL::NameCB {
       Compiled *model;
       NameCB(Compiled *M) : model(M) {}
       string Name(int ind) {
-        if (ind < 0 || ind > model->states) FATAL("oob ind ", ind);
+        if (ind < 0 || ind > model->state.size()) FATAL("oob ind ", ind);
         return model->state[ind].name;
       }
-    } nameCB;
+    };
 
-    ~Compiled() { delete [] state; }
-    Compiled(int N=0) : state(0), states(0), tiedstates(0), phonetx(0), nameCB(this) { if (N) Open(N); }
-    void Open(int N) { delete [] state; states=N; state=new State[states]; }
+    vector<State> state;
+    Matrix *tiedstates=0;
+    unique_ptr<Matrix> phonetx;
+    NameCB nameCB;
 
-    int GetStateCount() { return states; }
+    Compiled(int N=0) : nameCB(this) { if (N) Open(N); }
+    void Open(int N) { state = vector<State>(N, State()); }
+
+    int GetStateCount() { return state.size(); }
     State *GetState(unsigned stateID) { return 0; }
     void BeginState(Iterator *iter) { iter->done = 0; *reinterpret_cast<int*>(iter->impl) = 0; NextState(iter); }
     void NextState(Iterator *iter) {
       int *impl = reinterpret_cast<int*>(iter->impl);
-      if (*impl >= states) { iter->done = 1; return; }
+      if (*impl >= state.size()) { iter->done = 1; return; }
       iter->k = (*impl)++;
       iter->v = &state[iter->k];
     }
     Matrix *TiedStates() { return tiedstates; }
-    Matrix *PhoneTx() { return phonetx; }
+    Matrix *PhoneTx() { return phonetx.get(); }
   };
 
   const static int StatesPerPhone=3;
@@ -192,11 +192,11 @@ struct AcousticModel {
     return (xn - yn) < 0;
   }
 
-  static Compiled *FullyConnected(Compiled *model);
-  static Compiled *FromUtterance(AssetLoading *loader, Compiled *model, const char *transcript, bool UseTransit);
-  static Compiled *FromUtterance3(AssetLoading *loader, Compiled *model, const char *transcript, bool UseTransit);
-  static Compiled *FromUtterance1(AssetLoading *loader, Compiled *model, const char *transcript, bool UseTransit);
-  static Compiled *FromModel1(StateCollection *model, bool rewriteTransitions);
+  static unique_ptr<Compiled> FullyConnected(Compiled *model);
+  static unique_ptr<Compiled> FromUtterance(AssetLoading *loader, Compiled *model, const char *transcript, bool UseTransit);
+  static unique_ptr<Compiled> FromUtterance3(AssetLoading *loader, Compiled *model, const char *transcript, bool UseTransit);
+  static unique_ptr<Compiled> FromUtterance1(AssetLoading *loader, Compiled *model, const char *transcript, bool UseTransit);
+  static unique_ptr<Compiled> FromModel1(StateCollection *model, bool rewriteTransitions);
 
   static void LoadFlags(const char *flags);
   static string Flags();
@@ -219,31 +219,22 @@ struct AcousticModelFile : public AcousticModel::Compiled {
 };
 
 struct AcousticModelBuilder : public AcousticModel::StateCollection {
-  typedef map<int, AcousticModel::State*> Map;
+  typedef map<int, unique_ptr<AcousticModel::State>> Map;
   Map statemap;
 
-  AcousticModelBuilder() {} 
-  ~AcousticModelBuilder() {
-    for (Map::iterator i = statemap.begin(); i != statemap.end(); i++) {
-      AcousticModel::State *s = (*i).second;
-    }
-  }
-
   int GetStateCount() { return statemap.size(); }
-  AcousticModel::State *GetState(unsigned stateID) { Map::iterator i = statemap.find(stateID); return i != statemap.end() ? (*i).second : 0; }
+  AcousticModel::State *GetState(unsigned stateID) { Map::iterator i = statemap.find(stateID); return i != statemap.end() ? (*i).second.get() : 0; }
 
   void BeginState(Iterator *iter) { iter->done=0; Map::iterator *i = reinterpret_cast<Map::iterator*>(iter->impl); *i = statemap.begin(); AssignKV(iter, i); }
   void NextState (Iterator *iter) {               Map::iterator *i = reinterpret_cast<Map::iterator*>(iter->impl); (*i)++;                AssignKV(iter, i); }
 
   void AssignKV(Iterator *iter, Map::iterator *i) {
     if (*i == statemap.end()) iter->done = 1;
-    else { iter->k = (**i).first; iter->v = (**i).second; }
+    else { iter->k = (**i).first; iter->v = (**i).second.get(); }
   }
 
-  void Add(AcousticModel::State *s, int id) { statemap[id] = s; };
-  void Add(AcousticModel::State *s) { Add(s, s->Id()); }
-  void Rem(AcousticModel::State *s) { Rem(s->Id()); }
-  void Rem(int id) { statemap.erase(id); }
+  void Add(unique_ptr<AcousticModel::State> s, int id) { statemap[id] = move(s); };
+  void Add(unique_ptr<AcousticModel::State> s) { Add(move(s), s->Id()); }
 };
 
 struct AcousticHMM {
@@ -287,7 +278,7 @@ struct AcousticHMM {
     ~EmissionArray() { if (alloc) alloc->Free(emission); }
     EmissionArray(AcousticModel::Compiled *M, Matrix *Observed, bool UsePrior, Allocator *Alloc=0) : model(M),
     observed(Observed), use_prior_prob(UsePrior), time_index(0), alloc(Alloc?Alloc:Singleton<MallocAllocator>::Set()),
-    emission(static_cast<double*>(alloc->Malloc(sizeof(double)*model->states))) {}
+    emission(static_cast<double*>(alloc->Malloc(sizeof(double)*model->state.size()))) {}
 
     double *Observation(int t) { return observed->row(t); }
     int Observations() { return observed->M; }
@@ -314,8 +305,8 @@ struct AcousticHMM {
     ~EmissionMatrix() { if (!alloc) return; alloc->Free(calcd); alloc->Free(cudaPosterior); }
     EmissionMatrix(AcousticModel::Compiled *M, Matrix *Observed, bool UsePrior, Allocator *Alloc=0) : model(M), observed(Observed), use_prior_prob(UsePrior),
     K(model->state[0].emission.mean.M), time_index(0), alloc(Alloc?Alloc:Singleton<MallocAllocator>::Set()),
-    emission(observed->M, model->states, 0, 0, Alloc), emissionPosterior(observed->M, model->states*K, 0, 0, Alloc),
-    calcd(static_cast<bool*>(alloc->Malloc(observed->M))), cudaPosterior(static_cast<double*>(alloc->Malloc(model->states*K*sizeof(double))))
+    emission(observed->M, model->state.size(), 0, 0, Alloc), emissionPosterior(observed->M, model->state.size()*K, 0, 0, Alloc),
+    calcd(static_cast<bool*>(alloc->Malloc(observed->M))), cudaPosterior(static_cast<double*>(alloc->Malloc(model->state.size()*K*sizeof(double))))
     { memset(calcd, 0, observed->M);  }
 
     double *Observation(int t) { return observed->row(t); }
@@ -363,8 +354,8 @@ struct FeatureSink {
 };
 
 struct Decoder {
-  static Matrix *DecodeFile(AssetLoading*, AcousticModel::Compiled *model, const char *filename, double beamWidth);
-  static Matrix *DecodeFeatures(AcousticModel::Compiled *model, Matrix *features, double beamWidth, int flag=0, Window *vis=0);
+  static unique_ptr<Matrix> DecodeFile(AssetLoading*, AcousticModel::Compiled *model, const char *filename, double beamWidth);
+  static unique_ptr<Matrix> DecodeFeatures(AcousticModel::Compiled *model, Matrix *features, double beamWidth, int flag=0, Window *vis=0);
   static void VisualizeFeatures(Window*, AcousticModel::Compiled *model, Matrix *features, Matrix *viterbi, double vprob, Time time, bool interactive);
 
   struct PhoneIter {
@@ -383,7 +374,7 @@ struct Decoder {
     }
     int PhoneID(int offset) {
       int ind = int(m->row(offset)[0]);
-      if (ind < 0 || ind >= model->states) FATAL("oob ind ", ind, " (0, ", model->states, ")");
+      if (ind < 0 || ind >= model->state.size()) FATAL("oob ind ", ind, " (0, ", model->state.size(), ")");
       int pp, np;
       return AcousticModel::ParseName(model->state[ind].name.c_str(), 0, &pp, &np);
     }

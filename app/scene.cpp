@@ -1,5 +1,5 @@
 /*
- * $Id: scene.cpp 1314 2014-10-16 04:43:45Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -21,10 +21,9 @@
 namespace LFL {
 DEFINE_bool(hull_geometry, false, "Draw entity bounding hull"); 
 
-Entity *Scene::Add(const string &name, Entity *e) {
+Entity *Scene::Add(const string &name, unique_ptr<Entity> ent) {
   if (name.empty()) return 0;
-  entity[name] = e;
-
+  auto e = (entity[name] = move(ent)).get();
   if (e->asset) {
     EntityVector &eav = asset[e->asset->name];
     eav.push_back(e);
@@ -34,7 +33,7 @@ Entity *Scene::Add(const string &name, Entity *e) {
 }
 
 bool Scene::ChangeAsset(const string &entity_name, Asset *new_asset) {
-  Entity *e = FindOrNull(entity, entity_name);
+  Entity *e = FindUniqueOrNull(entity, entity_name);
   return e ? ChangeAsset(e, new_asset) : false;
 }
 
@@ -55,7 +54,7 @@ bool Scene::ChangeAsset(Entity *e, Asset *new_asset) {
 void Scene::Del(const string &name) { 
   auto i = entity.find(name);
   if (i == entity.end()) return;
-  Entity *e = i->second;
+  Entity *e = i->second.get();
   if (e->asset) {
     EntityVector &eav = asset[e->asset->name];
     for (auto j = eav.begin(); j != eav.end(); ++j) if (*j == e) { eav.erase(j); break; }

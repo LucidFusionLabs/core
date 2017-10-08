@@ -234,7 +234,7 @@ template <typename K, typename V> typename map<K, V>::iterator FindOrInsert(map<
 }
 template <typename K, typename V> typename map<K, V*>::iterator FindOrInsert(map<K, V*> &m, K k, bool *inserted=0) {
   auto ret = m.insert(typename map<K, V*>::value_type(k, 0));
-  if (ret.second) ret.first->second = new V();
+  if (ret.second) ret.first->second = make_unique<V>().release();
   if (inserted) *inserted = ret.second;
   return ret.first;
 }
@@ -255,6 +255,11 @@ template <typename K, typename V> typename unordered_map<K, V>::iterator FindOrI
 template <typename X> typename X::mapped_type FindOrNull(const X &m, const typename X::key_type &k) {
   typename X::const_iterator iter = m.find(k);
   return (iter != m.end()) ? iter->second : 0;
+}
+
+template <typename X> typename X::mapped_type::element_type* FindUniqueOrNull(const X &m, const typename X::key_type &k) {
+  typename X::const_iterator iter = m.find(k);
+  return (iter != m.end()) ? iter->second.get() : nullptr;
 }
 
 template <typename X> typename X::mapped_type *FindPtrOrNull(X &m, const typename X::key_type &k) {
@@ -832,10 +837,11 @@ template <class X> struct MessageQueue {
 };
 
 struct CallbackQueue : public MessageQueue<Callback*> {
-  void Shutdown() { Write(new Callback([](){})); }
-  void HandleMessage(Callback *cb) { if (*cb) (*cb)(); delete cb; }
-  int  HandleMessages() { int n=0; Callback *cb=0; for (; NBRead(&cb); n++) HandleMessage(cb); return n; }
-  void HandleMessagesWhile(const bool *cond) { for (use_cv=1; *cond; ) HandleMessage(Read()); }
+  void Shutdown() { WriteCallback(make_unique<Callback>([](){})); }
+  void WriteCallback(unique_ptr<Callback> x) { Write(x.release()); }
+  void HandleMessage(unique_ptr<Callback> cb) { if (*cb) (*cb)(); }
+  int  HandleMessages() { int n=0; for (Callback *cb=0; NBRead(&cb); n++) HandleMessage(unique_ptr<Callback>(cb)); return n; }
+  void HandleMessagesWhile(const bool *cond) { for (use_cv=1; *cond; ) HandleMessage(unique_ptr<Callback>(Read())); }
   void HandleMessagesLoop(ApplicationLifetime *l) { HandleMessagesWhile(&l->run); } 
 };
 

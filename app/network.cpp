@@ -1174,15 +1174,11 @@ void SocketServices::UpdateActive(SocketConnection *c) {
 
 /* SocketServicesThread */
 
-void SocketServicesThread::ConnectionHandler::HandleMessage(Callback *cb) { 
-  (*cb)();
-  delete cb;
-}
-
+void SocketServicesThread::ConnectionHandler::HandleMessage(unique_ptr<Callback> cb) { (*cb)(); }
 int SocketServicesThread::ConnectionHandler::Read(Connection *c) {
   int consumed = 0, s = sizeof(Callback*);
   for (; consumed + s <= c->rb.size(); consumed += s)
-    HandleMessage(*reinterpret_cast<Callback**>(c->rb.begin() + consumed));
+    HandleMessage(unique_ptr<Callback>(*reinterpret_cast<Callback**>(c->rb.begin() + consumed)));
   if (consumed) c->ReadFlush(consumed);
   return 0;
 }
@@ -1202,8 +1198,9 @@ SocketServicesThread::SocketServicesThread(SocketServices *N, bool Init) : init(
   net->active.Add(rd->socket, SocketSet::READABLE, &rd->self_reference);
 }
 
-void SocketServicesThread::Write(Callback *x) {
-  CHECK_EQ(sizeof(x), wr->WriteFlush(reinterpret_cast<const char*>(&x), sizeof(x)));
+void SocketServicesThread::Write(unique_ptr<Callback> x) {
+  auto p = x.release();
+  CHECK_EQ(sizeof(x), wr->WriteFlush(reinterpret_cast<const char*>(&p), sizeof(p)));
 }
 
 void SocketServicesThread::HandleMessagesLoop() {
@@ -1333,7 +1330,7 @@ void Sniffer::GetIPAddress(IPV4::Addr *out) {
   *out = 0;
 #if defined(LFL_WINDOWS) || defined(LFL_EMSCRIPTEN)
 #elif defined(LFL_ANDROID)
-  JNI *jni = Singleton<LFL::JNI>::Get();
+  JNI *jni = Singleton<LFL::JNI>::Set();
   static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "getAddress", "()I"));
   jint addr = jni->env->CallIntMethod(jni->activity, mid);
   *out = ntohl(addr);
@@ -1356,7 +1353,7 @@ void Sniffer::GetBroadcastAddress(IPV4::Addr *out) {
   *out = 0;
 #if defined(LFL_WINDOWS) || defined(LFL_EMSCRIPTEN)
 #elif defined(LFL_ANDROID)
-  JNI *jni = Singleton<LFL::JNI>::Get();
+  JNI *jni = Singleton<LFL::JNI>::Set();
   static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "getBroadcastAddress", "()I"));
   jint addr = jni->env->CallIntMethod(jni->activity, mid);
   *out = ntohl(addr);

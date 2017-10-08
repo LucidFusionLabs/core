@@ -129,7 +129,7 @@ struct FeatCorpus {
 
   static void AddFeature(MatrixFile *feat, const char *pn, const FeatCB &cb) {
     unique_ptr<Matrix> orig(feat->F->Clone());
-    feat->F = unique_ptr<Matrix>(Features::FromFeat(feat->F.get(), Features::Flag::Full));
+    feat->F = Features::FromFeat(feat->F.release(), Features::Flag::Full);
     DEBUG("processing %s : %s", pn,  feat->Text());
     cb(pn, orig.get(), feat->F.get(), feat->Text());
   }
@@ -185,7 +185,7 @@ struct PathCorpus {
 
       DEBUG("processing %s", uttfilename.c_str());
       unique_ptr<Matrix> orig(utt.F->Clone());
-      utt.F = unique_ptr<Matrix>(Features::FromFeat(utt.F.get(), Features::Flag::Full));
+      utt.F = Features::FromFeat(utt.F.release(), Features::Flag::Full);
       cb(0, path.F.get(), 0, vtime.GetTime(), orig.get(), utt.F.get(), utt.Text());
       count++;
     }

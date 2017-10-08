@@ -22,7 +22,7 @@
 #include <libgen.h>
 
 namespace LFL {
-static JNI *jni = Singleton<JNI>::Get();
+static JNI *jni = Singleton<JNI>::Set();
 
 const int Key::Escape     = 0xE100;
 const int Key::Return     = 10;
@@ -105,17 +105,17 @@ struct AndroidFrameworkModule : public Module {
 
 struct AndroidAssetLoader : public SimpleAssetLoader {
   AndroidAssetLoader(AssetLoading *a) : SimpleAssetLoader(a) {}
-  virtual void UnloadAudioFile(void *h) {}
-  virtual void *LoadAudioFile(File*) { return 0; }
-  virtual void *LoadAudioFileNamed(const string &filename) {
+  virtual void UnloadAudioFile(AudioAssetLoader::Handle&) {}
+  virtual AudioAssetLoader::Handle LoadAudioFile(unique_ptr<File>) { return AudioAssetLoader::Handle(this, nullptr); }
+  virtual AudioAssetLoader::Handle LoadAudioFileNamed(const string &filename) {
     static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "loadMusicResource", "(Ljava/lang/String;)Landroid/media/MediaPlayer;"));
     string fn = basename(filename.c_str());
     LocalJNIString jfn(jni->env, JNI::ToJString(jni->env, fn.substr(0, fn.find('.'))));
     LocalJNIObject handle(jni->env, jni->env->CallObjectMethod(jni->activity, mid, jfn.v));
-    return jni->env->NewGlobalRef(handle.v);
+    return AudioAssetLoader::Handle(this, jni->env->NewGlobalRef(handle.v));
   }
 
-  virtual void LoadAudio(void *handle, SoundAsset *a, int seconds, int flag) { a->handle = handle; }
+  virtual void LoadAudio(AudioAssetLoader::Handle &h, SoundAsset *a, int seconds, int flag) { /*a->handle = h;*/ }
   virtual int RefillAudio(SoundAsset *a, int reset) { return 0; }
 };
 
@@ -216,7 +216,7 @@ struct AndroidNag : public NagInterface {
 };
 
 void ThreadDispatcher::RunCallbackInMainThread(Callback cb) {
-  message_queue.Write(new Callback(move(cb)));
+  message_queue.WriteCallback(make_unique<Callback>(move(cb)));
   if (!FLAGS_target_fps) wakeup->Wakeup();
 }
 
@@ -383,8 +383,8 @@ void FrameScheduler::DelMainWaitSocket(Window*, Socket fd) {
   main_wait_sockets.Del(fd);
 }
 
-Window *CreateWindow(Application *a) { return new AndroidWindow(a); }
-Application *CreateApplication(int ac, const char* const* av) { return new Application(ac, av); }
+unique_ptr<Window> CreateWindow(Application *a) { return make_unique<AndroidWindow>(a); }
+unique_ptr<Application> CreateApplication(int ac, const char* const* av) { return make_unique<Application>(ac, av); }
 unique_ptr<Module> CreateFrameworkModule(Application *a) { return make_unique<AndroidFrameworkModule>(a, &a->scheduler, a->input.get()); }
 unique_ptr<AssetLoaderInterface> CreateAssetLoader(AssetLoading *a) { return make_unique<AndroidAssetLoader>(a); }
 unique_ptr<TimerInterface> SystemToolkit::CreateTimer(Callback cb) { return make_unique<AndroidTimer>(move(cb)); };
@@ -600,53 +600,53 @@ extern "C" jboolean Java_com_lucidfusionlabs_app_NativeAPI_getFrameEnabled(JNIEn
 
 extern "C" void Java_com_lucidfusionlabs_core_NativeCallback_RunCallbackInMainThread(JNIEnv *e, jclass c, jlong cb, jobject done_cb) {
   jni->app->RunCallbackInMainThread(*static_cast<Callback*>(Void(cb)));
-  if (done_cb) JNI::MainThreadRunRunnableOnUiThread(new GlobalJNIObject(e, done_cb, false));
+  if (done_cb) JNI::MainThreadRunRunnableOnUiThread(make_unique<GlobalJNIObject>(e, done_cb, false));
 }
 
 extern "C" void Java_com_lucidfusionlabs_core_NativeStringCB_RunStringCBInMainThread(JNIEnv *e, jclass c, jlong cb, jstring text, jobject done_cb) {
   jni->app->RunCallbackInMainThread(bind(*static_cast<StringCB*>(Void(cb)), JNI::GetJString(e, text)));
-  if (done_cb) JNI::MainThreadRunRunnableOnUiThread(new GlobalJNIObject(e, done_cb, false));
+  if (done_cb) JNI::MainThreadRunRunnableOnUiThread(make_unique<GlobalJNIObject>(e, done_cb, false));
 }
 
 extern "C" void Java_com_lucidfusionlabs_core_NativeIntCB_RunIntCBInMainThread(JNIEnv *e, jclass c, jlong cb, jint x, jobject done_cb) {
   jni->app->RunCallbackInMainThread(bind(*static_cast<IntCB*>(Void(cb)), x));
-  if (done_cb) JNI::MainThreadRunRunnableOnUiThread(new GlobalJNIObject(e, done_cb, false));
+  if (done_cb) JNI::MainThreadRunRunnableOnUiThread(make_unique<GlobalJNIObject>(e, done_cb, false));
 }
 
 extern "C" void Java_com_lucidfusionlabs_core_NativeIntIntCB_RunIntIntCBInMainThread(JNIEnv *e, jclass c, jlong cb, jint x, jint y, jobject done_cb) {
   jni->app->RunCallbackInMainThread(bind(*static_cast<IntIntCB*>(Void(cb)), x, y));
-  if (done_cb) JNI::MainThreadRunRunnableOnUiThread(new GlobalJNIObject(e, done_cb, false));
+  if (done_cb) JNI::MainThreadRunRunnableOnUiThread(make_unique<GlobalJNIObject>(e, done_cb, false));
 }
 
 extern "C" void Java_com_lucidfusionlabs_core_NativeCallback_FreeCallback(JNIEnv *e, jclass c, jlong cb) {
-  delete static_cast<Callback*>(Void(cb));
+  unique_ptr<Callback> v(static_cast<Callback*>(Void(cb)));
 }
 
 extern "C" void Java_com_lucidfusionlabs_core_NativeStringCB_FreeStringCB(JNIEnv *e, jclass c, jlong cb) {
-  delete static_cast<StringCB*>(Void(cb));
+  unique_ptr<StringCB> v(static_cast<StringCB*>(Void(cb)));
 }
 
 extern "C" void Java_com_lucidfusionlabs_core_NativeIntCB_FreeIntCB(JNIEnv *e, jclass c, jlong cb) {
-  delete static_cast<IntCB*>(Void(cb));
+  unique_ptr<IntCB> v(static_cast<IntCB*>(Void(cb)));
 }
 
 extern "C" void Java_com_lucidfusionlabs_core_NativeIntIntCB_FreeIntIntCB(JNIEnv *e, jclass c, jlong cb) {
-  delete static_cast<IntIntCB*>(Void(cb));
+  unique_ptr<IntIntCB> v(static_cast<IntIntCB*>(Void(cb)));
 }
 
 extern "C" void Java_com_lucidfusionlabs_core_NativePickerItemCB_FreePickerItemCB(JNIEnv *e, jclass c, jlong cb) {
-  delete static_cast<PickerItem::CB*>(Void(cb));
+  unique_ptr<PickerItem::CB> v(static_cast<PickerItem::CB*>(Void(cb)));
 }
 
 extern "C" jobject Java_com_lucidfusionlabs_core_PickerItem_getFontPickerItem(JNIEnv *e, jclass c) {
-  static GlobalJNIObject *picker_item = nullptr;
-  if (picker_item == nullptr) {
+  static unique_ptr<GlobalJNIObject> picker_item;
+  if (!picker_item) {
     auto font_picker = new PickerItem();
     font_picker->picked.resize(2);
     font_picker->data.resize(2);
     font_picker->data[0].emplace_back("default");
     for (int i=0; i<64; i++) font_picker->data[1].emplace_back(StrCat(i+1));
-    picker_item = new GlobalJNIObject(e, JNI::ToPickerItem(e, font_picker));
+    picker_item = make_unique<GlobalJNIObject>(e, JNI::ToPickerItem(e, font_picker));
   }
   return picker_item->v;
 }
@@ -665,7 +665,7 @@ extern "C" void Java_com_lucidfusionlabs_app_GPlusClient_startGame(JNIEnv *e, jo
 }
 
 extern "C" void Java_com_lucidfusionlabs_app_GPlusClient_read(JNIEnv *e, jobject a, jstring pid, jobject bb, jint len) {
-  static GPlus *gplus = Singleton<GPlus>::Get();
+  static GPlus *gplus = Singleton<GPlus>::Set();
   if (gplus->server) gplus->server->EndpointRead(jni->GetJString(e, pid), (const char*)e->GetDirectBufferAddress(bb), len);
 }
 

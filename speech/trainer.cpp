@@ -109,8 +109,8 @@ struct Wav2Features {
   }
 
   void AddFeatures(const string &sd, SoundAsset *wav, const char *transcript) {
-    Matrix *features = Features::FromAsset(wav, Features::Flag::Storable);
-    MatrixFile feat(features, transcript);
+    auto features = Features::FromAsset(wav, Features::Flag::Storable);
+    MatrixFile feat(features.get(), transcript);
     if (targ == File) {
       string outfile = dir + StringPrintf("%lx.feat", fnv32(BaseName(wav->filename)));
       feat.Write(outfile, wav->filename);
@@ -139,16 +139,14 @@ struct Features2Pronunciation {
     }
     if (!model) return;
 
-    AcousticModel::Compiled *hmm = AcousticModel::FromUtterance(loader, model, transcript, UseTransition);
-    if (!hmm) { ERROR("compile utterance '", transcript, "' failed"); return; }
+    auto hmm = AcousticModel::FromUtterance(loader, model, transcript, UseTransition);
+    if (!hmm) return ERROR("compile utterance '", transcript, "' failed");
 
-    for (int i=0; i<hmm->states; i++)
+    for (int i=0; i<hmm->state.size(); i++)
       phones.Incr(hmm->state[i].name);
-
-    delete hmm;
   }
 
-  void AddPath(AcousticModel::Compiled *hmm, Matrix *viterbi, double vprob, Time vtime, Matrix *MFCC, Matrix *features, const char *transcript) {
+  void AddPath(AcousticModel::Compiled*, Matrix *viterbi, double vprob, Time vtime, Matrix *MFCC, Matrix *features, const char *transcript) {
     PronunciationDict *dict = PronunciationDict::Instance(loader);
 
     StringWordIter worditer(transcript);
@@ -158,18 +156,15 @@ struct Features2Pronunciation {
     }
     if (!model) return;
 
-    if (hmm) ERROR("unexpected parameter ", hmm);
-    hmm = AcousticModel::FromUtterance(loader, model, transcript, UseTransition);
-    if (!hmm) { ERROR("compile utterance '", transcript, "' failed"); return; }
+    auto hmm = AcousticModel::FromUtterance(loader, model, transcript, UseTransition);
+    if (!hmm) return ERROR("compile utterance '", transcript, "' failed");
 
     if (viterbi->M != features->M) { ERROR("viterbi length mismatch ", viterbi->M, " != ", features->M); }
     MatrixRowIter(viterbi) {
       int vind = viterbi->row(i)[0];
-      if (vind < 0 || vind >= hmm->states) FATAL("oob vind ", vind);
+      if (vind < 0 || vind >= hmm->state.size()) FATAL("oob vind ", vind);
       phones.Incr(hmm->state[vind].name);
     }
-
-    delete hmm;
   }
 
   void Iter(const char *featdir) {
@@ -196,7 +191,7 @@ int Model1Init(const char *modeldir, int K, int D, Matrix *mean=0, Matrix *covar
     int states = phone == Phoneme::SIL ? 1 : AcousticModel::StatesPerPhone; 
 
     for (int j=0; j<states; j++) {
-      AcousticModel::State *s = new AcousticModel::State();
+      auto s = make_unique<AcousticModel::State>();
       s->name = AcousticModel::Name(phone, j);
 
       s->emission.prior.Open(K, 1, mw);
@@ -223,7 +218,7 @@ int Model1Init(const char *modeldir, int K, int D, Matrix *mean=0, Matrix *covar
       s->emission.diagcov.Open(K, D);
       if (covar) MatrixRowIter(&s->emission.diagcov) Vector::Assign(s->emission.diagcov.row(i), covar->row(0), D);
 
-      model.Add(s, phone_id++);
+      model.Add(move(s), phone_id++);
     }
   }
 
@@ -634,7 +629,7 @@ int ViterbiTrain(AssetLoading *loader, CUDA *cuda, Window *w, const char *featdi
 int BaumWelch(AssetLoading *loader, const char *featdir, const char *modeldir) {
   AcousticModelFile model; int lastiter;
   if ((lastiter = model.Open("AcousticModel", modeldir))<0) { ERROR("read ", modeldir, " ", lastiter); return -1; }
-  model.phonetx = new Matrix(LFL_PHONES, LFL_PHONES);
+  model.phonetx = make_unique<Matrix>(LFL_PHONES, LFL_PHONES);
   AcousticModel::ToCUDA(&model);
 
   struct BaumWelch train(loader, &model, FLAGS_BeamWidth, FLAGS_UsePrior, FLAGS_UseTransition, FLAGS_FullVariance);
@@ -822,22 +817,20 @@ struct RecognizeCorpus {
   void AddFeatures(const char *fn, Matrix *MFCC, Matrix *features, const char *transcript) {
     INFO("IN = '", transcript, "'");
     Timer vtime; double vprob = 0;
-    matrix<HMM::Token> *viterbi = Recognizer::DecodeFeatures(recognize, features, FLAGS_BeamWidth, FLAGS_UseTransition, &vprob,
-                                                             FLAGS_loglevel >= LFApp::Log::Debug ? &recognize->nameCB : 0);
-    string decodescript = Recognizer::Transcript(recognize, viterbi);
+    auto viterbi = Recognizer::DecodeFeatures(recognize, features, FLAGS_BeamWidth, FLAGS_UseTransition, &vprob,
+                                              FLAGS_loglevel >= LFApp::Log::Debug ? &recognize->nameCB : 0);
+    string decodescript = Recognizer::Transcript(recognize, viterbi.get());
     Time time = vtime.GetTime();
     double wer = Recognizer::WordErrorRate(recognize, transcript, decodescript);
     WER += wer; total++;
     INFO("OUT = '", decodescript, "' WER=", wer, " (total ", WER/total, ")");
-    if (FLAGS_enable_video) Visualize(visualize, recognize, MFCC, viterbi, vprob, time);
-    delete viterbi;
+    if (FLAGS_enable_video) Visualize(visualize, recognize, MFCC, viterbi.get(), vprob, time);
   }
 
   static void Visualize(Window *w, RecognitionModel *recognize, Matrix *MFCC, matrix<HMM::Token> *viterbi, double vprob, Time time) {
     Matrix path(viterbi->M, 1);
-    AcousticModel::Compiled *hmm = Recognizer::DecodedAcousticModel(recognize, viterbi, &path);
-    Decoder::VisualizeFeatures(w, hmm, MFCC, &path, vprob, time, FLAGS_interactive);
-    delete hmm;
+    auto hmm = Recognizer::DecodedAcousticModel(recognize, viterbi, &path);
+    Decoder::VisualizeFeatures(w, hmm.get(), MFCC, &path, vprob, time, FLAGS_interactive);
   }
 };
 
@@ -852,37 +845,37 @@ struct Wav2Segments {
 
   AssetLoading *loader;
   AcousticModel::Compiled *model;
+  vector<unique_ptr<Out>> out;
   Window *visualize;
-  Out **out;
   int HMMFlag=0;
 
-  ~Wav2Segments() { for (int i=0; i<LFL_PHONES; i++) delete out[i]; delete [] out; }
   Wav2Segments(AssetLoading *L, AcousticModel::Compiled *M, const char *dir, Window *V) :
-    loader(L), model(M), visualize(V), out(new Out *[LFL_PHONES]) {
-    int len = 0;
-    for (int i=0; i<LFL_PHONES; i++) out[len++] = new Out(StrCat(dir, "seg", Phoneme::Name(i)).c_str());
+    loader(L), model(M), visualize(V) {
+      for (int i=0; i<LFL_PHONES; i++)
+        out.emplace_back(make_unique<Out>(StrCat(dir, "seg", Phoneme::Name(i)).c_str()));
   }
 
   void AddWAV(const string &sd, SoundAsset *wav, const char *transcript) {
-    Matrix *MFCC = Features::FromAsset(wav, Features::Flag::Storable);
-    Matrix *features = Features::FromFeat(MFCC->Clone(), Features::Flag::Full);
+    auto MFCC = Features::FromAsset(wav, Features::Flag::Storable);
+    auto features = Features::FromFeat(MFCC->Clone(), Features::Flag::Full);
 
-    AcousticModel::Compiled *hmm = AcousticModel::FromUtterance1(loader, model, transcript, HMMFlag & AcousticHMM::Flag::UseTransit);
+    auto hmm = AcousticModel::FromUtterance1(loader, model, transcript, HMMFlag & AcousticHMM::Flag::UseTransit);
     if (!hmm) return DEBUG("utterance decode failed");
     if (!DimCheck("Wav2Segments", features->N, hmm->state[0].emission.mean.N)) return;
 
-    Matrix viterbi(features->M, 1); Timer vtime;
-    double vprob = AcousticHMM::Viterbi(hmm, features, &viterbi, 2, FLAGS_BeamWidth, HMMFlag);
-    if (FLAGS_enable_video) Decoder::VisualizeFeatures(visualize, hmm, MFCC, &viterbi, vprob, vtime.GetTime(), FLAGS_interactive);
+    Timer vtime;
+    Matrix viterbi(features->M, 1);
+    double vprob = AcousticHMM::Viterbi(hmm.get(), features.get(), &viterbi, 2, FLAGS_BeamWidth, HMMFlag);
+    if (FLAGS_enable_video) Decoder::VisualizeFeatures(visualize, hmm.get(), MFCC.get(), &viterbi, vprob, vtime.GetTime(), FLAGS_interactive);
 
     int transitions=0, longrun=0;
-    for (Decoder::PhoneIter iter(hmm, &viterbi); !iter.Done(); iter.Next()) {
+    for (Decoder::PhoneIter iter(hmm.get(), &viterbi); !iter.Done(); iter.Next()) {
       if (!iter.phone) continue;
       int len = iter.end - iter.beg;
       if (len > longrun) longrun = len;
 
       RingSampler::Handle B(wav->wav.get(), iter.beg*FLAGS_feat_hop, len*FLAGS_feat_hop);
-      Out *o = out[iter.phone];
+      Out *o = out[iter.phone].get();
       o->wav.Write(&B);
 
       Matrix seg(1,2);
@@ -902,9 +895,6 @@ struct Wav2Segments {
     }
 
     INFO(wav->filename, " ", features->M, " features ", transitions, " transitions, longrun ", longrun);
-    delete features;
-    delete MFCC;
-    delete hmm;
   }
 };
 
@@ -932,7 +922,7 @@ extern "C" int MyAppMain() {
   app->asset.Add(Asset(app, "snap", 0, 0, 0, 0, 0, 0, 0, 0));
   app->asset.Load();
 
-  app->soundasset.Add(SoundAsset(app, "snap", 0, new RingSampler(FLAGS_sample_rate*FLAGS_sample_secs), 1, FLAGS_sample_rate, FLAGS_sample_secs));
+  app->soundasset.Add(SoundAsset(app, "snap", 0, make_unique<RingSampler>(FLAGS_sample_rate*FLAGS_sample_secs), 1, FLAGS_sample_rate, FLAGS_sample_secs));
   app->soundasset.Load();
   
   app->focused->shell = make_unique<Shell>(app->focused, app, app, app, app, app, app->net.get(),
@@ -1057,22 +1047,20 @@ extern "C" int MyAppMain() {
   }
   if (FLAGS_uttmodel.size()) {
     LOAD_ACOUSTIC_MODEL(model, lastiter);
-    AcousticModel::Compiled *hmm = AcousticModel::FromUtterance(app, &model, FLAGS_uttmodel.c_str(), FLAGS_UseTransition);
+    auto hmm = AcousticModel::FromUtterance(app, &model, FLAGS_uttmodel.c_str(), FLAGS_UseTransition);
     if (!hmm) FATAL("compiled utterance for transcript '", FLAGS_uttmodel, "' failed");
-    AcousticHMM::PrintLattice(hmm, &model);
+    AcousticHMM::PrintLattice(hmm.get(), &model);
   }
   if (FLAGS_decodefile.size()) do {
     LOAD_ACOUSTIC_MODEL(model, lastiter);
-    AcousticModel::Compiled *hmm = FLAGS_fullyConnected ? AcousticModel::FullyConnected(&model) : AcousticModel::FromModel1(&model, false);
+    auto hmm = FLAGS_fullyConnected ? AcousticModel::FullyConnected(&model) : AcousticModel::FromModel1(&model, false);
     if (!hmm) { ERROR("hmm create failed ", hmm); break; }
 
     INFO("decode(", FLAGS_decodefile, ") begin");
-    Matrix *viterbi = Decoder::DecodeFile(app, hmm, FLAGS_decodefile.c_str(), FLAGS_BeamWidth);
-    HMM::PrintViterbi(viterbi, &model.nameCB);
-    string transcript = Decoder::Transcript(hmm, viterbi);
+    auto viterbi = Decoder::DecodeFile(app, hmm.get(), FLAGS_decodefile.c_str(), FLAGS_BeamWidth);
+    HMM::PrintViterbi(viterbi.get(), &model.nameCB);
+    string transcript = Decoder::Transcript(hmm.get(), viterbi.get());
     INFO("decode(", FLAGS_decodefile, ") end");
-    delete viterbi;
-    delete hmm;
     INFO("decode transcript: '", transcript, "'");
   } while(0);
 
@@ -1101,18 +1089,18 @@ extern "C" int MyAppMain() {
     AcousticModel::ToCUDA(&recognize.acoustic_model);
     do {
       INFO("recognize(", FLAGS_recognizefile, ") begin");
-      Matrix *MFCC=0; double vprob=0; Timer vtimer;
-      matrix<HMM::Token> *viterbi = Recognizer::DecodeFile(app, &recognize, FLAGS_recognizefile.c_str(), FLAGS_BeamWidth,
-                                                           FLAGS_UseTransition, &vprob, &MFCC,
-                                                           FLAGS_loglevel >= LFApp::Log::Debug ? &recognize.nameCB : 0);
-      string transcript = Recognizer::Transcript(&recognize, viterbi);
+      Timer vtimer;
+      double vprob=0;
+      unique_ptr<Matrix> MFCC;
+      auto viterbi = Recognizer::DecodeFile(app, &recognize, FLAGS_recognizefile.c_str(),
+                                            FLAGS_BeamWidth, FLAGS_UseTransition, &vprob, &MFCC,
+                                            FLAGS_loglevel >= LFApp::Log::Debug ? &recognize.nameCB : 0);
+      string transcript = Recognizer::Transcript(&recognize, viterbi.get());
       INFO("recognize(", FLAGS_recognizefile, ") end");
-      HMM::Token::PrintViterbi(viterbi, &recognize.nameCB);
+      HMM::Token::PrintViterbi(viterbi.get(), &recognize.nameCB);
       if (!transcript.size()) { ERROR("decode failed ", transcript.size()); break; }
       INFO("vprob = ", vprob, " : '", transcript, "'");
-      if (FLAGS_enable_video) RecognizeCorpus::Visualize(app->focused, &recognize, MFCC, viterbi, vprob, vtimer.GetTime());
-      delete viterbi;
-      delete MFCC;
+      if (FLAGS_enable_video) RecognizeCorpus::Visualize(app->focused, &recognize, MFCC.get(), viterbi.get(), vprob, vtimer.GetTime());
     } while (app->run && FLAGS_visualize && FLAGS_interactive);
   }
 

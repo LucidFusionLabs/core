@@ -48,7 +48,7 @@ struct RecognitionModel {
   int Read(const char *name, const char *dir, int want_iter=-1) {
     int amiter, recogiter, ret;
     if ((amiter = acoustic_model.Open("AcousticModel", dir, want_iter)) < 0) { ERROR("acoustic_model ", dir, " ", amiter); return -1; }
-    emissions = acoustic_model.states;
+    emissions = acoustic_model.state.size();
 
     if ((recogiter = recognition_network.Read("recognition", dir, want_iter)) < 0) { ERROR("recognition ", dir, " ", recogiter); return -1; }
     if ((ret = recognition_network_out.Read(dir, "recognition", "out", recogiter))) { ERROR("recognition out ", dir, " ", ret, " != ", 0); return -1; }
@@ -275,29 +275,30 @@ struct RecognitionHMM {
 };
 
 struct Recognizer {
-  static matrix<HMM::Token> *DecodeFile(AssetLoading *loader, RecognitionModel *model, const char *fn, double beam_width=0,
-                                        bool use_transit=0, double *vprobout=0, Matrix **MFCCout=0, TokenNameCB<HMM::Token> *nameCB=0) {
+  static unique_ptr<matrix<HMM::Token>>
+  DecodeFile(AssetLoading *loader, RecognitionModel *model, const char *fn, double beam_width=0,
+             bool use_transit=0, double *vprobout=0, unique_ptr<Matrix> *MFCCout=0, TokenNameCB<HMM::Token> *nameCB=0) {
     SoundAsset input(loader, "input", fn, 0, 0, 0, 0);
     input.Load();
     if (!input.wav) { ERROR(fn, " not found"); return 0; }
 
     if (MFCCout) *MFCCout = Features::FromAsset(&input, Features::Flag::Storable);
-    Matrix *features = Features::FromAsset(&input, Features::Flag::Full);
-    matrix<HMM::Token> *ret = DecodeFeatures(model, features, beam_width, use_transit, vprobout, nameCB);
-    delete features;
-    return ret;
+    auto features = Features::FromAsset(&input, Features::Flag::Full);
+    return DecodeFeatures(model, features.get(), beam_width, use_transit, vprobout, nameCB);
   }
 
-  static matrix<HMM::Token> *DecodeFeatures(RecognitionModel *model, Matrix *features, double beam_width,
-                                            bool use_transit=0, double *vprobout=0, TokenNameCB<HMM::Token> *nameCB=0) {
+  static unique_ptr<matrix<HMM::Token>>
+  DecodeFeatures(RecognitionModel *model, Matrix *features, double beam_width,
+                 bool use_transit=0, double *vprobout=0, TokenNameCB<HMM::Token> *nameCB=0) {
     if (!DimCheck("decodeFeatures", features->N, model->acoustic_model.state[0].emission.mean.N)) return 0;
-    matrix<HMM::Token> *viterbi = new matrix<HMM::Token>(features->M, 1, HMM::Token());
-    double vprob = RecognitionHMM::Viterbi(model, features, viterbi, beam_width, use_transit, nameCB);
+    auto viterbi = make_unique<matrix<HMM::Token>>(features->M, 1, HMM::Token());
+    double vprob = RecognitionHMM::Viterbi(model, features, viterbi.get(), beam_width, use_transit, nameCB);
     if (vprobout) *vprobout = vprob;
     return viterbi;
   }
 
-  static AcousticModel::Compiled *DecodedAcousticModel(RecognitionModel *model, matrix<HMM::Token> *viterbi, Matrix *vout) {
+  static unique_ptr<AcousticModel::Compiled>
+  DecodedAcousticModel(RecognitionModel *model, matrix<HMM::Token> *viterbi, Matrix *vout) {
     int last = -1, count = 0;
     MatrixRowIter(viterbi) {
       int recogState = viterbi->row(i)[0].ind;
@@ -306,7 +307,7 @@ struct Recognizer {
       count++;
     }
 
-    AcousticModel::Compiled *hmm = new AcousticModel::Compiled(count);
+    auto hmm = make_unique<AcousticModel::Compiled>(count);
     last = -1; count = 0;
     MatrixRowIter(viterbi) {
       vout->row(i)[0] = count-1;
@@ -316,9 +317,9 @@ struct Recognizer {
       vout->row(i)[0] = count;
       last = emission_index;
       int pp, pn, phone = AcousticModel::ParseName(model->acoustic_model.state[emission_index].name, 0, &pp, &pn);
-      AcousticModel::State::Assign(hmm->state, &count, hmm->states, &model->acoustic_model, 0, phone, 0, 1);
+      AcousticModel::State::Assign(&hmm->state[0], &count, hmm->state.size(), &model->acoustic_model, 0, phone, 0, 1);
     }
-    if (count > hmm->states) FATAL("overflow ", count, " > ", hmm->states);
+    if (count > hmm->state.size()) FATAL("overflow ", count, " > ", hmm->state.size());
     return hmm;
   }
 

@@ -61,7 +61,7 @@ string AssetLoading::FileContents(const string &asset_fn) {
   if (i != asset_cache.end()) return string(i->second.data(), i->second.size());
   if (asset_fn[0] == '/') return LocalFile::FileContents(asset_fn);
 #ifdef LFL_ANDROID
-  static JNI *jni = Singleton<LFL::JNI>::Get();
+  static JNI *jni = Singleton<LFL::JNI>::Set();
   unique_ptr<BufferFile> f(jni->OpenAsset(asset_fn));
   return f ? string(move(f->buf)) : string();
 #endif
@@ -73,7 +73,7 @@ unique_ptr<File> AssetLoading::OpenFile(const string &asset_fn) {
   if (i != asset_cache.end()) return make_unique<BufferFile>(StringPiece(i->second), asset_fn.c_str());
   if (asset_fn[0] == '/') return make_unique<LocalFile>(asset_fn, "r");
 #ifdef LFL_ANDROID
-  static JNI *jni = Singleton<LFL::JNI>::Get();
+  static JNI *jni = Singleton<LFL::JNI>::Set();
   return jni->OpenAsset(asset_fn);
 #endif
   return make_unique<LocalFile>(FileName(asset_fn), "r");
@@ -475,10 +475,9 @@ void glSpectogram(GraphicsDevice *gd, Matrix *m, Texture *t, float *max, float c
 
 void glSpectogram(GraphicsDevice *gd, const RingSampler::Handle *in, Texture *t, Matrix *transform, float *max, float clip) {
   /* 20*log10(abs(specgram(y,2048,sr,hamming(512),256))) */
-  Matrix *m = Spectogram(in, 0, 512, 256, 512, vector<double>(), PowerDomain::abs);
-  if (transform) m = Matrix::Mult(m, transform, mDelA);
-  glSpectogram(gd, m, t, max, clip, PowerDomain::abs);
-  delete m;
+  unique_ptr<Matrix> m(Spectogram(in, 0, 512, 256, 512, vector<double>(), PowerDomain::abs));
+  if (transform) m = Matrix::Mult(move(m), transform);
+  glSpectogram(gd, m.get(), t, max, clip, PowerDomain::abs);
 }
 
 /* Cube */

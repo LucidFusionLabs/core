@@ -1,5 +1,5 @@
 /*
- * $Id: camera.h 1306 2014-09-04 07:13:16Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -30,9 +30,9 @@ struct Camera : public Module {
   CameraState state;
   Camera() : fps(64) { memzero(state); }
 
-  int Init ();
-  int Free ();
-  int Frame(unsigned time);
+  int Init()               override;
+  int Free()               override;
+  int Frame(unsigned time) override;
 };
 
 }; // namespace LFL

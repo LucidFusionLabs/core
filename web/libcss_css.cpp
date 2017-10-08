@@ -262,15 +262,11 @@ css_error LibCSS_StyleSheet::Font(void *pw, lwc_string *name, css_system_font *s
   return CSS_INVALID; // CSS_OK;
 }
 
-StyleSheet::~StyleSheet() {
-  CHECK_EQ(CSS_OK, css_stylesheet_destroy(sheet));
-  delete params;
-}
-
+StyleSheet::~StyleSheet() { CHECK_EQ(CSS_OK, css_stylesheet_destroy(sheet)); }
 StyleSheet::StyleSheet(LFL::DOM::Document *D, const char *U, const char *CS,
                        bool in_line, bool quirks, const char *Content) :
   ownerDocument(D), content_url(BlankNull(U)), character_set(BlankNull(CS)) {
-  params = new css_stylesheet_params();
+  params = make_unique<css_stylesheet_params>();
   params->params_version = CSS_STYLESHEET_PARAMS_VERSION_1;
   params->level = CSS_LEVEL_DEFAULT;
   params->title = NULL;
@@ -283,7 +279,7 @@ StyleSheet::StyleSheet(LFL::DOM::Document *D, const char *U, const char *CS,
   params->color = LibCSS_StyleSheet::Color;
   params->font = LibCSS_StyleSheet::Font;
   params->resolve_pw = params->import_pw = params->color_pw = params->font_pw = this;
-  CHECK_EQ(CSS_OK, css_stylesheet_create(params, &sheet));
+  CHECK_EQ(CSS_OK, css_stylesheet_create(params.get(), &sheet));
   if (Content) { Parse(Content); Done(); }
 }
 

@@ -38,11 +38,11 @@ struct Terminal : public TextArea {
   struct TerminalColors : public Colors {
     Color c[16 + 3];
     TerminalColors() { normal_index=16; bold_index=17; background_index=18; }
-    const Color *GetColor(int n) const { CHECK_RANGE(n, 0, sizeofarray(c)); return &c[n]; }
+    const Color *GetColor(int n) const override { CHECK_RANGE(n, 0, sizeofarray(c)); return &c[n]; }
   };
-  struct StandardVGAColors       : public TerminalColors { StandardVGAColors(); };
-  struct SolarizedDarkColors     : public TerminalColors { SolarizedDarkColors(); };
-  struct SolarizedLightColors    : public TerminalColors { SolarizedLightColors(); };
+  struct StandardVGAColors    : public TerminalColors { StandardVGAColors(); };
+  struct SolarizedDarkColors  : public TerminalColors { SolarizedDarkColors(); };
+  struct SolarizedLightColors : public TerminalColors { SolarizedLightColors(); };
 
   ByteSink *sink=0;
   int term_width=0, term_height=0, parse_state=State::TEXT;
@@ -59,32 +59,32 @@ struct Terminal : public TextArea {
 
   Terminal(ByteSink *O, Window *W, const FontRef &F=FontRef(), const point &dim=point(1,1));
   virtual ~Terminal() {}
-  virtual void Resized(const Box &b, bool font_size_changed=false);
+  virtual void Resized(const Box &b, bool font_size_changed=false) override;
   virtual void ResizedLeftoverRegion(int w, int h, bool update_fb=true);
   virtual void SetScrollRegion(int b, int e, bool release_fb=false);
   virtual void SetTerminalDimension(int w, int h);
-  virtual void Draw(const Box &b, int flag=DrawFlag::Default, Shader *shader=0);
-  virtual void Write(const StringPiece &s, bool update_fb=true, bool release_fb=true);
-  virtual void Input(char k) {                       sink->Write(StringPiece(&k, 1)); }
-  virtual void Erase      () {                       sink->Write(StringPiece(&erase_char, 1)); }
-  virtual void Enter      () {                       sink->Write(StringPiece(&enter_char, 1)); }
-  virtual void Tab        () { char k = '\t';        sink->Write(StringPiece(&k, 1)); }
-  virtual void Escape     () { char k = 0x1b;        sink->Write(StringPiece(&k, 1)); }
-  virtual void HistUp     () { char k[] = "\x1bOA";  sink->Write(StringPiece( k, 3)); }
-  virtual void HistDown   () { char k[] = "\x1bOB";  sink->Write(StringPiece( k, 3)); }
-  virtual void CursorRight() { char k[] = "\x1bOC";  sink->Write(StringPiece( k, 3)); }
-  virtual void CursorLeft () { char k[] = "\x1bOD";  sink->Write(StringPiece( k, 3)); }
-  virtual void PageUp     () { char k[] = "\x1b[5~"; sink->Write(StringPiece( k, 4)); }
-  virtual void PageDown   () { char k[] = "\x1b[6~"; sink->Write(StringPiece( k, 4)); }
-  virtual void Home       () { char k[] = "\x1bOH";  sink->Write(StringPiece( k, 3)); }
-  virtual void End        () { char k[] = "\x1bOF";  sink->Write(StringPiece( k, 3)); }
+  virtual void Draw(const Box &b, int flag=DrawFlag::Default, Shader *shader=0) override;
+  virtual void Write(const StringPiece &s, bool update_fb=true, bool release_fb=true) override;
+  virtual void Input(char k) override {                       sink->Write(StringPiece(&k, 1)); }
+  virtual void Erase      () override {                       sink->Write(StringPiece(&erase_char, 1)); }
+  virtual void Enter      () override {                       sink->Write(StringPiece(&enter_char, 1)); }
+  virtual void Tab        () override { char k = '\t';        sink->Write(StringPiece(&k, 1)); }
+  virtual void Escape     () override { char k = 0x1b;        sink->Write(StringPiece(&k, 1)); }
+  virtual void HistUp     () override { char k[] = "\x1bOA";  sink->Write(StringPiece( k, 3)); }
+  virtual void HistDown   () override { char k[] = "\x1bOB";  sink->Write(StringPiece( k, 3)); }
+  virtual void CursorRight() override { char k[] = "\x1bOC";  sink->Write(StringPiece( k, 3)); }
+  virtual void CursorLeft () override { char k[] = "\x1bOD";  sink->Write(StringPiece( k, 3)); }
+  virtual void PageUp     () override { char k[] = "\x1b[5~"; sink->Write(StringPiece( k, 4)); }
+  virtual void PageDown   () override { char k[] = "\x1b[6~"; sink->Write(StringPiece( k, 4)); }
+  virtual void Home       () override { char k[] = "\x1bOH";  sink->Write(StringPiece( k, 3)); }
+  virtual void End        () override { char k[] = "\x1bOF";  sink->Write(StringPiece( k, 3)); }
   virtual void MoveToOrFromScrollRegion(LinesFrameBuffer *fb, Line *l, const point &p, int flag);
   // virtual int UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int *first_len) { return 0; }
-  virtual void UpdateCursor() { cursor.p = point(GetCursorX(term_cursor.x, term_cursor.y), GetCursorY(term_cursor.y)); }
-  virtual void UpdateToken(Line*, int word_offset, int word_len, int update_type, const TokenProcessor<DrawableBox>*);
-  virtual bool GetGlyphFromCoords(const point &p, Selection::Point *out) { return GetGlyphFromCoordsOffset(p, out, clip ? 0 : start_line, 0); }
-  virtual void ScrollUp  () { TextArea::PageDown(); }
-  virtual void ScrollDown() { TextArea::PageUp(); }
+  virtual void UpdateCursor() override { cursor.p = point(GetCursorX(term_cursor.x, term_cursor.y), GetCursorY(term_cursor.y)); }
+  virtual void UpdateToken(Line*, int word_offset, int word_len, int update_type, const TokenProcessor<DrawableBox>*) override;
+  virtual bool GetGlyphFromCoords(const point &p, Selection::Point *out) override { return GetGlyphFromCoordsOffset(p, out, clip ? 0 : start_line, 0); }
+  virtual void ScrollUp  () override { TextArea::PageDown(); }
+  virtual void ScrollDown() override { TextArea::PageUp(); }
   int GetFrameY(int y) const;
   int GetCursorY(int y) const;
   int GetCursorX(int x, int y) const;
@@ -106,7 +106,7 @@ struct Terminal : public TextArea {
   void NewTopline();
   void TabNext(int n);
   void TabPrev(int n);
-  void Redraw(bool attach=true, bool relayout=false);
+  void Redraw(bool attach=true, bool relayout=false) override;
   void ResetTerminal();
   void ClearTerminal();
 };

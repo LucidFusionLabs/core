@@ -27,21 +27,17 @@ bool SpeechClientManual() { return !SpeechClientAuto() && !SpeechClientFlood(); 
 
 struct AcousticEventDetector {
   FixedAllocator<65536*2> alloc;
-  int feature_rate;
-  long long samples_processed, samples_available;
-
   FeatureSink *sink;
   vector<StatefulFilter> feature_filters;
-  RingSampler *feature_buf;
+  unique_ptr<RingSampler> feature_buf;
 
   /* An Adaptive and Fast Speech Detection Algorithm by Dragos Burileanu */
   RingSampler pe, zcr, szcr;
-  float emax, emin, sl, sl2, nl, zcravg, zcrdev, szcravg, szcrdev;
-  int initcount, slcount, sl2count, nlcount, zcrcount, szcrcount;
   RollingAvg<unsigned> remax, remin, rsl, rsl2, rnl;
-
-  int t1countA, t1countB, t2countA, t2countB;
-  long long total, t1A, t1B, t2A, t2B;
+  float emax=-INFINITY, emin=INFINITY, sl=0, sl2=0, nl=0, zcravg=0, zcrdev=0, szcravg=0, szcrdev=0;
+  int feature_rate, initcount=0, slcount=0, sl2count=0, nlcount=0, zcrcount=0, szcrcount=0;
+  long long samples_processed=0, samples_available=0, total=0, t1A, t1B, t2A, t2B;
+  int t1countA=1, t1countB=1, t2countA=1, t2countB=1;
 
   struct Word {
     long long PS, PE;
@@ -73,23 +69,15 @@ struct AcousticEventDetector {
   }
 
   void AlwaysComputeFeatures() {
-    feature_buf = new RingSampler(feature_rate, feature_rate*FLAGS_sample_secs, sizeof(double)*Features::Dimension());
+    feature_buf = make_unique<RingSampler>(feature_rate, feature_rate*FLAGS_sample_secs, sizeof(double)*Features::Dimension());
   }
 
-  ~AcousticEventDetector() { delete feature_buf; }
   AcousticEventDetector(int FeatureRate, FeatureSink *Sink) :
-    feature_rate(FeatureRate),
-    samples_processed(0), samples_available(0),
-    sink(Sink), feature_buf(0),
+    feature_rate(FeatureRate),  sink(Sink), 
     pe(feature_rate, feature_rate*FLAGS_sample_secs),
     zcr(feature_rate, feature_rate*FLAGS_sample_secs),
     szcr(feature_rate, feature_rate*FLAGS_sample_secs),
-    emax(-INFINITY), emin(INFINITY), initcount(0),
-    sl(0), sl2(0), nl(0), zcravg(0), zcrdev(0), szcravg(0), szcrdev(0),
-    slcount(0), sl2count(0), nlcount(0), zcrcount(0), szcrcount(0),
-    remax(7*feature_rate), remin(7*feature_rate), rsl(feature_rate), rsl2(feature_rate), rnl(feature_rate),
-    t1countA(1), t1countB(1), t2countA(1), t2countB(1),
-    total(0) {}
+    remax(7*feature_rate), remin(7*feature_rate), rsl(feature_rate), rsl2(feature_rate), rnl(feature_rate) {}
 
   void Signal(long long begin, long long end) {
     if (!sink || SpeechClientManual()) return;
@@ -219,7 +207,7 @@ struct AcousticEventDetector {
       if (t2countA > 0) { t2countA=0; t2B=total; }
     }
 
-    /* new word */
+    /* New word */
     if (t2A == total && !OnAir()) {
       if (words.size() && (Top().PE >= total-d2jump_right && Top().EE < d2jump_right)) {
         Signal(Top().PE+1, total);
@@ -311,11 +299,11 @@ struct AcousticEventDetector {
 
 #ifdef LFL_CORE_APP_GL_VIEW_H__
 struct AcousticEventGUI {
-  static void Draw(AcousticEventDetector *AED, Box win, bool flip=false) {
+  static void Draw(AcousticEventDetector *AED, GraphicsDevice *gd, Box win, bool flip=false) {
     AED->alloc.Reset();
 
     int maxverts = AED->words.size()*6+SpeechClientFlood()*2;
-    Geometry *geom = new Geometry(GraphicsDevice::Lines, maxverts, NullPointer<v2>(), 0, 0, Color(1.0,1.0,1.0));
+    geom = make_unique<Geometry>(GraphicsDevice::Lines, maxverts, NullPointer<v2>(), 0, 0, Color(1.0,1.0,1.0));
     v2 *verts = reinterpret_cast<v2*>(&geom->vert[0]);
     geom->count = 0;
 
@@ -372,10 +360,9 @@ struct AcousticEventGUI {
       }
     }
 
-    auto gd = app->focused->gd;
     gd->DisableTexture();
-    Scene::Select(gd, geom);
-    Scene::Draw(gd, geom, 0);
+    Scene::Select(gd, geom.get());
+    Scene::Draw(gd, geom.get(), 0);
   }
 };
 #endif /* LFL_CORE_APP_GL_VIEW_H__ */
