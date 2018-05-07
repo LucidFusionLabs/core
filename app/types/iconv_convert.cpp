@@ -22,7 +22,7 @@ namespace LFL {
 template <class X, class Y>
 int String::Convert(const StringPieceT<X> &in, basic_string<Y> *out, const char *from, const char *to) {
   iconv_t cd = iconv_open(to, from);
-  if (cd < 0) { ERROR("failed convert ", from, " to ", to); out->clear(); return 0; }
+  if (cd == (iconv_t)-1) { ERROR("failed convert ", from, " to ", to); out->clear(); return 0; }
 
   out->resize(in.len*4/sizeof(Y)+4);
   char *inp = reinterpret_cast<char*>(const_cast<X*>(in.buf)), *top = reinterpret_cast<char*>(&(*out)[0]);

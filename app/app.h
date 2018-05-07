@@ -127,8 +127,8 @@ extern int optind;
 #define CHECK_LE(x, a) if (!((x) <= (a))) ::LFL::FatalMessage(__FILE__, __LINE__, ::LFL::StrCat((x), " <= ", (a), ": CHECK_LE(", #x, ", ", #a, ")")).GetStream()
 #define CHECK_EQ(x, a) if (!((x) == (a))) ::LFL::FatalMessage(__FILE__, __LINE__, ::LFL::StrCat((x), " == ", (a), ": CHECK_EQ(", #x, ", ", #a, ")")).GetStream()
 #define CHECK_NE(x, a) if (!((x) != (a))) ::LFL::FatalMessage(__FILE__, __LINE__, ::LFL::StrCat((x), " != ", (a), ": CHECK_NE(", #x, ", ", #a, ")")).GetStream()
+#define CHECK(x) if (!(x)) ::LFL::Logger::Log(::LFApp::Log::Fatal, __FILE__, __LINE__, ::LFL::StrCat(#x));
 #define CHECK_RANGE(x, y, z) { CHECK_GE(x, y); CHECK_LT(x, z); }
-#define CHECK(x) if (!(x)) FATAL(#x)
 
 #ifdef LFL_DEBUG
 #define DEBUG_CHECK_LT(x, a) CHECK_LT(x, a)
@@ -290,7 +290,7 @@ struct VAlign { enum { Bottom=1, Center=2, Top  =3 }; };
 struct FatalMessage {
   const char *file; int line; string msg; std::stringstream stream;
   FatalMessage(const char *F, int L, string M) : file(F), line(L), msg(move(M)) {}
-  ~FatalMessage() { ::LFL::Logger::Log(::LFApp::Log::Fatal, file, line, msg.append(stream.str())); throw(0); }
+  ~FatalMessage() { ::LFL::Logger::Log(::LFApp::Log::Fatal, file, line, msg.append(stream.str())); }
   std::stringstream& GetStream() { return stream; }
 };
 

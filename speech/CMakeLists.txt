@@ -1,4 +1,4 @@
-# $Id: CMakeLists.txt 1320 2014-10-26 08:12:52Z justin $
+# $Id$
 
 lfl_project(speech)
 

@@ -1,4 +1,4 @@
-# $Id: CMakeLists.txt 1320 2014-10-26 08:12:52Z justin $
+# $Id$
 
 lfl_add_target(app_null_css STATIC_LIBRARY SOURCES null_css.cpp)
 lfl_add_target(app_browser STATIC_LIBRARY SOURCES browser.cpp)

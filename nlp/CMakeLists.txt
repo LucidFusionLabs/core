@@ -1,4 +1,4 @@
-# $Id: CMakeLists.txt 1336 2014-12-08 09:29:59Z justin $
+# $Id$
 
 lfl_project(nlp)
 lfl_add_target(nlp STATIC_LIBRARY SOURCES nlp.cpp)

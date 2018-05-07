@@ -1,5 +1,5 @@
 /*
- * $Id: phones.h 726 2013-09-10 09:25:01Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify

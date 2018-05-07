@@ -1,5 +1,5 @@
 /*
- * $Id: tinyurl.h 1314 2014-10-16 04:43:45Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify

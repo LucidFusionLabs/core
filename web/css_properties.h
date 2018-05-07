@@ -1,5 +1,5 @@
 /*
- * $Id: css_properties.h 1198 2014-05-24 01:44:03Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
