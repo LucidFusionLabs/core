@@ -101,8 +101,16 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
     UIBackgroundTaskIdentifier bg_task;
     SCNetworkReachabilityFlags reachability_flags;
   }
+  static LFUIApplication *instance;
 
-  + (LFUIApplication *)sharedAppDelegate { return (LFUIApplication *)[[UIApplication sharedApplication] delegate]; }
+  - (id)init {
+    self = [super init];
+    CHECK(!instance);
+    instance = self;
+    return self;
+  }
+
+  + (LFUIApplication *)sharedAppDelegate { return instance; }
 
   + (CGSize)currentWindowSize {
     return [LFUIApplication sizeInOrientation:[UIApplication sharedApplication].statusBarOrientation];
@@ -119,6 +127,7 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
   }
 
   - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
+    NSLog(@"begin didFinishLaunchingWithOptions");
     _main_wait_fh = [[NSMutableDictionary alloc] init];
     _scale = [[UIScreen mainScreen] scale];
     CGRect wbounds = [[UIScreen mainScreen] bounds];
@@ -215,18 +224,22 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
   }
 
   - (void)applicationWillTerminate:(UIApplication *)application {
+    NSLog(@"applicationWillTerminate");
     [_controller shutdownNotifications];
     [_controller shutdownGestureRecognizers];
   }
 
   - (void)applicationWillResignActive:(UIApplication*)application {
+    NSLog(@"applicationWillResignActive");
   }
 
   - (void)applicationDidBecomeActive:(UIApplication*)application {
+    NSLog(@"applicationDidBecomeActive");
     if (!has_become_active && (has_become_active = true)) {}
   }
 
   - (void)applicationDidEnterBackground:(UIApplication *)application {
+    NSLog(@"applicationDidEnterBackground");
     _app->suspended = true;
     if (_app->focused->unfocused_cb) _app->focused->unfocused_cb();
     while (_app->message_queue.HandleMessages()) {}
@@ -247,6 +260,7 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
   }
 
   - (void)applicationWillEnterForeground:(UIApplication *)application{
+    NSLog(@"applicationWillEnterForeground");
     _app->suspended = false;
     if (bg_task != UIBackgroundTaskInvalid) {
       [application endBackgroundTask:bg_task];

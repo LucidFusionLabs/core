@@ -59,7 +59,7 @@
   @property BOOL overlay_top_controller, frame_disabled, frame_on_mouse_input, downscale, show_title, wifi;
   @property int screen_w, screen_h, gl_y, gl_w, gl_h;
   @property CGFloat scale;
-  + (LFUIApplication *) sharedAppDelegate;
+  + (LFUIApplication *)sharedAppDelegate;
   + (CGSize)currentWindowSize;
   + (CGSize)sizeInOrientation:(UIInterfaceOrientation)orientation;
   - (CGFloat)getScale;

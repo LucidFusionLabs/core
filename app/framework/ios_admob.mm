@@ -29,7 +29,7 @@
 @interface IOSAdMob : NSObject<GADBannerViewDelegate>
   @property (nonatomic, retain) GADBannerView *banner;
   @property (nonatomic, retain) NSMutableArray *testDevices;
-  @property (nonatomic)         BOOL loaded, shown;
+  @property (nonatomic)         BOOL requested, loaded, shown;
 @end
 
 @implementation IOSAdMob
@@ -44,9 +44,6 @@
     [_testDevices addObject: kGADSimulatorID];
     for (auto &id : test_devices) [_testDevices addObject: LFL::MakeNSString(id)];
 
-    GADRequest *request = [GADRequest request];
-    request.testDevices = _testDevices;
-    [_banner loadRequest:request];
     return self;
   }
 
@@ -60,6 +57,12 @@
     [_banner removeFromSuperview];
     if ((_shown = show_or_hide)) {
       _banner.rootViewController = table;
+      if (!_requested) {
+        _requested = YES;
+        GADRequest *request = [GADRequest request];
+        request.testDevices = _testDevices;
+        [_banner loadRequest:request];
+      }
       [self updateBannerFrame];
       if (!_loaded && (_loaded = YES)) [self adjustParentFrame: -_banner.frame.size.height];
       [_banner.rootViewController.view addSubview:_banner];

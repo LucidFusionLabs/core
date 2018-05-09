@@ -96,10 +96,13 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
     else if (n == "Dark")  { [_toolbar setBarStyle: UIBarStyleBlackTranslucent]; [_toolbar2 setBarStyle: UIBarStyleBlackTranslucent]; }
     else                   { [_toolbar setBarStyle: UIBarStyleDefault];          [_toolbar2 setBarStyle: UIBarStyleDefault]; }
   }
-  
+
   - (NSMutableArray*)createUIToolbarItems: (BOOL)resignAfterClick {
     NSMutableArray *items = [[NSMutableArray alloc] init];
     UIBarButtonItem *spacer = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil];
+    UIFont *font = [UIFont boldSystemFontOfSize: 7];
+    NSDictionary<NSAttributedStringKey, id> *fontattr = @{NSFontAttributeName: font};
+
     for (int i=0, l=data.size(); i<l; i++) {
       if (i || l == 1) [items addObject: spacer];
       NSString *K = [NSString stringWithUTF8String: data[i].shortcut.c_str()];
@@ -111,6 +114,11 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
       } else {
         item = [[UIBarButtonItem alloc] initWithTitle:(([K length] && LFL::isascii([K characterAtIndex:0])) ? [NSString stringWithFormat:@"%@", K] : [NSString stringWithFormat:@"%@\U0000FE0E", K])
           style:UIBarButtonItemStylePlain target:self action:(resignAfterClick ? @selector(onClickResign:) : @selector(onClick:))];
+      }
+      if (data.size() > 5) {
+        [item setTitleTextAttributes:fontattr forState:UIControlStateNormal];
+        [item setTitleTextAttributes:fontattr forState:UIControlStateSelected];
+        [item setTitleTextAttributes:fontattr forState:UIControlStateDisabled];
       }
       [item setTag:i];
       [items addObject:item];
@@ -391,15 +399,20 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
   }
 
   - (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)path {
-    if (path.section >= data.size() || path.row >= data[path.section].item.size()) return tableView.rowHeight;
-    auto &hi = data[path.section];
-    const auto &ci = hi.item[path.row];
-    if (ci.hidden) return 0;
-    else if ((ci.flags & iOSTableItem::GUILoaded) &&
-             (ci.type == LFL::TableItem::Picker || ci.type == LFL::TableItem::FontPicker)) return ci.height;
-    else if (hi.flag & LFL::TableSectionInterface::Flag::DoubleRowHeight) return tableView.rowHeight * 2;
-    else if (ci.flags & LFL::TableItem::Flag::SubText) return UITableViewAutomaticDimension;
-    else return tableView.rowHeight;
+    CGFloat ret = 0;
+    if (path.section >= data.size() || path.row >= data[path.section].item.size()) ret = tableView.rowHeight;
+    else {
+      auto &hi = data[path.section];
+      const auto &ci = hi.item[path.row];
+      if (ci.hidden) ret = 0;
+      else if ((ci.flags & iOSTableItem::GUILoaded) &&
+               (ci.type == LFL::TableItem::Picker || ci.type == LFL::TableItem::FontPicker)) ret = ci.height;
+      else if (hi.flag & LFL::TableSectionInterface::Flag::DoubleRowHeight)
+        ret = tableView.rowHeight > 0 ? tableView.rowHeight * 2 : tableView.rowHeight;
+      else if (ci.flags & LFL::TableItem::Flag::SubText) ret = UITableViewAutomaticDimension;
+      else ret = tableView.rowHeight;
+    }
+    return ret;
   }
   
   - (void)clearNavigationButton:(int)align {
@@ -477,6 +490,7 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
 
         IOSTextField *textfield = [[IOSTextField alloc] initWithFrame:
           [self getCellFrame:cell.textLabel.frame.size.width]];
+        textfield.hidden = ci.hidden;
         textfield.changed_cb = ci.right_cb;
         textfield.autoresizingMask = UIViewAutoresizingFlexibleHeight;
         // textfield.adjustsFontSizeToFitWidth = YES;
@@ -535,6 +549,7 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
 
         int picker_cols = item.data.size();
         IOSPicker *picker = [[IOSPicker alloc] initWithColumns: move(item) andTheme:(dark_theme ? "Dark" : "Light")];
+        picker.hidden = ci.hidden;
         picker.autoresizingMask = UIViewAutoresizingFlexibleWidth;
         if (row > 0) {
           LFL::StringVec v, joined(picker_cols, "");
@@ -556,6 +571,7 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
           [button addTarget:button action:@selector(buttonClicked:) forControlEvents:UIControlEventTouchUpInside];
           button.cb = [=](){ auto &item = data[section].item[row]; if (item.cb) item.cb(); };
           button.frame = cell.frame;
+          button.hidden = ci.hidden;
           int spacing = -10, target_height = 40, margin = fabs(button.frame.size.height - target_height) / 2;
           [button setTitleColor:blue forState:UIControlStateNormal];
           [button setTitle:LFL::MakeNSString(ci.key) forState:UIControlStateNormal];
@@ -575,6 +591,7 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
       } else if (ci.type == LFL::TableItem::Toggle) {
         IOSSwitch *onoff = [[IOSSwitch alloc] init];
         onoff.changed_cb = ci.right_cb;
+        onoff.hidden = ci.hidden;
         onoff.on = ci.val == "1";
         [onoff addTarget: self action: @selector(switchFlipped:) forControlEvents: UIControlEventValueChanged];
         cell.textLabel.text = LFL::MakeNSString(ci.key);
@@ -586,6 +603,7 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
         [cell.textLabel sizeToFit];
 
         UILabel *label = [[UILabel alloc] initWithFrame: CGRectMake(-40, 0, 40, 44)];
+        label.hidden = ci.hidden;
         label.text = LFL::MakeNSString(ci.val);
         label.textColor = cell.textLabel.textColor;
         label.hidden = YES;
@@ -594,6 +612,7 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
           [self getCellFrame: cell.textLabel.frame.size.width + label.frame.size.width]];
         slider.minimumValue = ci.minval;
         slider.maximumValue = ci.maxval;
+        slider.hidden = ci.hidden;
         slider.continuous = YES;
         slider.value = LFL::atof(ci.val);
         slider.label = label;
@@ -614,6 +633,7 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
         } else {
           [cell.textLabel sizeToFit];
           UILabel *label = [[UILabel alloc] initWithFrame: [self getCellFrame: cell.textLabel.frame.size.width]];
+          label.hidden = ci.hidden;
           label.text = LFL::MakeNSString(ci.val);
           label.adjustsFontSizeToFitWidth = TRUE;
           label.textAlignment = NSTextAlignmentRight;
@@ -650,6 +670,7 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
         CHECK_LE(icon, app_images.size());
         UIImage *image = app_images[icon - 1]; 
         IOSButton *button = [IOSButton buttonWithType:UIButtonTypeCustom];
+        button.hidden = ci.hidden;
         button.frame = CGRectMake(0, 0, 40, 40);
         [button setImage:image forState:UIControlStateNormal];
         button.cb = LFL::bind(ci.right_cb, "");
@@ -664,9 +685,11 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
           label.textColor = [UIColor colorWithRed:c.r() green:c.g() blue:c.b() alpha:c.a()];
         } else label.textColor = self.view.tintColor;
         label.text = LFL::MakeNSString(ci.right_text);
+        label.hidden = ci.hidden;
         [label sizeToFit];
         if (ci.right_cb) {
           IOSButton *button = [IOSButton buttonWithType:UIButtonTypeCustom];
+          button.hidden = ci.hidden;
           button.frame = label.frame;
           button.cb = LFL::bind(ci.right_cb, "");
           [button addTarget:button action:@selector(buttonClicked:) forControlEvents:UIControlEventTouchUpInside];
