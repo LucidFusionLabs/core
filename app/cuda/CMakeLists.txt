@@ -1,4 +1,4 @@
-# $Id: CMakeLists.txt 323 2011-03-07 02:31:15Z justin $
+# $Id$
 
 if(LFL_CUDA)
   lfl_add_target(app_cuda STATIC_LIBRARY SOURCES cuda.cpp

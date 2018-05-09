@@ -1,5 +1,5 @@
 /*
- * $Id: test.cpp 1305 2014-09-02 08:10:25Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify

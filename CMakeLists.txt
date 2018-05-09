@@ -1,4 +1,4 @@
-# $Id: CMakeLists.txt 1318 2014-10-23 06:13:52Z justin $
+# $Id$
 
 if(NOT LFL_SOURCE_DIR)
   cmake_minimum_required(VERSION 3.0)

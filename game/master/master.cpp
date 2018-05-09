@@ -1,5 +1,5 @@
 /*
- * $Id: master.cpp 1306 2014-09-04 07:13:16Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify

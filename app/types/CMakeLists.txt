@@ -1,4 +1,4 @@
-# $Id: CMakeLists.txt 1298 2011-12-11 18:46:06Z justin $
+# $Id$
 
 lfl_add_target(app_null_convert STATIC_LIBRARY SOURCES null_convert.cpp)
 lfl_add_target(app_null_regex STATIC_LIBRARY SOURCES null_regex.cpp)

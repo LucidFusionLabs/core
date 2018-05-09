@@ -1,4 +1,4 @@
-# $Id: CMakeLists.txt 1334 2014-11-28 09:14:21Z justin $
+# $Id$
 
 if(LFL_MOBILE)
   return()
