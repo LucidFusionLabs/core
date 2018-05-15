@@ -224,7 +224,7 @@
 
   - (void)flagsChanged:(NSEvent *)theEvent {
     int flags = [theEvent modifierFlags];
-    bool cmd = flags & NSCommandKeyMask, ctrl = flags & NSControlKeyMask, shift = flags & NSShiftKeyMask;
+    bool cmd = flags & NSEventModifierFlagCommand, ctrl = flags & NSEventModifierFlagControl, shift = flags & NSEventModifierFlagShift;
     auto a = _screen->parent;
     if (cmd   != cmd_down)   { a->input->KeyPress(0x82, 0, cmd);   cmd_down   = cmd;   }
     if (ctrl  != ctrl_down)  { a->input->KeyPress(0x86, 0, ctrl);  ctrl_down  = ctrl;  }
@@ -321,6 +321,7 @@
 @implementation AppDelegate
   - (void)applicationWillTerminate: (NSNotification *)aNotification {}
   - (void)applicationDidFinishLaunching: (NSNotification *)aNotification {
+    [[NSUserDefaults standardUserDefaults] registerDefaults:@{ @"NSApplicationCrashOnExceptions": @YES }];
     // [[NSFileManager defaultManager] changeCurrentDirectoryPath: [[NSBundle mainBundle] resourcePath]];
     int ret = MyAppMain();
     if (ret) exit(ret);
@@ -329,7 +330,7 @@
 
   - (GameView*)createWindow: (int)w height:(int)h nativeWindow:(LFL::Window*)s {
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, w, h)
-                                         styleMask:NSClosableWindowMask|NSMiniaturizableWindowMask|NSResizableWindowMask|NSTitledWindowMask
+                                         styleMask:NSWindowStyleMaskClosable|NSWindowStyleMaskMiniaturizable|NSWindowStyleMaskResizable|NSWindowStyleMaskTitled
                                          backing:NSBackingStoreBuffered defer:NO];
 
     GameContainerView *container_view = [[[GameContainerView alloc] initWithFrame:window.frame] autorelease];
@@ -388,7 +389,7 @@
     [_alert addButtonWithTitle: [NSString stringWithUTF8String: kv[2].first.c_str()]];
     [_alert setMessageText:     [NSString stringWithUTF8String: kv[1].first.c_str()]];
     [_alert setInformativeText: [NSString stringWithUTF8String: kv[1].second.c_str()]];
-    [_alert setAlertStyle:NSWarningAlertStyle];
+    [_alert setAlertStyle:NSAlertStyleWarning];
     if ((_add_text = _style == "textinput")) {
       _input = [[NSTextField alloc] initWithFrame:NSMakeRect(0, 0, 200, 24)];
       _input.delegate = self;
@@ -431,7 +432,7 @@
   - (id) initWithBox: (const LFL::Box&) b {
     self = [super init];
     _window = [[NSPanel alloc] initWithContentRect:NSMakeRect(b.x, b.y, b.w, b.h) 
-      styleMask:NSTitledWindowMask | NSClosableWindowMask 
+      styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable
       backing:NSBackingStoreBuffered defer:YES];
     [_window makeFirstResponder:nil];
     return self;
@@ -485,7 +486,6 @@
     font = [NSFont fontWithName:[NSString stringWithUTF8String:name] size:s];
     NSFontManager *fontManager = [NSFontManager sharedFontManager];
     [fontManager setSelectedFont:font isMultiple:NO];
-    [fontManager setDelegate:self];
     [fontManager setTarget:self];
     [fontManager orderFrontFontPanel:self];
   }
@@ -519,7 +519,7 @@ extern "C" void OSXCreateSystemApplicationMenu() {
     action:@selector(hide:) keyEquivalent:@"h"];
   item = [menu addItemWithTitle:@"Hide Others"
     action:@selector(hideOtherApplications:) keyEquivalent:@"h"];
-  [item setKeyEquivalentModifierMask:(NSAlternateKeyMask|NSCommandKeyMask)];
+  [item setKeyEquivalentModifierMask:(NSEventModifierFlagOption|NSEventModifierFlagCommand)];
   item = [menu addItemWithTitle:@"Show All" action:@selector(unhideAllApplications:) keyEquivalent:@""];
   [menu addItem:[NSMenuItem separatorItem]];
   item = [menu addItemWithTitle: [@"Quit " stringByAppendingString:app_name]
@@ -612,8 +612,9 @@ struct OSXAlertView : public AlertViewInterface {
   void Show(const string &arg) {
     NSWindow *w = [dynamic_cast<OSXWindow*>(win->focused)->view window];
     if (alert.add_text) [alert.input setStringValue: MakeNSString(arg)];
-    [alert.alert beginSheetModalForWindow:w modalDelegate:alert
-      didEndSelector:@selector(alertDidEnd:returnCode:contextInfo:) contextInfo:w];
+    [alert.alert beginSheetModalForWindow:w completionHandler:^(NSModalResponse n) {
+      [alert alertDidEnd:alert.alert returnCode:n contextInfo:w];
+    } ];
     [dynamic_cast<OSXWindow*>(win->focused)->view  clearKeyModifiers];
   }
 
@@ -622,16 +623,18 @@ struct OSXAlertView : public AlertViewInterface {
     alert.confirm_cb = move(confirm_cb);
     [alert.alert setMessageText: MakeNSString(title)];
     [alert.alert setInformativeText: MakeNSString(msg)];
-    [alert.alert beginSheetModalForWindow:w modalDelegate:alert
-      didEndSelector:@selector(alertDidEnd:returnCode:contextInfo:) contextInfo:w];
+    [alert.alert beginSheetModalForWindow:w completionHandler:^(NSModalResponse n) {
+      [alert alertDidEnd:alert.alert returnCode:n contextInfo:w];
+    } ];
     [dynamic_cast<OSXWindow*>(win->focused)->view  clearKeyModifiers];
   }
 
   string RunModal(const string &arg) {
     NSWindow *w = [dynamic_cast<OSXWindow*>(win->focused)->view window];
     if (alert.add_text) [alert.input setStringValue: MakeNSString(arg)];
-    [alert.alert beginSheetModalForWindow:w modalDelegate:alert
-      didEndSelector:@selector(modalAlertDidEnd:returnCode:contextInfo:) contextInfo:w];
+    [alert.alert beginSheetModalForWindow:w completionHandler:^(NSModalResponse n) {
+      [alert modalAlertDidEnd:alert.alert returnCode:n contextInfo:w];
+    } ];
     [NSApp runModalForWindow: w];
     return alert.add_text ? GetNSString([alert.input stringValue]) : "";
   }
@@ -805,7 +808,7 @@ void Application::ShowSystemFileChooser(bool choose_files, bool choose_dirs, boo
   [panel setAllowsMultipleSelection:choose_multi];
   NSInteger clicked = [panel runModal];
   LoseFocus();
-  if (clicked != NSFileHandlingPanelOKButton) return;
+  if (clicked != NSModalResponseOK) return;
 
   StringVec arg;
   for (NSURL *url in [panel URLs]) arg.emplace_back([[url absoluteString] UTF8String]);
@@ -813,9 +816,9 @@ void Application::ShowSystemFileChooser(bool choose_files, bool choose_dirs, boo
 }
 
 void Application::ShowSystemContextMenu(const MenuItemVec &items) {
-  NSEvent *event = [NSEvent mouseEventWithType: NSLeftMouseDown
+  NSEvent *event = [NSEvent mouseEventWithType: NSEventTypeLeftMouseDown
                             location:           NSMakePoint(focused->mouse.x, focused->mouse.y)
-                            modifierFlags:      NSLeftMouseDownMask
+                            modifierFlags:      NSEventMaskLeftMouseDown
                             timestamp:          0
                             windowNumber:       [[dynamic_cast<OSXWindow*>(focused)->view window] windowNumber]
                             context:            [[dynamic_cast<OSXWindow*>(focused)->view window] graphicsContext]

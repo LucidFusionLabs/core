@@ -104,3 +104,6 @@
 [submodule "imports/java/appirater-android"]
 	path = imports/java/appirater-android
 	url = https://github.com/LucidFusionLabs/appirater-android
+[submodule "imports/fabric-osx"]
+	path = imports/fabric-osx
+	url = https://github.com/LucidFusionLabs/fabric-osx

@@ -130,10 +130,10 @@ int CoreTextFontEngine::InitGlyphs(Font *f, Glyph *g, int n) {
 
     for (int i=0; i<n; ++i) ascii[i] = g[i].id;
     CHECK(CTFontGetGlyphsForCharacters(ctfont, &ascii[0], &glyphs[0], glyphs.size()));
-    CTFontGetBoundingRectsForGlyphs(ctfont, kCTFontDefaultOrientation, &glyphs[0], &bounds[0], glyphs.size());
+    CTFontGetBoundingRectsForGlyphs(ctfont, kCTFontOrientationDefault, &glyphs[0], &bounds[0], glyphs.size());
 
     for (Glyph *e = g + n; g != e; ++g, ++b, ++cg) {
-      CTFontGetAdvancesForGlyphs(ctfont, kCTFontDefaultOrientation, cg, &advance, 1);
+      CTFontGetAdvancesForGlyphs(ctfont, kCTFontOrientationDefault, cg, &advance, 1);
       AssignGlyph(g, *b, advance);
       g->internal.coretext.id = *cg;
       f->UpdateMetrics(g);
@@ -143,8 +143,8 @@ int CoreTextFontEngine::InitGlyphs(Font *f, Glyph *g, int n) {
     CTFontRef substituted_ctfont;
     GetSubstitutedFont(f, ctfont, g->id, 0, &substituted_ctfont, &g->internal.coretext.id);
     CGGlyph cg = g->internal.coretext.id;
-    CTFontGetBoundingRectsForGlyphs(substituted_ctfont, kCTFontDefaultOrientation, &cg, &b,       1);
-    CTFontGetAdvancesForGlyphs     (substituted_ctfont, kCTFontDefaultOrientation, &cg, &advance, 1);
+    CTFontGetBoundingRectsForGlyphs(substituted_ctfont, kCTFontOrientationDefault, &cg, &b,       1);
+    CTFontGetAdvancesForGlyphs     (substituted_ctfont, kCTFontOrientationDefault, &cg, &advance, 1);
     CFRelease(substituted_ctfont);
     AssignGlyph(g, b, advance);
     f->UpdateMetrics(g);

@@ -63,7 +63,7 @@ static LFL::FreeListVector<NSImage*> app_images;
 
     _headerTitle = [[NSTextField alloc] initWithFrame: CGRectMake(0, 0, frame.size.width, _header_height)];
     _headerTitle.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
-    _headerTitle.alignment = NSCenterTextAlignment;
+    _headerTitle.alignment = NSTextAlignmentCenter;
     _headerTitle.editable = NO;
     _headerTitle.selectable = NO;
     [_headerView addSubview: _headerTitle];
@@ -370,7 +370,7 @@ static LFL::FreeListVector<NSImage*> app_images;
         cellView.textValue.bordered = NO;
         cellView.textValue.drawsBackground = NO;
         cellView.textValue.editable = cellView.textValue.selectable = !label;
-        cellView.textValue.alignment = NSRightTextAlignment;
+        cellView.textValue.alignment = NSTextAlignmentRight;
         if (v->size() && ((*v)[0] == 1 || (*v)[0] == 2)) cellView.textValue.placeholderString = LFL::MakeNSString(v->substr(1));
         else if (v->size())                              cellView.textValue.stringValue       = LFL::MakeNSString(*v);
         [cellView addSubview:cellView.textValue];
