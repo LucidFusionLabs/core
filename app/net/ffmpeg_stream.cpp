@@ -141,7 +141,8 @@ HTTPServer::StreamResource::~StreamResource() {
   StreamResourceClient::FreeAVFormatContext(fctx);
 }
 
-HTTPServer::StreamResource::StreamResource(const char *oft, int Abr, int Vbr) : abr(Abr), vbr(Vbr) {
+HTTPServer::StreamResource::StreamResource(Audio *A, Camera *C, const char *oft, int Abr, int Vbr) :
+  audio_input(A), camera_input(C), abr(Abr), vbr(Vbr) {
   fctx = avformat_alloc_context();
   fctx->oformat = av_guess_format(oft, 0, 0);
   if (!fctx->oformat) { ERROR("guess_format '", oft, "' failed"); return; }
@@ -230,13 +231,13 @@ void HTTPServer::StreamResource::Update(int audio_samples, bool video_sample) {
 
   if (ac && audio_samples) {
     if (!resampler) {
-      resampler = CreateAudioResampler();
+      resampler = CreateAudioResampler().release();
       resampler->out = new RingSampler(ac->sample_rate, ac->sample_rate*channels);
       resampler->Open(resampler->out, FLAGS_chans_in, FLAGS_sample_rate, Sample::S16,
                       channels, ac->sample_rate, SampleFromFFMpegId(ac->channel_layout));
     };
-    RingSampler::Handle L(app->audio->IL.get(), app->audio->IL->ring.back-audio_samples, audio_samples);
-    RingSampler::Handle R(app->audio->IR.get(), app->audio->IR->ring.back-audio_samples, audio_samples);
+    RingSampler::Handle L(audio_input->IL.get(), audio_input->IL->ring.back-audio_samples, audio_samples);
+    RingSampler::Handle R(audio_input->IR.get(), audio_input->IR->ring.back-audio_samples, audio_samples);
     if (resampler->Update(audio_samples, &L, FLAGS_chans_in > 1 ? &R : 0)) open=0;
   }
 
@@ -252,7 +253,7 @@ void HTTPServer::StreamResource::Update(int audio_samples, bool video_sample) {
     int audio_behind = resampler->output_available - resamples_processed;
     microseconds audio_timestamp = resampler->out->ReadTimestamp(0, resampler->out->ring.back - audio_behind);
 
-    if (audio_timestamp < microseconds(app->camera->state.image_timestamp_us)) SendAudio();
+    if (audio_timestamp < microseconds(camera_input->state.image_timestamp_us)) SendAudio();
     else { SendVideo(); video_sample=0; }
   }
 }
@@ -287,11 +288,11 @@ void HTTPServer::StreamResource::SendVideo() {
   /* convert video */
   if (!conv)
     conv = sws_getContext(FLAGS_camera_image_width, FLAGS_camera_image_height,
-                          AVPixelFormat(PixelToFFMpegId(app->camera->state.image_format)),
+                          AVPixelFormat(PixelToFFMpegId(camera_input->state.image_format)),
                           vc->width, vc->height, vc->pix_fmt, SWS_BICUBIC, 0, 0, 0);
 
-  int camera_linesize[4] = { app->camera->state.image_linesize, 0, 0, 0 }, got = 0;
-  sws_scale(conv, reinterpret_cast<uint8_t**>(&app->camera->state.image), camera_linesize, 0,
+  int camera_linesize[4] = { camera_input->state.image_linesize, 0, 0, 0 }, got = 0;
+  sws_scale(conv, reinterpret_cast<uint8_t**>(&camera_input->state.image), camera_linesize, 0,
             FLAGS_camera_image_height, picture->data, picture->linesize);
 
   /* broadcast */
@@ -301,7 +302,7 @@ void HTTPServer::StreamResource::SendVideo() {
   pkt.size = 0;
 
   avcodec_encode_video2(vc, &pkt, picture, &got);
-  if (got) Broadcast(&pkt, microseconds(app->camera->state.image_timestamp_us));
+  if (got) Broadcast(&pkt, microseconds(camera_input->state.image_timestamp_us));
 
   av_free_packet(&pkt);
 }

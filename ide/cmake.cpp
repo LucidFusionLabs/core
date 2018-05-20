@@ -56,7 +56,7 @@ void CMakeDaemon::Start(ApplicationInfo *appinfo, SocketServices *net,
   vector<const char*> argv{ bin.c_str(), "-E", "daemon", builddir.c_str(), nullptr };
   CHECK(!process.Open(argv.data(), appinfo->startdir.c_str()));
   dispatch->RunInNetworkThread([=](){ net->unix_client->AddConnectedSocket
-                          (fileno(process.in), new Connection::CallbackHandler
+                          (fileno(process.in), make_unique<Connection::CallbackHandler>
                            (bind(&CMakeDaemon::HandleRead, this, _1),
                             bind(&CMakeDaemon::HandleClose, this, _1))); });
 }

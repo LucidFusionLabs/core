@@ -848,7 +848,6 @@ struct Application : public ::LFApp, public ApplicationInfo, public ApplicationS
 #endif
 };
 
-unique_ptr<Application> CreateApplication(int ac, const char* const* av);
 unique_ptr<Window> CreateWindow(Application *app);
 unique_ptr<Module> CreateFrameworkModule(Application*);
 unique_ptr<Module> CreateAudioModule(Audio*);

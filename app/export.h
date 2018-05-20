@@ -157,6 +157,7 @@ struct Box;
 struct Browser;
 struct BrowserInterface;
 struct BufferFile;
+struct Camera;
 struct ClangTranslationUnit;
 struct Clipboard;
 struct Color;

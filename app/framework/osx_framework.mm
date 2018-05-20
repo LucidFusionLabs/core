@@ -893,7 +893,6 @@ void FrameScheduler::DelMainWaitSocket(Window *w, Socket fd) {
 }
 
 unique_ptr<Window> CreateWindow(Application *app) { return make_unique<OSXWindow>(app); }
-unique_ptr<Application> CreateApplication(int ac, const char* const* av) { return make_unique<Application>(ac, av); }
 unique_ptr<Module> CreateFrameworkModule(Application *a) { return make_unique<OSXFrameworkModule>(a); }
 unique_ptr<TimerInterface> SystemToolkit::CreateTimer(Callback cb) { return make_unique<AppleTimer>(move(cb)); }
 unique_ptr<AlertViewInterface> SystemToolkit::CreateAlert(Window *w, AlertItemVec items) { return make_unique<OSXAlertView>(w->parent, move(items)); }

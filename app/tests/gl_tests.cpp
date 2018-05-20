@@ -40,7 +40,7 @@ extern "C" int MyAppFrame(Window *W, unsigned clicks, int flag) {
 
 extern "C" LFApp *MyAppCreate(int argc, const char* const* argv) {
   FLAGS_enable_video = FLAGS_enable_input = true;
-  app = CreateApplication(argc, argv).release();
+  app = make_unique<Application>(argc, argv).release();
   app->focused = CreateWindow(app).release();
   app->focused->frame_cb = MyAppFrame;
   testing::InitGoogleTest(&argc, const_cast<char**>(argv));

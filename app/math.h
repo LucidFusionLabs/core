@@ -507,6 +507,11 @@ template <class T=double> struct matrix {
   void AssignL(unique_ptr<matrix> m, int f) { return AssignL(m.get(), f); }
   void AssignR(unique_ptr<matrix> m, int f) { return AssignR(m.get(), f); }
   void AssignDiagonal(double v) { MatrixRowIter(this) row(i)[i] = v; }
+  bool Assign(const matrix *x) {
+    if (M != x->M || N != x->N || ((flag & Flag::Complex) && !(x->flag & Flag::Complex))) return false;
+    AssignL(x);
+    return true;
+  }
 
   void MultdiagR(double *diagonalmatrix, int len=0) { /* this = this * diagnolmatrix */
     if (len && len != N) FATAL("mismatch ", len, " != ", N);

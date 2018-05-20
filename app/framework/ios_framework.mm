@@ -1252,7 +1252,6 @@ void FrameScheduler::DelMainWaitSocket(Window *w, Socket fd) {
 }
 
 unique_ptr<Window> CreateWindow(Application *a) { return make_unique<iOSWindow>(a); }
-unique_ptr<Application> CreateApplication(int ac, const char* const* av) { return make_unique<Application>(ac, av); }
 unique_ptr<Module> CreateFrameworkModule(Application *a) { return make_unique<iOSFrameworkModule>(a); }
 unique_ptr<AssetLoaderInterface> CreateAssetLoader(AssetLoading *p) { return make_unique<iOSAssetLoader>(p); }
 unique_ptr<TimerInterface> SystemToolkit::CreateTimer(Callback cb) { return make_unique<AppleTimer>(move(cb)); }

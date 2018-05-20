@@ -27,6 +27,8 @@ bool SpeechClientManual() { return !SpeechClientAuto() && !SpeechClientFlood(); 
 
 struct AcousticEventDetector {
   FixedAllocator<65536*2> alloc;
+  Audio *audio_input;
+  int feature_rate;
   FeatureSink *sink;
   vector<StatefulFilter> feature_filters;
   unique_ptr<RingSampler> feature_buf;
@@ -35,7 +37,7 @@ struct AcousticEventDetector {
   RingSampler pe, zcr, szcr;
   RollingAvg<unsigned> remax, remin, rsl, rsl2, rnl;
   float emax=-INFINITY, emin=INFINITY, sl=0, sl2=0, nl=0, zcravg=0, zcrdev=0, szcravg=0, szcrdev=0;
-  int feature_rate, initcount=0, slcount=0, sl2count=0, nlcount=0, zcrcount=0, szcrcount=0;
+  int initcount=0, slcount=0, sl2count=0, nlcount=0, zcrcount=0, szcrcount=0;
   long long samples_processed=0, samples_available=0, total=0, t1A, t1B, t2A, t2B;
   int t1countA=1, t1countB=1, t2countA=1, t2countB=1;
 
@@ -72,8 +74,8 @@ struct AcousticEventDetector {
     feature_buf = make_unique<RingSampler>(feature_rate, feature_rate*FLAGS_sample_secs, sizeof(double)*Features::Dimension());
   }
 
-  AcousticEventDetector(int FeatureRate, FeatureSink *Sink) :
-    feature_rate(FeatureRate),  sink(Sink), 
+  AcousticEventDetector(Audio *A, int FeatureRate, FeatureSink *Sink) :
+    audio_input(A), feature_rate(FeatureRate), sink(Sink), 
     pe(feature_rate, feature_rate*FLAGS_sample_secs),
     zcr(feature_rate, feature_rate*FLAGS_sample_secs),
     szcr(feature_rate, feature_rate*FLAGS_sample_secs),
@@ -87,13 +89,13 @@ struct AcousticEventDetector {
     int offset = total - begin;
 
     if (!feature_buf) {
-      RingSampler::Handle L(app->audio->IL.get(), app->audio->RL.next-Behind()-offset*FLAGS_feat_hop, FLAGS_feat_window+(frames-1)*FLAGS_feat_hop);
+      RingSampler::Handle L(audio_input->IL.get(), audio_input->RL.next-Behind()-offset*FLAGS_feat_hop, FLAGS_feat_window+(frames-1)*FLAGS_feat_hop);
       Matrix features(frames, Features::Dimension(), 0.0, 0, &alloc);
-      Matrix *out = Features::FromBuf(&L, &features, &feature_filters, &alloc);
-      sink->Write(out, begin);
+      unique_ptr<Matrix> out = Features::FromBuf(&L, &features, &feature_filters, &alloc);
+      sink->Write(out.get(), begin);
     }
     else {
-      RingSampler::MatrixHandle out(feature_buf, feature_buf->ring.back-1-offset, frames);
+      RingSampler::MatrixHandle out(feature_buf.get(), feature_buf->ring.back-1-offset, frames);
       sink->Write(&out, begin);
     }
   }
@@ -108,7 +110,7 @@ struct AcousticEventDetector {
   void Update(unsigned samples) {
     samples_available += samples;
     while (samples_available >= samples_processed + FLAGS_feat_window) {
-      RingSampler::Handle L(app->audio->IL.get(), app->audio->RL.next-Behind(), FLAGS_feat_window);
+      RingSampler::Handle L(audio_input->IL.get(), audio_input->RL.next-Behind(), FLAGS_feat_window);
       Update(&L);
       samples_processed += FLAGS_feat_hop;
     }
@@ -123,7 +125,7 @@ struct AcousticEventDetector {
 
     /* compute features */
     if (feature_buf) {
-      RingSampler::RowMatHandle featBH(feature_buf);
+      RingSampler::RowMatHandle featBH(feature_buf.get());
       Matrix *feat = featBH.Write();
       Features::FromBuf(in, feat, &feature_filters, &alloc);
     }
@@ -303,7 +305,7 @@ struct AcousticEventGUI {
     AED->alloc.Reset();
 
     int maxverts = AED->words.size()*6+SpeechClientFlood()*2;
-    geom = make_unique<Geometry>(GraphicsDevice::Lines, maxverts, NullPointer<v2>(), 0, 0, Color(1.0,1.0,1.0));
+    auto geom = make_unique<Geometry>(GraphicsDevice::Lines, maxverts, NullPointer<v2>(), nullptr, nullptr, Color(1.0,1.0,1.0));
     v2 *verts = reinterpret_cast<v2*>(&geom->vert[0]);
     geom->count = 0;
 
@@ -355,8 +357,8 @@ struct AcousticEventGUI {
         if (!flip) { tx = win.x + perc * win.w; ty = win.centerY();        }
         else       { tx = win.centerX();        ty = win.y + perc * win.h; }
 
-        static Font *text = app->fonts->Get(FLAGS_font, "", 12, Color::white, Color::clear, FontDesc::Outline);
-        text->Draw(AED->sink->decode[i].text, point(tx, ty), 0, Font::DrawFlag::Orientation(!flip ? 1 : 3));
+        static Font *text = gd->parent->parent->fonts->Get(gd->parent->gl_h, FLAGS_font, "", 12, Color::white, Color::clear, FontDesc::Outline);
+        text->Draw(gd, AED->sink->decode[i].text, point(tx, ty), 0, Font::DrawFlag::Orientation(!flip ? 1 : 3));
       }
     }
 

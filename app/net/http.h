@@ -128,6 +128,8 @@ struct HTTPServer : public SocketService {
   };
 
   struct StreamResource : public Resource {
+    Audio *audio_input;
+    Camera *camera_input;
     AVFormatContext *fctx;
     map<void*, Connection*> subscribers;
     bool open=0;
@@ -142,7 +144,7 @@ struct HTTPServer : public SocketService {
     SwsContext *conv=0;
 
     virtual ~StreamResource();
-    StreamResource(const char *outputFileType, int audioBitRate, int videoBitRate);        
+    StreamResource(Audio*, Camera*, const char *outputFileType, int audioBitRate, int videoBitRate);        
     Response Request(Connection *, int method, const char *url, const char *args, const char *headers, const char *postdata, int postlen);
     void OpenStreams(bool audio, bool video);
     void Update(int audio_samples, bool video_sample);

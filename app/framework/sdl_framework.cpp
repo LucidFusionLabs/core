@@ -258,7 +258,6 @@ void FrameScheduler::DelMainWaitSocket(Window *w, Socket fd) {
   if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd);
 }
 
-Application *CreateApplication(int ac, const char* const* av) { return new Application(ac, av); }
 unique_ptr<Module> CreateFrameworkModule() { return make_unique<SDLFrameworkModule>(); }
 
 extern "C" int main(int argc, const char* const* argv) {

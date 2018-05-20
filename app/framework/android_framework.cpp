@@ -384,7 +384,6 @@ void FrameScheduler::DelMainWaitSocket(Window*, Socket fd) {
 }
 
 unique_ptr<Window> CreateWindow(Application *a) { return make_unique<AndroidWindow>(a); }
-unique_ptr<Application> CreateApplication(int ac, const char* const* av) { return make_unique<Application>(ac, av); }
 unique_ptr<Module> CreateFrameworkModule(Application *a) { return make_unique<AndroidFrameworkModule>(a, &a->scheduler, a->input.get()); }
 unique_ptr<AssetLoaderInterface> CreateAssetLoader(AssetLoading *a) { return make_unique<AndroidAssetLoader>(a); }
 unique_ptr<TimerInterface> SystemToolkit::CreateTimer(Callback cb) { return make_unique<AndroidTimer>(move(cb)); };

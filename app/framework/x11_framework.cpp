@@ -230,7 +230,6 @@ void FrameScheduler::DelMainWaitSocket(Window *w, Socket fd) {
   main_wait_sockets.Del(fd);
 }
 
-Application *CreateApplication(int ac, const char* const* av) { return new Application(ac, av); }
 unique_ptr<Module> CreateFrameworkModule() { return make_unique<X11FrameworkModule>(); }
 
 extern "C" int main(int argc, const char* const* argv) {

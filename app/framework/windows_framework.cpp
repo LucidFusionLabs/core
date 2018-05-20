@@ -377,7 +377,6 @@ void FrameScheduler::DelMainWaitSocket(Window *w, Socket fd) {
   WSAAsyncSelect(fd, dynamic_cast<WinWindow*>(w)->hwnd, WM_USER, 0);
 }
 
-Application *CreateApplication(int ac, const char* const* av) { return new Application(ac, av); }
 unique_ptr<Module> CreateFrameworkModule() { return make_unique<WinFrameworkModule>(); }
 }; // namespace LFL
 

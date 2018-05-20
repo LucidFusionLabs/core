@@ -329,7 +329,6 @@ extern "C" int main(int argc, const char *argv[]) {
 }
 
 Window *Window::Create() { return new QtWindow(); }
-Application *CreateApplication(int ac, const char* const* av) { return new Application(ac, av); }
 unique_ptr<Module> CreateFrameworkModule() { return make_unique<QtFrameworkModule>(); }
 
 }; // namespace LFL
