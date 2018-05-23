@@ -1,5 +1,5 @@
 [submodule "imports/ios-openssl"]
-	path = imports/ios-openssl
+	path = imports/ios/ios-openssl
 	url = https://github.com/st3fan/ios-openssl
 [submodule "imports/openssl"]
 	path = imports/openssl
@@ -87,16 +87,16 @@
 	path = imports/glew
 	url = https://github.com/LucidFusionLabs/glew
 [submodule "imports/fabric-ios"]
-	path = imports/fabric-ios
+	path = imports/ios/fabric-ios
 	url = https://github.com/LucidFusionLabs/fabric-ios
 [submodule "imports/AdMob-ios"]
-	path = imports/AdMob-ios
+	path = imports/ios/AdMob-ios
 	url = https://github.com/LucidFusionLabs/AdMob-ios
 [submodule "CMake"]
 	path = CMake
 	url = https://github.com/LucidFusionLabs/LFLCMake
 [submodule "imports/OpenSSL-for-Android-Prebuilt"]
-	path = imports/OpenSSL-for-Android-Prebuilt
+	path = imports/android/OpenSSL-for-Android-Prebuilt
 	url = https://github.com/LucidFusionLabs/OpenSSL-for-Android-Prebuilt
 [submodule "imports/appirater"]
 	path = imports/appirater
@@ -105,5 +105,8 @@
 	path = imports/java/appirater-android
 	url = https://github.com/LucidFusionLabs/appirater-android
 [submodule "imports/fabric-osx"]
-	path = imports/fabric-osx
+	path = imports/osx/fabric-osx
 	url = https://github.com/LucidFusionLabs/fabric-osx
+[submodule "imports/windows/ffmpeg-for-Windows-prebuilt"]
+	path = imports/windows/ffmpeg-for-Windows-prebuilt
+	url = https://github.com/LucidFusionLabs/ffmpeg-for-Windows-prebuilt
