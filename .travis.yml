@@ -1,6 +1,8 @@
 sudo: false
 dist: precise
 language: cpp
+git:
+  submodules: false
 
 matrix:
   include:
@@ -24,6 +26,7 @@ matrix:
             - george-edison55-precise-backports
 
 before_install:
+  - git submodule update --init --recursive CMake imports/cmake-precompiled-header imports/libglog imports/googletest imports/protobuf imports/libcss
   - echo $TRAVIS_OS_NAME
   - echo $LANG
   - echo $LC_ALL
