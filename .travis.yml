@@ -26,7 +26,7 @@ matrix:
             - george-edison55-precise-backports
 
 before_install:
-  - git submodule update --init --recursive CMake imports/cmake-precompiled-header imports/glog imports/googletest imports/protobuf imports/libcss
+  - git submodule update --init --recursive CMake imports/cmake-precompiled-header imports/glog imports/googletest imports/protobuf imports/OpenCV imports/libcss
   - echo $TRAVIS_OS_NAME
   - echo $LANG
   - echo $LC_ALL
