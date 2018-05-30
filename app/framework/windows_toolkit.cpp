@@ -18,43 +18,104 @@
 
 #include <shellapi.h>
 #include <commdlg.h>
+#include "core/app/framework/windows_common.h"
 
 namespace LFL {
-SystemMenuView::~SystemMenuView() {}
-SystemMenuView::SystemMenuView(const string &title_text, const vector<MenuItem>&items) {
-  WinWindow *win = dynamic_cast<WinWindow*>(screen);
-  if (!win->menu) { win->menu = CreateMenu(); win->context_menu = CreatePopupMenu(); }
-  HMENU hAddMenu = CreatePopupMenu();
-  for (auto &i : items) {
-    if (i.name == "<separator>") AppendMenu(hAddMenu, MF_MENUBARBREAK, 0, NULL);
-    else AppendMenu(hAddMenu, MF_STRING, win->start_msg_id + win->menu_cmds.size(), i.name.c_str());
-    win->menu_cmds.push_back(i.cmd);
+struct WindowsToolbarView : public ToolbarViewInterface {
+  string theme;
+  void Show(bool show_or_hide) {}
+  void ToggleButton(const string &n) {}
+  void SetTheme(const string &x) { theme = x; }
+  string GetTheme() { return theme; }
+};
+
+struct WindowsCollectionView : public CollectionViewInterface {
+  vector<TableSection<CollectionItem>> data;
+  WindowsCollectionView(const string &title, const string &style, vector<CollectionItem> items) :
+    data(TableSection<CollectionItem>::Convert(move(items))) {}
+  void SetToolbar(ToolbarViewInterface *t) {}
+  void Show(bool show_or_hide) {}
+};
+
+struct WindowsTableView : public TableViewInterface {
+  vector<TableSection<TableItem>> data;
+  WindowsTableView(const string &title, const string &style, TableItemVec items) :
+    data(TableSection<TableItem>::Convert(move(items))) {}
+
+  void DelNavigationButton(int align) {}
+  void AddNavigationButton(int align, const TableItem &item) {}
+  void SetToolbar(ToolbarViewInterface *t) {}
+  void Show(bool show_or_hide) {}
+
+  string GetKey(int section, int row) { return ""; }
+  string GetValue(int section, int row) { return ""; }
+  int GetTag(int section, int row) { return 0; }
+  PickerItem *GetPicker(int section, int row) { return 0; }
+
+  StringPairVec GetSectionText(int section) {
+    StringPairVec ret;
+    CHECK_RANGE(section, 0, data.size());
+    for (auto &i : data[section].item) ret.emplace_back(i.key, i.val);
+    return ret;
   }
-  AppendMenu(win->menu, MF_STRING | MF_POPUP, (UINT)hAddMenu, title.c_str());
-  AppendMenu(win->context_menu, MF_STRING | MF_POPUP, (UINT)hAddMenu, title.c_str());
-  if (win->menubar) SetMenu(dynamic_cast<WinWindow*>(screen)->hwnd, win->menu);
-}
 
-unique_ptr<SystemMenuView> SystemMenuView::CreateEditMenu(const vector<MenuItem>&items) { return nullptr; }
+  void BeginUpdates() {}
+  void EndUpdates() {}
+  void AddRow(int section, TableItem item) {}
+  void SelectRow(int section, int row) {}
+  void ReplaceRow(int section, int row, TableItem item) {}
+  void ReplaceSection(int section, TableItem h, int flag, TableItemVec item) {}
+  void ApplyChangeList(const TableSectionInterface::ChangeList&) {}
+  void SetSectionValues(int section, const StringVec &item) {
+    if (section == data.size()) data.emplace_back();
+    CHECK_LT(section, data.size());
+    CHECK_EQ(item.size(), data[section].item.size());
+    for (int i = 0, l = data[section].item.size(); i != l; ++i) data[section].item[i].val = item[i];
+  }
 
-void Application::ShowSystemFontChooser(const FontDesc &cur_font, const string &choose_cmd) {
-  LOGFONT lf;
-  memzero(lf);
-  HDC hdc = GetDC(NULL);
-  lf.lfHeight = -MulDiv(cur_font.size, GetDeviceCaps(hdc, LOGPIXELSY), 72);
-  lf.lfWeight = (cur_font.flag & FontDesc::Bold) ? FW_BOLD : FW_NORMAL;
-  lf.lfItalic = cur_font.flag & FontDesc::Italic;
-  strncpy(lf.lfFaceName, cur_font.name.c_str(), sizeof(lf.lfFaceName)-1);
-  ReleaseDC(NULL, hdc);
-  CHOOSEFONT cf;
-  memzero(cf);
-  cf.lpLogFont = &lf;
-  cf.lStructSize = sizeof(cf);
-  cf.hwndOwner = dynamic_cast<WinWindow*>(screen)->hwnd;
-  cf.Flags = CF_SCREENFONTS | CF_INITTOLOGFONTSTRUCT;
-  if (!ChooseFont(&cf)) return;
-  int flag = FontDesc::Mono | (lf.lfWeight > FW_NORMAL ? FontDesc::Bold : 0) | (lf.lfItalic ? FontDesc::Italic : 0);
-  screen->shell->Run(StrCat(choose_cmd, " ", lf.lfFaceName, " ", cf.iPointSize/10, " ", flag));
-}
+  void SetSectionColors(int section, const vector<Color> &item) {
+    if (section == data.size()) data.emplace_back();
+    CHECK_LT(section, data.size());
+    CHECK_EQ(item.size(), data[section].item.size());
+    for (int i = 0, l = data[section].item.size(); i != l; ++i) data[section].item[i].font.fg = item[i];
+  }
+
+  void SetHeader(int section, TableItem) {}
+  void SetKey(int section, int row, const string &val) {}
+  void SetTag(int section, int row, int val) {}
+  void SetValue(int section, int row, const string &val) {}
+  void SetSelected(int section, int row, int selected) {}
+  void SetHidden(int section, int row, int val) {}
+  void SetColor(int section, int row, const Color &val) {}
+  void SetTitle(const string &title) {}
+  void SetTheme(const string &theme) {}
+  void SetSectionEditable(int section, int start_row, int skip_last_rows, LFL::IntIntCB cb) {}
+};
+
+struct WindowsTextView : public TextViewInterface {
+  void Show(bool show_or_hide) {}
+};
+
+struct WindowsNavigationView : public NavigationViewInterface {
+  void Show(bool show_or_hide) {}
+  TableViewInterface *Back() { return nullptr; }
+  void PushTableView(TableViewInterface *t) {}
+  void PushTextView(TextViewInterface *t) {}
+  void PopToRoot() {}
+  void PopAll() {}
+  void PopView(int n) {}
+  void SetTheme(const string &theme) {}
+};
+
+int Application::LoadSystemImage(const string &n) { static int ret = 0; return ++ret; }
+void Application::UpdateSystemImage(int n, Texture&) {}
+void Application::UnloadSystemImage(int n) {}
+
+unique_ptr<ToolbarViewInterface> SystemToolkit::CreateToolbar(Window*, const string &theme, MenuItemVec items, int flag) { return make_unique<WindowsToolbarView>(); }
+unique_ptr<CollectionViewInterface> SystemToolkit::CreateCollectionView(Window*, const string &title, const string &style, const string &theme, vector<CollectionItem> items) { return make_unique<WindowsCollectionView>(title, style, move(items)); }
+unique_ptr<TableViewInterface> SystemToolkit::CreateTableView(Window*, const string &title, const string &style, const string &theme, TableItemVec items) { return make_unique<WindowsTableView>(title, style, move(items)); }
+unique_ptr<TextViewInterface> SystemToolkit::CreateTextView(Window*, const string &title, File *file) { return make_unique<WindowsTextView>(); }
+unique_ptr<TextViewInterface> SystemToolkit::CreateTextView(Window*, const string &title, const string &text) { return make_unique<WindowsTextView>(); }
+unique_ptr<NavigationViewInterface> SystemToolkit::CreateNavigationView(Window*, const string &style, const string &theme) { return make_unique<WindowsNavigationView>(); }
 
 }; // namespace LFL

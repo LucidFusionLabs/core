@@ -16,6 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <Ole2.h>
 #include <mlang.h>
 IMLangFontLink2 *fontlink=0;
 
@@ -63,7 +64,7 @@ GDIFontEngine::Resource::~Resource() {
 }
 
 GDIFontEngine::~GDIFontEngine() { DeleteDC(hdc);}
-GDIFontEngine::GDIFontEngine() : hdc(CreateCompatibleDC(NULL)) {
+GDIFontEngine::GDIFontEngine(Fonts *p) : FontEngine(p), hdc(CreateCompatibleDC(NULL)) {
   CHECK(!fontlink)
     CoCreateInstance(CLSID_CMultiLanguage, NULL, CLSCTX_ALL, IID_IMLangFontLink2, (void**)&fontlink);
 }
@@ -143,7 +144,7 @@ unique_ptr<Font> GDIFontEngine::Open(const FontDesc &d) {
 
   bool new_cache = false, pre_load = false;
   ret->glyph->cache =
-    (!new_cache ? app->fonts->GetGlyphCache() :
+    (!new_cache ? parent->GetGlyphCache() :
      make_shared<GlyphCache>(parent->parent, 0, AtlasFontEngine::Dimension(ret->max_width, ret->Height(), count)));
   GlyphCache *cache = ret->glyph->cache.get();
 
@@ -151,7 +152,7 @@ unique_ptr<Font> GDIFontEngine::Open(const FontDesc &d) {
     pbm = SelectObject((cache->hdc = hdc), (hbitmap = cache->tex.CreateGDIBitMap(hdc)));
   }
   if (pre_load) LoadGlyphs(ret.get(), &ret->glyph->table[0], ret->glyph->table.size());
-  if (FLAGS_atlas_dump) AtlasFontEngine::WriteAtlas(d.Filename(), ret.get(), &cache->tex);
+  if (FLAGS_atlas_dump) AtlasFontEngine::WriteAtlas(parent->appinfo, d.Filename(), ret.get(), &cache->tex);
   if (new_cache) {
     GdiFlush();
     cache->tex.LoadGL();

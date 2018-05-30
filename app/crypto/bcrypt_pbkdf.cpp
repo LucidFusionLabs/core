@@ -17,6 +17,11 @@
  */
 
 #include "core/app/crypto.h"
+#ifdef LFL_WINDOWS
+typedef uint32_t u_int32_t;
+typedef uint16_t u_int16_t;
+typedef uint8_t u_int8_t;
+#endif
 
 extern "C" {
 #define DEF_WEAK(x)

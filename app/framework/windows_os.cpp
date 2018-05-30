@@ -20,13 +20,35 @@
 #include <commdlg.h>
 
 namespace LFL {
-void Application::OpenSystemBrowser(const string &url_text) {
+string Application::PrintCallStack() { return ""; }
+string Application::GetSetting(const string &key) { return string(); }
+void Application::SaveSettings(const StringPairVec&) {}
+void Application::LoadDefaultSettings(const StringPairVec &v) {}
+
+string ApplicationInfo::GetVersion() { return string(); }
+string ApplicationInfo::GetSystemDeviceName() {
+  string ret(128, 0);
+  DWORD len = ret.size();
+  if (!GetComputerName(&ret[0], &len)) return "";
+  ret.resize(len);
+  return ret;
+}
+
+string ApplicationInfo::GetSystemDeviceId() {
+  return "";
+}
+string Localization::GetLocalizedString(const char *key) { return string(); }
+String16 Localization::GetLocalizedString16(const char *key) { return String16(); }
+string Localization::GetLocalizedInteger(int number) { return string(); }
+String16 Localization::GetLocalizedInteger16(int number) { return String16(); }
+
+void SystemBrowser::OpenSystemBrowser(const string &url_text) {
   ShellExecute(NULL, "open", url_text.c_str(), NULL, NULL, SW_SHOWNORMAL);
 }
 
-Connection *Application::ConnectTCP(const string &hostport, int default_port, Callback *connected_cb, bool background_services) {
+Connection *Networking::ConnectTCP(const string &hostport, int default_port, Connection::CB *connected_cb, bool background_services) {
   INFO("Application::ConnectTCP ", hostport, " (default_port = ", default_port, ") background_services = false"); 
-  return app->net->tcp_client->Connect(hostport, default_port, connected_cb);
+  return net->tcp_client->Connect(hostport, default_port, connected_cb);
 }
 
 }; // namespace LFL

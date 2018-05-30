@@ -118,7 +118,8 @@ endif()
 if(LFL_WINDOWS)
   lfl_add_target(app_windows_os STATIC_LIBRARY SOURCES windows_os.cpp
                  LINK_LIBRARIES Ws2_32.lib Dnsapi.lib opengl32.lib glu32.lib strmiids.lib zlib)
-  lfl_add_target(app_windows_framework STATIC_LIBRARY SOURCES windows_framework.cpp)
+  lfl_add_target(app_windows_framework STATIC_LIBRARY SOURCES windows_framework.cpp
+                 INCLUDE_DIRECTORIES ${GLEW_INCLUDE} LINK_LIBRARIES ${GLEW_LIB})
   lfl_add_target(app_windows_toolkit STATIC_LIBRARY SOURCES windows_toolkit.cpp)
 endif()
 

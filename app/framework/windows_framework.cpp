@@ -18,6 +18,11 @@
 
 #include <windowsx.h>
 #include <objbase.h>
+#include <commdlg.h>
+#include "GL/glew.h"
+#include "GL/wglew.h"
+#include "core/app/shell.h"
+#include "core/app/framework/windows_common.h"
 
 namespace LFL {
 const int Key::Escape     = '\x1b';
@@ -58,194 +63,69 @@ const int Key::Insert     = 0xf00 | VK_INSERT;
 
 const int Texture::updatesystemimage_pf = Pixel::RGB24;
 
-struct WinApp {
-  HINSTANCE hInst = 0;
-  int nCmdShow = 0;
-  void Setup(HINSTANCE hI, int nCS) { hInst = hI; nCmdShow = nCS; }
-  void CreateClass();
-  int MessageLoop();
-  static LRESULT APIENTRY WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
+HINSTANCE WindowsFrameworkModule::hInst;
+int       WindowsFrameworkModule::nCmdShow;
+
+struct WindowsAlertView : public AlertViewInterface {
+  void Hide() {}
+  void Show(const string &arg) {}
+  void ShowCB(const string &title, const string &msg, const string &arg, StringCB confirm_cb) {}
+  string RunModal(const string &arg) { return string(); }
 };
 
-struct WinWindow : public Window {
-  HWND hwnd = 0;
-  HGLRC gl = 0;
-  HDC surface = 0;
-  bool menubar = 0, frame_on_keyboard_input = 0, frame_on_mouse_input = 0;
-  point prev_mouse_pos, resize_increment;
-  int start_msg_id = WM_USER + 100;
-  HMENU menu = 0, context_menu = 0;
-  vector<string> menu_cmds;
-  ~WinWindow() { ClearChildren(); }
-
-  bool RestrictResize(int m, RECT*);
-  void SetCaption(const string &v) { SetWindowText(hwnd, v.c_str()); }
-  void SetResizeIncrements(float x, float y) { resize_increment = point(x, y); }
-
-  void SetTransparency(float v) {
-    if (v <= 0) SetWindowLong(hwnd, GWL_EXSTYLE, GetWindowLong(hwnd, GWL_EXSTYLE) & (~WS_EX_LAYERED));
-    else {
-      SetWindowLong(hwnd, GWL_EXSTYLE, GetWindowLong(hwnd, GWL_EXSTYLE) | (WS_EX_LAYERED));
-      SetLayeredWindowAttributes(hwnd, 0, BYTE(max(1.0, (1 - v)*255.0)), LWA_ALPHA);
+struct WindowsMenuView : public MenuViewInterface {
+  WindowsMenuView(WindowsWindow *win, const string &title, MenuItemVec items) {
+    if (!win->menu) { win->menu = CreateMenu(); win->context_menu = CreatePopupMenu(); }
+    HMENU hAddMenu = CreatePopupMenu();
+    for (auto &i : items) {
+      if (i.name == "<separator>") AppendMenu(hAddMenu, MF_MENUBARBREAK, 0, NULL);
+      else AppendMenu(hAddMenu, MF_STRING, win->start_msg_id + win->menu_cmds.size(), i.name.c_str());
+      // win->menu_cmds.push_back(i.cmd);
     }
+    AppendMenu(win->menu, MF_STRING | MF_POPUP, (UINT)hAddMenu, title.c_str());
+    AppendMenu(win->context_menu, MF_STRING | MF_POPUP, (UINT)hAddMenu, title.c_str());
+    if (win->menubar) SetMenu(win->hwnd, win->menu);
   }
-
-  bool Reshape(int w, int h) {
-    long lStyle = GetWindowLong(hwnd, GWL_STYLE);
-    RECT r = { 0, 0, w, h };
-    AdjustWindowRect(&r, lStyle, win->menubar);
-    SetWindowPos(hwnd, 0, 0, 0, r.right - r.left, r.bottom - r.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
-    return true;
-  }
+  void Show() {}
 };
 
-struct WinFrameworkModule : public Module {
-  int Init() {
-    INFO("WinFrameworkModule::Init()");
-    CHECK(Video::CreateWindow(screen));
-    return 0;
-  }
-
-  static int GetKeyCode(unsigned char k) {
-    const unsigned short key_code[] = {
-      0xF00, /*null*/              0xF01, /*Left mouse*/     0xF02, /*Right mouse*/     0xF03, /*Control-break*/
-      0xF04, /*Middle mouse*/      0xF05, /*X1 mouse*/       0xF06, /*X2 mouse*/        0xF07, /*Undefined*/
-      '\b',  /*BACKSPACE key*/     '\t',  /*TAB key*/        0xF0A, /*Reserved*/        0xF0B, /*Reserved*/
-      0xF0C, /*CLEAR key*/         '\r',  /*ENTER key*/      0xF0E, /*Undefined*/       0xF0F, /*Undefined*/
-      0xF10, /*SHIFT key*/         0xF11, /*CTRL key*/       0xF12, /*ALT key*/         0xF13, /*PAUSE key*/
-      0xF14, /*CAPS LOCK key*/     0xF15, /*IME Kana mode*/  0xF16, /*Undefined*/       0xF17, /*IME Junja mode*/
-      0xF18, /*IME final mode*/    0xF19, /*IME Hanja mode*/ 0xF1A, /*Undefined*/       '\x1b',/*ESC key*/
-      0xF1C, /*IME convert*/       0xF1D, /*IME nonconvert*/ 0xF1E, /*IME accept*/      0xF1F, /*IME mode change*/
-      ' ',   /*SPACEBAR*/          0xF21, /*PAGE UP key*/    0xF22, /*PAGE DOWN key*/   0xF23, /*END key*/
-      0xF24, /*HOME key*/          0xF25, /*LEFT ARROW key*/ 0xF26, /*UP ARROW key*/    0xF27, /*RIGHT ARROW key*/
-      0xF28, /*DOWN ARROW key*/    0xF29, /*SELECT key*/     0xF2A, /*PRINT key*/       0xF2B, /*EXECUTE key*/
-      0xF2C, /*PRINT SCREEN key*/  0xF2D, /*INS key*/        0xF2E, /*DEL key*/         0xF2F, /*HELP key*/
-      '0',   /*0 key*/             '1',   /*1 key*/          '2',   /*2 key*/           '3',   /*3 key*/
-      '4',   /*4 key*/             '5',   /*5 key*/          '6',   /*6 key*/           '7',   /*7 key*/
-      '8',   /*8 key*/             '9',   /*9 key*/          0xF3A, /*undefined*/       0xF3B, /*undefined*/
-      0xF3C, /*undefined*/         0xF3D, /*undefined*/      0xF3E, /*undefined*/       0xF3F, /*undefined*/
-      0xF40, /*undefined*/         'a',   /*A key*/          'b',   /*B key*/           'c',   /*C key*/
-      'd',   /*D key*/             'e',   /*E key*/          'f',   /*F key*/           'g',   /*G key*/
-      'h',   /*H key*/             'i',   /*I key*/          'j',   /*J key*/           'k',   /*K key*/
-      'l',   /*L key*/             'm',   /*M key*/          'n',   /*N key*/           'o',   /*O key*/
-      'p',   /*P key*/             'q',   /*Q key*/          'r',   /*R key*/           's',   /*S key*/
-      't',   /*T key*/             'u',   /*U key*/          'v',   /*V key*/           'w',   /*W key*/
-      'x',   /*X key*/             'y',   /*Y key*/          'z',   /*Z key*/           0xF5B, /*Left Windows key*/
-      0xF5C, /*Right Windows key*/ 0xF5D, /*Apps-key*/       0xF5E, /*Reserved*/        0xF5F, /*Computer Sleep*/
-      0xF60, /*keypad 0 key*/      0xF61, /*keypad 1 key*/   0xF62, /*keypad 2 key*/    0xF63, /*keypad 3 key*/
-      0xF64, /*keypad 4 key*/      0xF65, /*keypad 5 key*/   0xF66, /*keypad 6 key*/    0xF67, /*keypad 7 key*/
-      0xF68, /*keypad 8 key*/      0xF69, /*keypad 9 key*/   0xF6A, /*Multiply key*/    0xF6B, /*Add key*/
-      0xF6C, /*Separator key*/     0xF6D, /*Subtract key*/   0xF6E, /*Decimal key*/     0xF6F, /*Divide key*/
-      0xF70, /*F1 key*/            0xF71, /*F2 key*/         0xF72, /*F3 key*/          0xF73, /*F4 key*/
-      0xF74, /*F5 key*/            0xF75, /*F6 key*/         0xF76, /*F7 key*/          0xF77, /*F8 key*/
-      0xF78, /*F9 key*/            0xF79, /*F10 key*/        0xF7A, /*F11 key*/         0xF7B, /*F12 key*/
-      0xF7C, /*F13 key*/           0xF7D, /*F14 key*/        0xF7E, /*F15 key*/         0xF7F, /*F16 key*/
-      0xF80, /*F17 key*/           0xF81, /*F18 key*/        0xF82, /*F19 key*/         0xF83, /*F20 key*/
-      0xF84, /*F21 key*/           0xF85, /*F22 key*/        0xF86, /*F23 key*/         0xF87, /*F24 key*/
-      0xF88, /*Unassigned*/        0xF89, /*Unassigned*/     0xF8A, /*Unassigned*/      0xF8B, /*Unassigned*/
-      0xF8C, /*Unassigned*/        0xF8D, /*Unassigned*/     0xF8E, /*Unassigned*/      0xF8F, /*Unassigned*/
-      0xF90, /*NUM LOCK key*/      0xF91, /*SCROLL LOCK*/    0xF92, /*OEM specific*/    0xF93, /*OEM specific*/
-      0xF94, /*OEM specific*/      0xF95, /*OEM specific*/   0xF96, /*OEM specific*/    0xF97, /*Unassigned*/
-      0xF98, /*Unassigned*/        0xF99, /*Unassigned*/     0xF9A, /*Unassigned*/      0xF9B, /*Unassigned*/
-      0xF9C, /*Unassigned*/        0xF9D, /*Unassigned*/     0xF9E, /*Unassigned*/      0xF9F, /*Unassigned*/
-      0xFA0, /*Left SHIFT key*/    0xFA1, /*Right SHIFT*/    0xFA2, /*Left CONTROL*/    0xFA3, /*Right CONTROL*/
-      0xFA4, /*Left MENU key*/     0xFA5, /*Right MENU*/     0xFA6, /*Browser Back*/    0xFA7, /*Browser Forward*/
-      0xFA8, /*Browser Refresh*/   0xFA9, /*Browser Stop*/   0xFAA, /*Browser Search*/  0xFAB, /*Browser Favorites*/
-      0xFAC, /*Browser Home*/      0xFAD, /*Volume Mute*/    0xFAE, /*Volume Down*/     0xFAF, /*Volume Up*/
-      0xFB0, /*Next Track key*/    0xFB1, /*Previous Track*/ 0xFB2, /*Stop Media*/      0xFB3, /*Play/Pause Media*/
-      0xFB4, /*Start Mail key*/    0xFB5, /*Select Media*/   0xFB6, /*Start App-1 key*/ 0xFB7, /*Start Application 2*/
-      0xFB8, /*Reserved*/          0xFB9, /*Reserved*/       ';',   /*the ';:' key*/    '=',  /*the '+' key*/
-      ',',   /*the ',' key*/       '-',   /*the '-' key*/    '.',   /*the '.' key*/     '/',  /*the '/?' key*/
-      '\`',  /*the '`~' key*/      0xFC1, /*Reserved*/       0xFC2, /*Reserved*/        0xFC3, /*Reserved*/
-      0xFC4, /*Reserved*/          0xFC5, /*Reserved*/       0xFC6, /*Reserved*/        0xFC7, /*Reserved*/
-      0xFC8, /*Reserved*/          0xFC9, /*Reserved*/       0xFCA, /*Reserved*/        0xFCB, /*Reserved*/
-      0xFCC, /*Reserved*/          0xFCD, /*Reserved*/       0xFCE, /*Reserved*/        0xFCF, /*Reserved*/
-      0xFD0, /*Reserved*/          0xFD1, /*Reserved*/       0xFD2, /*Reserved*/        0xFD3, /*Reserved*/
-      0xFD4, /*Reserved*/          0xFD5, /*Reserved*/       0xFD6, /*Reserved*/        0xFD7, /*Reserved*/
-      0xFD8, /*Unassigned*/        0xFD9, /*Unassigned*/     0xFDA, /*Unassigned*/      '[',  /*the '[{' key*/
-      '\\',  /*the '\|' key*/      ']',  /*the ']}' key*/    '\'',  /*'quote' key*/     0xFDF, /*misc*/
-      0xFE0, /*Reserved*/          0xFE1, /*OEM specific*/   0xFE2, /*RT 102 bracket*/  0xFE3, /*OEM specific*/
-      0xFE4, /*OEM specific*/      0xFE5, /*IME PROCESS*/    0xFE6, /*OEM specific*/    0xFE7, /*Used for Unicode*/
-      0xFE8, /*Unassigned*/        0xFE9, /*OEM specific*/   0xFEA, /*OEM specific*/    0xFEB, /*OEM specific*/
-      0xFEC, /*OEM specific*/      0xFED, /*OEM specific*/   0xFEE, /*OEM specific*/    0xFEF, /*OEM specific*/
-      0xFF0, /*OEM specific*/      0xFF1, /*OEM specific*/   0xFF2, /*OEM specific*/    0xFF3, /*OEM specific*/
-      0xFF4, /*OEM specific*/      0xFF5, /*OEM specific*/   0xFF6, /*Attn key*/        0xFF7, /*CrSel key*/
-      0xFF8, /*ExSel key*/         0xFF9, /*Erase EOF key*/  0xFFA, /*Play key*/        0xFFB, /*Zoom key*/
-      0xFFC, /*Reserved*/          0xFFD, /*PA1 key*/        0xFFE, /*Clear key*/       0xFFF, /*Unused*/
-    };
-    return key_code[k];
-  }
-
-  static void UpdateMousePosition(const LPARAM &lParam, point *p, point *d) {
-    WinWindow *win = dynamic_cast<WinWindow*>(screen);
-    *p = point(GET_X_LPARAM(lParam), screen->height - GET_Y_LPARAM(lParam));
-    *d = *p - win->prev_mouse_pos;
-    win->prev_mouse_pos = *p;
-  }
+struct WindowsPanelView : public PanelViewInterface {
+  void Show() {}
+  void SetTitle(const string &title) {}
 };
 
-void WinApp::CreateClass() {
-  WNDCLASS wndClass;
-  wndClass.style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW;
-  wndClass.lpfnWndProc = &WinApp::WndProc;
-  wndClass.cbClsExtra = 0;
-  wndClass.cbWndExtra = 0;
-  wndClass.hInstance = hInst;
-  wndClass.hIcon = LoadIcon(hInst, "IDI_APP_ICON");
-  wndClass.hCursor = LoadCursor(NULL, IDC_ARROW);
-  if (auto c = app->splash_color) wndClass.hbrBackground = CreateSolidBrush(RGB(c->R(), c->G(), c->B()));
-  else                            wndClass.hbrBackground = (HBRUSH)GetStockObject(NULL_BRUSH);
-  wndClass.lpszMenuName = NULL;
-  wndClass.lpszClassName = app->name.c_str();
-  if (!RegisterClass(&wndClass)) ERROR("RegisterClass: ", GetLastError());
-}
+struct WindowsNag : public NagInterface {
+};
 
-int WinApp::MessageLoop() {
-  INFOf("WinApp::MessageLoop %p", screen);
-  CoInitialize(NULL);
-  MSG msg;
-  while (app->run) {
-    if (app->run && FLAGS_target_fps) app->TimerDrivenFrame(true);
-    while (app->run && PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) { TranslateMessage(&msg); DispatchMessage(&msg); }
-    if (app->run && !FLAGS_target_fps) if (GetMessage(&msg, NULL, 0, 0)) { TranslateMessage(&msg); DispatchMessage(&msg); }
+void WindowsWindow::SetCaption(const string &v) { SetWindowText(hwnd, v.c_str()); }
+void WindowsWindow::SetResizeIncrements(float x, float y) { resize_increment = point(x, y); }
+
+void WindowsWindow::SetTransparency(float v) {
+  if (v <= 0) SetWindowLong(hwnd, GWL_EXSTYLE, GetWindowLong(hwnd, GWL_EXSTYLE) & (~WS_EX_LAYERED));
+  else {
+    SetWindowLong(hwnd, GWL_EXSTYLE, GetWindowLong(hwnd, GWL_EXSTYLE) | (WS_EX_LAYERED));
+    SetLayeredWindowAttributes(hwnd, 0, BYTE(max(1.0, (1 - v)*255.0)), LWA_ALPHA);
   }
-  LFAppAtExit();
-  CoUninitialize();
-  return msg.wParam;
 }
 
-LRESULT APIENTRY WinApp::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
-  WinWindow *win = dynamic_cast<WinWindow*>(screen);
-  PAINTSTRUCT ps;
-  POINT cursor;
-  point p, d;
-  int ind, w, h;
-  switch (message) {
-  case WM_CREATE:                      return 0;
-  case WM_DESTROY:                     LFAppShutdown(); PostQuitMessage(0); return 0;
-  case WM_SIZE:                        if ((w = LOWORD(lParam)) != screen->width && (h = HIWORD(lParam)) != screen->height) { WindowReshaped(0, 0, w, h); app->scheduler.Wakeup(screen); } return 0;
-  case WM_KEYUP:   case WM_SYSKEYUP:   if (KeyPress(WinFrameworkModule::GetKeyCode(wParam), 0, 0) && win->frame_on_keyboard_input) app->scheduler.Wakeup(screen); return 0;
-  case WM_KEYDOWN: case WM_SYSKEYDOWN: if (KeyPress(WinFrameworkModule::GetKeyCode(wParam), 0, 1) && win->frame_on_keyboard_input) app->scheduler.Wakeup(screen); return 0;
-  case WM_LBUTTONDOWN:                 if (MouseClick(1, 1, win->prev_mouse_pos.x, win->prev_mouse_pos.y) && win->frame_on_mouse_input) app->scheduler.Wakeup(screen); return 0;
-  case WM_LBUTTONUP:                   if (MouseClick(1, 0, win->prev_mouse_pos.x, win->prev_mouse_pos.y) && win->frame_on_mouse_input) app->scheduler.Wakeup(screen); return 0;
-  case WM_RBUTTONDOWN:                 if (MouseClick(2, 1, win->prev_mouse_pos.x, win->prev_mouse_pos.y) && win->frame_on_mouse_input) app->scheduler.Wakeup(screen); return 0;
-  case WM_RBUTTONUP:                   if (MouseClick(2, 0, win->prev_mouse_pos.x, win->prev_mouse_pos.y) && win->frame_on_mouse_input) app->scheduler.Wakeup(screen); return 0;
-  case WM_MOUSEMOVE:                   WinFrameworkModule::UpdateMousePosition(lParam, &p, &d); if (MouseMove(p.x, p.y, d.x, d.y) && win->frame_on_mouse_input) app->scheduler.Wakeup(screen); return 0;
-  case WM_COMMAND:                     if ((ind = wParam - win->start_msg_id) >= 0) if (ind < win->menu_cmds.size()) ShellRun(win->menu_cmds[ind].c_str()); return 0;
-  case WM_CONTEXTMENU:                 if (win->menu) { GetCursorPos(&cursor); TrackPopupMenu(win->context_menu, TPM_LEFTALIGN | TPM_TOPALIGN, cursor.x, cursor.y, 0, hWnd, NULL); } return 0;
-  case WM_PAINT:                       BeginPaint(dynamic_cast<WinWindow*>(screen)->hwnd, &ps); if (!FLAGS_target_fps) LFAppFrame(true); EndPaint(dynamic_cast<WinWindow*>(screen)->hwnd, &ps); return 0;
-  case WM_SIZING:                      return win->resize_increment.Zero() ? 0 : win->RestrictResize(wParam, reinterpret_cast<LPRECT>(lParam));
-  case WM_USER:                        if (!FLAGS_target_fps) LFAppFrame(true); return 0;
-  case WM_KILLFOCUS:                   app->input->ClearButtonsDown(); return 0;
-  default:                             break;
-  }
-  return DefWindowProc(hWnd, message, wParam, lParam);
+bool WindowsWindow::Reshape(int w, int h) {
+  long lStyle = GetWindowLong(hwnd, GWL_STYLE);
+  RECT r = { 0, 0, w, h };
+  AdjustWindowRect(&r, lStyle, menubar);
+  SetWindowPos(hwnd, 0, 0, 0, r.right - r.left, r.bottom - r.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+  return true;
 }
 
-bool WinWindow::RestrictResize(int m, RECT *r) {
+void WindowsWindow::UpdateMousePosition(const LPARAM &lParam, point *p, point *d) {
+  *p = point(GET_X_LPARAM(lParam), gl_h - GET_Y_LPARAM(lParam));
+  *d = *p - prev_mouse_pos;
+  prev_mouse_pos = *p;
+}
+
+bool WindowsWindow::RestrictResize(int m, RECT *r) {
   point in(r->right - r->left, r->bottom - r->top);
   RECT w = { 0, 0, in.x, in.y };
-  AdjustWindowRect(&w, GetWindowLong(dynamic_cast<WinWindow*>(screen)->hwnd, GWL_STYLE), menubar);
+  AdjustWindowRect(&w, GetWindowLong(hwnd, GWL_STYLE), menubar);
   point extra((w.right - w.left) - in.x, (w.bottom - w.top) - in.y), content = in - extra;
   switch (m) {
     case WMSZ_TOP:         r->top    -= (NextMultipleOfN(content.y, resize_increment.y) - content.y); break;
@@ -264,26 +144,210 @@ bool WinWindow::RestrictResize(int m, RECT *r) {
   return true;
 }
 
-void Application::RunCallbackInMainThread(Callback cb) {
-  message_queue.Write(new Callback(move(cb)));
-  if (!FLAGS_target_fps) scheduler.Wakeup(focused);
+int WindowsFrameworkModule::Init() {
+  INFO("WindowsFrameworkModule::Init()");
+  CreateClass(window->focused->parent);
+  CHECK(Video::CreateWindow(window, window->focused));
+  return 0;
 }
 
-void Application::MakeCurrentWindow(Window *W) { if (auto w = dynamic_cast<WinWindow*>(W)) wglMakeCurrent(w->surface, w->gl); }
+void WindowsFrameworkModule::CreateClass(ApplicationInfo *appinfo) {
+  WNDCLASS wndClass;
+  wndClass.style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW;
+  wndClass.lpfnWndProc = &WindowsFrameworkModule::WndProcDispatch;
+  wndClass.cbWndExtra = sizeof(WindowsFrameworkModule*);
+  wndClass.cbClsExtra = 0;
+  wndClass.hInstance = hInst;
+  wndClass.hIcon = LoadIcon(hInst, "IDI_APP_ICON");
+  wndClass.hCursor = LoadCursor(NULL, IDC_ARROW);
+  if (Color *c = 0 /* app->splash_color*/) wndClass.hbrBackground = CreateSolidBrush(RGB(c->R(), c->G(), c->B()));
+  else                            wndClass.hbrBackground = (HBRUSH)GetStockObject(NULL_BRUSH);
+  wndClass.lpszMenuName = NULL;
+  wndClass.lpszClassName = appinfo->name.c_str();
+  if (!RegisterClass(&wndClass)) ERROR("RegisterClass: ", GetLastError());
+}
+
+int WindowsFrameworkModule::MessageLoop() {
+  INFOf("WinApp::MessageLoop %p", window->focused);
+  CoInitialize(NULL);
+  MSG msg;
+  auto app = window->focused->parent;
+  while (app->run) {
+    if (app->run && FLAGS_target_fps) app->TimerDrivenFrame(true);
+    while (app->run && PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) { TranslateMessage(&msg); DispatchMessage(&msg); }
+    if (app->run && !FLAGS_target_fps) if (GetMessage(&msg, NULL, 0, 0)) { TranslateMessage(&msg); DispatchMessage(&msg); }
+  }
+  LFAppAtExit();
+  CoUninitialize();
+  return msg.wParam;
+}
+
+LRESULT APIENTRY WindowsFrameworkModule::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
+  WindowsWindow *win = dynamic_cast<WindowsWindow*>(window->focused);
+  auto app = win->parent;
+  PAINTSTRUCT ps;
+  POINT cursor;
+  point p, d;
+  int ind, w, h;
+  switch (message) {
+  case WM_CREATE:                      return 0;
+  case WM_DESTROY:                     app->Shutdown(); PostQuitMessage(0); return 0;
+  case WM_SIZE:                        if ((w = LOWORD(lParam)) != win->gl_w && (h = HIWORD(lParam)) != win->gl_h) { win->Reshaped(point(w, h), Box(0, 0, w, h)); win->Wakeup(); } return 0;
+  case WM_KEYUP:   case WM_SYSKEYUP:   if (app->input->KeyPress(WindowsFrameworkModule::GetKeyCode(wParam), 0, 0) && win->frame_on_keyboard_input) win->Wakeup(); return 0;
+  case WM_KEYDOWN: case WM_SYSKEYDOWN: if (app->input->KeyPress(WindowsFrameworkModule::GetKeyCode(wParam), 0, 1) && win->frame_on_keyboard_input) win->Wakeup(); return 0;
+  case WM_LBUTTONDOWN:                 if (app->input->MouseClick(1, 1, point(win->prev_mouse_pos.x, win->prev_mouse_pos.y)) && win->frame_on_mouse_input) win->Wakeup(); return 0;
+  case WM_LBUTTONUP:                   if (app->input->MouseClick(1, 0, point(win->prev_mouse_pos.x, win->prev_mouse_pos.y)) && win->frame_on_mouse_input) win->Wakeup(); return 0;
+  case WM_RBUTTONDOWN:                 if (app->input->MouseClick(2, 1, point(win->prev_mouse_pos.x, win->prev_mouse_pos.y)) && win->frame_on_mouse_input) win->Wakeup(); return 0;
+  case WM_RBUTTONUP:                   if (app->input->MouseClick(2, 0, point(win->prev_mouse_pos.x, win->prev_mouse_pos.y)) && win->frame_on_mouse_input) win->Wakeup(); return 0;
+  case WM_MOUSEMOVE:                   win->UpdateMousePosition(lParam, &p, &d); if (app->input->MouseMove(point(p.x, p.y), point(d.x, d.y)) && win->frame_on_mouse_input) win->Wakeup(); return 0;
+  case WM_COMMAND:                     if ((ind = wParam - win->start_msg_id) >= 0) if (ind < win->menu_cmds.size()) win->shell->Run(win->menu_cmds[ind].c_str()); return 0;
+  case WM_CONTEXTMENU:                 if (win->menu) { GetCursorPos(&cursor); TrackPopupMenu(win->context_menu, TPM_LEFTALIGN | TPM_TOPALIGN, cursor.x, cursor.y, 0, hWnd, NULL); } return 0;
+  case WM_PAINT:                       BeginPaint(win->hwnd, &ps); if (!FLAGS_target_fps) app->EventDrivenFrame(true, true); EndPaint(win->hwnd, &ps); return 0;
+  case WM_SIZING:                      return win->resize_increment.Zero() ? 0 : win->RestrictResize(wParam, reinterpret_cast<LPRECT>(lParam));
+  case WM_USER:                        if (!FLAGS_target_fps) app->EventDrivenFrame(true, true); return 0;
+  case WM_KILLFOCUS:                   app->input->ClearButtonsDown(); return 0;
+  default:                             break;
+  }
+  return DefWindowProc(hWnd, message, wParam, lParam);
+}
+
+LRESULT APIENTRY WindowsFrameworkModule::WndProcDispatch(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
+  return static_cast<WindowsFrameworkModule*>(Void(GetWindowLongPtr(hWnd, 0)))->WndProc(hWnd, message, wParam, lParam);
+}
+
+int WindowsFrameworkModule::GetKeyCode(unsigned char k) {
+  const unsigned short key_code[] = {
+    0xF00, /*null*/              0xF01, /*Left mouse*/     0xF02, /*Right mouse*/     0xF03, /*Control-break*/
+    0xF04, /*Middle mouse*/      0xF05, /*X1 mouse*/       0xF06, /*X2 mouse*/        0xF07, /*Undefined*/
+    '\b',  /*BACKSPACE key*/     '\t',  /*TAB key*/        0xF0A, /*Reserved*/        0xF0B, /*Reserved*/
+    0xF0C, /*CLEAR key*/         '\r',  /*ENTER key*/      0xF0E, /*Undefined*/       0xF0F, /*Undefined*/
+    0xF10, /*SHIFT key*/         0xF11, /*CTRL key*/       0xF12, /*ALT key*/         0xF13, /*PAUSE key*/
+    0xF14, /*CAPS LOCK key*/     0xF15, /*IME Kana mode*/  0xF16, /*Undefined*/       0xF17, /*IME Junja mode*/
+    0xF18, /*IME final mode*/    0xF19, /*IME Hanja mode*/ 0xF1A, /*Undefined*/       '\x1b',/*ESC key*/
+    0xF1C, /*IME convert*/       0xF1D, /*IME nonconvert*/ 0xF1E, /*IME accept*/      0xF1F, /*IME mode change*/
+    ' ',   /*SPACEBAR*/          0xF21, /*PAGE UP key*/    0xF22, /*PAGE DOWN key*/   0xF23, /*END key*/
+    0xF24, /*HOME key*/          0xF25, /*LEFT ARROW key*/ 0xF26, /*UP ARROW key*/    0xF27, /*RIGHT ARROW key*/
+    0xF28, /*DOWN ARROW key*/    0xF29, /*SELECT key*/     0xF2A, /*PRINT key*/       0xF2B, /*EXECUTE key*/
+    0xF2C, /*PRINT SCREEN key*/  0xF2D, /*INS key*/        0xF2E, /*DEL key*/         0xF2F, /*HELP key*/
+    '0',   /*0 key*/             '1',   /*1 key*/          '2',   /*2 key*/           '3',   /*3 key*/
+    '4',   /*4 key*/             '5',   /*5 key*/          '6',   /*6 key*/           '7',   /*7 key*/
+    '8',   /*8 key*/             '9',   /*9 key*/          0xF3A, /*undefined*/       0xF3B, /*undefined*/
+    0xF3C, /*undefined*/         0xF3D, /*undefined*/      0xF3E, /*undefined*/       0xF3F, /*undefined*/
+    0xF40, /*undefined*/         'a',   /*A key*/          'b',   /*B key*/           'c',   /*C key*/
+    'd',   /*D key*/             'e',   /*E key*/          'f',   /*F key*/           'g',   /*G key*/
+    'h',   /*H key*/             'i',   /*I key*/          'j',   /*J key*/           'k',   /*K key*/
+    'l',   /*L key*/             'm',   /*M key*/          'n',   /*N key*/           'o',   /*O key*/
+    'p',   /*P key*/             'q',   /*Q key*/          'r',   /*R key*/           's',   /*S key*/
+    't',   /*T key*/             'u',   /*U key*/          'v',   /*V key*/           'w',   /*W key*/
+    'x',   /*X key*/             'y',   /*Y key*/          'z',   /*Z key*/           0xF5B, /*Left Windows key*/
+    0xF5C, /*Right Windows key*/ 0xF5D, /*Apps-key*/       0xF5E, /*Reserved*/        0xF5F, /*Computer Sleep*/
+    0xF60, /*keypad 0 key*/      0xF61, /*keypad 1 key*/   0xF62, /*keypad 2 key*/    0xF63, /*keypad 3 key*/
+    0xF64, /*keypad 4 key*/      0xF65, /*keypad 5 key*/   0xF66, /*keypad 6 key*/    0xF67, /*keypad 7 key*/
+    0xF68, /*keypad 8 key*/      0xF69, /*keypad 9 key*/   0xF6A, /*Multiply key*/    0xF6B, /*Add key*/
+    0xF6C, /*Separator key*/     0xF6D, /*Subtract key*/   0xF6E, /*Decimal key*/     0xF6F, /*Divide key*/
+    0xF70, /*F1 key*/            0xF71, /*F2 key*/         0xF72, /*F3 key*/          0xF73, /*F4 key*/
+    0xF74, /*F5 key*/            0xF75, /*F6 key*/         0xF76, /*F7 key*/          0xF77, /*F8 key*/
+    0xF78, /*F9 key*/            0xF79, /*F10 key*/        0xF7A, /*F11 key*/         0xF7B, /*F12 key*/
+    0xF7C, /*F13 key*/           0xF7D, /*F14 key*/        0xF7E, /*F15 key*/         0xF7F, /*F16 key*/
+    0xF80, /*F17 key*/           0xF81, /*F18 key*/        0xF82, /*F19 key*/         0xF83, /*F20 key*/
+    0xF84, /*F21 key*/           0xF85, /*F22 key*/        0xF86, /*F23 key*/         0xF87, /*F24 key*/
+    0xF88, /*Unassigned*/        0xF89, /*Unassigned*/     0xF8A, /*Unassigned*/      0xF8B, /*Unassigned*/
+    0xF8C, /*Unassigned*/        0xF8D, /*Unassigned*/     0xF8E, /*Unassigned*/      0xF8F, /*Unassigned*/
+    0xF90, /*NUM LOCK key*/      0xF91, /*SCROLL LOCK*/    0xF92, /*OEM specific*/    0xF93, /*OEM specific*/
+    0xF94, /*OEM specific*/      0xF95, /*OEM specific*/   0xF96, /*OEM specific*/    0xF97, /*Unassigned*/
+    0xF98, /*Unassigned*/        0xF99, /*Unassigned*/     0xF9A, /*Unassigned*/      0xF9B, /*Unassigned*/
+    0xF9C, /*Unassigned*/        0xF9D, /*Unassigned*/     0xF9E, /*Unassigned*/      0xF9F, /*Unassigned*/
+    0xFA0, /*Left SHIFT key*/    0xFA1, /*Right SHIFT*/    0xFA2, /*Left CONTROL*/    0xFA3, /*Right CONTROL*/
+    0xFA4, /*Left MENU key*/     0xFA5, /*Right MENU*/     0xFA6, /*Browser Back*/    0xFA7, /*Browser Forward*/
+    0xFA8, /*Browser Refresh*/   0xFA9, /*Browser Stop*/   0xFAA, /*Browser Search*/  0xFAB, /*Browser Favorites*/
+    0xFAC, /*Browser Home*/      0xFAD, /*Volume Mute*/    0xFAE, /*Volume Down*/     0xFAF, /*Volume Up*/
+    0xFB0, /*Next Track key*/    0xFB1, /*Previous Track*/ 0xFB2, /*Stop Media*/      0xFB3, /*Play/Pause Media*/
+    0xFB4, /*Start Mail key*/    0xFB5, /*Select Media*/   0xFB6, /*Start App-1 key*/ 0xFB7, /*Start Application 2*/
+    0xFB8, /*Reserved*/          0xFB9, /*Reserved*/       ';',   /*the ';:' key*/    '=',  /*the '+' key*/
+    ',',   /*the ',' key*/       '-',   /*the '-' key*/    '.',   /*the '.' key*/     '/',  /*the '/?' key*/
+    '\`',  /*the '`~' key*/      0xFC1, /*Reserved*/       0xFC2, /*Reserved*/        0xFC3, /*Reserved*/
+    0xFC4, /*Reserved*/          0xFC5, /*Reserved*/       0xFC6, /*Reserved*/        0xFC7, /*Reserved*/
+    0xFC8, /*Reserved*/          0xFC9, /*Reserved*/       0xFCA, /*Reserved*/        0xFCB, /*Reserved*/
+    0xFCC, /*Reserved*/          0xFCD, /*Reserved*/       0xFCE, /*Reserved*/        0xFCF, /*Reserved*/
+    0xFD0, /*Reserved*/          0xFD1, /*Reserved*/       0xFD2, /*Reserved*/        0xFD3, /*Reserved*/
+    0xFD4, /*Reserved*/          0xFD5, /*Reserved*/       0xFD6, /*Reserved*/        0xFD7, /*Reserved*/
+    0xFD8, /*Unassigned*/        0xFD9, /*Unassigned*/     0xFDA, /*Unassigned*/      '[',  /*the '[{' key*/
+    '\\',  /*the '\|' key*/      ']',  /*the ']}' key*/    '\'',  /*'quote' key*/     0xFDF, /*misc*/
+    0xFE0, /*Reserved*/          0xFE1, /*OEM specific*/   0xFE2, /*RT 102 bracket*/  0xFE3, /*OEM specific*/
+    0xFE4, /*OEM specific*/      0xFE5, /*IME PROCESS*/    0xFE6, /*OEM specific*/    0xFE7, /*Used for Unicode*/
+    0xFE8, /*Unassigned*/        0xFE9, /*OEM specific*/   0xFEA, /*OEM specific*/    0xFEB, /*OEM specific*/
+    0xFEC, /*OEM specific*/      0xFED, /*OEM specific*/   0xFEE, /*OEM specific*/    0xFEF, /*OEM specific*/
+    0xFF0, /*OEM specific*/      0xFF1, /*OEM specific*/   0xFF2, /*OEM specific*/    0xFF3, /*OEM specific*/
+    0xFF4, /*OEM specific*/      0xFF5, /*OEM specific*/   0xFF6, /*Attn key*/        0xFF7, /*CrSel key*/
+    0xFF8, /*ExSel key*/         0xFF9, /*Erase EOF key*/  0xFFA, /*Play key*/        0xFFB, /*Zoom key*/
+    0xFFC, /*Reserved*/          0xFFD, /*PA1 key*/        0xFFE, /*Clear key*/       0xFFF, /*Unused*/
+  };
+  return key_code[k];
+}
+
+void Window::Wakeup(int) {
+  auto w = dynamic_cast<WindowsWindow*>(this);
+  InvalidateRect(w->hwnd, NULL, 0);
+  // PostMessage(w->hwnd, WM_USER, 0, 0);
+}
+
+void WindowHolder::MakeCurrentWindow(Window *W) { if (auto w = dynamic_cast<WindowsWindow*>(W)) wglMakeCurrent(w->surface, w->gl); }
+
 void Application::CloseWindow(Window *W) {
   windows.erase(W->id);
-  if (windows.empty()) app->run = false;
-  if (app->window_closed_cb) app->window_closed_cb(W);
-  screen = 0;
+  if (windows.empty()) run = false;
+  if (window_closed_cb) window_closed_cb(W);
+  focused = nullptr;
 }
 
-void Application::ReleaseMouseFocus() {}
-void Application::GrabMouseFocus() {}
-void Application::OpenTouchKeyboard(bool) {}
-void Application::SetTouchKeyboardTiled(bool v) {}
-void Application::SetAutoRotateOrientation(bool v) {}
+void Application::ShowSystemFontChooser(const FontDesc &cur_font, const StringVecCB &choose_cmd) {
+  LOGFONT lf;
+  memzero(lf);
+  HDC hdc = GetDC(NULL);
+  lf.lfHeight = -MulDiv(cur_font.size, GetDeviceCaps(hdc, LOGPIXELSY), 72);
+  lf.lfWeight = (cur_font.flag & FontDesc::Bold) ? FW_BOLD : FW_NORMAL;
+  lf.lfItalic = cur_font.flag & FontDesc::Italic;
+  strncpy(lf.lfFaceName, cur_font.name.c_str(), sizeof(lf.lfFaceName) - 1);
+  ReleaseDC(NULL, hdc);
+  CHOOSEFONT cf;
+  memzero(cf);
+  cf.lpLogFont = &lf;
+  cf.lStructSize = sizeof(cf);
+  cf.hwndOwner = dynamic_cast<WindowsWindow*>(focused)->hwnd;
+  cf.Flags = CF_SCREENFONTS | CF_INITTOLOGFONTSTRUCT;
+  if (!ChooseFont(&cf)) return;
+  int flag = FontDesc::Mono | (lf.lfWeight > FW_NORMAL ? FontDesc::Bold : 0) | (lf.lfItalic ? FontDesc::Italic : 0);
+  focused->shell->Run(StrCat(choose_cmd, " ", lf.lfFaceName, " ", cf.iPointSize / 10, " ", flag));
+}
 
-void Application::SetClipboardText(const string &in) {
+int Application::Suspended() { return 0; }
+int Application::SetExtraScale(bool v) { return false; }
+void Application::SetDownScale(bool v) {}
+void Application::SetTitleBar(bool v) {}
+void Application::SetKeepScreenOn(bool v) {}
+void Application::SetAutoRotateOrientation(bool v) {}
+void Application::SetVerticalSwipeRecognizer(int touches) {}
+void Application::SetHorizontalSwipeRecognizer(int touches) {}
+void Application::SetPanRecognizer(bool enabled) {}
+void Application::SetPinchRecognizer(bool enabled) {}
+void Application::ShowSystemStatusBar(bool v) {}
+void Application::SetTheme(const string &v) {}
+
+void ThreadDispatcher::RunCallbackInMainThread(Callback cb) {
+  message_queue.Write(make_unique<Callback>(move(cb)).release());
+  if (!FLAGS_target_fps) wakeup->Wakeup();
+}
+
+void MouseFocus::ReleaseMouseFocus() {}
+void MouseFocus::GrabMouseFocus() {}
+
+void TouchKeyboard::ToggleTouchKeyboard() {}
+void TouchKeyboard::OpenTouchKeyboard() {}
+void TouchKeyboard::CloseTouchKeyboard() {}
+void TouchKeyboard::CloseTouchKeyboardAfterReturn(bool v) {}
+void TouchKeyboard::SetTouchKeyboardTiled(bool v) {}
+
+void Clipboard::SetClipboardText(const string &in) {
   String16 s = String::ToUTF16(in);
   if (!OpenClipboard(NULL)) return;
   EmptyClipboard();
@@ -296,7 +360,7 @@ void Application::SetClipboardText(const string &in) {
   GlobalFree(hg);
 }
 
-string Application::GetClipboardText() {
+string Clipboard::GetClipboardText() {
   string ret;
   if (!OpenClipboard(NULL)) return "";
   const HANDLE hg = GetClipboardData(CF_UNICODETEXT);
@@ -308,76 +372,75 @@ string Application::GetClipboardText() {
 }
 
 void Video::StartWindow(Window *W) {}
-bool Video::CreateWindow(Window *W) {
-  static WinApp *winapp = Singleton<WinApp>::Get();
-  ONCE({ winapp->CreateClass(); });
-  RECT r = { 0, 0, W->width, W->height };
+bool Video::CreateWindow(WindowHolder *H, Window *Win) {
+  auto W = dynamic_cast<WindowsWindow*>(Win);
+  auto app = W->parent;
+  RECT r = { 0, 0, W->gl_w, W->gl_h };
   DWORD dwStyle = WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_CLIPSIBLINGS;
   if (!AdjustWindowRect(&r, dwStyle, 0)) return ERRORv(false, "AdjustWindowRect");
-  HWND hWnd = CreateWindowEx(WS_EX_LEFT, app->name.c_str(), W->caption.c_str(), dwStyle, 0, 0, r.right - r.left, r.bottom - r.top, NULL, NULL, winapp->hInst, NULL);
+  HWND hWnd = CreateWindowEx(WS_EX_LEFT, app->name.c_str(), W->caption.c_str(), dwStyle, 0, 0, r.right - r.left, r.bottom - r.top, NULL, NULL, WindowsFrameworkModule::hInst, NULL);
   if (!hWnd) return ERRORv(false, "CreateWindow: ", GetLastError());
+  SetWindowLongPtr(hWnd, 0, LONG_PTR(app->framework.get()));
   HDC hDC = GetDC(hWnd);
   PIXELFORMATDESCRIPTOR pfd = { sizeof(PIXELFORMATDESCRIPTOR), 1, PFD_SUPPORT_OPENGL | PFD_DRAW_TO_WINDOW | PFD_DOUBLEBUFFER,
     PFD_TYPE_RGBA, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 16, 0, 0, PFD_MAIN_PLANE, 0, 0, 0, 0, };
   int pf = ChoosePixelFormat(hDC, &pfd);
   if (!pf) return ERRORv(false, "ChoosePixelFormat: ", GetLastError());
   if (SetPixelFormat(hDC, pf, &pfd) != TRUE) return ERRORv(false, "SetPixelFormat: ", GetLastError());
-  if (!(W->gl = MakeTyped(wglCreateContext(hDC))).v) return ERRORv(false, "wglCreateContext: ", GetLastError());
-  W->surface = MakeTyped(hDC);
-  W->impl = MakeTyped(new WinWindow());
-  app->windows[(W->id = MakeTyped(hWnd)).v] = W;
-  INFOf("Application::CreateWindow %p %p %p (%p)", W->id.v, W->surface.v, W->gl.v, W);
+  if (!(W->gl = wglCreateContext(hDC))) return ERRORv(false, "wglCreateContext: ", GetLastError());
+  W->surface = hDC;
+  W->hwnd = hWnd;
+  app->windows[(W->id = hWnd)] = W;
+  INFOf("Application::CreateWindow %p %p %p (%p)", W->id, W->surface, W->gl, W);
   app->MakeCurrentWindow(W);
-  ShowWindow(hWnd, winapp->nCmdShow);
-  app->scheduler.Wakeup(screen);
+  ShowWindow(hWnd, WindowsFrameworkModule::nCmdShow);
+  W->Wakeup();
   return true;
 }
 
-void *Video::BeginGLContextCreate(Window *W) {
+void *Video::BeginGLContextCreate(Window *Win) {
+  auto W = dynamic_cast<WindowsWindow*>(Win);
   if (wglewIsSupported("WGL_ARB_create_context")) return wglCreateContextAttribsARB((HDC)W->surface, (HGLRC)W->gl, 0);
   else { HGLRC ret = wglCreateContext((HDC)W->surface); wglShareLists((HGLRC)W->gl, ret); return ret; }
 }
 
 void *Video::CompleteGLContextCreate(Window *W, void *gl_context) {
-  wglMakeCurrent((HDC)W->surface, (HGLRC)gl_context);
+  wglMakeCurrent((HDC)dynamic_cast<WindowsWindow*>(W)->surface, (HGLRC)gl_context);
   return gl_context;
 }
 
-int Video::Swap() {
-  screen->gd->Flush();
-  SwapBuffers(dynamic_cast<WinWindow*>(screen)->surface);
-  screen->gd->CheckForError(__FILE__, __LINE__);
+int Video::Swap(Window *w) {
+  w->gd->Flush();
+  SwapBuffers(dynamic_cast<WindowsWindow*>(w)->surface);
+  w->gd->CheckForError(__FILE__, __LINE__);
   return 0;
 }
 
-FrameScheduler::FrameScheduler() :
-  maxfps(&FLAGS_target_fps), wakeup_thread(&frame_mutex, &wait_mutex), rate_limit(1), wait_forever(!FLAGS_target_fps),
+FrameScheduler::FrameScheduler(WindowHolder *w) :
+  window(w), maxfps(&FLAGS_target_fps), rate_limit(1), wait_forever(!FLAGS_target_fps),
   wait_forever_thread(0), synchronize_waits(0), monolithic_frame(1), run_main_loop(0) {}
 
 bool FrameScheduler::DoMainWait(bool only_poll) { return false;  }
 void FrameScheduler::UpdateWindowTargetFPS(Window*) {}
-void FrameScheduler::Wakeup(Window *W, int) { 
-  auto w = dynamic_cast<WinWindow*>(W);
-  InvalidateRect(w->hwnd, NULL, 0);
-  // PostMessage(w->hwnd, WM_USER, 0, 0);
-}
-
-void FrameScheduler::AddMainWaitMouse(Window *w) { dynamic_cast<WinWindow*>(w)->frame_on_mouse_input = true; }
-void FrameScheduler::DelMainWaitMouse(Window *w) { dynamic_cast<WinWindow*>(w)->frame_on_mouse_input = false; }
-void FrameScheduler::AddMainWaitKeyboard(Window *w) { dynamic_cast<WinWindow*>(w)->frame_on_keyboard_input = true; }
-void FrameScheduler::DelMainWaitKeyboard(Window *w) { dynamic_cast<WinWindow*>(w)->frame_on_keyboard_input = false; }
+void FrameScheduler::AddMainWaitMouse(Window *w) { dynamic_cast<WindowsWindow*>(w)->frame_on_mouse_input = true; }
+void FrameScheduler::DelMainWaitMouse(Window *w) { dynamic_cast<WindowsWindow*>(w)->frame_on_mouse_input = false; }
+void FrameScheduler::AddMainWaitKeyboard(Window *w) { dynamic_cast<WindowsWindow*>(w)->frame_on_keyboard_input = true; }
+void FrameScheduler::DelMainWaitKeyboard(Window *w) { dynamic_cast<WindowsWindow*>(w)->frame_on_keyboard_input = false; }
 void FrameScheduler::AddMainWaitSocket(Window *w, Socket fd, int flag, function<bool()>) {
-  if (fd == InvalidSocket) return;
-  if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, w);
-  WSAAsyncSelect(fd, dynamic_cast<WinWindow*>(w)->hwnd, WM_USER, FD_READ | FD_CLOSE);
+  if (fd != InvalidSocket) WSAAsyncSelect(fd, dynamic_cast<WindowsWindow*>(w)->hwnd, WM_USER, FD_READ | FD_CLOSE);
 }
 void FrameScheduler::DelMainWaitSocket(Window *w, Socket fd) {
-  if (fd == InvalidSocket) return;
-  if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd);
-  WSAAsyncSelect(fd, dynamic_cast<WinWindow*>(w)->hwnd, WM_USER, 0);
+  if (fd != InvalidSocket) WSAAsyncSelect(fd, dynamic_cast<WindowsWindow*>(w)->hwnd, WM_USER, 0);
 }
 
-unique_ptr<Module> CreateFrameworkModule() { return make_unique<WinFrameworkModule>(); }
+unique_ptr<Window> CreateWindow(Application *A) { return make_unique<WindowsWindow>(A); }
+unique_ptr<Module> CreateFrameworkModule(Application *a) { return make_unique<WindowsFrameworkModule>(a); }
+unique_ptr<TimerInterface> SystemToolkit::CreateTimer(Callback cb) { return nullptr; }
+unique_ptr<AlertViewInterface> SystemToolkit::CreateAlert(Window *w, AlertItemVec items) { return make_unique<WindowsAlertView>(); }
+unique_ptr<PanelViewInterface> SystemToolkit::CreatePanel(Window *w, const Box &b, const string &title, PanelItemVec items) { return nullptr; }
+unique_ptr<MenuViewInterface> SystemToolkit::CreateMenu(Window *w, const string &title, MenuItemVec items) { return make_unique<WindowsMenuView>(dynamic_cast<WindowsWindow*>(w), title, move(items)); }
+unique_ptr<MenuViewInterface> SystemToolkit::CreateEditMenu(Window *w, vector<MenuItem> items) { return nullptr; }
+unique_ptr<NagInterface> SystemToolkit::CreateNag(const string &id, int min_days, int min_uses, int min_events, int remind_days) { return make_unique<WindowsNag>(); }
 }; // namespace LFL
 
 int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nCmdShow) {
@@ -390,9 +453,9 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nC
   for (auto &i : a) av.push_back(i.c_str());
   av.push_back(0);
 
-  MyAppCreate(av.size() - 1, &av[0]);
-  LFL::WinApp *winapp = LFL::Singleton<LFL::WinApp>::Get();
-  winapp->Setup(hInst, nCmdShow);
+  auto app = static_cast<LFL::Application*>(MyAppCreate(av.size() - 1, &av[0]));
+  LFL::WindowsFrameworkModule::hInst = hInst;
+  LFL::WindowsFrameworkModule::nCmdShow = nCmdShow;
   int ret = MyAppMain();
-  return ret ? ret : winapp->MessageLoop();
+  return ret ? ret : dynamic_cast<LFL::WindowsFrameworkModule*>(app->framework.get())->MessageLoop();
 }

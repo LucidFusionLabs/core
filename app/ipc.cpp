@@ -378,7 +378,7 @@ bool InterProcessComm::StartServerProcess(const string &server_program, const ve
 #elif defined(LFL_TCP_IPC)
   Socket l = -1;
   IPV4Endpoint listen;
-  CHECK_NE(-1, (l = SystemNetwork::Listen(LFL::Protocol::TCP, IPV4::Parse("127.0.0.1"), 0, 1, true)))
+  CHECK_NE(-1, (l = SystemNetwork::Listen(LFL::Protocol::TCP, IPV4::Parse("127.0.0.1"), 0, 1, true)));
   CHECK_EQ(0, SystemNetwork::GetSockName(l, &listen.addr, &listen.port));
   SystemNetwork::SetSocketCloseOnExec(l, true);
   string arg0 = server_program, arg1 = StrCat("tcp://", listen.name());
