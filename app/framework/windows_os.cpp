@@ -35,11 +35,12 @@ string ApplicationInfo::GetSystemDeviceName() {
 }
 
 string ApplicationInfo::GetSystemDeviceId() {
-  return "";
+  return "DeviceIdNone";
 }
-string Localization::GetLocalizedString(const char *key) { return string(); }
+
+string Localization::GetLocalizedString(const char *key) { return key; }
 String16 Localization::GetLocalizedString16(const char *key) { return String16(); }
-string Localization::GetLocalizedInteger(int number) { return string(); }
+string Localization::GetLocalizedInteger(int number) { return StrCat(number); }
 String16 Localization::GetLocalizedInteger16(int number) { return String16(); }
 
 void SystemBrowser::OpenSystemBrowser(const string &url_text) {

@@ -88,7 +88,7 @@ int RFC822TimeZone(const char *text) {
 
 void GMTtm(time_t in, tm *t) {
 #ifdef WIN32
-  *t = *gmtime(&in);
+  gmtime_s(t, &in);
 #else
   gmtime_r(&in, t);
 #endif
@@ -97,7 +97,7 @@ void GMTtm(tm *t) { return GMTtm(time(0), t); }
 
 void localtm(time_t in, tm *t) {
 #ifdef WIN32
-  *t = *localtime(&in);
+  localtime_s(t, &in);
 #else
   localtime_r(&in, t);
 #endif
@@ -109,7 +109,7 @@ int logtime(char *buf, int size, tm *s) { return logtime(Now(), buf, size, s); }
 int logtime(Time t, char *buf, int size, tm *s) { time_t tt=Time2time_t(t); return logtime(tt, (t-Seconds(tt)).count(), buf, size, s); }
 int logtime(time_t secs, int ms, char *buf, int size, tm *s) { tm tm; if (!s) s=&tm; localtm(secs, s); return logtime(s, ms, buf, size); }
 int logtime(const tm *tm, int ms, char *buf, int size) {
-  return snprintf(buf, size, "%02d:%02d:%02d.%03d", tm->tm_hour, tm->tm_min, tm->tm_sec, ms);
+  return sprint(buf, size, "%02d:%02d:%02d.%03d", tm->tm_hour, tm->tm_min, tm->tm_sec, ms);
 }
 
 string logfileday(const tm &tm) { char buf[128] = {0}; logfileday(&tm, buf, sizeof(buf)); return buf; }
@@ -117,38 +117,38 @@ string logfileday(Time t) { char buf[128] = {0}; logfileday(Time2time_t(t), buf,
 int logfileday(char *buf, int size) { return logfileday(time(0), buf, size); }
 int logfileday(time_t t, char *buf, int size) { tm tm; localtm(t, &tm); return logfileday(&tm, buf, size); }
 int logfileday(const tm *tm, char *buf, int size) {
-  return snprintf(buf, size, "%04d-%02d-%02d", 1900+tm->tm_year, tm->tm_mon+1, tm->tm_mday);
+  return sprint(buf, size, "%04d-%02d-%02d", 1900+tm->tm_year, tm->tm_mon+1, tm->tm_mday);
 }
 
 string logfiledaytime(Time t) { char buf[128] = {0}; logfiledaytime(Time2time_t(t), buf, sizeof(buf)); return buf; }
 int logfiledaytime(char *buf, int size) { return logfiledaytime(time(0), buf, size); }
 int logfiledaytime(time_t t, char *buf, int size) { tm tm; localtm(t, &tm); return logfiledaytime(&tm, buf, size); }
 int logfiledaytime(const tm *tm, char *buf, int size) {
-  return snprintf(buf, size, "%04d-%02d-%02d_%02d_%02d", 1900+tm->tm_year, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min);
+  return sprint(buf, size, "%04d-%02d-%02d_%02d_%02d", 1900+tm->tm_year, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min);
 }
 
 string logfiletime(Time t) { char buf[128] = {0}; logfiletime(Time2time_t(t), buf, sizeof(buf)); return buf; }
 int logfiletime(char *buf, int size) { return logfiletime(time(0), buf, size); }
 int logfiletime(time_t t, char *buf, int size) { tm tm; localtm(t, &tm); return logfiletime(&tm, buf, size); }
 int logfiletime(const tm *tm, char *buf, int size) {
-  return snprintf(buf, size, "%04d-%02d-%02d_%02d.%02d.%02d", 1900+tm->tm_year, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec);
+  return sprint(buf, size, "%04d-%02d-%02d_%02d.%02d.%02d", 1900+tm->tm_year, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec);
 }
 
 int httptime(char *buf, int size) { return httptime(time(0), buf, size); }
 int httptime(time_t t, char *buf, int size) { tm tm; GMTtm(t, &tm); return httptime(&tm, buf, size); }
 int httptime(const tm *tm, char *buf, int size) {
-  return snprintf(buf, size, "%s, %d %s %d %02d:%02d:%02d GMT",
-                  dayname(tm->tm_wday), tm->tm_mday, monthname(tm->tm_mon), 1900+tm->tm_year,
-                  tm->tm_hour, tm->tm_min, tm->tm_sec);
+  return sprint(buf, size, "%s, %d %s %d %02d:%02d:%02d GMT",
+                dayname(tm->tm_wday), tm->tm_mday, monthname(tm->tm_mon), 1900+tm->tm_year,
+                tm->tm_hour, tm->tm_min, tm->tm_sec);
 }
 
 string localhttptime(Time t) { char buf[128] = {0}; localhttptime(Time2time_t(t), buf, sizeof(buf)); return buf; }
 int localhttptime(char *buf, int size) { return localhttptime(time(0), buf, size); }
 int localhttptime(time_t t, char *buf, int size) { tm tm; localtm(t, &tm); return localhttptime(&tm, buf, size); }
 int localhttptime(const tm *tm, char *buf, int size) {
-  return snprintf(buf, size, "%s, %d %s %d %02d:%02d:%02d %s",
-                  dayname(tm->tm_wday), tm->tm_mday, monthname(tm->tm_mon), 1900+tm->tm_year,
-                  tm->tm_hour, tm->tm_min, tm->tm_sec,
+  return sprint(buf, size, "%s, %d %s %d %02d:%02d:%02d %s",
+                dayname(tm->tm_wday), tm->tm_mday, monthname(tm->tm_mon), 1900+tm->tm_year,
+                tm->tm_hour, tm->tm_min, tm->tm_sec,
 #ifdef WIN32
                   "");
 #else
@@ -159,12 +159,12 @@ int localhttptime(const tm *tm, char *buf, int size) {
 string localhttpdate(Time t) { char buf[128] = {0}; localhttpdate(Time2time_t(t), buf, sizeof(buf)); return buf; }
 int localhttpdate(char *buf, int size) { return localhttpdate(time(0), buf, size); }
 int localhttpdate(time_t t, char *buf, int size) { tm tm; localtm(t, &tm); return localhttpdate(&tm, buf, size); }
-int localhttpdate(const tm *tm, char *buf, int size) { return snprintf(buf, size, "%s, %d %s %d", dayname(tm->tm_wday), tm->tm_mday, monthname(tm->tm_mon), 1900+tm->tm_year); }
+int localhttpdate(const tm *tm, char *buf, int size) { return sprint(buf, size, "%s, %d %s %d", dayname(tm->tm_wday), tm->tm_mday, monthname(tm->tm_mon), 1900+tm->tm_year); }
 
 string localhttptod(Time t) { char buf[128] = {0}; localhttptod(Time2time_t(t), buf, sizeof(buf)); return buf; }
 int localhttptod(char *buf, int size) { return localhttptod(time(0), buf, size); }
 int localhttptod(time_t t, char *buf, int size) { tm tm; localtm(t, &tm); return localhttptod(&tm, buf, size); }
-int localhttptod(const tm *tm, char *buf, int size) { return snprintf(buf, size, "%02d:%02d:%02d", tm->tm_hour, tm->tm_min, tm->tm_sec); }
+int localhttptod(const tm *tm, char *buf, int size) { return sprint(buf, size, "%02d:%02d:%02d", tm->tm_hour, tm->tm_min, tm->tm_sec); }
 
 string localsmtptime(Time t) { char buf[128] = {0}; localsmtptime(Time2time_t(t), buf, sizeof(buf)); return buf; }
 int localsmtptime(char *buf, int size) { return localsmtptime(time(0), buf, size); }
@@ -176,18 +176,18 @@ int localsmtptime(const tm *tm, char *buf, int size) {
 #else
   RFC822TimeZone(tm->tm_zone)*100;
 #endif
-  return snprintf(buf, size, "%s, %02d %s %d %02d:%02d:%02d %s%04d",
-                  dayname(tm->tm_wday), tm->tm_mday, monthname(tm->tm_mon), 1900+tm->tm_year,
-                  tm->tm_hour, tm->tm_min, tm->tm_sec, tzo<0?"-":"", abs(tzo));
+  return sprint(buf, size, "%s, %02d %s %d %02d:%02d:%02d %s%04d",
+                dayname(tm->tm_wday), tm->tm_mday, monthname(tm->tm_mon), 1900+tm->tm_year,
+                tm->tm_hour, tm->tm_min, tm->tm_sec, tzo<0?"-":"", abs(tzo));
 }
 
 string localmboxtime(Time t) { char buf[128] = {0}; localmboxtime(Time2time_t(t), buf, sizeof(buf)); return buf; }
 int localmboxtime(char *buf, int size) { return localmboxtime(time(0), buf, size); }
 int localmboxtime(time_t t, char *buf, int size) { tm tm; localtm(t, &tm); return localmboxtime(&tm, buf, size); }
 int localmboxtime(const tm *tm, char *buf, int size) {
-  return snprintf(buf, size, "%s %s%s%d %02d:%02d:%02d %d",
-                  dayname(tm->tm_wday), monthname(tm->tm_mon), tm->tm_mday < 10 ? "  " : " ",
-                  tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec, 1900+tm->tm_year);
+  return sprint(buf, size, "%s %s%s%d %02d:%02d:%02d %d",
+                dayname(tm->tm_wday), monthname(tm->tm_mon), tm->tm_mday < 10 ? "  " : " ",
+                tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec, 1900+tm->tm_year);
 }
 
 string intervaltime(Time t) { time_t tt=Time2time_t(t); char buf[64] = {0}; intervaltime(tt, (t-Seconds(tt)).count(), buf, sizeof(buf)); return buf; }
@@ -196,24 +196,24 @@ int intervaltime(time_t t, int ms, char *buf, int size) {
   t -= hours*3600;
   int minutes = t/60;
   int seconds = t - minutes*60;
-  return snprintf(buf, size, "%02d:%02d:%02d.%03d", hours, minutes, seconds, ms);
+  return sprint(buf, size, "%02d:%02d:%02d.%03d", hours, minutes, seconds, ms);
 }
 
 string intervalminutes(Time t) { time_t tt=Time2time_t(t); char buf[64] = {0}; intervalminutes(tt, (t-Seconds(tt)).count(), buf, sizeof(buf)); return buf; }
 int intervalminutes(time_t t, int ms, char *buf, int size) {
   int minutes = t/60;
   int seconds = t - minutes*60;
-  return snprintf(buf, size, "%02d:%02d", minutes, seconds);
+  return sprint(buf, size, "%02d:%02d", minutes, seconds);
 }
 
 string intervalfraction(Time t) { time_t tt=Time2time_t(t); char buf[64] = {0}; intervalfraction(tt, (t-Seconds(tt)).count(), buf, sizeof(buf)); return buf; }
 int intervalfraction(time_t t, int ms, char *buf, int size) {
-  if      (t < 60)           return snprintf(buf, size, "%.0f seconds", t + ms/1000.0f);
-  else if (t < 60*60)        return snprintf(buf, size, "%.0f minutes", t/(          60.0f));
-  else if (t < 60*60*24)     return snprintf(buf, size, "%.1f hours",   t/(       60*60.0f));
-  else if (t < 60*60*24*31)  return snprintf(buf, size, "%.1f days",    t/(    24*60*60.0f));
-  else if (t < 60*60*24*365) return snprintf(buf, size, "%.1f months",  t/( 31*24*60*60.0f));
-  else                       return snprintf(buf, size, "%.1f years",   t/(365*24*60*60.0f));
+  if      (t < 60)           return sprint(buf, size, "%.0f seconds", t + ms/1000.0f);
+  else if (t < 60*60)        return sprint(buf, size, "%.0f minutes", t/(          60.0f));
+  else if (t < 60*60*24)     return sprint(buf, size, "%.1f hours",   t/(       60*60.0f));
+  else if (t < 60*60*24*31)  return sprint(buf, size, "%.1f days",    t/(    24*60*60.0f));
+  else if (t < 60*60*24*365) return sprint(buf, size, "%.1f months",  t/( 31*24*60*60.0f));
+  else                       return sprint(buf, size, "%.1f years",   t/(365*24*60*60.0f));
 }
 
 bool RFC822Time(const char *text, int *hour, int *min, int *sec) {
@@ -231,7 +231,7 @@ bool RFC822Time(const char *text, int *hour, int *min, int *sec) {
 }
 
 Time RFC822Date(const char *text) {
-  const char *comma = strchr(text, ','), *start = comma ? comma + 1 : text, *parsetext;
+  const char *comma = strchr(text, ','), *start = comma ? comma + 1 : text;
   tm tm;
   memset(&tm, 0, sizeof(tm));
   StringWordIter words(start);
@@ -272,18 +272,18 @@ Time SinceDayBegan(Time t, int gmt_offset_hrs) {
   return ret < Time(0) ? ret + Hours(24) : ret;
 }
 
-bool    IsDaylightSavings(Time t) { tm tm; localtm(t != Time(0) ? Time2time_t(t) : time(0), &tm); return tm.tm_isdst; }
+bool IsDaylightSavings(Time t) { tm tm; localtm(t != Time(0) ? Time2time_t(t) : time(0), &tm); return tm.tm_isdst; }
 #ifndef WIN32
-const char *LocalTimeZone(Time t) { tm tm; localtm(t != Time(0) ? Time2time_t(t) : time(0), &tm); return tm.tm_zone; }
+string LocalTimeZone(Time t) { tm tm; localtm(t != Time(0) ? Time2time_t(t) : time(0), &tm); return tm.tm_zone; }
 #else
-const char *LocalTimeZone(Time t) { return _tzname[_daylight]; }
+string LocalTimeZone(Time t) { return _tzname[_daylight]; }
 #endif
-const char *WallStTimeZone(Time t) { return IsDaylightSavings(t) ? "EDT" : "EST"; }
+string WallStTimeZone(Time t) { return IsDaylightSavings(t) ? "EDT" : "EST"; }
 
 int WallStHoursFromLocal(int *wall_st_hours_from_gmt_out) {
   Time now = Now();
-  int local_hours_from_gmt   = RFC822TimeZone(LocalTimeZone(now));
-  int wall_st_hours_from_gmt = RFC822TimeZone(WallStTimeZone(now));
+  int local_hours_from_gmt   = RFC822TimeZone(LocalTimeZone(now).c_str());
+  int wall_st_hours_from_gmt = RFC822TimeZone(WallStTimeZone(now).c_str());
   if (wall_st_hours_from_gmt_out) *wall_st_hours_from_gmt_out = wall_st_hours_from_gmt;
   return -1 * local_hours_from_gmt + wall_st_hours_from_gmt;
 }

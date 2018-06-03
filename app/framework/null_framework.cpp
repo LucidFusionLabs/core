@@ -61,9 +61,11 @@ struct NullWindow : public Window {
   void SetResizeIncrements(float x, float y) {}
   void SetTransparency(float v) {}
   bool Reshape(int w, int h) { return false; }
+  void Wakeup(int) {}
+  int Swap() { return 0; }
 };
 
-struct NullFrameworkModule : public Module {
+struct NullFrameworkModule : public Framework {
   WindowHolder *window;
   NullFrameworkModule(WindowHolder *w) : window(w) {}
 
@@ -73,6 +75,15 @@ struct NullFrameworkModule : public Module {
     window->windows[window->focused->id] = window->focused;
     return 0;
   }
+
+  unique_ptr<Window> ConstructWindow(Application *A) { return make_unique<NullWindow>(A); }
+
+  bool CreateWindow(WindowHolder *H, Window *W) {
+    H->windows[W->id] = W;
+    return true;
+  }
+
+  void StartWindow(Window*) {}
 };
 
 struct NullAlertView : public AlertViewInterface {
@@ -100,7 +111,6 @@ void ThreadDispatcher::RunCallbackInMainThread(Callback cb) {
 }
 
 void WindowHolder::MakeCurrentWindow(Window *W) {}
-void Window::Wakeup(int) {}
 
 int Application::Suspended() { return 0; }
 void Application::CloseWindow(Window *W) {
@@ -132,13 +142,6 @@ void Application::ShowSystemContextMenu(const vector<MenuItem>&items) {}
 void Application::SetKeepScreenOn(bool v) {}
 void Application::SetTheme(const string &v) {}
 
-bool Video::CreateWindow(WindowHolder *H, Window *W) { 
-  H->windows[W->id] = W;
-  return true;
-}
-void Video::StartWindow(Window*) {}
-int Video::Swap(Window*) { return 0; }
-
 FrameScheduler::FrameScheduler(WindowHolder *w) :
   window(w), maxfps(&FLAGS_target_fps), rate_limit(0), wait_forever(!FLAGS_target_fps),
   wait_forever_thread(0), synchronize_waits(0), monolithic_frame(1), run_main_loop(1) {}
@@ -157,8 +160,7 @@ extern "C" int main(int argc, const char *argv[]) {
   return MyAppMain();
 }
 
-unique_ptr<Window> CreateWindow(Application *A) { return make_unique<NullWindow>(A); }
-unique_ptr<Module> CreateFrameworkModule(Application *app) { return make_unique<NullFrameworkModule>(app); }
+unique_ptr<Framework> Framework::Create(Application *app) { return make_unique<NullFrameworkModule>(app); }
 unique_ptr<TimerInterface> SystemToolkit::CreateTimer(Callback cb) { return nullptr; }
 unique_ptr<AlertViewInterface> SystemToolkit::CreateAlert(Window*, AlertItemVec items) { return make_unique<NullAlertView>(); }
 unique_ptr<PanelViewInterface> SystemToolkit::CreatePanel(Window*, const Box &b, const string &title, PanelItemVec items) { return nullptr; }

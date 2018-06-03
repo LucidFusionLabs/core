@@ -192,7 +192,7 @@ int FloatContainer::FloatHeight() const {
 
 int FloatContainer::ClearFloats(int fy, int fh, bool clear_left, bool clear_right) const {
   if (!clear_left && !clear_right) return 0;
-  int fl = -1, fr = -1, sy = fy, ch;
+  int fl = -1, fr = -1, sy = fy;
   while (clear_left || clear_right) {
     if (clear_left)  { baseleft (fy, fh, &fl); if (fl >= 0) Min(&fy, float_left [fl].Position().y - fh); }
     if (clear_right) { baseright(fy, fh, &fr); if (fr >= 0) Min(&fy, float_right[fr].Position().y - fh); }

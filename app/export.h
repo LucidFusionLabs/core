@@ -174,6 +174,7 @@ struct FloatContainer;
 struct Flow;
 struct Font;
 struct Fonts;
+struct Framework;
 struct GameServer;
 struct Geometry;
 struct Glyph;

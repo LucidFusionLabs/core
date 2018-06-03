@@ -104,7 +104,7 @@ struct DocumentParser {
       parentNode->appendChild(addNode);
       target.push_back(addNode);
       if (tag == "body") {
-        int ind; string pseudo_style = addNode->AsHTMLBodyElement()->HTML4PseudoClassStyle();
+        string pseudo_style = addNode->AsHTMLBodyElement()->HTML4PseudoClassStyle();
         if (!pseudo_style.empty() && style_target) style_target->Parse(pseudo_style);
       } else if (tag == "img" || (tag == "input" && StringEquals(addNode->getAttribute("type"), "image"))) {
         parent->Open(LFL::String::ToUTF8(addNode->getAttribute("src")), addNode);

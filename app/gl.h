@@ -363,6 +363,7 @@ struct GraphicsDevice {
   static const int Fill, Line, Point, GLPreferredBuffer, GLInternalFormat;
 
   Window *parent;
+  Void glew_context = 0;
   int version, default_draw_mode = DrawMode::_2D, draw_mode = 0, default_framebuffer = 0;
   bool done_init = 0, have_framebuffer = 1, have_cubemap = 1, have_npot_textures = 1;
   bool blend_enabled = 0, invert_view_matrix = 0, track_model_matrix = 0, dont_clear_deferred = 0;
@@ -508,6 +509,7 @@ struct GraphicsDevice {
   Box GetScissorBox();
   void DrawPixels(const Box &b, const Texture &tex);
 
+  static unique_ptr<GraphicsDevice> Create(Window*, Shaders*, int ver);
   static int VertsPerPrimitive(int gl_primtype);
 };
 

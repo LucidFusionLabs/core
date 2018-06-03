@@ -9,14 +9,14 @@ lfl_add_target(app_null_advertising STATIC_LIBRARY SOURCES null_advertising.cpp)
 
 if(LFL_ANDROID)
   lfl_add_target(app_android_os STATIC_LIBRARY SOURCES android_os.cpp LINK_LIBRARIES -llog -lz ${C_LIBRARY})
-  lfl_add_target(app_android_framework STATIC_LIBRARY SOURCES android_framework.cpp)
-  lfl_add_target(app_android_toolkit STATIC_LIBRARY SOURCES android_toolkit.cpp)
+  lfl_add_target(app_android_framework STATIC_LIBRARY SOURCES android_framework.cpp android_common.h)
+  lfl_add_target(app_android_toolkit STATIC_LIBRARY SOURCES android_toolkit.cpp android_toolkit.h)
   lfl_add_target(app_android_billing STATIC_LIBRARY SOURCES android_billing.cpp)
   lfl_add_target(app_android_admob STATIC_LIBRARY SOURCES android_admob.cpp)
 endif()
 
 if(LFL_IOS)
-  add_library(app_ios_os STATIC ios_os.mm apple_common.mm)
+  add_library(app_ios_os STATIC ios_os.mm apple_common.mm apple_common.h)
   lfl_set_xcode_properties(app_ios_os)
   target_include_directories(app_ios_os PUBLIC ${LFL_APP_INCLUDE})
   target_compile_definitions(app_ios_os PUBLIC ${LFL_APP_DEF})
@@ -26,7 +26,7 @@ if(LFL_IOS)
                         "-framework OpenGLES" "-framework UIKit" "-framework QuartzCore" "-framework GLKit"
                         "-framework Security" "-framework AVFoundation")
 
-  add_library(app_ios_framework STATIC ios_framework.mm)
+  add_library(app_ios_framework STATIC ios_framework.mm ios_common.h)
   lfl_set_xcode_properties(app_ios_framework)
   target_include_directories(app_ios_framework PUBLIC ${LFL_APP_INCLUDE})
   target_compile_definitions(app_ios_framework PUBLIC ${LFL_APP_DEF})
@@ -57,7 +57,7 @@ if(LFL_IOS)
 endif()
 
 if(LFL_OSX)
-  add_library(app_osx_os STATIC osx_os.mm apple_common.mm)
+  add_library(app_osx_os STATIC osx_os.mm apple_common.mm apple_common.h)
   lfl_set_xcode_properties(app_osx_os)
   target_include_directories(app_osx_os PUBLIC ${LFL_APP_INCLUDE})
   target_compile_definitions(app_osx_os PUBLIC ${LFL_APP_DEF})
@@ -65,7 +65,7 @@ if(LFL_OSX)
   target_link_libraries(app_osx_os "-framework Cocoa" "-framework QuartzCore" "-framework CoreVideo"
                         "-framework QTKit" "-framework Security" "-framework IOKit" -lz -lbz2 -liconv)
 
-  add_library(app_osx_framework STATIC osx_framework.mm)
+  add_library(app_osx_framework STATIC osx_framework.mm osx_common.h)
   lfl_set_xcode_properties(app_osx_framework)
   target_include_directories(app_osx_framework PUBLIC ${LFL_APP_INCLUDE})
   target_compile_definitions(app_osx_framework PUBLIC ${LFL_APP_DEF})
@@ -118,15 +118,15 @@ endif()
 if(LFL_WINDOWS)
   lfl_add_target(app_windows_os STATIC_LIBRARY SOURCES windows_os.cpp
                  LINK_LIBRARIES Ws2_32.lib Dnsapi.lib opengl32.lib glu32.lib strmiids.lib zlib)
-  lfl_add_target(app_windows_framework STATIC_LIBRARY SOURCES windows_framework.cpp
-                 INCLUDE_DIRECTORIES ${GLEW_INCLUDE} LINK_LIBRARIES ${GLEW_LIB})
+  lfl_add_target(app_windows_framework STATIC_LIBRARY SOURCES windows_framework.cpp windows_common.h
+                 COMPILE_DEFINITIONS ${GLEW_DEF} INCLUDE_DIRECTORIES ${GLEW_INCLUDE} LINK_LIBRARIES ${GLEW_LIB})
   lfl_add_target(app_windows_toolkit STATIC_LIBRARY SOURCES windows_toolkit.cpp)
 endif()
 
 if(LFL_QT)
   lfl_enable_qt()
   set(CMAKE_AUTOMOC ON)
-  lfl_add_target(app_qt_framework STATIC_LIBRARY SOURCES qt_framework.cpp
+  lfl_add_target(app_qt_framework STATIC_LIBRARY SOURCES qt_framework.cpp qt_common.h
                  INCLUDE_DIRECTORIES ${QT_INCLUDE} ${CMAKE_CURRENT_BINARY_DIR} LINK_LIBRARIES ${QT_LIB})
   lfl_add_target(app_qt_toolkit STATIC_LIBRARY SOURCES qt_toolkit.cpp
                  INCLUDE_DIRECTORIES ${QT_INCLUDE} ${CMAKE_CURRENT_BINARY_DIR} LINK_LIBRARIES ${QT_LIB})

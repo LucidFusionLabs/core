@@ -32,26 +32,34 @@ struct WindowsWindow : public Window {
 
   WindowsWindow(Application *a) : Window(a) {}
   ~WindowsWindow() { ClearChildren(); }
+  int Swap();
+  void Wakeup(int flag=0);
   bool RestrictResize(int m, RECT*);
   void SetCaption(const string &v);
   void SetResizeIncrements(float x, float y);
   void SetTransparency(float v);
   bool Reshape(int w, int h);
   void UpdateMousePosition(const LPARAM &lParam, point *p, point *d);
+  LRESULT APIENTRY WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
+  static LRESULT APIENTRY WndProcDispatch(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 };
 
-struct WindowsFrameworkModule : public Module {
+
+struct WindowsFrameworkModule : public Framework {
   static HINSTANCE hInst;
   static int nCmdShow;
   WindowHolder *window;
   WindowsFrameworkModule(WindowHolder *w) : window(w) {}
 
-  int Init();
-  void CreateClass(ApplicationInfo *appinfo);
+  int Init() override;
+  void CreateClass(Application*);
+  unique_ptr<Window> ConstructWindow(Application*) override;
+  bool CreateWindow(WindowHolder *H, Window *W) override;
+  void StartWindow(Window *W) override;
   int MessageLoop();
-  LRESULT APIENTRY WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
-  static LRESULT APIENTRY WndProcDispatch(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
+
   static int GetKeyCode(unsigned char k);
+  static string GetLastErrorText();
 };
 
 }; // namespace LFL

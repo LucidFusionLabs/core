@@ -6,7 +6,7 @@ if(LFL_FREETYPE)
 endif()
 
 set(FONT_SOURCE atlas_font.cpp ipc_font.cpp)
-set(FONT_LINK_LIBRARIES lfl_app)
+set(FONT_LINK_LIBRARIES app_core)
 if(LFL_APPLE)
   set(FONT_SOURCE ${FONT_SOURCE} coretext_font.cpp)
 elseif(LFL_WINDOWS)

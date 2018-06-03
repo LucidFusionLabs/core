@@ -17,7 +17,7 @@
  */
 
 #if defined(LFL_GLEW)
-#define glewGetContext() static_cast<GLEWContext*>(screen->glew_context)
+#define glewGetContext() static_cast<GLEWContext*>(glew_context)
 #include <GL/glew.h>
 #ifdef LFL_WINDOWS
 #include <GL/wglew.h>
@@ -699,11 +699,11 @@ struct OpenGLES2 : public GraphicsDevice, public QOpenGLFunctions {
 };
 #endif // LFL_GLES2
 
-unique_ptr<GraphicsDevice> CreateGraphicsDevice(Window *w, Shaders *s, int opengles_version) {
+unique_ptr<GraphicsDevice> GraphicsDevice::Create(Window *w, Shaders *s, int opengles_version) {
   unique_ptr<GraphicsDevice> gd;
 #ifdef LFL_GLEW
 #ifdef GLEW_MX
-  ONCE({ screen->glew_context = new GLEWContext(); });
+  auto glew_context = new GLEWContext();
 #endif
   ONCE({
     GLenum glew_err;
@@ -724,6 +724,9 @@ unique_ptr<GraphicsDevice> CreateGraphicsDevice(Window *w, Shaders *s, int openg
 
 #ifdef LFL_GLEW
   gd->have_framebuffer = GLEW_EXT_framebuffer_object;
+#ifdef GLEW_MX
+  gd->glew_context = glew_context;
+#endif
 #endif
 
   return gd;

@@ -157,7 +157,7 @@ int ProcessPipe::Open(const char* const* argv, const char *startdir) {
   memset(&sa, 0, sizeof(sa));
   sa.nLength = sizeof(sa);
   sa.bInheritHandle = 1;
-  HANDLE pipeinR, pipeinW, pipeoutR, pipeoutW, h;
+  HANDLE pipeinR, pipeinW, pipeoutR, pipeoutW;
   if (!CreatePipe(&pipeinR, &pipeinW, &sa, 0)) return -1;
   if (!CreatePipe(&pipeoutR, &pipeoutW, &sa, 0)) { CloseHandle(pipeinR); CloseHandle(pipeinW); return -1; }
 
@@ -175,8 +175,8 @@ int ProcessPipe::Open(const char* const* argv, const char *startdir) {
   CloseHandle(pipeinW);
   CloseHandle(pipeoutR);
 
-  in = fdopen(_open_osfhandle((long)pipeinR, O_TEXT), "r"); // leaks ?
-  out = fdopen(_open_osfhandle((long)pipeoutW, O_TEXT), "w");
+  in = LocalFile::FdOpen(_open_osfhandle((long)pipeinR, O_TEXT), "r"); // leaks ?
+  out = LocalFile::FdOpen(_open_osfhandle((long)pipeoutW, O_TEXT), "w");
   setvbuf(in, 0, _IONBF, 0);
   setvbuf(out, 0, _IONBF, 0);
   return 0;

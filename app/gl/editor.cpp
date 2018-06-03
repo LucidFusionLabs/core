@@ -410,7 +410,7 @@ bool Editor::WalkUndo(bool backwards) {
   const Modification &m = version[backwards ? --version_number.offset : version_number.offset++];
   bool nl = m.data.size() == 1 && m.data[0] == '\n';
   point target = (nl && (backwards != m.erase)) ? point(0, m.p.y + 1) :
-    point(m.p.x + ((backwards && !nl) ? (m.erase ? -m.data.size() : m.data.size()) : 0), m.p.y);
+    point(m.p.x + ((backwards && !nl) ? (m.erase ? -int(m.data.size()) : m.data.size()) : 0), m.p.y);
   CHECK(ScrollTo(target.y, target.x));
   CHECK_EQ(target.y, cursor_line_index);
   CHECK_EQ(target.x, cursor.i.x);

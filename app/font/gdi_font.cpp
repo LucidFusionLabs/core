@@ -24,7 +24,7 @@ namespace LFL {
 void GlyphCache::Load(const Font *f, const Glyph *g, HFONT hfont, int size, HDC dc) {
   if (!g->id || !g->tex.width || !g->tex.height) return;
   point p;
-  wchar_t b[] = { g->Id(), 0 };
+  wchar_t b[] = { wchar_t(g->Id()), 0 };
   bool cache_glyph = ShouldCacheGlyph(g->tex);
   if (cache_glyph) {
     CHECK(Add(&p, g->tex.coord, g->tex.width, g->tex.height, f->Height()));

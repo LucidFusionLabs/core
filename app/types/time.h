@@ -118,8 +118,8 @@ Time NumericDate(const char *datetext, const char *timetext, const char *timezon
 
 Time SinceDayBegan(Time, int gmt_offset_hrs);
 bool IsDaylightSavings(Time t=Time(0));
-const char *LocalTimeZone(Time t=Time(0));
-const char *WallStTimeZone(Time t=Time(0));
+string LocalTimeZone(Time t=Time(0));
+string WallStTimeZone(Time t=Time(0));
 
 int WallStHoursFromLocal(int *wall_st_hours_from_gmt_out=0);
 void WallStTime(Time t, struct tm *out, int hours_to_wall_st=0);

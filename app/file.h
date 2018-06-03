@@ -111,11 +111,11 @@ struct BufferFile : public File {
 struct LocalFile : public File {
   static const char Slash, ExecutableSuffix[];
 
-  void *impl;
+  FILE *impl=0;
   string fn;
-  bool writable;
+  bool writable=0;
   virtual ~LocalFile() { Close(); }
-  LocalFile() : impl(0), writable(0) {}
+  LocalFile() {}
   LocalFile(const string &path, const string &mode, bool pre_create=0) : impl(0) { Open(path, mode, pre_create); }
 
   bool Opened() const override { return impl; }
@@ -134,6 +134,7 @@ struct LocalFile : public File {
   bool ReplaceWith(unique_ptr<File>) override;
 
   static int WhenceMap(int n);
+  static bool chdir(const string &dir);
   static bool mkdir(const string &dir, int mode);
   static bool unlink(const string &fn);
   static int IsFile(const string &localfilename);
@@ -148,6 +149,10 @@ struct LocalFile : public File {
     LocalFile file(path, "w");
     return file.Opened() ? file.Write(sp.data(), sp.size()) : -1;
   }
+
+  static FILE *FOpen(const char *fn, const char *mode);
+  static FILE *FdOpen(int, const char *mode);
+  static FILE *FReopen(const char *fn, const char *mode, FILE *stream);
 };
 
 struct SearchPaths {

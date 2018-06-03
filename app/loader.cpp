@@ -347,7 +347,7 @@ void SimpleAssetLoader::LoadAudio(AudioAssetLoader::Handle &h, SoundAsset *a, in
     WavHeader wav_header;
     WavReader wav_reader;
     if (!wav_reader.Open(f, &wav_header))
-      return ERROR("LoadAudio(", a->name, ", ", fn, ") open failed: ", strerror(errno));
+      return ERROR("LoadAudio(", a->name, ", ", fn, ") open failed: ", Application::SystemError());
 
     int wav_samples = (f->Size() - WavHeader::Size) / 2;
     if (wav_header.audio_format != 1 || wav_header.num_channels != 1 ||
@@ -361,7 +361,7 @@ void SimpleAssetLoader::LoadAudio(AudioAssetLoader::Handle &h, SoundAsset *a, in
     a->wav = make_unique<RingSampler>(a->sample_rate, wav_samples);
     RingSampler::Handle H(a->wav.get());
     if (wav_reader.Read(&H, 0, wav_samples))
-      return ERROR("LoadAudio(", a->name, ", ", fn, ") read failed: ", strerror(errno));
+      return ERROR("LoadAudio(", a->name, ", ", fn, ") read failed: ", Application::SystemError());
   } else if (SuffixMatch(fn, ".ogg", false)) {
     if (!(a->handle = OGGReader::OpenFile(this, fn, &a->sample_rate, &a->channels, 0)))
       return ERROR("LoadOGG(", a->name, ", ", fn, ") failed");

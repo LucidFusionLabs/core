@@ -113,7 +113,7 @@ struct HTMLParser {
     bool selfclose = tag.size() && tag[tag.size()-1] == '/';
     if (!space) tagname = tag.substr(0, tag.size()-selfclose);
     else {
-      int len = space-base, outlen;
+      int len = space-base;
       tagname = tag.substr(0, len);
       len = tag.size()-len-1;
       Char *key, *val; bool done=0, dquote=0;

@@ -17,12 +17,9 @@ set(qt_incs ${incs})
 set(qt_libs ${libs})
 
 if(LFL_GLEW)
-  set(defs ${defs} -DLFL_GLEW)
+  set(defs ${defs} ${GLEW_DEF})
   set(incs ${incs} ${GLEW_INCLUDE})
   set(libs ${libs} ${GLEW_LIB})
-  if(LFL_WINDOWS)
-    set(defs ${defs} -DGLEW_STATIC)
-  endif()
 endif()
 
 lfl_add_target(app_null_graphics STATIC_LIBRARY SOURCES null_graphics.cpp)

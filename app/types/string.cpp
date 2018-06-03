@@ -70,7 +70,7 @@ Box   Scannable::Scan(const Box   &b, const char *v) { StringWordIter w(StringPi
 Color Scannable::Scan(const Color &b, const char *v) { return Color(v); }
 
 String16 String::ToUTF16(const StringPiece &text, int *consumed) {
-  int input = text.Length(), output = 0, c_bytes, c;
+  int input = text.Length(), output = 0, c_bytes;
   String16 ret;
   ret.resize(input);
   const char *b = text.data(), *p = b;

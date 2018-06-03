@@ -233,7 +233,7 @@ void Terminal::Draw(const Box &b, int flag, Shader *shader) {
   TextArea::Draw(b, flag & ~DrawFlag::DrawCursor, shader);
   if (shader) {
     scale = shader->scale;
-    shader->SetUniform2f("iChannelScroll", 0, XY_or_Y(scale, -line_fb.align_top_or_bot * extra_height) - b.y);
+    shader->SetUniform2f("iChannelScroll", 0, XY_or_Y(scale, -int(line_fb.align_top_or_bot) * extra_height) - b.y);
   }
   if (clip) {
     if (scale) { Box ub(b); ub.y /= scale; ub = Box::TopBorder(ub, *clip); ub.y *= scale; Scissor s(gc.gd, ub); cmd_fb.DrawAligned(ub, point()); }

@@ -136,14 +136,14 @@ const char LocalFile::ExecutableSuffix[] = ".exe";
 int LocalFile::IsFile(const string &filename) {
   if (filename.empty()) return true;
   DWORD attr = ::GetFileAttributes(filename.c_str());
-  if (attr == INVALID_FILE_ATTRIBUTES) return ERRORv(0, "GetFileAttributes(", filename, ") failed: ", strerror(errno));
+  if (attr == INVALID_FILE_ATTRIBUTES) return ERRORv(0, "GetFileAttributes(", filename, ") failed: ", Application::SystemError());
   return attr & FILE_ATTRIBUTE_NORMAL;
 }
 
 int LocalFile::IsDirectory(const string &filename) {
   if (filename.empty()) return true;
   DWORD attr = ::GetFileAttributes(filename.c_str());
-  if (attr == INVALID_FILE_ATTRIBUTES) return ERRORv(0, "GetFileAttributes(", filename, ") failed: ", strerror(errno));
+  if (attr == INVALID_FILE_ATTRIBUTES) return ERRORv(0, "GetFileAttributes(", filename, ") failed: ", Application::SystemError());
   return attr & FILE_ATTRIBUTE_DIRECTORY;
 }
 
@@ -191,6 +191,40 @@ string LocalFile::CreateTemporaryNameTemplate(ApplicationInfo *a, const string &
 }
 #endif // LFL_WINDOWS
 
+FILE *LocalFile::FOpen(const char *fn, const char *mode) {
+#ifdef LFL_WINDOWS
+  FILE *ret = 0;
+  return fopen_s(&ret, fn, mode) == 0 ? ret : nullptr;
+#else
+  return fopen(fn, mode);
+#endif
+}
+
+FILE *LocalFile::FdOpen(int fd, const char *mode) {
+#ifdef LFL_WINDOWS
+  return _fdopen(fd, mode);
+#else
+  return fdopen(fd, mode);
+#endif
+}
+
+FILE *LocalFile::FReopen(const char *fn, const char *mode, FILE *stream) {
+#ifdef LFL_WINDOWS
+  FILE *ret = 0;
+  return freopen_s(&ret, fn, mode, stream) == 0 ? ret : nullptr;
+#else
+  return freopen(fn, mode, stream);
+#endif
+}
+
+bool LocalFile::chdir(const string &dir) {
+#ifdef LFL_WINDOWS
+  return _chdir(dir.c_str()) == 0;
+#else
+  return ::chdir(dir.c_str()) == 0;
+#endif
+}
+
 bool LocalFile::mkdir(const string &dir, int mode) {
 #ifdef LFL_WINDOWS
   return _mkdir(dir.c_str()) == 0;
@@ -200,7 +234,11 @@ bool LocalFile::mkdir(const string &dir, int mode) {
 }
 
 bool LocalFile::unlink(const string &fn) {
+#ifdef LFL_WINDOWS
+  return _unlink(fn.c_str()) == 0;
+#else
   return ::unlink(fn.c_str()) == 0;
+#endif
 }
 
 int LocalFile::WhenceMap(int n) {
@@ -213,13 +251,13 @@ int LocalFile::WhenceMap(int n) {
 bool LocalFile::Open(const string &path, const string &mode, bool pre_create) {
   fn = path;
   if (pre_create) {
-    FILE *created = fopen(fn.c_str(), "a");
+    FILE *created = FOpen(fn.c_str(), "a");
     if (created) fclose(created);
   }
 #ifdef LFL_WINDOWS
-  if (!(impl = fopen(fn.c_str(), StrCat(mode, "b").c_str()))) return 0;
+  if (!(impl = FOpen(fn.c_str(), StrCat(mode, "b").c_str()))) return 0;
 #else
-  if (!(impl = fopen(fn.c_str(), mode.c_str()))) return 0;
+  if (!(impl = FOpen(fn.c_str(), mode.c_str()))) return 0;
 #endif
 #if 0
   char filepath[MAXPATHLEN];
@@ -286,7 +324,11 @@ bool LocalFile::ReplaceWith(unique_ptr<File> nf) {
 
 string LocalFile::CurrentDirectory(int max_size) {
   string ret(max_size, 0); 
+#ifdef LFL_WINDOWS
+  _getcwd(&ret[0], ret.size());
+#else
   getcwd(&ret[0], ret.size());
+#endif
   ret.resize(strlen(ret.data()));
   return ret;
 }
@@ -321,15 +363,16 @@ DirectoryIter::DirectoryIter(const string &path, int dirs, const char *Pref, con
     return;
   }
 #ifdef LFL_WINDOWS
-  _finddatai64_t f; int h;
+  _finddatai64_t f;
   string match = StrCat(path, "*.*");
-  if ((h = _findfirsti64(match.c_str(), &f)) < 0) return;
+  int h = _findfirsti64(match.c_str(), &f);
+  if (h < 0) return;
 
   do {
     if (!strcmp(f.name, ".")) continue;
 
     bool isdir = f.attrib & _A_SUBDIR;
-    if (dirs >= 0 && isdir != dirs) continue;
+    if (dirs >= 0 && int(isdir) != dirs) continue;
 
     filemap[StrCat(f.name, isdir?"/":"")] = 1;
   }
@@ -728,8 +771,8 @@ int MatrixFile::WriteBinaryHeader(File *file, const string &name, const string &
   BinaryHeader hdrbuf = { int(0xdeadbeef), M, N, int(sizeof(BinaryHeader)), int(sizeof(BinaryHeader)+pnl), int(sizeof(BinaryHeader)+pnl+phl), 0, 0 };
   if (file->Write(&hdrbuf, sizeof(BinaryHeader)) != sizeof(BinaryHeader)) return -1;
   string buf(pnl+phl, 0);
-  strncpy(&buf[0], name.c_str(), nl);
-  strncpy(&buf[0]+pnl, hdr.c_str(), hl);
+  buf.replace(0, nl, name.c_str(), nl);
+  buf.replace(pnl, hl, hdr.c_str(), hl);
   if (file->Write(buf.data(), pnl+phl) != pnl+phl) return -1;
   return sizeof(BinaryHeader)+pnl+phl;
 }
@@ -778,7 +821,7 @@ int SettingsFile::Write(const vector<string> &fields, const string &dir, const s
 
 int SettingsFile::Save(ApplicationInfo *a, const vector<string> &fields) {
   Singleton<FlagMap>::Set()->dirty = false;
-  chdir(a->startdir.c_str());
+  LocalFile::chdir(a->startdir);
   int ret = SettingsFile::Write(fields, a->savedir, StrCat(a->name, "_settings"));
   INFO("wrote settings");
   return ret;

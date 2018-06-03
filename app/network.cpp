@@ -344,7 +344,7 @@ int SystemNetwork::GetPeerName(Socket fd, IPV4::Addr *addr_out, int *port_out) {
   struct sockaddr_in sin;
   socklen_t sinSize=sizeof(sin);
   if (::getpeername(fd, reinterpret_cast<struct sockaddr*>(&sin), &sinSize) < 0)
-    return ERRORv(-1, "getpeername: ", strerror(errno));
+    return ERRORv(-1, "getpeername: ", Application::SystemError());
   *addr_out = sin.sin_addr.s_addr;
   *port_out = ntohs(sin.sin_port);
   return 0;
@@ -354,7 +354,7 @@ int SystemNetwork::GetSockName(Socket fd, IPV4::Addr *addr_out, int *port_out) {
   struct sockaddr_in sin;
   socklen_t sinSize=sizeof(sin);
   if (::getsockname(fd, reinterpret_cast<struct sockaddr*>(&sin), &sinSize) < 0)
-    return ERRORv(-1, "getsockname: ", strerror(errno));
+    return ERRORv(-1, "getsockname: ", Application::SystemError());
   *addr_out = sin.sin_addr.s_addr;
   *port_out = ntohs(sin.sin_port);
   return 0;
@@ -609,13 +609,13 @@ int SocketConnection::WriteFlush(const char *buf, int len) {
   int wrote = 0;
   if (bio.ssl) {
     if ((wrote = bio.Write(StringPiece(buf, len))) < 0) {
-      if (!SystemNetwork::EWouldBlock()) return ERRORv(-1, Name(), ": send: ", strerror(errno));
+      if (!SystemNetwork::EWouldBlock()) return ERRORv(-1, Name(), ": send: ", Application::SystemError());
       wrote = 0;
     }
   }
   else {
     if ((wrote = send(socket, buf, len, 0)) < 0) {
-      if (!SystemNetwork::EWouldBlock()) return ERRORv(-1, Name(), ": send: ", strerror(errno));
+      if (!SystemNetwork::EWouldBlock()) return ERRORv(-1, Name(), ": send: ", Application::SystemError());
       wrote = 0;
     }
   }
@@ -632,13 +632,13 @@ int SocketConnection::WriteVFlush(const iovec *iov, int len) {
     vector<WSABUF> buf;
     for (const iovec *i = iov, *e = i + len; i != e; ++i) buf.push_back({ i->iov_len, static_cast<char*>(i->iov_base) });
     if (WSASend(socket, &buf[0], buf.size(), &sent, 0, NULL, NULL)) {
-      if (!SystemNetwork::EWouldBlock()) return ERRORv(-1, Name(), ": WSASend: ", strerror(errno));
+      if (!SystemNetwork::EWouldBlock()) return ERRORv(-1, Name(), ": WSASend: ", Application::SystemError());
       sent = 0;
     }
     wrote = sent;
 #else
     if ((wrote = writev(socket, iov, len)) < 0) {
-      if (!SystemNetwork::EWouldBlock()) return ERRORv(-1, Name(), ": send: ", strerror(errno));
+      if (!SystemNetwork::EWouldBlock()) return ERRORv(-1, Name(), ": send: ", Application::SystemError());
       wrote = 0;
     }
 #endif
@@ -706,7 +706,7 @@ int SocketService::OpenSocket(SocketConnection *c, int protocol, int blocking, I
     for (int i=0, max_bind_attempts=10; /**/; i++) {
       src_pool->Get(&c->src_addr, &c->src_port);
       if (i >= max_bind_attempts || (i && c->src_addr == last_src.addr && c->src_port == last_src.port))
-      { ERROR("connect-bind ", IPV4::Text(c->src_addr, c->src_port), ": ", strerror(errno)); SystemNetwork::CloseSocket(fd); return -1; }
+      { ERROR("connect-bind ", IPV4::Text(c->src_addr, c->src_port), ": ", Application::SystemError()); SystemNetwork::CloseSocket(fd); return -1; }
 
       if (SystemNetwork::Bind(fd, c->src_addr, c->src_port) != -1) break;
       src_pool->BindFailed(c->src_addr, c->src_port);
@@ -1035,7 +1035,7 @@ void SocketServices::AcceptFrame(SocketService *svc, SocketListener *listener) {
       struct sockaddr_in sin;
       socklen_t sinSize = sizeof(sin);
       if (::getpeername(socket, reinterpret_cast<struct sockaddr*>(&sin), &sinSize) < 0)
-      { if (!SystemNetwork::EWouldBlock()) ERROR("getpeername: ", strerror(errno)); break; }
+      { if (!SystemNetwork::EWouldBlock()) ERROR("getpeername: ", Application::SystemError()); break; }
 
       /* insert socket */
       c = svc->Accept(Connection::Connected, socket, sin.sin_addr.s_addr, ntohs(sin.sin_port));
@@ -1405,7 +1405,11 @@ int NBRead(Socket fd, char *buf, int len, ApplicationLifetime *life, int timeout
   if (timeout && !NBReadable(fd, life, timeout)) return 0;
   int o = 0, s = 0;
   do {
-    if ((s = read(fd, buf+o, len-o)) <= 0) {
+#ifdef LFL_WINDOWS
+    if ((s = _read(fd, buf + o, len - o)) <= 0) {
+#else
+    if ((s =  read(fd, buf + o, len - o)) <= 0) {
+#endif
       if (!s || (s < 0 && !SystemNetwork::EWouldBlock())) return o ? o : -1;
     } else o += s;
   } while (s > 0 && len - o > 1024);

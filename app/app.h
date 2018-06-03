@@ -86,11 +86,9 @@ extern int optind;
 #undef ERROR
 #undef CreateWindow
 #define S_IFDIR _S_IFDIR
-#define getcwd _getcwd
-#define chdir _chdir
-#define strcasecmp _stricmp
-#define strncasecmp _strnicmp
-#define snprintf _snprintf
+#define strcasecmp(a,b) _stricmp(a,b)
+#define strncasecmp(a,b,c) _strnicmp(a,b,c)
+#define fileno(a) _fileno(a)
 #endif
 
 #if defined(LFL_LINUX) || defined(LFL_EMSCRIPTEN)
@@ -490,7 +488,7 @@ struct RateLimiter {
 };
 
 struct FrameScheduler {
-  Module *framework;
+  Framework *framework;
   WindowHolder *window;
   RateLimiter maxfps;
   mutex frame_mutex, wait_mutex;
@@ -589,10 +587,9 @@ struct Window : public ::LFAppWindow, public GraphicsDeviceHolder, public Wakeup
   virtual void SetResizeIncrements(float x, float y) = 0;
   virtual void SetTransparency(float v)              = 0;
   virtual bool Reshape(int w, int h)                 = 0;
+  virtual int  Swap()                                = 0;
 
   GraphicsDevice *GD() override { return gd; };
-  void Wakeup(int flag=0) override;
-
   LFL::Box Box()                   const { return LFL::Box(gl_x, gl_y, gl_w, gl_h); }
   LFL::Box Box(float xs, float ys) const { return LFL::Box(gl_w*xs, gl_h*ys); }
   LFL::Box Box(float xp, float yp, float xs, float ys,
@@ -639,12 +636,13 @@ struct Window : public ::LFAppWindow, public GraphicsDeviceHolder, public Wakeup
   void DrawDialogs();
 };
 
-struct Video {
-  static int Swap(Window *W);
-  static bool CreateWindow(WindowHolder *H, Window *W);
-  static void StartWindow(Window *W);
-  static void *BeginGLContextCreate(Window *W);
-  static void *CompleteGLContextCreate(Window *W, void *gl_context);
+struct Framework : public Module {
+  static unique_ptr<Framework> Create(Application*);
+  virtual unique_ptr<Window> ConstructWindow(Application*) = 0;
+  virtual bool CreateWindow(WindowHolder *H, Window *W) = 0;
+  virtual void StartWindow(Window *W) = 0;
+  // void *BeginGLContextCreate(Window *W);
+  // void *CompleteGLContextCreate(Window *W, void *gl_context);
 };
 
 struct ApplicationInfo {
@@ -659,7 +657,7 @@ struct ApplicationInfo {
 struct WindowHolder : public GraphicsDeviceHolder, public WakeupHandle {
   unordered_map<const void*, Window*> windows;
   function<void(Window*)> window_init_cb, window_start_cb, window_closed_cb = [](Window *w){ delete w; };
-  unique_ptr<Module> framework;
+  unique_ptr<Framework> framework;
   bool suspended=0, frame_disabled=0;
   Window *focused=0;
   virtual ~WindowHolder() {}
@@ -834,6 +832,7 @@ struct Application : public ::LFApp, public ApplicationInfo, public ApplicationS
   bool LoadKeychain(const string &key, string *val);
   void SaveKeychain(const string &key, const string &val);
 
+  static string SystemError();
   static StringPiece LoadResource(int id);
   static void *GetSymbol(const string &n);
   static string GetSetting(const string &key);
@@ -848,11 +847,8 @@ struct Application : public ::LFApp, public ApplicationInfo, public ApplicationS
 #endif
 };
 
-unique_ptr<Window> CreateWindow(Application *app);
-unique_ptr<Module> CreateFrameworkModule(Application*);
 unique_ptr<Module> CreateAudioModule(Audio*);
 unique_ptr<Module> CreateCameraModule(CameraState*);
-unique_ptr<GraphicsDevice> CreateGraphicsDevice(Window*, Shaders*, int ver);
 unique_ptr<VideoResamplerInterface> CreateVideoResampler();
 void InitCrashReporting(const string &id, const string &name, const string &email);
 void TestCrashReporting();

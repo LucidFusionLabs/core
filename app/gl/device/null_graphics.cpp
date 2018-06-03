@@ -177,6 +177,6 @@ struct NullGraphicsDevice : public GraphicsDevice {
   void Uniform3fv(int u, int n, const float *v) {}
 };
 
-unique_ptr<GraphicsDevice> CreateGraphicsDevice(Window *w, Shaders*, int) { return make_unique<NullGraphicsDevice>(w); }
+unique_ptr<GraphicsDevice> GraphicsDevice::Create(Window *w, Shaders*, int) { return make_unique<NullGraphicsDevice>(w); }
 
 }; // namespace LFL

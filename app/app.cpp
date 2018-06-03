@@ -44,7 +44,7 @@
 #endif
 
 extern "C" void BreakHook() {}
-extern "C" void LFAppAtExit() { /*delete LFL::app;*/ }
+extern "C" void LFAppAtExit() {}
 
 extern "C" unsigned LFAppNextRandSeed() {
   static LFL::mutex m;
@@ -339,6 +339,7 @@ Application::Application(int ac, const char* const* av) :
   frames_ran = 0;
   memzero(log_time); 
   fonts = make_unique<Fonts>(this, this, this);
+  framework = Framework::Create(this);
 #ifdef LFL_MOBILE
   toolkit = system_toolkit;
 #else
@@ -363,10 +364,10 @@ void Application::Log(int level, const char *file, int line, const char *message
 }
 
 void Application::CreateNewWindow() {
-  Window *orig_window = focused, *new_window = CreateWindow(this).release();
+  Window *orig_window = focused, *new_window = framework->ConstructWindow(this).release();
   if (window_init_cb) window_init_cb(new_window);
-  new_window->gd = CreateGraphicsDevice(new_window, shaders.get(), 2).release();
-  CHECK(Video::CreateWindow(this, new_window));
+  new_window->gd = GraphicsDevice::Create(new_window, shaders.get(), 2).release();
+  CHECK(framework->CreateWindow(this, new_window));
   if (!new_window->started && (new_window->started = true)) {
     MakeCurrentWindow(new_window);
     StartNewWindow(new_window);
@@ -380,7 +381,7 @@ void Application::StartNewWindow(Window *new_window) {
     new_window->default_font.Load(new_window);
   }
   if (window_start_cb) window_start_cb(new_window);
-  Video::StartWindow(new_window);
+  framework->StartWindow(new_window);
 }
 
 SocketServicesThread *Application::CreateNetworkThread(bool detach, bool start) {
@@ -537,7 +538,7 @@ int Application::Create(const char *source_filename) {
 #endif
       FLAGS_logfile = StrCat(logdir, name, ".txt");
     }
-    logfile = fopen(FLAGS_logfile.c_str(), "a");
+    logfile = LocalFile::FOpen(FLAGS_logfile.c_str(), "a");
     if (logfile) SystemNetwork::SetSocketCloseOnExec(fileno(logfile), 1);
     INFO("logfile = ", FLAGS_logfile, " (opened=", logfile != nullptr, ")");
   }
@@ -583,7 +584,7 @@ int Application::Create(const char *source_filename) {
 }
 
 int Application::Init() {
-  if (LoadModule((framework = unique_ptr<Module>(CreateFrameworkModule(this))).get()))
+  if (LoadModule(framework.get()))
     return ERRORv(-1, "platform init failed");
 
   thread_pool.Open(X_or_1(FLAGS_threadpool_size));
@@ -592,7 +593,7 @@ int Application::Init() {
   if (focused) {
     if (FLAGS_enable_video) {
       shaders = make_unique<Shaders>(this);
-      if (!focused->gd) focused->gd = CreateGraphicsDevice(focused, shaders.get(), 2).release();
+      if (!focused->gd) focused->gd = GraphicsDevice::Create(focused, shaders.get(), 2).release();
       focused->gd->Init(this, focused->Box());
 #ifdef LFL_WINDOWS
       if (splash_color) DrawSplash(*splash_color);
@@ -720,7 +721,7 @@ void Application::DrawSplash(const Color &c) {
   focused->gd->ClearColor(c);
   focused->gd->Clear();
   focused->gd->Flush();
-  Video::Swap(focused);
+  focused->Swap();
   focused->gd->ClearColor(focused->gd->clear_color);
 }
 
@@ -758,13 +759,24 @@ Application::~Application() {
 #endif
 }
 
+string Application::SystemError() {
+  string ret(128, 0);
+#ifdef LFL_WINDOWS
+  strerror_s(&ret[0], ret.size(), errno);
+#else
+  strerror_r(errno, &ret[0], ret.size());
+#endif
+  ret.resize(strlen(ret.data()));
+  return ret;
+}
+
 #ifdef LFL_WINDOWS
 void Application::OpenSystemConsole(const char *title) {
   LFL::FLAGS_open_console=1;
   AllocConsole();
   SetConsoleTitle(title);
-  freopen("CONOUT$", "wb", stdout);
-  freopen("CONIN$", "rb", stdin);
+  LocalFile::FReopen("CONOUT$", "wb", stdout);
+  LocalFile::FReopen("CONIN$", "rb", stdin);
   SetConsoleCtrlHandler(SignalHandler::HandleCtrlC, 1);
 }
 void Application::CloseSystemConsole() {
@@ -896,7 +908,7 @@ int Window::Frame(unsigned clicks, int flag) {
   fps.Add(clicks);
 
   if (FLAGS_enable_video) {
-    Video::Swap(this);
+    Swap();
   }
   return ret;
 }

@@ -1081,7 +1081,6 @@ int PropertyView::UpdateMappedLines(pair<int, int> read_lines, bool up, bool hea
   CHECK((lib = property_line.SecondBound(read_lines.first+1)).val);
   for (lie = lib; lie.val && lie.key <= last_read_line; ++lie) {}
 
-  Line *L;
   if (up) for (auto li=lie; li!=lib;       added++, fb_wrapped_lines++) LayoutLine(line.PushBack(), *(--li).val, line_fb.BackPlus(point(0,  fh*(added+1))));
   else    for (auto li=lib; li!=lie; ++li, added++, fb_wrapped_lines++) LayoutLine(line.PushFront(), *li.val,    line_fb.BackPlus(point(0, -fh*added), true));
   return added;

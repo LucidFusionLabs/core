@@ -97,6 +97,19 @@ struct WindowsPanelView : public PanelViewInterface {
 struct WindowsNag : public NagInterface {
 };
 
+int WindowsWindow::Swap() {
+  gd->Flush();
+  SwapBuffers(surface);
+  gd->CheckForError(__FILE__, __LINE__);
+  return 0;
+}
+
+void WindowsWindow::Wakeup(int) {
+  auto w = dynamic_cast<WindowsWindow*>(this);
+  InvalidateRect(w->hwnd, NULL, 0);
+  // PostMessage(w->hwnd, WM_USER, 0, 0);
+}
+
 void WindowsWindow::SetCaption(const string &v) { SetWindowText(hwnd, v.c_str()); }
 void WindowsWindow::SetResizeIncrements(float x, float y) { resize_increment = point(x, y); }
 
@@ -144,27 +157,108 @@ bool WindowsWindow::RestrictResize(int m, RECT *r) {
   return true;
 }
 
+LRESULT APIENTRY WindowsWindow::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
+  PAINTSTRUCT ps;
+  POINT cursor;
+  point p, d;
+  int ind, w, h;
+  switch (message) {
+  case WM_CREATE:                      return 0;
+  case WM_DESTROY:                     parent->Shutdown(); PostQuitMessage(0); return 0;
+  case WM_SIZE:                        w = LOWORD(lParam); h = HIWORD(lParam); if (w != gl_w || h != gl_h) { Reshaped(point(w, h), Box(0, 0, w, h)); Wakeup(); } return 0;
+  case WM_KEYUP:   case WM_SYSKEYUP:   if (parent->input->KeyPress(WindowsFrameworkModule::GetKeyCode(wParam), 0, 0) && frame_on_keyboard_input) Wakeup(); return 0;
+  case WM_KEYDOWN: case WM_SYSKEYDOWN: if (parent->input->KeyPress(WindowsFrameworkModule::GetKeyCode(wParam), 0, 1) && frame_on_keyboard_input) Wakeup(); return 0;
+  case WM_LBUTTONDOWN:                 if (parent->input->MouseClick(1, 1, point(prev_mouse_pos.x, prev_mouse_pos.y)) && frame_on_mouse_input) Wakeup(); return 0;
+  case WM_LBUTTONUP:                   if (parent->input->MouseClick(1, 0, point(prev_mouse_pos.x, prev_mouse_pos.y)) && frame_on_mouse_input) Wakeup(); return 0;
+  case WM_RBUTTONDOWN:                 if (parent->input->MouseClick(2, 1, point(prev_mouse_pos.x, prev_mouse_pos.y)) && frame_on_mouse_input) Wakeup(); return 0;
+  case WM_RBUTTONUP:                   if (parent->input->MouseClick(2, 0, point(prev_mouse_pos.x, prev_mouse_pos.y)) && frame_on_mouse_input) Wakeup(); return 0;
+  case WM_MOUSEMOVE:                   UpdateMousePosition(lParam, &p, &d); if (parent->input->MouseMove(point(p.x, p.y), point(d.x, d.y)) && frame_on_mouse_input) Wakeup(); return 0;
+  case WM_COMMAND:                     if ((ind = wParam - start_msg_id) >= 0) if (ind < menu_cmds.size()) shell->Run(menu_cmds[ind].c_str()); return 0;
+  case WM_CONTEXTMENU:                 if (menu) { GetCursorPos(&cursor); TrackPopupMenu(context_menu, TPM_LEFTALIGN | TPM_TOPALIGN, cursor.x, cursor.y, 0, hWnd, NULL); } return 0;
+  case WM_PAINT:                       BeginPaint(hwnd, &ps); if (!FLAGS_target_fps) parent->EventDrivenFrame(true, true); EndPaint(hwnd, &ps); return 0;
+  case WM_SIZING:                      return resize_increment.Zero() ? 0 : RestrictResize(wParam, reinterpret_cast<LPRECT>(lParam));
+  case WM_USER:                        if (!FLAGS_target_fps) parent->EventDrivenFrame(true, true); return 0;
+  case WM_KILLFOCUS:                   parent->input->ClearButtonsDown(); return 0;
+  default:                             break;
+  }
+  return DefWindowProc(hWnd, message, wParam, lParam);
+}
+
+LRESULT APIENTRY WindowsWindow::WndProcDispatch(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
+  WindowsWindow *win = 0;
+  if (message == WM_NCCREATE) {
+    auto pCreate = static_cast<CREATESTRUCT*>(Void(lParam));
+    win = static_cast<WindowsWindow*>(pCreate->lpCreateParams);
+#ifdef _WIN64
+    SetWindowLongPtr(hWnd, 0, win);
+#else
+    SetWindowLongPtr(hWnd, 0, LONG(win));
+#endif
+  } else win = static_cast<WindowsWindow*>(Void(GetWindowLongPtr(hWnd, 0)));
+  return win->WndProc(hWnd, message, wParam, lParam);
+}
+
+unique_ptr<Window> WindowsFrameworkModule::ConstructWindow(Application *A) { return make_unique<WindowsWindow>(A); }
+void WindowsFrameworkModule::StartWindow(Window *W) {}
+bool WindowsFrameworkModule::CreateWindow(WindowHolder *H, Window *Win) {
+  auto W = dynamic_cast<WindowsWindow*>(Win);
+  auto app = W->parent;
+  RECT r = { 0, 0, W->gl_w, W->gl_h };
+  DWORD dwStyle = WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_CLIPSIBLINGS;
+  if (!AdjustWindowRect(&r, dwStyle, 0)) return ERRORv(false, "AdjustWindowRect");
+  HWND hWnd = CreateWindowEx(WS_EX_LEFT, app->name.c_str(), W->caption.c_str(), dwStyle, 0, 0, r.right - r.left, r.bottom - r.top, NULL, NULL, WindowsFrameworkModule::hInst, W);
+  if (!hWnd) return ERRORv(false, "CreateWindow: ", GetLastErrorText());
+  HDC hDC = GetDC(hWnd);
+  PIXELFORMATDESCRIPTOR pfd = { sizeof(PIXELFORMATDESCRIPTOR), 1, PFD_SUPPORT_OPENGL | PFD_DRAW_TO_WINDOW | PFD_DOUBLEBUFFER,
+    PFD_TYPE_RGBA, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 16, 0, 0, PFD_MAIN_PLANE, 0, 0, 0, 0, };
+  int pf = ChoosePixelFormat(hDC, &pfd);
+  if (!pf) return ERRORv(false, "ChoosePixelFormat: ", GetLastErrorText());
+  if (SetPixelFormat(hDC, pf, &pfd) != TRUE) return ERRORv(false, "SetPixelFormat: ", GetLastErrorText());
+  if (!(W->gl = wglCreateContext(hDC))) return ERRORv(false, "wglCreateContext: ", GetLastErrorText());
+  W->surface = hDC;
+  W->hwnd = hWnd;
+  app->windows[(W->id = hWnd)] = W;
+  INFOf("Application::CreateWindow %p %p %p (%p)", W->id, W->surface, W->gl, W);
+  app->MakeCurrentWindow(W);
+  ShowWindow(hWnd, WindowsFrameworkModule::nCmdShow);
+  W->Wakeup();
+  return true;
+}
+
+#if 0
+void *WindowsFrameworkModule::BeginGLContextCreate(Window *Win) {
+  auto W = dynamic_cast<WindowsWindow*>(Win);
+  if (wglewIsSupported("WGL_ARB_create_context")) return wglCreateContextAttribsARB((HDC)W->surface, (HGLRC)W->gl, 0);
+  else { HGLRC ret = wglCreateContext((HDC)W->surface); wglShareLists((HGLRC)W->gl, ret); return ret; }
+}
+
+void *WindowsFrameworkModule::CompleteGLContextCreate(Window *W, void *gl_context) {
+  wglMakeCurrent((HDC)dynamic_cast<WindowsWindow*>(W)->surface, (HGLRC)gl_context);
+  return gl_context;
+}
+#endif
+
 int WindowsFrameworkModule::Init() {
   INFO("WindowsFrameworkModule::Init()");
   CreateClass(window->focused->parent);
-  CHECK(Video::CreateWindow(window, window->focused));
+  CHECK(CreateWindow(window, window->focused));
   return 0;
 }
 
-void WindowsFrameworkModule::CreateClass(ApplicationInfo *appinfo) {
-  WNDCLASS wndClass;
+void WindowsFrameworkModule::CreateClass(Application *app) {
+  WNDCLASS wndClass = {};
   wndClass.style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW;
-  wndClass.lpfnWndProc = &WindowsFrameworkModule::WndProcDispatch;
-  wndClass.cbWndExtra = sizeof(WindowsFrameworkModule*);
+  wndClass.lpfnWndProc = &WindowsWindow::WndProcDispatch;
+  wndClass.cbWndExtra = sizeof(WindowsWindow*);
   wndClass.cbClsExtra = 0;
   wndClass.hInstance = hInst;
   wndClass.hIcon = LoadIcon(hInst, "IDI_APP_ICON");
   wndClass.hCursor = LoadCursor(NULL, IDC_ARROW);
-  if (Color *c = 0 /* app->splash_color*/) wndClass.hbrBackground = CreateSolidBrush(RGB(c->R(), c->G(), c->B()));
+  if (auto c = app->splash_color) wndClass.hbrBackground = CreateSolidBrush(RGB(c->R(), c->G(), c->B()));
   else                            wndClass.hbrBackground = (HBRUSH)GetStockObject(NULL_BRUSH);
   wndClass.lpszMenuName = NULL;
-  wndClass.lpszClassName = appinfo->name.c_str();
-  if (!RegisterClass(&wndClass)) ERROR("RegisterClass: ", GetLastError());
+  wndClass.lpszClassName = app->name.c_str();
+  if (!RegisterClass(&wndClass)) ERROR("RegisterClass: ", GetLastErrorText());
 }
 
 int WindowsFrameworkModule::MessageLoop() {
@@ -180,39 +274,6 @@ int WindowsFrameworkModule::MessageLoop() {
   LFAppAtExit();
   CoUninitialize();
   return msg.wParam;
-}
-
-LRESULT APIENTRY WindowsFrameworkModule::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
-  WindowsWindow *win = dynamic_cast<WindowsWindow*>(window->focused);
-  auto app = win->parent;
-  PAINTSTRUCT ps;
-  POINT cursor;
-  point p, d;
-  int ind, w, h;
-  switch (message) {
-  case WM_CREATE:                      return 0;
-  case WM_DESTROY:                     app->Shutdown(); PostQuitMessage(0); return 0;
-  case WM_SIZE:                        if ((w = LOWORD(lParam)) != win->gl_w && (h = HIWORD(lParam)) != win->gl_h) { win->Reshaped(point(w, h), Box(0, 0, w, h)); win->Wakeup(); } return 0;
-  case WM_KEYUP:   case WM_SYSKEYUP:   if (app->input->KeyPress(WindowsFrameworkModule::GetKeyCode(wParam), 0, 0) && win->frame_on_keyboard_input) win->Wakeup(); return 0;
-  case WM_KEYDOWN: case WM_SYSKEYDOWN: if (app->input->KeyPress(WindowsFrameworkModule::GetKeyCode(wParam), 0, 1) && win->frame_on_keyboard_input) win->Wakeup(); return 0;
-  case WM_LBUTTONDOWN:                 if (app->input->MouseClick(1, 1, point(win->prev_mouse_pos.x, win->prev_mouse_pos.y)) && win->frame_on_mouse_input) win->Wakeup(); return 0;
-  case WM_LBUTTONUP:                   if (app->input->MouseClick(1, 0, point(win->prev_mouse_pos.x, win->prev_mouse_pos.y)) && win->frame_on_mouse_input) win->Wakeup(); return 0;
-  case WM_RBUTTONDOWN:                 if (app->input->MouseClick(2, 1, point(win->prev_mouse_pos.x, win->prev_mouse_pos.y)) && win->frame_on_mouse_input) win->Wakeup(); return 0;
-  case WM_RBUTTONUP:                   if (app->input->MouseClick(2, 0, point(win->prev_mouse_pos.x, win->prev_mouse_pos.y)) && win->frame_on_mouse_input) win->Wakeup(); return 0;
-  case WM_MOUSEMOVE:                   win->UpdateMousePosition(lParam, &p, &d); if (app->input->MouseMove(point(p.x, p.y), point(d.x, d.y)) && win->frame_on_mouse_input) win->Wakeup(); return 0;
-  case WM_COMMAND:                     if ((ind = wParam - win->start_msg_id) >= 0) if (ind < win->menu_cmds.size()) win->shell->Run(win->menu_cmds[ind].c_str()); return 0;
-  case WM_CONTEXTMENU:                 if (win->menu) { GetCursorPos(&cursor); TrackPopupMenu(win->context_menu, TPM_LEFTALIGN | TPM_TOPALIGN, cursor.x, cursor.y, 0, hWnd, NULL); } return 0;
-  case WM_PAINT:                       BeginPaint(win->hwnd, &ps); if (!FLAGS_target_fps) app->EventDrivenFrame(true, true); EndPaint(win->hwnd, &ps); return 0;
-  case WM_SIZING:                      return win->resize_increment.Zero() ? 0 : win->RestrictResize(wParam, reinterpret_cast<LPRECT>(lParam));
-  case WM_USER:                        if (!FLAGS_target_fps) app->EventDrivenFrame(true, true); return 0;
-  case WM_KILLFOCUS:                   app->input->ClearButtonsDown(); return 0;
-  default:                             break;
-  }
-  return DefWindowProc(hWnd, message, wParam, lParam);
-}
-
-LRESULT APIENTRY WindowsFrameworkModule::WndProcDispatch(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
-  return static_cast<WindowsFrameworkModule*>(Void(GetWindowLongPtr(hWnd, 0)))->WndProc(hWnd, message, wParam, lParam);
 }
 
 int WindowsFrameworkModule::GetKeyCode(unsigned char k) {
@@ -285,10 +346,15 @@ int WindowsFrameworkModule::GetKeyCode(unsigned char k) {
   return key_code[k];
 }
 
-void Window::Wakeup(int) {
-  auto w = dynamic_cast<WindowsWindow*>(this);
-  InvalidateRect(w->hwnd, NULL, 0);
-  // PostMessage(w->hwnd, WM_USER, 0, 0);
+string WindowsFrameworkModule::GetLastErrorText() {
+  DWORD error = GetLastError();
+  if (!error) return string();
+  LPSTR b = nullptr;
+  size_t l = FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+                            NULL, error, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&b, 0, NULL);
+  string error_text(b, l);
+  LocalFree(b);
+  return StrCat(error, ": ", error_text);
 }
 
 void WindowHolder::MakeCurrentWindow(Window *W) { if (auto w = dynamic_cast<WindowsWindow*>(W)) wglMakeCurrent(w->surface, w->gl); }
@@ -371,51 +437,6 @@ string Clipboard::GetClipboardText() {
   return ret;
 }
 
-void Video::StartWindow(Window *W) {}
-bool Video::CreateWindow(WindowHolder *H, Window *Win) {
-  auto W = dynamic_cast<WindowsWindow*>(Win);
-  auto app = W->parent;
-  RECT r = { 0, 0, W->gl_w, W->gl_h };
-  DWORD dwStyle = WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_CLIPSIBLINGS;
-  if (!AdjustWindowRect(&r, dwStyle, 0)) return ERRORv(false, "AdjustWindowRect");
-  HWND hWnd = CreateWindowEx(WS_EX_LEFT, app->name.c_str(), W->caption.c_str(), dwStyle, 0, 0, r.right - r.left, r.bottom - r.top, NULL, NULL, WindowsFrameworkModule::hInst, NULL);
-  if (!hWnd) return ERRORv(false, "CreateWindow: ", GetLastError());
-  SetWindowLongPtr(hWnd, 0, LONG_PTR(app->framework.get()));
-  HDC hDC = GetDC(hWnd);
-  PIXELFORMATDESCRIPTOR pfd = { sizeof(PIXELFORMATDESCRIPTOR), 1, PFD_SUPPORT_OPENGL | PFD_DRAW_TO_WINDOW | PFD_DOUBLEBUFFER,
-    PFD_TYPE_RGBA, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 16, 0, 0, PFD_MAIN_PLANE, 0, 0, 0, 0, };
-  int pf = ChoosePixelFormat(hDC, &pfd);
-  if (!pf) return ERRORv(false, "ChoosePixelFormat: ", GetLastError());
-  if (SetPixelFormat(hDC, pf, &pfd) != TRUE) return ERRORv(false, "SetPixelFormat: ", GetLastError());
-  if (!(W->gl = wglCreateContext(hDC))) return ERRORv(false, "wglCreateContext: ", GetLastError());
-  W->surface = hDC;
-  W->hwnd = hWnd;
-  app->windows[(W->id = hWnd)] = W;
-  INFOf("Application::CreateWindow %p %p %p (%p)", W->id, W->surface, W->gl, W);
-  app->MakeCurrentWindow(W);
-  ShowWindow(hWnd, WindowsFrameworkModule::nCmdShow);
-  W->Wakeup();
-  return true;
-}
-
-void *Video::BeginGLContextCreate(Window *Win) {
-  auto W = dynamic_cast<WindowsWindow*>(Win);
-  if (wglewIsSupported("WGL_ARB_create_context")) return wglCreateContextAttribsARB((HDC)W->surface, (HGLRC)W->gl, 0);
-  else { HGLRC ret = wglCreateContext((HDC)W->surface); wglShareLists((HGLRC)W->gl, ret); return ret; }
-}
-
-void *Video::CompleteGLContextCreate(Window *W, void *gl_context) {
-  wglMakeCurrent((HDC)dynamic_cast<WindowsWindow*>(W)->surface, (HGLRC)gl_context);
-  return gl_context;
-}
-
-int Video::Swap(Window *w) {
-  w->gd->Flush();
-  SwapBuffers(dynamic_cast<WindowsWindow*>(w)->surface);
-  w->gd->CheckForError(__FILE__, __LINE__);
-  return 0;
-}
-
 FrameScheduler::FrameScheduler(WindowHolder *w) :
   window(w), maxfps(&FLAGS_target_fps), rate_limit(1), wait_forever(!FLAGS_target_fps),
   wait_forever_thread(0), synchronize_waits(0), monolithic_frame(1), run_main_loop(0) {}
@@ -433,8 +454,7 @@ void FrameScheduler::DelMainWaitSocket(Window *w, Socket fd) {
   if (fd != InvalidSocket) WSAAsyncSelect(fd, dynamic_cast<WindowsWindow*>(w)->hwnd, WM_USER, 0);
 }
 
-unique_ptr<Window> CreateWindow(Application *A) { return make_unique<WindowsWindow>(A); }
-unique_ptr<Module> CreateFrameworkModule(Application *a) { return make_unique<WindowsFrameworkModule>(a); }
+unique_ptr<Framework> Framework::Create(Application *a) { return make_unique<WindowsFrameworkModule>(a); }
 unique_ptr<TimerInterface> SystemToolkit::CreateTimer(Callback cb) { return nullptr; }
 unique_ptr<AlertViewInterface> SystemToolkit::CreateAlert(Window *w, AlertItemVec items) { return make_unique<WindowsAlertView>(); }
 unique_ptr<PanelViewInterface> SystemToolkit::CreatePanel(Window *w, const Box &b, const string &title, PanelItemVec items) { return nullptr; }
