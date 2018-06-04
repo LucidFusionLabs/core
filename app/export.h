@@ -281,13 +281,13 @@ struct CameraState {
 };
 
 LFApp *MyAppCreate(int argc, const char* const* argv);
-int MyAppMain();
+int MyAppMain(LFApp*);
 
 unsigned LFAppNextRandSeed();
 void LFAppLog(int level, const char *file, int line, const char *fmt, ...);
 void LFAppDebug(const char *file, int line, const char *fmt, ...);
+void LFAppExit(LFApp*);
 void LFAppFatal();
-void LFAppAtExit();
 void BreakHook();
 
 #ifdef __cplusplus

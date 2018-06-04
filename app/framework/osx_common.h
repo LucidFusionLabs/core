@@ -36,9 +36,11 @@ struct OSXWindow : public Window {
   NSOpenGLContext *gl=0;
   OSXWindow(Application *app) : Window(app) {}
   virtual ~OSXWindow() { ClearChildren(); }
-  void SetCaption(const string &c);
-  void SetResizeIncrements(float x, float y);
-  void SetTransparency(float v);
-  bool Reshape(int w, int h);
+  void SetCaption(const string &c) override;
+  void SetResizeIncrements(float x, float y) override;
+  void SetTransparency(float v) override;
+  bool Reshape(int w, int h) override;
+  void Wakeup(int flag=0) override;
+  int Swap() override;
 };
 }; // namespace LFL

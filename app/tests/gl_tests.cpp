@@ -41,13 +41,13 @@ extern "C" int MyAppFrame(Window *W, unsigned clicks, int flag) {
 extern "C" LFApp *MyAppCreate(int argc, const char* const* argv) {
   FLAGS_enable_video = FLAGS_enable_input = true;
   app = make_unique<Application>(argc, argv).release();
-  app->focused = CreateWindow(app).release();
+  app->focused = app->framework->ConstructWindow(app).release();
   app->focused->frame_cb = MyAppFrame;
   testing::InitGoogleTest(&argc, const_cast<char**>(argv));
   return app;
 }
 
-extern "C" int MyAppMain() {
+extern "C" int MyAppMain(LFApp*) {
   CHECK_EQ(0, app->Create(__FILE__));
   CHECK_EQ(0, app->Init());
   app->focused->gd->have_npot_textures = false;

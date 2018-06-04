@@ -143,7 +143,7 @@ string UTF8::WriteGlyph(int codepoint) {
 int UTF16::ReadGlyph(const String16Piece &s, const char16_t *p, int *len, bool eof) { *len=1; return *p; }
 String16 UTF16::WriteGlyph(int codepoint) { return String16(1, codepoint); }
 
-int isfileslash (int c) { return c == LocalFile::Slash; }
+int isfileslash (int c) { return c == LocalFileSystem::Slash; }
 int IsOpenParen (int c) { return c == '(' || c == '[' || c == '<' || c == '{'; }
 int IsCloseParen(int c) { return c == ')' || c == ']' || c == '>' || c == '}'; }
 int MatchingParens(int c1, int c2) { return (c1 == '(' && c2 == ')') || (c1 == '[' && c2 == ']') || (c1 == '<' && c2 == '>') || (c1 == '{' && c2 == '}'); }

@@ -364,8 +364,8 @@ struct TextBox : public View, public TextboxController {
   virtual void UpdateLongToken(Line *BL, int beg_offset, Line *EL, int end_offset, const string &text, int update_type);
   virtual shared_ptr<Control> AddUrlBox(Line *BL, int beg_offset, Line *EL, int end_offset, string v, Callback cb);
 
-  void AddHistory  (const string &cmd);
-  int  ReadHistory (const string &dir, const string &name);
+  void AddHistory(const string &cmd);
+  int  ReadHistory(FileSystem*, const string &dir, const string &name);
   int  WriteHistory(const string &dir, const string &name, const string &hdr);
 };
 
@@ -524,7 +524,8 @@ struct PropertyTree : public PropertyView {
 };
 
 struct DirectoryTree : public PropertyTree {
-  using PropertyTree::PropertyTree;
+  FileSystem *fs;
+  DirectoryTree(Window *W, FileSystem *FS, const FontRef &F=FontRef()) : PropertyTree(W, F), fs(FS) {}
   void Open(const string &p) { tree.Clear(); SetRoot(AddDir(p)); Reload(); }
   Id AddDir (const string &p) { return AddNode(menuicon_white->FindGlyph(13), BaseName(StringPiece(p.data(), p.size()?p.size()-1:0)), p); }
   Id AddFile(const string &p) { return AddNode(menuicon_white->FindGlyph(14), BaseName(p), p, 0); }

@@ -156,8 +156,10 @@ void FrameScheduler::AddMainWaitSocket(Window*, Socket fd, int flag, function<bo
 void FrameScheduler::DelMainWaitSocket(Window*, Socket fd) {}
 
 extern "C" int main(int argc, const char *argv[]) {
-  MyAppCreate(argc, argv);
-  return MyAppMain();
+  auto app = MyAppCreate(argc, argv);
+  int ret = MyAppMain(app);
+  LFAppExit(app);
+  return ret;
 }
 
 unique_ptr<Framework> Framework::Create(Application *app) { return make_unique<NullFrameworkModule>(app); }

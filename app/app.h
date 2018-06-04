@@ -774,6 +774,7 @@ struct Application : public ::LFApp, public ApplicationInfo, public ApplicationS
   const Color *splash_color = &Color::black;
   StringCB open_url_cb;
   Callback exit_cb;
+  LocalFileSystem localfs;
   vector<Module*> modules;
   unique_ptr<Audio> audio;
   unique_ptr<Input> input;
@@ -802,6 +803,7 @@ struct Application : public ::LFApp, public ApplicationInfo, public ApplicationS
   int Main();
   int MainLoop();
   int Suspended();
+  void Exit();
   void DrawSplash(const Color &c);
   void ResetGL(int flag);
   void CloseWindow(Window*);

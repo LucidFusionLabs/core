@@ -790,7 +790,7 @@ TEST(GUITest, EditorScrollFuzz) {
 TEST(GUITest, EditorUndoFuzz) {
   Font *font = app->fonts->Fake();
   int fh = font->Height(), fw = font->fixed_width;
-  string fn = "../../../../core/app/app.cpp", contents = LocalFile::FileContents(fn);
+  string fn = "../../../../core/app/app.cpp", contents = LocalFile(fn, "r").Contents();
   CHECK(fh && fw);
   for (int mode=0; mode<2; mode++) {
     BufferFile modified(string("")), undone(string("")), redone(string(""));

@@ -59,13 +59,13 @@ string AssetLoading::FileName(const string &asset_fn) {
 string AssetLoading::FileContents(const string &asset_fn) {
   auto i = asset_cache.find(asset_fn);
   if (i != asset_cache.end()) return string(i->second.data(), i->second.size());
-  if (asset_fn[0] == '/') return LocalFile::FileContents(asset_fn);
+  if (asset_fn[0] == '/') return LocalFile(asset_fn, "r").Contents();
 #ifdef LFL_ANDROID
   static JNI *jni = Singleton<LFL::JNI>::Set();
   unique_ptr<BufferFile> f(jni->OpenAsset(asset_fn));
   return f ? string(move(f->buf)) : string();
 #endif
-  return LocalFile::FileContents(FileName(asset_fn));
+  return LocalFile(FileName(asset_fn), "r").Contents();
 }
 
 unique_ptr<File> AssetLoading::OpenFile(const string &asset_fn) {

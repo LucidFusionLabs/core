@@ -129,18 +129,87 @@ bool BufferFile::ReplaceWith(unique_ptr<File> nf) {
   return true;
 }
 
+struct LocalDirectoryIter : public DirectoryIter {
+  bool init=0;
+  LocalDirectoryIter(LocalFileSystem *fs, const string &path, int dirs, const char *Pref, const char *Suff) {
+    P = Pref;
+    S = Suff;
+    if (fs->IsDirectory(path)) pathname = path;
+    else {
+      INFO("DirectoryIter: \"", path, "\" not a directory");
+      if (LocalFile(path, "r").Opened()) {
+        pathname = string(path, DirNameLen(path)) + fs->slash;
+        filemap[BaseName(path)] = 1;
+      }
+      return;
+    }
 #ifdef LFL_WINDOWS
-const char LocalFile::Slash = '\\';
-const char LocalFile::ExecutableSuffix[] = ".exe";
+    _finddatai64_t f;
+    string match = StrCat(path, "*.*");
+    int h = _findfirsti64(match.c_str(), &f);
+    if (h < 0) return;
 
-int LocalFile::IsFile(const string &filename) {
+    do {
+      if (!strcmp(f.name, ".")) continue;
+
+      bool isdir = f.attrib & _A_SUBDIR;
+      if (dirs >= 0 && int(isdir) != dirs) continue;
+
+      filemap[StrCat(f.name, isdir?"/":"")] = 1;
+    }
+    while (!_findnexti64(h, &f));
+
+    _findclose(h);
+#else /* LFL_WINDOWS */
+    DIR *dir;
+    dirent *dent;
+    string dirname = path;
+    if (dirname.empty()) dirname = ".";
+    if (dirname.size() > 1 && dirname[dirname.size()-1] == '/') dirname.erase(dirname.size()-1);
+    if (!(dir = opendir(dirname.c_str()))) return;
+
+    while ((dent = readdir(dir))) {
+      if (!strcmp(dent->d_name, ".")) continue;
+      if (dent->d_type != DT_DIR && dent->d_type != DT_REG && dent->d_type != DT_LNK) continue;
+
+      bool isdir = dent->d_type == DT_DIR;
+      if (dirs >= 0 && isdir != dirs) continue;
+
+      filemap[StrCat(dent->d_name, isdir?"/":"")] = 1;
+    }
+
+    closedir(dir);
+#endif /* LFL_WINDOWS */
+  }
+
+  const char *Next() override {
+    const char *fn=0;
+    for (;;) {
+      if (!init) { init=1; iter = filemap.begin(); }
+      else iter++;
+      if (iter == filemap.end()) return 0;
+      const char *k = (*iter).first.c_str();
+
+      if (!strcmp(k, "../")) continue;
+      if (P && !PrefixMatch(k, P)) continue;
+      if (S && !SuffixMatch(k, S)) continue;
+      return k;
+    }
+  }
+};
+
+#ifdef LFL_WINDOWS
+const char LocalFileSystem::Slash = '\\'
+LocalFileSystem::LocalFileSystem() : FileSystem(Slash, ".exe") {}
+
+int LocalFileSystem::IsFile(const string &filename) {
   if (filename.empty()) return true;
   DWORD attr = ::GetFileAttributes(filename.c_str());
   if (attr == INVALID_FILE_ATTRIBUTES) return ERRORv(0, "GetFileAttributes(", filename, ") failed: ", Application::SystemError());
   return attr & FILE_ATTRIBUTE_NORMAL;
 }
 
-int LocalFile::IsDirectory(const string &filename) {
+int LocalFileSystem::IsDirectory(const string &filename) {
   if (filename.empty()) return true;
   DWORD attr = ::GetFileAttributes(filename.c_str());
   if (attr == INVALID_FILE_ATTRIBUTES) return ERRORv(0, "GetFileAttributes(", filename, ") failed: ", Application::SystemError());
@@ -148,24 +217,50 @@ int LocalFile::IsDirectory(const string &filename) {
 }
 
 #else // LFL_WINDOWS
-const char LocalFile::Slash = '/';
-const char LocalFile::ExecutableSuffix[] = "";
+const char LocalFileSystem::Slash = '/';
+LocalFileSystem::LocalFileSystem() : FileSystem(Slash, "") {}
 
-int LocalFile::IsFile(const string &filename) {
+int LocalFileSystem::IsFile(const string &filename) {
   if (filename.empty()) return false;
   struct stat buf;
   if (stat(filename.c_str(), &buf)) return false;
   return !(buf.st_mode & S_IFDIR);
 }
 
-int LocalFile::IsDirectory(const string &filename) {
+int LocalFileSystem::IsDirectory(const string &filename) {
   if (filename.empty()) return true;
   struct stat buf;
   if (stat(filename.c_str(), &buf)) return false;
   return buf.st_mode & S_IFDIR;
 }
+#endif // LFL_WINDOWS
 
-int LocalFile::CreateTemporary(ApplicationInfo *a, const string &prefix, string *name) {
+string LocalFileSystem::CurrentDirectory(int max_size) {
+  string ret(max_size, 0); 
+#ifdef LFL_WINDOWS
+  _getcwd(&ret[0], ret.size());
+#else
+  getcwd(&ret[0], ret.size());
+#endif
+  ret.resize(strlen(ret.data()));
+  return ret;
+}
+
+string LocalFileSystem::JoinPath(const string &x, const string &y) {
+  string p = (y.size() && y[0] == '/') ? "" : x;
+  return StrCat(p, p.empty() ? "" : (p.back() == slash ? "" : StrCat(slash)),
+                p.size() && PrefixMatch(y, "./") ? y.substr(2) : y);
+}
+
+unique_ptr<File> LocalFileSystem::OpenFile(const string &path, const string &mode, bool pre_create) {
+  return make_unique<LocalFile>(path, mode, pre_create);
+}
+
+unique_ptr<DirectoryIter> LocalFileSystem::ReadDirectory(const string &path, int dirs, const char *P, const char *S) {
+  return make_unique<LocalDirectoryIter>(this, path, dirs, P, S);
+}
+
+int LocalFileSystem::CreateTemporary(ApplicationInfo *a, const string &prefix, string *name) {
   string v;
   if (!name) name = &v;
   *name = CreateTemporaryNameTemplate(a, prefix);
@@ -175,13 +270,13 @@ int LocalFile::CreateTemporary(ApplicationInfo *a, const string &prefix, string 
   return fd;
 }
 
-string LocalFile::CreateTemporaryName(ApplicationInfo *a, const string &prefix) {
+string LocalFileSystem::CreateTemporaryName(ApplicationInfo *a, const string &prefix) {
   string ret = CreateTemporaryNameTemplate(a, prefix);
   CHECK(mktemp(&ret[0]));
   return ret;
 }
 
-string LocalFile::CreateTemporaryNameTemplate(ApplicationInfo *a, const string &prefix) {
+string LocalFileSystem::CreateTemporaryNameTemplate(ApplicationInfo *a, const string &prefix) {
 #ifdef LFL_APPLE
   string dir = "/var/tmp/";
 #else
@@ -189,7 +284,37 @@ string LocalFile::CreateTemporaryNameTemplate(ApplicationInfo *a, const string &
 #endif
   return StrCat(dir, a->name, "_", prefix, ".XXXXXXXX");
 }
-#endif // LFL_WINDOWS
+
+bool LocalFileSystem::chdir(const string &dir) {
+#ifdef LFL_WINDOWS
+  return _chdir(dir.c_str()) == 0;
+#else
+  return ::chdir(dir.c_str()) == 0;
+#endif
+}
+
+bool LocalFileSystem::mkdir(const string &dir, int mode) {
+#ifdef LFL_WINDOWS
+  return _mkdir(dir.c_str()) == 0;
+#else
+  return ::mkdir(dir.c_str(), mode) == 0;
+#endif
+}
+
+bool LocalFileSystem::unlink(const string &fn) {
+#ifdef LFL_WINDOWS
+  return _unlink(fn.c_str()) == 0;
+#else
+  return ::unlink(fn.c_str()) == 0;
+#endif
+}
+
+int LocalFile::WhenceMap(int n) {
+  if      (n == Whence::SET) return SEEK_SET;
+  else if (n == Whence::CUR) return SEEK_CUR;
+  else if (n == Whence::END) return SEEK_END;
+  else return -1;
+}
 
 FILE *LocalFile::FOpen(const char *fn, const char *mode) {
 #ifdef LFL_WINDOWS
@@ -217,37 +342,6 @@ FILE *LocalFile::FReopen(const char *fn, const char *mode, FILE *stream) {
 #endif
 }
 
-bool LocalFile::chdir(const string &dir) {
-#ifdef LFL_WINDOWS
-  return _chdir(dir.c_str()) == 0;
-#else
-  return ::chdir(dir.c_str()) == 0;
-#endif
-}
-
-bool LocalFile::mkdir(const string &dir, int mode) {
-#ifdef LFL_WINDOWS
-  return _mkdir(dir.c_str()) == 0;
-#else
-  return ::mkdir(dir.c_str(), mode) == 0;
-#endif
-}
-
-bool LocalFile::unlink(const string &fn) {
-#ifdef LFL_WINDOWS
-  return _unlink(fn.c_str()) == 0;
-#else
-  return ::unlink(fn.c_str()) == 0;
-#endif
-}
-
-int LocalFile::WhenceMap(int n) {
-  if      (n == Whence::SET) return SEEK_SET;
-  else if (n == Whence::CUR) return SEEK_CUR;
-  else if (n == Whence::END) return SEEK_END;
-  else return -1;
-}
-
 bool LocalFile::Open(const string &path, const string &mode, bool pre_create) {
   fn = path;
   if (pre_create) {
@@ -261,7 +355,7 @@ bool LocalFile::Open(const string &path, const string &mode, bool pre_create) {
 #endif
 #if 0
   char filepath[MAXPATHLEN];
-  if (fcntl(fileno(static_cast<FILE*>(impl)), F_GETPATH, filepath) != -1) fn = filepath;
+  if (fcntl(fileno(impl), F_GETPATH, filepath) != -1) fn = filepath;
 #endif
   if (!Opened()) return false;
   writable = strchr(mode.c_str(), 'w');
@@ -269,47 +363,49 @@ bool LocalFile::Open(const string &path, const string &mode, bool pre_create) {
 }
 
 void LocalFile::Reset() {
-  fseek(static_cast<FILE*>(impl), 0, SEEK_SET);
+  fseek(impl, 0, SEEK_SET);
 }
 
 int LocalFile::Size() {
   if (!impl) return -1;
 
-  int place = ftell(static_cast<FILE*>(impl));
-  fseek(static_cast<FILE*>(impl), 0, SEEK_END);
+  int place = ftell(impl);
+  fseek(impl, 0, SEEK_END);
 
-  int ret = ftell(static_cast<FILE*>(impl));
-  fseek(static_cast<FILE*>(impl), place, SEEK_SET);
+  int ret = ftell(impl);
+  fseek(impl, place, SEEK_SET);
   return ret;
 }
 
 void LocalFile::Close() {
-  if (impl) fclose(static_cast<FILE*>(impl));
+  if (impl) fclose(impl);
   impl = 0;
 }
 
 long long LocalFile::Seek(long long offset, int whence) {
-  long long ret = fseek(static_cast<FILE*>(impl), offset, WhenceMap(whence));
+  long long ret = fseek(impl, offset, WhenceMap(whence));
   if (ret < 0) return ret;
   if (whence == Whence::SET) ret = offset;
-  else ret = ftell(static_cast<FILE*>(impl));
+  else ret = ftell(impl);
   return ret;
 }
 
 int LocalFile::Read(void *buf, size_t size) {
-  int ret = fread(buf, 1, size, static_cast<FILE*>(impl));
+  int ret = fread(buf, 1, size, impl);
   if (ret < 0) return ret;
   return ret;
 }
 
 int LocalFile::Write(const void *buf, size_t size) {
-  int ret = fwrite(buf, 1, size!=-1?size:strlen(static_cast<const char*>(buf)), static_cast<FILE*>(impl));
+  if (!Opened()) return -1;
+  int ret = fwrite(buf, 1, size!=-1?size:strlen(static_cast<const char*>(buf)), impl);
   if (ret < 0) return ret;
   return ret;
 }
 
-bool LocalFile::Flush() { fflush(static_cast<FILE*>(impl)); return true; }
+bool LocalFile::Flush() { fflush(impl); return true; }
 unique_ptr<File> LocalFile::Create() { return make_unique<LocalFile>(StrCat(fn, ".new"), "w+"); }
+
 bool LocalFile::ReplaceWith(unique_ptr<File> nf) {
   LocalFile *new_file = dynamic_cast<LocalFile*>(nf.get());
   if (!new_file) return false;
@@ -322,98 +418,17 @@ bool LocalFile::ReplaceWith(unique_ptr<File> nf) {
   return !ret;
 }
 
-string LocalFile::CurrentDirectory(int max_size) {
-  string ret(max_size, 0); 
-#ifdef LFL_WINDOWS
-  _getcwd(&ret[0], ret.size());
-#else
-  getcwd(&ret[0], ret.size());
-#endif
-  ret.resize(strlen(ret.data()));
-  return ret;
-}
-
-string LocalFile::JoinPath(const string &x, const string &y) {
-  string p = (y.size() && y[0] == '/') ? "" : x;
-  return StrCat(p, p.empty() ? "" : (p.back() == LocalFile::Slash ? "" : StrCat(LocalFile::Slash)),
-                p.size() && PrefixMatch(y, "./") ? y.substr(2) : y);
-}
-
-SearchPaths::SearchPaths(const char *paths) {
+SearchPaths::SearchPaths(FileSystem *FS, const char *paths) : fs(FS) {
   StringWordIter words(StringPiece::Unbounded(BlankNull(paths)), isint<':'>);
   for (string word = words.NextString(); !words.Done(); word = words.NextString()) path.push_back(word);
 }
 
 string SearchPaths::Find(const string &fn) {
   for (auto &p : path) {
-    string f = StrCat(p, LocalFile::Slash, fn);
-    if (LocalFile::IsFile(f)) return f;
+    string f = StrCat(p, fs->slash, fn);
+    if (fs->IsFile(f)) return f;
   }
   return "";
-}
-
-DirectoryIter::DirectoryIter(const string &path, int dirs, const char *Pref, const char *Suf) : P(Pref), S(Suf) {
-  if (LocalFile::IsDirectory(path)) pathname = path;
-  else {
-    INFO("DirectoryIter: \"", path, "\" not a directory");
-    if (LocalFile(path, "r").Opened()) {
-      pathname = string(path, DirNameLen(path)) + LocalFile::Slash;
-      filemap[BaseName(path)] = 1;
-    }
-    return;
-  }
-#ifdef LFL_WINDOWS
-  _finddatai64_t f;
-  string match = StrCat(path, "*.*");
-  int h = _findfirsti64(match.c_str(), &f);
-  if (h < 0) return;
-
-  do {
-    if (!strcmp(f.name, ".")) continue;
-
-    bool isdir = f.attrib & _A_SUBDIR;
-    if (dirs >= 0 && int(isdir) != dirs) continue;
-
-    filemap[StrCat(f.name, isdir?"/":"")] = 1;
-  }
-  while (!_findnexti64(h, &f));
-
-  _findclose(h);
-#else /* LFL_WINDOWS */
-  DIR *dir;
-  dirent *dent;
-  string dirname = path;
-  if (dirname.empty()) dirname = ".";
-  if (dirname.size() > 1 && dirname[dirname.size()-1] == '/') dirname.erase(dirname.size()-1);
-  if (!(dir = opendir(dirname.c_str()))) return;
-
-  while ((dent = readdir(dir))) {
-    if (!strcmp(dent->d_name, ".")) continue;
-    if (dent->d_type != DT_DIR && dent->d_type != DT_REG && dent->d_type != DT_LNK) continue;
-
-    bool isdir = dent->d_type == DT_DIR;
-    if (dirs >= 0 && isdir != dirs) continue;
-
-    filemap[StrCat(dent->d_name, isdir?"/":"")] = 1;
-  }
-
-  closedir(dir);
-#endif /* LFL_WINDOWS */
-}
-
-const char *DirectoryIter::Next() {
-  const char *fn=0;
-  for (;;) {
-    if (!init) { init=1; iter = filemap.begin(); }
-    else iter++;
-    if (iter == filemap.end()) return 0;
-    const char *k = (*iter).first.c_str();
-
-    if (!strcmp(k, "../")) continue;
-    if (P && !PrefixMatch(k, P)) continue;
-    if (S && !SuffixMatch(k, S)) continue;
-    return k;
-  }
 }
 
 /* ContainerFile */
@@ -530,8 +545,8 @@ void StringFile::Print(const string &name, bool nl) {
   if (!nl) INFO(s);
 }
 
-int StringFile::ReadVersioned(const VersionedFileName &fn, ApplicationLifetime *life, int iteration) {
-  if (iteration == -1) if ((iteration = MatrixFile::FindHighestIteration(fn, "string", life)) == -1) return -1;
+int StringFile::ReadVersioned(FileSystem *fs, const VersionedFileName &fn, ApplicationLifetime *life, int iteration) {
+  if (iteration == -1) if ((iteration = MatrixFile::FindHighestIteration(fs, fn, "string", life)) == -1) return -1;
   if (Read(StrCat(fn.dir, MatrixFile::Filename(fn, "string", iteration)))) return -1;
   return iteration;
 }
@@ -595,9 +610,9 @@ int StringFile::WriteRow(File *file, const string &rowval) {
 
 /* MatrixFile */
 
-int MatrixFile::ReadVersioned(const VersionedFileName &fn, ApplicationLifetime *life, int iteration) {
+int MatrixFile::ReadVersioned(FileSystem *fs, const VersionedFileName &fn, ApplicationLifetime *life, int iteration) {
   static const char *fileext[] = { "matbin", "matrix" };
-  if (iteration == -1) if ((iteration = FindHighestIteration(fn, fileext[0], fileext[1], life)) == -1) return -1;
+  if (iteration == -1) if ((iteration = FindHighestIteration(fs, fn, fileext[0], fileext[1], life)) == -1) return -1;
 
   bool found = 0;
   if (!found) if (!ReadBinary(string(fn.dir) + Filename(fn, fileext[0], iteration))) found=1;
@@ -708,21 +723,21 @@ string MatrixFile::Filename(const string &Class, const string &Var, const string
   return StringPrintf("%s.%04d.%s.%s", Class.c_str(), iteration, Var.c_str(), Suffix.c_str());
 }
 
-int MatrixFile::FindHighestIteration(const VersionedFileName &fn, const string &Suffix, ApplicationLifetime *life) {
+int MatrixFile::FindHighestIteration(FileSystem *fs, const VersionedFileName &fn, const string &Suffix, ApplicationLifetime *life) {
   int iteration = -1, iter;
   string pref = StrCat(fn._class, ".");
   string suf  = StrCat(".", fn.var, ".", Suffix);
 
-  DirectoryIter d(fn.dir, 0, pref.c_str(), suf.c_str());
-  for (const char *f = d.Next(); (!life || life->run) && f; f = d.Next()) {
+  auto d = fs->ReadDirectory(fn.dir, 0, pref.c_str(), suf.c_str());
+  for (const char *f = d->Next(); (!life || life->run) && f; f = d->Next()) {
     if ((iter = atoi(f + pref.length())) > iteration) iteration = iter;
   }
   return iteration;
 }
 
-int MatrixFile::FindHighestIteration(const VersionedFileName &fn, const string &Suffix1, const string &Suffix2, ApplicationLifetime *life) {
-  int iter1 = FindHighestIteration(fn, Suffix1);
-  int iter2 = FindHighestIteration(fn, Suffix2);
+int MatrixFile::FindHighestIteration(FileSystem *fs, const VersionedFileName &fn, const string &Suffix1, const string &Suffix2, ApplicationLifetime *life) {
+  int iter1 = FindHighestIteration(fs, fn, Suffix1);
+  int iter2 = FindHighestIteration(fs, fn, Suffix2);
   return iter1 >= iter2 ? iter1 : iter2;
 }
 
@@ -793,16 +808,16 @@ int MatrixFile::WriteRow(File *file, const double *row, int N, bool lastrow) {
 
 /* SettingsFile */
 
-int SettingsFile::Load(ApplicationInfo *a) {
-  int ret = SettingsFile::Read(a->savedir, StrCat(a->name, "_settings"));
+int SettingsFile::Load(FileSystem *fs, ApplicationInfo *a) {
+  int ret = SettingsFile::Read(fs, a->savedir, StrCat(a->name, "_settings"));
   Singleton<FlagMap>::Set()->dirty = false;
   return ret;
 }
 
-int SettingsFile::Read(const string &dir, const string &name) {
+int SettingsFile::Read(FileSystem *fs, const string &dir, const string &name) {
   StringFile settings; int lastiter=0;
   VersionedFileName vfn(dir.c_str(), name.c_str(), VarName());
-  if (settings.ReadVersioned(vfn, nullptr, lastiter) < 0) return ERRORv(-1, name, ".", lastiter, ".name");
+  if (settings.ReadVersioned(fs, vfn, nullptr, lastiter) < 0) return ERRORv(-1, name, ".", lastiter, ".name");
   for (int i=0, l=settings.Lines(); i<l; i++) {
     const char *line = (*settings.F)[i].c_str(), *sep = strstr(line, Separator());
     if (sep) Singleton<FlagMap>::Set()->Set(string(line, sep-line), sep + strlen(Separator()));
@@ -819,9 +834,9 @@ int SettingsFile::Write(const vector<string> &fields, const string &dir, const s
   return 0;
 }
 
-int SettingsFile::Save(ApplicationInfo *a, const vector<string> &fields) {
+int SettingsFile::Save(FileSystem *fs, ApplicationInfo *a, const vector<string> &fields) {
   Singleton<FlagMap>::Set()->dirty = false;
-  LocalFile::chdir(a->startdir);
+  fs->chdir(a->startdir);
   int ret = SettingsFile::Write(fields, a->savedir, StrCat(a->name, "_settings"));
   INFO("wrote settings");
   return ret;

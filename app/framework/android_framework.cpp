@@ -476,7 +476,7 @@ extern "C" void Java_com_lucidfusionlabs_app_NativeAPI_main(JNIEnv *e, jclass c,
   app->focused->gl_w = w;
   app->focused->gl_h = h;
   app->focused->gd->version = v;
-  int ret = MyAppMain();
+  int ret = MyAppMain(app);
 
   NativeAPI_shutdownMainLoop();
   INFOf("Main: env=%p ret=%d", jni->env, ret);

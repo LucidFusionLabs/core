@@ -132,7 +132,7 @@ TEST(IterTest, ChunkIter) {
     EXPECT_EQ(contents, appended);
   }
   {
-    string contents = LocalFile::FileContents("../../../../core/app/app.cpp"), appended;
+    string contents = LocalFile("../../../../core/app/app.cpp", "r").Contents(), appended;
     StringChunkIterT<70, char> iter(contents);
     for(iter.Next(); !iter.Done(); iter.Next()) appended.append(iter.Current(), iter.CurrentLength());
     EXPECT_EQ(contents, appended);

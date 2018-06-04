@@ -394,7 +394,7 @@ bool HTTPClient::WGet(SocketServices *net, ApplicationInfo *appinfo, const strin
   if (!handler->LoadURL(url, &prot)) {
     if (prot != "file") return false;
     string fn = StrCat(!handler->host.empty() ? "/" : "", handler->host , "/", handler->path);
-    string content = LocalFile::FileContents(fn);
+    string content = LocalFile(fn, "r").Contents();
     if (!content.empty() && cb) cb(0, 0, string(), content.data(), content.size());
     if (cb)                     cb(0, 0, string(), 0,              0);
     return true;

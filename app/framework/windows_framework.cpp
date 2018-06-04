@@ -271,7 +271,7 @@ int WindowsFrameworkModule::MessageLoop() {
     while (app->run && PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) { TranslateMessage(&msg); DispatchMessage(&msg); }
     if (app->run && !FLAGS_target_fps) if (GetMessage(&msg, NULL, 0, 0)) { TranslateMessage(&msg); DispatchMessage(&msg); }
   }
-  LFAppAtExit();
+  app->Exit();
   CoUninitialize();
   return msg.wParam;
 }

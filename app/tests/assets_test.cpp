@@ -22,7 +22,7 @@ namespace LFL {
 extern Application *app;
 
 TEST(LoaderTest, ZLib) {
-  string contents = LocalFile::FileContents("../../../../core/app/assets/MenuAtlas,0,255,255,255,0.0000.png");
+  string contents = LocalFile("../../../../core/app/assets/MenuAtlas,0,255,255,255,0.0000.png", "r").Contents();
   string compressed = ZLibWriter::Compress(contents);
   string decompressed = ZLibReader::Decompress(compressed);
   EXPECT_EQ(contents, decompressed);

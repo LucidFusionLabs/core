@@ -40,12 +40,13 @@ struct Shell {
   MouseFocus *mouse_focus;
   TouchKeyboard *touch_keyboard;
   Fonts *fonts;
+  FileSystem *fs;
   vector<Command> command;
   Shell(Window*, ApplicationInfo*, ApplicationShutdown *shutdown, ThreadDispatcher*, 
         GraphicsDeviceHolder*, Clipboard*, SocketServices*, AssetStore*, AssetLoading*, Audio*,
-        MouseFocus*, TouchKeyboard*, Fonts*);
+        MouseFocus*, TouchKeyboard*, Fonts*, FileSystem*);
   Shell(Window *w) : Shell(w, w->parent, w->parent, w->parent, w->parent, w->parent, w->parent->net.get(), w->parent,
-                           w->parent, w->parent->audio.get(), w->parent, w->parent, w->parent->fonts.get()) {}
+                           w->parent, w->parent->audio.get(), w->parent, w->parent, w->parent->fonts.get(), &w->parent->localfs) {}
 
   template <class... Args> void Add(Args&&... args) { command.emplace_back(forward<Args>(args)...); }
   void AddSceneCommands(Scene *scene);

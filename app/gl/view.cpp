@@ -622,10 +622,10 @@ void TextBox::AddHistory(const string &cmd) {
   cmd_last[(cmd_last_ind = -1)] = cmd;
 }
 
-int TextBox::ReadHistory(const string &dir, const string &name) {
+int TextBox::ReadHistory(FileSystem *fs, const string &dir, const string &name) {
   StringFile history;
   VersionedFileName vfn(dir.c_str(), name.c_str(), "history");
-  if (history.ReadVersioned(vfn) < 0) { ERROR("no ", name, " history"); return -1; }
+  if (history.ReadVersioned(fs, vfn) < 0) { ERROR("no ", name, " history"); return -1; }
   for (int i=0, l=history.Lines(); i<l; i++) AddHistory((*history.F)[l-1-i]);
   return 0;
 }
@@ -1156,8 +1156,8 @@ void DirectoryTree::VisitExpandedChildren(Id id, const Node::Visitor &cb, int de
   else depth = n->depth;
   if (!n->expanded) return;
   string dirname = n->val;
-  DirectoryIter dir(dirname, -1);
-  while(const char *fn = dir.Next()) {
+  auto dir = fs->ReadDirectory(dirname, -1);
+  while(const char *fn = dir->Next()) {
     string pn = StrCat(dirname, fn);
     VisitExpandedChildren(pn.back() == '/' ? AddDir(pn) : AddFile(pn), cb, 1+depth);
   }

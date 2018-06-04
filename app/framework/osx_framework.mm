@@ -296,6 +296,16 @@
 @end
 
 @implementation GameContainerView
+  {
+    LFL::Application *app;
+  }
+
+  - (id)initWithFrame:(NSRect)frame andApp:(LFL::Application*)a {
+    self = [super initWithFrame: frame];
+    app = a;
+    return self;
+  }
+
   // - (void)windowDidBecomeKey:(NSNotification *)notification {}
   // - (void)windowDidResignKey:(NSNotification *)notification {}
   // - (void)windowDidBecomeMain:(NSNotification *)notification {}
@@ -307,7 +317,7 @@
     auto wh = _gameView.screen->parent;
     wh->SetFocusedWindow(_gameView.screen);
     wh->CloseWindow(_gameView.screen);
-    if (wh->windows.empty()) LFAppAtExit();
+    if (wh->windows.empty()) app->Exit();
   }
 
   - (void)objcWindowSelect { _gameView.screen->parent->SetFocusedWindow(_gameView.screen); }
@@ -319,11 +329,21 @@
 @end
 
 @implementation AppDelegate
+  {
+    LFL::Application *app;
+  }
+
+  - (id) initWithApp: (LFL::Application*) a {
+    self = [super init];
+    app = a;
+    return self;
+  }
+
   - (void)applicationWillTerminate: (NSNotification *)aNotification {}
   - (void)applicationDidFinishLaunching: (NSNotification *)aNotification {
     [[NSUserDefaults standardUserDefaults] registerDefaults:@{ @"NSApplicationCrashOnExceptions": @YES }];
     // [[NSFileManager defaultManager] changeCurrentDirectoryPath: [[NSBundle mainBundle] resourcePath]];
-    int ret = MyAppMain();
+    int ret = MyAppMain(app);
     if (ret) exit(ret);
     INFOf("OSXFramework::Main ret=%d\n", ret);
   }
@@ -333,7 +353,7 @@
                                          styleMask:NSWindowStyleMaskClosable|NSWindowStyleMaskMiniaturizable|NSWindowStyleMaskResizable|NSWindowStyleMaskTitled
                                          backing:NSBackingStoreBuffered defer:NO];
 
-    GameContainerView *container_view = [[[GameContainerView alloc] initWithFrame:window.frame] autorelease];
+    GameContainerView *container_view = [[[GameContainerView alloc] initWithFrame:window.frame andApp:app] autorelease];
     container_view.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
     [container_view setAutoresizesSubviews:YES];
     [window setContentView:container_view];
@@ -590,16 +610,31 @@ const int Key::Insert = -1;
 
 const int Texture::updatesystemimage_pf = Pixel::RGB24;
 
-struct OSXFrameworkModule : public Module {
+struct OSXFrameworkModule : public Framework {
   WindowHolder *window;
   OSXFrameworkModule(WindowHolder *w) : window(w) {}
 
-  int Init() {
+  int Init() override {
     INFO("OSXFrameworkModule::Init()");
-    CHECK(Video::CreateWindow(window, window->focused));
+    CHECK(CreateWindow(window, window->focused));
     window->MakeCurrentWindow(window->focused);
     return 0;
   }
+
+  unique_ptr<Window> ConstructWindow(Application *app) override { return make_unique<OSXWindow>(app); }
+  void StartWindow(Window *W) override { [dynamic_cast<OSXWindow*>(W)->view startThread:true]; }
+
+  bool CreateWindow(WindowHolder *H, Window *W) override { 
+    [dynamic_cast<OSXWindow*>(H->focused)->view clearKeyModifiers];
+    W->id = (dynamic_cast<OSXWindow*>(W)->view =
+             [static_cast<AppDelegate*>([NSApp delegate]) createWindow:W->gl_w height:W->gl_h nativeWindow:W]);
+    if (W->id) H->windows[W->id] = W;
+    W->SetCaption(W->caption);
+    return true; 
+  }
+
+  // void *BeginGLContextCreate(Window *W) { return 0; }
+  // void *CompleteGLContextCreate(Window *W, void *gl_context) { return [dynamic_cast<OSXWindow*>(W)->view createGLContext]; }
 };
 
 struct OSXAlertView : public AlertViewInterface {
@@ -718,6 +753,21 @@ bool OSXWindow::Reshape(int w, int h) {
   return true;
 }
 
+void OSXWindow::Wakeup(int flag) {
+  if (parent->scheduler.wait_forever) {
+    if (flag & WakeupFlag::InMainThread) [view setNeedsDisplay:YES];
+    else [view performSelectorOnMainThread:@selector(setNeedsDisplay:) withObject:@YES waitUntilDone:NO];
+  }
+}
+
+int OSXWindow::Swap() {
+  gd->Flush();
+  // [[view openGLContext] flushBuffer];
+  CGLFlushDrawable([[view openGLContext] CGLContextObj]);
+  gd->CheckForError(__FILE__, __LINE__);
+  return 0;
+}
+
 void ThreadDispatcher::RunCallbackInMainThread(Callback cb) {
   message_queue.Write(make_unique<Callback>(move(cb)).release());
   if (!FLAGS_target_fps) wakeup->Wakeup();
@@ -775,13 +825,6 @@ void TouchKeyboard::OpenTouchKeyboard() {}
 void TouchKeyboard::CloseTouchKeyboard() {}
 void TouchKeyboard::CloseTouchKeyboardAfterReturn(bool v) {}
 void TouchKeyboard::SetTouchKeyboardTiled(bool v) {}
-
-void Window::Wakeup(int flag) {
-  if (parent->scheduler.wait_forever) {
-    if (flag & WakeupFlag::InMainThread) [dynamic_cast<OSXWindow*>(this)->view setNeedsDisplay:YES];
-    else [dynamic_cast<OSXWindow*>(this)->view performSelectorOnMainThread:@selector(setNeedsDisplay:) withObject:@YES waitUntilDone:NO];
-  }
-}
 
 void WindowHolder::SetAppFrameEnabled(bool) {}
 int Application::SetExtraScale(bool v) { return false; }
@@ -841,29 +884,6 @@ void Application::ShowSystemContextMenu(const MenuItemVec &items) {
   [dynamic_cast<OSXWindow*>(focused)->view clearKeyModifiers];
 }
 
-bool Video::CreateWindow(WindowHolder *H, Window *W) { 
-  [dynamic_cast<OSXWindow*>(H->focused)->view clearKeyModifiers];
-  W->id = (dynamic_cast<OSXWindow*>(W)->view =
-           [static_cast<AppDelegate*>([NSApp delegate]) createWindow:W->gl_w height:W->gl_h nativeWindow:W]);
-  if (W->id) H->windows[W->id] = W;
-  W->SetCaption(W->caption);
-  return true; 
-}
-
-void Video::StartWindow(Window *W) { [dynamic_cast<OSXWindow*>(W)->view startThread:true]; }
-void *Video::BeginGLContextCreate(Window *W) { return 0; }
-void *Video::CompleteGLContextCreate(Window *W, void *gl_context) {
-  return [dynamic_cast<OSXWindow*>(W)->view createGLContext];
-}
-
-int Video::Swap(Window *W) {
-  W->gd->Flush();
-  // [[dynamic_cast<OSXWindow*>(W)->view openGLContext] flushBuffer];
-  CGLFlushDrawable([[dynamic_cast<OSXWindow*>(W)->view openGLContext] CGLContextObj]);
-  W->gd->CheckForError(__FILE__, __LINE__);
-  return 0;
-}
-
 FrameScheduler::FrameScheduler(WindowHolder *w) :
   window(w), maxfps(&FLAGS_target_fps), rate_limit(0), wait_forever(!FLAGS_target_fps),
   wait_forever_thread(0), synchronize_waits(0), monolithic_frame(0), run_main_loop(0) {}
@@ -892,8 +912,7 @@ void FrameScheduler::DelMainWaitSocket(Window *w, Socket fd) {
   [dynamic_cast<OSXWindow*>(w)->view delMainWaitSocket: fd];
 }
 
-unique_ptr<Window> CreateWindow(Application *app) { return make_unique<OSXWindow>(app); }
-unique_ptr<Module> CreateFrameworkModule(Application *a) { return make_unique<OSXFrameworkModule>(a); }
+unique_ptr<Framework> Framework::Create(Application *a) { return make_unique<OSXFrameworkModule>(a); }
 unique_ptr<TimerInterface> SystemToolkit::CreateTimer(Callback cb) { return make_unique<AppleTimer>(move(cb)); }
 unique_ptr<AlertViewInterface> SystemToolkit::CreateAlert(Window *w, AlertItemVec items) { return make_unique<OSXAlertView>(w->parent, move(items)); }
 unique_ptr<PanelViewInterface> SystemToolkit::CreatePanel(Window*, const Box &b, const string &title, PanelItemVec items) { return make_unique<OSXPanelView>(b, title, move(items)); }
@@ -915,8 +934,8 @@ unique_ptr<MenuViewInterface> SystemToolkit::CreateEditMenu(Window*, MenuItemVec
 }; // namespace LFL
 
 extern "C" int main(int argc, const char** argv) {
-  MyAppCreate(argc, argv);
-  AppDelegate *app_delegate = [[AppDelegate alloc] init];
+  auto app = static_cast<LFL::Application*>(MyAppCreate(argc, argv));
+  AppDelegate *app_delegate = [[AppDelegate alloc] initWithApp: app];
   [[NSApplication sharedApplication] setDelegate: app_delegate];
   [NSApp setMainMenu:[[NSMenu alloc] init]];
   OSXCreateSystemApplicationMenu();

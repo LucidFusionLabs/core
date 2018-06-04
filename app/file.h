@@ -83,6 +83,33 @@ struct File {
   static bool WriteSuccess(File *f, void *out, int len) { return f->Write(out, len) == len; }
 };
 
+struct DirectoryIter {
+  typedef map<string, int> Map;
+  string pathname;
+  Map filemap;
+  Map::iterator iter;
+  const char *P=0, *S=0;
+  virtual const char *Next() = 0;
+  static void Add(void *self, const char *k, int v) { static_cast<DirectoryIter*>(self)->filemap[k] = v; }
+};
+
+struct FileSystem {
+  const char slash;
+  const string executable_suffix;
+  FileSystem(char s='/', const string &es="") : slash(s), executable_suffix(es) {}
+
+  virtual ~FileSystem() {}
+  virtual bool chdir(const string &dir) = 0;
+  virtual bool mkdir(const string &dir, int mode) = 0;
+  virtual bool unlink(const string &fn) = 0;
+  virtual int IsFile(const string &localfilename) = 0;
+  virtual int IsDirectory(const string &localfilename) = 0;
+  virtual string CurrentDirectory(int max_size=1024) = 0;
+  virtual string JoinPath(const string &x, const string &y) = 0;
+  virtual unique_ptr<File> OpenFile(const string &fn, const string &mode, bool pre_create=false) = 0;
+  virtual unique_ptr<DirectoryIter> ReadDirectory(const string &path, int dirs=0, const char *P=0, const char *S=0) = 0;
+};
+
 struct BufferFile : public File {
   StringPiece ptr;
   string buf, fn;
@@ -109,8 +136,6 @@ struct BufferFile : public File {
 };
 
 struct LocalFile : public File {
-  static const char Slash, ExecutableSuffix[];
-
   FILE *impl=0;
   string fn;
   bool writable=0;
@@ -134,30 +159,33 @@ struct LocalFile : public File {
   bool ReplaceWith(unique_ptr<File>) override;
 
   static int WhenceMap(int n);
-  static bool chdir(const string &dir);
-  static bool mkdir(const string &dir, int mode);
-  static bool unlink(const string &fn);
-  static int IsFile(const string &localfilename);
-  static int IsDirectory(const string &localfilename);
-  static int CreateTemporary(ApplicationInfo*, const string &prefix, string *localfilename_out);
-  static string CreateTemporaryName(ApplicationInfo*, const string &prefix);
-  static string CreateTemporaryNameTemplate(ApplicationInfo*, const string &prefix);
-  static string CurrentDirectory(int max_size=1024);
-  static string JoinPath(const string &x, const string &y);
-  static string FileContents(const string &localfilename) { return LocalFile(localfilename, "r").Contents(); }
-  static int WriteFile(const string &path, const StringPiece &sp) {
-    LocalFile file(path, "w");
-    return file.Opened() ? file.Write(sp.data(), sp.size()) : -1;
-  }
-
   static FILE *FOpen(const char *fn, const char *mode);
   static FILE *FdOpen(int, const char *mode);
   static FILE *FReopen(const char *fn, const char *mode, FILE *stream);
 };
 
+struct LocalFileSystem : public FileSystem {
+  static const char Slash;
+  LocalFileSystem();
+  bool chdir(const string &dir) override;
+  bool mkdir(const string &dir, int mode) override;
+  bool unlink(const string &fn) override;
+  int IsFile(const string &localfilename) override;
+  int IsDirectory(const string &localfilename) override;
+  string CurrentDirectory(int max_size=1024) override;
+  string JoinPath(const string &x, const string &y) override;
+  unique_ptr<File> OpenFile(const string &fn, const string &mode, bool pre_create=false) override;
+  unique_ptr<DirectoryIter> ReadDirectory(const string &path, int dirs=0, const char *P=0, const char *S=0) override;
+
+  static int CreateTemporary(ApplicationInfo*, const string &prefix, string *localfilename_out);
+  static string CreateTemporaryName(ApplicationInfo*, const string &prefix);
+  static string CreateTemporaryNameTemplate(ApplicationInfo*, const string &prefix);
+};
+
 struct SearchPaths {
+  FileSystem *fs;
   vector<string> path;
-  SearchPaths(const char *paths);
+  SearchPaths(FileSystem*, const char *paths);
   string Find(const string &fn);
 };
 
@@ -201,19 +229,6 @@ struct BufferFileLineIter : public StringIter {
   int CurrentOffset() const override { return nr.file_offset; }
   int CurrentLength() const override { return nr.record_len; }
   int TotalLength() const override { return 0; }
-};
-
-struct DirectoryIter {
-  typedef map<string, int> Map;
-  string pathname;
-  Map filemap;
-  Map::iterator iter;
-  const char *P=0, *S=0;
-  bool init=0;
-  DirectoryIter() {}
-  DirectoryIter(const string &path, int dirs=0, const char *FilePrefix=0, const char *FileSuffix=0);
-  const char *Next();
-  static void Add(void *self, const char *k, int v) { reinterpret_cast<DirectoryIter*>(self)->filemap[k] = v; }
 };
 
 struct ArchiveIter {
@@ -308,7 +323,7 @@ struct StringFile {
   string Line(int i) const { return (F && i < F->size()) ? (*F)[i] : ""; }
   void MoveTo(unique_ptr<vector<string>> *Fo, string *Ho) { if (Fo) *Fo=F.release(); if (Ho) *Ho=H; Clear(); }
 
-  int ReadVersioned (const VersionedFileName &fn, ApplicationLifetime *life=0, int iter=-1);
+  int ReadVersioned(FileSystem*, const VersionedFileName &fn, ApplicationLifetime *life=0, int iter=-1);
   int WriteVersioned(const VersionedFileName &fn, int iter, const string &hdr=string());
   int WriteVersioned(const char *D, const char *C, const char *V, int iter, const string &hdr=string())
   { return WriteVersioned(VersionedFileName(D, C, V), iter, hdr); }
@@ -322,10 +337,10 @@ struct StringFile {
 
   static int Read(const string &fn, unique_ptr<vector<string>> *F, string *H)
   { StringFile f; int ret=f.Read(fn); f.MoveTo(F, H); return ret; }
-  static int ReadVersioned(const VersionedFileName &fn, unique_ptr<vector<string>> *F, string *H, int iter=-1)
-  { StringFile f; int ret=f.ReadVersioned(fn); f.MoveTo(F, H); return ret; }
-  static int ReadVersioned(const char *D, const char *C, const char *V, unique_ptr<vector<string>> *F, string *H, int iter=-1)
-  { return ReadVersioned(VersionedFileName(D, C, V), F, H, iter); }
+  static int ReadVersioned(FileSystem *fs, const VersionedFileName &fn, unique_ptr<vector<string>> *F, string *H, int iter=-1)
+  { StringFile f; int ret=f.ReadVersioned(fs, fn); f.MoveTo(F, H); return ret; }
+  static int ReadVersioned(FileSystem *fs, const char *D, const char *C, const char *V, unique_ptr<vector<string>> *F, string *H, int iter=-1)
+  { return ReadVersioned(fs, VersionedFileName(D, C, V), F, H, iter); }
 };
 
 struct SettingsFile {
@@ -333,10 +348,10 @@ struct SettingsFile {
   static const char *VarName() { return "settings"; }
   static const char *Separator() { return " = "; }
 
-  static int Load(ApplicationInfo*);
-  static int Read(const string &dir, const string &name);
+  static int Load(FileSystem*, ApplicationInfo*);
+  static int Read(FileSystem*, const string &dir, const string &name);
   static int Write(const vector<string> &fields, const string &dir, const string &name);
-  static int Save(ApplicationInfo*, const vector<string> &fields);
+  static int Save(FileSystem*, ApplicationInfo*, const vector<string> &fields);
 };
 
 struct MatrixFile {
@@ -352,7 +367,7 @@ struct MatrixFile {
   const char *Text() { return H.c_str(); }
   void MoveTo(unique_ptr<Matrix> *Fo, string *Ho) { if (Fo) *Fo=F.release(); if (Ho) *Ho=H; Clear(); }
 
-  int ReadVersioned       (const VersionedFileName &fn, ApplicationLifetime *life=0, int iteration=-1);
+  int ReadVersioned(FileSystem*, const VersionedFileName &fn, ApplicationLifetime *life=0, int iteration=-1);
   int WriteVersioned      (const VersionedFileName &fn, int iteration);
   int WriteVersionedBinary(const VersionedFileName &fn, int iteration);
   int WriteVersioned(const char *D, const char *C, const char *V, int iter)
@@ -372,8 +387,8 @@ struct MatrixFile {
 
   static string Filename(const VersionedFileName &fn, const string &suf, int iter) { return Filename(fn._class, fn.var, suf, iter); }
   static string Filename(const string &_class, const string &var, const string &suffix, int iteration);
-  static int FindHighestIteration(const VersionedFileName &fn, const string &suffix, ApplicationLifetime *life=0);
-  static int FindHighestIteration(const VersionedFileName &fn, const string &suffix1, const string &suffix2, ApplicationLifetime *life=0);
+  static int FindHighestIteration(FileSystem*, const VersionedFileName &fn, const string &suffix, ApplicationLifetime *life=0);
+  static int FindHighestIteration(FileSystem*, const VersionedFileName &fn, const string &suffix1, const string &suffix2, ApplicationLifetime *life=0);
   static int ReadHeader    (IterWordIter *word, string *hdrout);
   static int ReadDimensions(IterWordIter *word, int *M, int *N);
   static int WriteHeader      (File *file, const string &name, const string &hdr, int M, int N);
@@ -384,10 +399,10 @@ struct MatrixFile {
   { MatrixFile f; int ret=f.Read(fd); f.MoveTo(F, H); return ret; }
   static int Read(const string &fn, unique_ptr<Matrix> *F, string *H)
   { MatrixFile f; int ret=f.Read(fn); f.MoveTo(F, H); return ret; }
-  static int ReadVersioned(const VersionedFileName &fn, unique_ptr<Matrix> *F, string *H, int iter=-1)
-  { MatrixFile f; int ret=f.ReadVersioned(fn); f.MoveTo(F, H); return ret; }
-  static int ReadVersioned(const char *D, const char *C, const char *V, unique_ptr<Matrix> *F, string *H=0, int iter=-1)
-  { return ReadVersioned(VersionedFileName(D, C, V), F, H, iter); }
+  static int ReadVersioned(FileSystem *fs, const VersionedFileName &fn, unique_ptr<Matrix> *F, string *H, int iter=-1)
+  { MatrixFile f; int ret=f.ReadVersioned(fs, fn); f.MoveTo(F, H); return ret; }
+  static int ReadVersioned(FileSystem *fs, const char *D, const char *C, const char *V, unique_ptr<Matrix> *F, string *H=0, int iter=-1)
+  { return ReadVersioned(fs, VersionedFileName(D, C, V), F, H, iter); }
 };
 
 struct MatrixArchiveInputFile {

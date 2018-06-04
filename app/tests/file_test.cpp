@@ -35,7 +35,7 @@ TEST(FileTest, BufferFile) {
 
 TEST(FileTest, LocalFileRead) {
   {
-    string fn = "../../../../core/app/assets/MenuAtlas,0,255,255,255,0.0000.png", contents = LocalFile::FileContents(fn), buf;
+    string fn = "../../../../core/app/assets/MenuAtlas,0,255,255,255,0.0000.png", contents = LocalFile(fn, "r").Contents(), buf;
     INFO("Read ", fn, " ", contents.size(), " bytes");
     LocalFile f(fn, "r");
     NextRecordReader nr(&f);
@@ -43,7 +43,7 @@ TEST(FileTest, LocalFileRead) {
     EXPECT_EQ(contents, buf);
   }
   {
-    string fn = "../../../../core/app/app.cpp", contents = LocalFile::FileContents(fn), buf;
+    string fn = "../../../../core/app/app.cpp", contents = LocalFile(fn, "r").Contents(), buf;
     INFO("Read ", fn, " ", contents.size(), " bytes");
     if (contents.back() != '\n') contents.append("\n");
     LocalFile f(fn, "r");

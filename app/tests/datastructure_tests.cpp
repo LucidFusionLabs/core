@@ -19,17 +19,16 @@
 #include "gtest/gtest.h"
 
 namespace LFL {
-Application *app=0;
-
 extern "C" LFApp *MyAppCreate(int argc, const char* const* argv) {
   FLAGS_font = FakeFontEngine::Filename();
-  app = make_unique<Application>(argc, argv).release();
-  app->focused = CreateWindow(app).release();
+  auto app = make_unique<Application>(argc, argv).release();
+  app->focused = app->framework->ConstructWindow(app).release();
   testing::InitGoogleTest(&argc, const_cast<char**>(argv));
   return app;
 }
 
-extern "C" int MyAppMain() {
+extern "C" int MyAppMain(LFApp *a) {
+  auto app = static_cast<Application*>(a);
   CHECK_EQ(0, app->Create(__FILE__));
   return RUN_ALL_TESTS();
 }

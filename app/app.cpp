@@ -44,14 +44,13 @@
 #endif
 
 extern "C" void BreakHook() {}
-extern "C" void LFAppAtExit() {}
-
 extern "C" unsigned LFAppNextRandSeed() {
   static LFL::mutex m;
   LFL::ScopedMutex sm(m);
   return (LFL::FLAGS_rand_seed = LFL::fnv32(&LFL::FLAGS_rand_seed, sizeof(unsigned)));
 }
 
+extern "C" void LFAppExit(LFApp *app) { static_cast<LFL::Application*>(app)->Exit(); }
 extern "C" void LFAppFatal() {
   ERROR("LFAppFatal");
   if (bool suicide=true) *reinterpret_cast<volatile int*>(0) = 0;
@@ -446,7 +445,7 @@ int Application::Create(const char *source_filename) {
   SetMainThread();
   time_started = Now();
   progname = argv[0];
-  startdir = LocalFile::CurrentDirectory();
+  startdir = localfs.CurrentDirectory();
 
 #ifdef LFL_WINDOWS
   bindir = progname.substr(0, DirNameLen(progname, true));
@@ -461,7 +460,7 @@ int Application::Create(const char *source_filename) {
 
 #else
   pid = getpid();
-  bindir = LocalFile::JoinPath(startdir, progname.substr(0, DirNameLen(progname, true)));
+  bindir = localfs.JoinPath(startdir, progname.substr(0, DirNameLen(progname, true)));
 
   /* handle SIGINT */
   signal(SIGINT, SignalHandler::HandleSigInt);
@@ -717,6 +716,11 @@ int Application::MainLoop() {
   return 0;
 }
 
+void Application::Exit() {
+  INFO("Application::Exit");
+  delete this;
+}
+
 void Application::DrawSplash(const Color &c) {
   focused->gd->ClearColor(c);
   focused->gd->Clear();
@@ -828,7 +832,7 @@ void Window::SetBox(const point &wd, const LFL::Box &b) {
 
 void Window::InitConsole(const Callback &animating_cb) {
   view.push_back((console = make_unique<Console>(this, animating_cb)).get());
-  console->ReadHistory(parent->savedir, StrCat(parent->name, "_console"));
+  console->ReadHistory(&parent->localfs, parent->savedir, StrCat(parent->name, "_console"));
   console->Write(StrCat(caption, " started"));
   console->Write("Try console commands 'cmds' and 'flags'");
 }

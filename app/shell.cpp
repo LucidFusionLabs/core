@@ -28,9 +28,9 @@ namespace LFL {
 DEFINE_bool(shell_debug, false, "Print shell commands");
 
 Shell::Shell(Window *W, ApplicationInfo *A, ApplicationShutdown *SA, ThreadDispatcher *D, GraphicsDeviceHolder *G, Clipboard *C,
-             SocketServices *N, AssetStore *AS, AssetLoading *AL, Audio *S, MouseFocus *MF, TouchKeyboard *TK, Fonts *F) :
+             SocketServices *N, AssetStore *AS, AssetLoading *AL, Audio *S, MouseFocus *MF, TouchKeyboard *TK, Fonts *F, FileSystem *FS) :
   parent(W), app_info(A), app_shutdown(SA), dispatch(D), gd(G), clipboard(C), net(N), assets(AS), loading(AL), audio(S), mouse_focus(MF),
-  touch_keyboard(TK), fonts(F) {
+  touch_keyboard(TK), fonts(F), fs(FS) {
 
   if (!parent) return;
   command.emplace_back("quit",         bind(&Shell::quit,          this, _1));
@@ -128,7 +128,7 @@ void Shell::savedir(const vector<string>&) { INFO(app_info->savedir); }
 
 void Shell::savesettings(const vector<string> &a) {
   if (a.empty()) return INFO("usage: savesettings <fields>");
-  SettingsFile::Save(app_info, a);
+  SettingsFile::Save(fs, app_info, a);
 }
 
 void Shell::screenshot(const vector<string> &a) {
