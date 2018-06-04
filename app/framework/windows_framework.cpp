@@ -447,9 +447,11 @@ void FrameScheduler::AddMainWaitMouse(Window *w) { dynamic_cast<WindowsWindow*>(
 void FrameScheduler::DelMainWaitMouse(Window *w) { dynamic_cast<WindowsWindow*>(w)->frame_on_mouse_input = false; }
 void FrameScheduler::AddMainWaitKeyboard(Window *w) { dynamic_cast<WindowsWindow*>(w)->frame_on_keyboard_input = true; }
 void FrameScheduler::DelMainWaitKeyboard(Window *w) { dynamic_cast<WindowsWindow*>(w)->frame_on_keyboard_input = false; }
+
 void FrameScheduler::AddMainWaitSocket(Window *w, Socket fd, int flag, function<bool()>) {
   if (fd != InvalidSocket) WSAAsyncSelect(fd, dynamic_cast<WindowsWindow*>(w)->hwnd, WM_USER, FD_READ | FD_CLOSE);
 }
+
 void FrameScheduler::DelMainWaitSocket(Window *w, Socket fd) {
   if (fd != InvalidSocket) WSAAsyncSelect(fd, dynamic_cast<WindowsWindow*>(w)->hwnd, WM_USER, 0);
 }
@@ -476,6 +478,6 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nC
   auto app = static_cast<LFL::Application*>(MyAppCreate(av.size() - 1, &av[0]));
   LFL::WindowsFrameworkModule::hInst = hInst;
   LFL::WindowsFrameworkModule::nCmdShow = nCmdShow;
-  int ret = MyAppMain();
+  int ret = MyAppMain(app);
   return ret ? ret : dynamic_cast<LFL::WindowsFrameworkModule*>(app->framework.get())->MessageLoop();
 }

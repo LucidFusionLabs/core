@@ -199,7 +199,7 @@ struct LocalDirectoryIter : public DirectoryIter {
 };
 
 #ifdef LFL_WINDOWS
-const char LocalFileSystem::Slash = '\\'
+const char LocalFileSystem::Slash = '\\';
 LocalFileSystem::LocalFileSystem() : FileSystem(Slash, ".exe") {}
 
 int LocalFileSystem::IsFile(const string &filename) {
@@ -261,6 +261,9 @@ unique_ptr<DirectoryIter> LocalFileSystem::ReadDirectory(const string &path, int
 }
 
 int LocalFileSystem::CreateTemporary(ApplicationInfo *a, const string &prefix, string *name) {
+#ifdef LFL_WINDOWS
+  return ERRORv(-1, "not implemented");
+#else
   string v;
   if (!name) name = &v;
   *name = CreateTemporaryNameTemplate(a, prefix);
@@ -268,11 +271,16 @@ int LocalFileSystem::CreateTemporary(ApplicationInfo *a, const string &prefix, s
   int fd = -1;
   if ((fd = mkstemp(&(*name)[0])) < 0) return ERRORv(-1, "mkstemp ", *name, ": ", strerror(errno));
   return fd;
+#endif
 }
 
 string LocalFileSystem::CreateTemporaryName(ApplicationInfo *a, const string &prefix) {
   string ret = CreateTemporaryNameTemplate(a, prefix);
+#ifdef LFL_WINDOWS
+  CHECK(_mktemp_s(&ret[0], ret.size()));
+#else
   CHECK(mktemp(&ret[0]));
+#endif
   return ret;
 }
 

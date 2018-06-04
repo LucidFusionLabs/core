@@ -354,7 +354,11 @@ struct OpenGLES2 : public GraphicsDevice, public QOpenGLFunctions {
   void Init(AssetLoading *loader, const Box &b) {
     done_init = true;
     GDDebug("Init");
-    memzero(vertex_attr); memzero(tex_attr); memzero(color_attr); memzero(normal_attr); memzero(bound_texture);
+    memzero(vertex_attr);
+    memzero(tex_attr);
+    memzero(color_attr);
+    memzero(normal_attr);
+    memzero(bound_texture);
     deferred.prim_type = deferred.vertex_size = deferred.vertexbuffer_len = deferred.draw_calls = 0;
     deferred.vertexbuffer = -1;
     modelview_matrix.clear();
@@ -367,6 +371,7 @@ struct OpenGLES2 : public GraphicsDevice, public QOpenGLFunctions {
     scissor_stack.push_back(vector<Box>());
     if (vertex_shader.empty()) vertex_shader = loader->FileContents("default.vert");
     if ( pixel_shader.empty()) pixel_shader  = loader->FileContents("default.frag");
+    LogVersion();
     Shader::Create(parent->parent, "app",          vertex_shader, pixel_shader, ShaderDefines(1,0,1,0), &shaders->shader_default);
     Shader::Create(parent->parent, "app_cubemap",  vertex_shader, pixel_shader, ShaderDefines(1,0,0,1), &shaders->shader_cubemap);
     Shader::Create(parent->parent, "app_normals",  vertex_shader, pixel_shader, ShaderDefines(0,1,1,0), &shaders->shader_normals);
@@ -378,7 +383,6 @@ struct OpenGLES2 : public GraphicsDevice, public QOpenGLFunctions {
     DrawMode(default_draw_mode);
     InitDefaultLight();
     INFO("OpenGLES2::Init width=", b.w, ", height=", b.h);
-    LogVersion();
   }
 
   bool ShaderSupport() const { return true; }

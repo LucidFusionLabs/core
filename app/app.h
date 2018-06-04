@@ -611,18 +611,21 @@ struct Window : public ::LFAppWindow, public GraphicsDeviceHolder, public Wakeup
   template <class X> X* GetOwnInputController(size_t i) { return i < my_input.size() ? dynamic_cast<X*>(my_input[i].get()) : nullptr; }
   template <class X> X* AddInputController(unique_ptr<X> g) { auto gp = VectorAddUnique(&my_input, move(g)); input.push_back(gp); return gp; }
   template <class X> void DelViewPointer(X **g) { DelView(*g); *g = nullptr; }
+
   template <class X> X* AddView(unique_ptr<X> g) {
     auto gp = VectorAddUnique(&my_view, move(g));
     view.push_back(gp);
     DEBUGf("AddView[%zd] %s %p", view.size()-1, typeid(X).name(), view.back());
     return gp;
   }
+
   template <class X> X* ReplaceView(size_t i, unique_ptr<X> g) {
     auto gp = g.get();
     if (auto p = my_view[i].get()) RemoveView(p);
     view.push_back((my_view[i] = move(g)).get());
     return gp;
   }
+
   void DelInputController(InputController *g) { RemoveInputController(g); VectorRemoveUnique(&my_input, g); }
   void RemoveInputController(InputController *g) { VectorEraseByValue(&input, g); }
   void RemoveView(View *v) { VectorEraseByValue(&view, v); }
