@@ -39,7 +39,7 @@ void FreeTypeFontEngine::SetDefault() {
 
 bool FreeTypeFontEngine::Init(const FontDesc &d) {
   if (Contains(resource, d.name)) return true;
-  string content = d.name.data()[0] == '/' ? LocalFile::FileContents(d.name) : parent->loader->FileContents(d.name);
+  string content = d.name.data()[0] == '/' ? LocalFile(d.name, "r").Contents() : parent->loader->FileContents(d.name);
   if (auto r = OpenBuffer(d, &content)) {
     resource[d.name] = shared_ptr<Resource>(r.release());
     return true;

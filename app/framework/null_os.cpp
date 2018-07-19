@@ -21,15 +21,16 @@ namespace LFL {
 string GetNSDocumentDirectory() { return string("/tmp"); }
 #endif
 
-string Application::GetVersion() { return string(); }
-string Application::PrintCallStack() { return ""; }
 string Application::GetSetting(const string &key) { return string(); }
 void Application::SaveSettings(const StringPairVec&) {}
-void Application::OpenSystemBrowser(const string &url_text) {}
+string Application::PrintCallStack() { return ""; }
 
-Connection *Application::ConnectTCP(const string &hostport, int default_port, Connection::CB *connected_cb, bool background_services) {
+string ApplicationInfo::GetVersion() { return string(); }
+void SystemBrowser::OpenSystemBrowser(const string &url_text) {}
+
+Connection *Networking::ConnectTCP(const string &hostport, int default_port, Connection::CB *connected_cb, bool background_services) {
   INFO("Application::ConnectTCP ", hostport, " (default_port = ", default_port, ") background_services = false"); 
-  return app->net->tcp_client->Connect(hostport, default_port, connected_cb);
+  return net->tcp_client->Connect(hostport, default_port, connected_cb);
 }
 
 }; // namespace LFL

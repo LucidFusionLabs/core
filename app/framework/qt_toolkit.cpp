@@ -32,13 +32,14 @@ static FreeListVector<unique_ptr<QIcon>> app_images;
 struct QtTableView;
 
 struct QtAlertView : public AlertViewInterface {
+  QtWindowInterface *win;
   string style;
   bool add_text = 0;
   StringCB cancel_cb, confirm_cb;
   unique_ptr<QInputDialog> alert;
   unique_ptr<QMessageBox> msg;
 
-  QtAlertView(AlertItemVec kv) {
+  QtAlertView(Window *W, AlertItemVec kv) : win(dynamic_cast<QtWindowInterface*>(W)) {
     CHECK_EQ(4, kv.size());
     CHECK_EQ("style", kv[0].first);
     cancel_cb  = move(kv[2].cb);
@@ -67,7 +68,7 @@ struct QtAlertView : public AlertViewInterface {
   void Hide() {}
 
   void Show(const string &arg) {
-    app->ReleaseMouseFocus();
+    win->parent->ReleaseMouseFocus();
     if (add_text) {
       alert->setTextValue(MakeQString(arg));
       alert->open();
@@ -116,10 +117,12 @@ struct QtPanelView : public PanelViewInterface {
 };
  
 struct QtToolbarView : public ToolbarViewInterface {
+  QtWindowInterface *win;
   unique_ptr<QToolBar> toolbar;
   string theme;
   bool init=0;
-  QtToolbarView(MenuItemVec v) : toolbar(make_unique<QToolBar>()) {
+
+  QtToolbarView(Window *W, MenuItemVec v) : win(dynamic_cast<QtWindowInterface*>(W)), toolbar(make_unique<QToolBar>()) {
     for (auto b = v.begin(), e = v.end(), i = b; i != e; ++i) {
       QAction *action = toolbar->addAction(MakeQString(i->shortcut));
       if (i->cb) toolbar->connect(action, &QAction::triggered, move(i->cb));
@@ -130,18 +133,19 @@ struct QtToolbarView : public ToolbarViewInterface {
   void SetTheme(const string &x) { theme=x; }
   void ToggleButton(const string &n) {}
   void Show(bool show_or_hide) {  
-    if (!init && (init=1)) 
-      dynamic_cast<QtWindowInterface*>(app->focused)->layout->setMenuBar(toolbar.get());
+    if (!init && (init=1)) win->layout->setMenuBar(toolbar.get());
     if (show_or_hide) toolbar->show();
     else              toolbar->hide();
   }
 };
 
 struct QtMenuView : public MenuViewInterface {
+  Window *w;
   QMenu *menu;
+
   ~QtMenuView() { delete menu; }
-  QtMenuView(const string &title_text, MenuItemVec v) {
-    auto mb = dynamic_cast<QtWindowInterface*>(app->focused)->window->menuBar();
+  QtMenuView(Window *W, const string &title_text, MenuItemVec v) : w(W) {
+    auto mb = dynamic_cast<QtWindowInterface*>(w)->window->menuBar();
     menu = new QMenu(MakeQString(title_text), mb);
     for (auto b = v.begin(), e = v.end(), i = b; i != e; ++i) {
       QAction *action = menu->addAction(MakeQString(i->name));
@@ -292,6 +296,7 @@ class QtTableWidget : public QTableView {
 };
 
 struct QtTableView : public QtTableInterface, public TableViewInterface {
+  QtWindowInterface *win;
   TableItem left_nav, right_nav;
   unique_ptr<QTableView> table;
   unique_ptr<QtTableModel> model;
@@ -300,9 +305,10 @@ struct QtTableView : public QtTableInterface, public TableViewInterface {
   int editable_section=-1, editable_start_row=-1, selected_section=0, selected_row=0, row_height=30;
   QtStyledItemDelegate item_delegate;
 
-  QtTableView(const string &title, string sty, vector<TableItem> item) :
-    QtTableInterface(TableSection<TableItem>::Convert(move(item))), table(make_unique<QtTableWidget>(this)),
-    model(make_unique<QtTableModel>(&data)), style(move(sty)), item_delegate(nullptr, this) {
+  QtTableView(Window *W, const string &title, string sty, vector<TableItem> item) :
+    QtTableInterface(TableSection<TableItem>::Convert(move(item))), win(dynamic_cast<QtWindowInterface*>(W)),
+    table(make_unique<QtTableWidget>(this)), model(make_unique<QtTableModel>(&data)),
+    style(move(sty)), item_delegate(nullptr, this) {
 
     vector<int> hide_indices;
     for (auto sb = data.begin(), se = data.end(), s = sb; s != se; ++s) {
@@ -374,14 +380,13 @@ struct QtTableView : public QtTableInterface, public TableViewInterface {
   void SetToolbar(ToolbarViewInterface *t) {}
 
   void Show(bool show_or_hide) {
-    auto w = dynamic_cast<QtWindowInterface*>(app->focused);
     if (show_or_hide) {
       if (show_cb) show_cb();
-      w->layout->addWidget(table.get());
-      w->layout->setCurrentWidget(table.get());
+      win->layout->addWidget(table.get());
+      win->layout->setCurrentWidget(table.get());
     } else {
-      w->layout->setCurrentWidget(w->opengl_container);
-      w->layout->removeWidget(table.get());
+      win->layout->setCurrentWidget(win->opengl_container);
+      win->layout->removeWidget(table.get());
     }
   }
 
@@ -594,13 +599,15 @@ struct QtTextView : public TextViewInterface {
 };
 
 struct QtNavigationView : public NavigationViewInterface {
+  QtWindowInterface *win;
   unique_ptr<QWidget> header_widget, content_widget;
   unique_ptr<QLabel> header_label;
   unique_ptr<QPushButton> header_back, header_forward;
   unique_ptr<QHBoxLayout> header_layout;
   unique_ptr<QStackedLayout> content_layout;
 
-  QtNavigationView() : header_widget(make_unique<QWidget>()), content_widget(make_unique<QWidget>()),
+  QtNavigationView(Window *W) : win(dynamic_cast<QtWindowInterface*>(W)),
+  header_widget(make_unique<QWidget>()), content_widget(make_unique<QWidget>()),
   header_label(make_unique<QLabel>()), header_back(make_unique<QPushButton>()), header_forward(make_unique<QPushButton>()),
   header_layout(make_unique<QHBoxLayout>()), content_layout(make_unique<QStackedLayout>()) {
     QObject::connect(header_back   .get(), &QPushButton::clicked, bind(&QtNavigationView::HandleBackClicked,    this));
@@ -666,13 +673,12 @@ struct QtNavigationView : public NavigationViewInterface {
   }
 
   void Show(bool show_or_hide) {
-    auto w = dynamic_cast<QtWindowInterface*>(app->focused);
     if (show_or_hide) {
-      w->layout->addWidget(content_widget.get());
-      w->layout->setCurrentWidget(content_widget.get());
+      win->layout->addWidget(content_widget.get());
+      win->layout->setCurrentWidget(content_widget.get());
     } else {
-      w->layout->setCurrentWidget(w->opengl_container);
-      w->layout->removeWidget(content_widget.get());
+      win->layout->setCurrentWidget(win->opengl_container);
+      win->layout->removeWidget(content_widget.get());
     }
   }
 
@@ -734,19 +740,18 @@ void Application::ShowSystemFileChooser(bool files, bool dirs, bool multi, const
 }
 
 void Application::ShowSystemContextMenu(const vector<MenuItem> &items) {
-  auto screen = app->focused;
   QMenu *menu = new QMenu();
   for (auto &i : items) {
     QAction *action = menu->addAction(MakeQString(i.name));
     if (i.cb) menu->connect(action, &QAction::triggered, i.cb);
   }
-  menu->popup(dynamic_cast<QtWindowInterface*>(screen)->opengl_window->mapToGlobal
-              (MakeQPoint(Input::TransformMouseCoordinate(screen->mouse))));
+  menu->popup(dynamic_cast<QtWindowInterface*>(focused)->opengl_window->mapToGlobal
+              (MakeQPoint(Input::TransformMouseCoordinate(focused, focused->mouse))));
 }
 
 int Application::LoadSystemImage(const string &n) {
-  return app_images.Insert(make_unique<QIcon>(MakeQString(StrCat(app->assetdir, "../drawable-xhdpi/",
-                                                          n, ".png")))) + 1;
+  return app_images.Insert
+    (make_unique<QIcon>(MakeQString(StrCat(assetdir, "../drawable-xhdpi/", n, ".png")))) + 1;
 }
 
 void Application::UpdateSystemImage(int n, Texture &t) {
@@ -761,15 +766,15 @@ void Application::UnloadSystemImage(int n) {
   app_images.Erase(n-1);
 }
 
-unique_ptr<AlertViewInterface> SystemToolkit::CreateAlert(AlertItemVec items) { return make_unique<QtAlertView>(move(items)); }
-unique_ptr<PanelViewInterface> SystemToolkit::CreatePanel(const Box &b, const string &title, PanelItemVec items) { return nullptr; }
-unique_ptr<ToolbarViewInterface> SystemToolkit::CreateToolbar(const string &theme, MenuItemVec items, int flag) { return make_unique<QtToolbarView>(move(items)); }
-unique_ptr<MenuViewInterface> SystemToolkit::CreateMenu(const string &title, MenuItemVec items) { return make_unique<QtMenuView>(title, move(items)); }
-unique_ptr<MenuViewInterface> SystemToolkit::CreateEditMenu(MenuItemVec items) { return make_unique<QtMenuView>("Edit", move(items)); }
-unique_ptr<CollectionViewInterface> SystemToolkit::CreateCollectionView(const string &title, const string &style, const string &theme, vector<CollectionItem> items) { return make_unique<QtCollectionView>(title, style, move(items)); }
-unique_ptr<TableViewInterface> SystemToolkit::CreateTableView(const string &title, const string &style, const string &theme, TableItemVec items) { return make_unique<QtTableView>(title, style, move(items)); }
-unique_ptr<TextViewInterface> SystemToolkit::CreateTextView(const string &title, File *file) { return make_unique<QtTextView>(title, file); }
-unique_ptr<TextViewInterface> SystemToolkit::CreateTextView(const string &title, const string &text) { return make_unique<QtTextView>(title, text); }
-unique_ptr<NavigationViewInterface> SystemToolkit::CreateNavigationView(const string &style, const string &theme) { return make_unique<QtNavigationView>(); }
+unique_ptr<AlertViewInterface> SystemToolkit::CreateAlert(Window *w, AlertItemVec items) { return make_unique<QtAlertView>(w, move(items)); }
+unique_ptr<PanelViewInterface> SystemToolkit::CreatePanel(Window *w, const Box &b, const string &title, PanelItemVec items) { return nullptr; }
+unique_ptr<ToolbarViewInterface> SystemToolkit::CreateToolbar(Window *w, const string &theme, MenuItemVec items, int flag) { return make_unique<QtToolbarView>(w, move(items)); }
+unique_ptr<MenuViewInterface> SystemToolkit::CreateMenu(Window *w, const string &title, MenuItemVec items) { return make_unique<QtMenuView>(w, title, move(items)); }
+unique_ptr<MenuViewInterface> SystemToolkit::CreateEditMenu(Window *w, MenuItemVec items) { return make_unique<QtMenuView>(w, "Edit", move(items)); }
+unique_ptr<CollectionViewInterface> SystemToolkit::CreateCollectionView(Window *w, const string &title, const string &style, const string &theme, vector<CollectionItem> items) { return make_unique<QtCollectionView>(title, style, move(items)); }
+unique_ptr<TableViewInterface> SystemToolkit::CreateTableView(Window *w, const string &title, const string &style, const string &theme, TableItemVec items) { return make_unique<QtTableView>(w, title, style, move(items)); }
+unique_ptr<TextViewInterface> SystemToolkit::CreateTextView(Window *w, const string &title, File *file) { return make_unique<QtTextView>(title, file); }
+unique_ptr<TextViewInterface> SystemToolkit::CreateTextView(Window *w, const string &title, const string &text) { return make_unique<QtTextView>(title, text); }
+unique_ptr<NavigationViewInterface> SystemToolkit::CreateNavigationView(Window *w, const string &style, const string &theme) { return make_unique<QtNavigationView>(w); }
 
 }; // namespace LFL

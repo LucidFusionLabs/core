@@ -32,6 +32,8 @@ struct QtWindowInterface : public Window {
   QWindow *opengl_window=0;
   QWidget *opengl_container=0;
   QOpenGLContext *glc=0;
+
+  QtWindowInterface(Application *a) : Window(a) {}
   ~QtWindowInterface() { ClearChildren(); }
 };
 
