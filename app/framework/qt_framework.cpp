@@ -337,6 +337,7 @@ extern "C" int main(int argc, const char *argv[]) {
   return qapp->exec();
 }
 
+unique_ptr<TimerInterface> SystemToolkit::CreateTimer(Callback cb) { return nullptr; }
 unique_ptr<Framework> Framework::Create(Application *a) { return make_unique<QtFramework>(); }
 
 }; // namespace LFL

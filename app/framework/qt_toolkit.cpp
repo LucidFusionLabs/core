@@ -531,7 +531,7 @@ struct QtTableView : public QtTableInterface, public TableViewInterface {
 
   void SetColor(int section, int row, const Color &v) {
     CheckExists(section, row);
-    data[section].item[row].SetFGColor(v);
+    data[section].item[row].font.fg = v;
   }
 
   void SetTitle(const string &title) { table->setWindowTitle(MakeQString(title)); }

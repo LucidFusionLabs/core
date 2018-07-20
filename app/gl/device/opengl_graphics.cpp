@@ -348,8 +348,8 @@ struct OpenGLES2 : public GraphicsDevice, public QOpenGLFunctions {
   LFL::Material material;
   LFL::Light light[4];
   Deferred deferred;
-  Shaders *shaders;
-  OpenGLES2(Window *P, Shaders *S) : GraphicsDevice(P, 2), shaders(S) {}
+  LFL::Shaders *shaders;
+  OpenGLES2(Window *P, LFL::Shaders *S) : GraphicsDevice(P, 2), shaders(S) {}
 
   void Init(AssetLoading *loader, const Box &b) {
     done_init = true;
