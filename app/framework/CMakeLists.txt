@@ -111,10 +111,8 @@ endif()
 if(LFL_LINUX)
   lfl_add_target(app_linux_os STATIC_LIBRARY SOURCES linux_os.cpp
                  LINK_LIBRARIES -lutil -lz -lpng -lpthread -ldl -lbz2)
-  if(0)
-    lfl_add_target(app_x11_framework STATIC_LIBRARY SOURCES x11_framework.cpp
-                   LINK_LIBRARIES -lXi -lXv -lXext -lX11 -lXxf86vm -lXrandr -lXcursor -lXt)
-  endif()
+  lfl_add_target(app_x11_framework STATIC_LIBRARY SOURCES x11_framework.cpp
+                 LINK_LIBRARIES -lXi -lXv -lXext -lX11 -lXxf86vm -lXrandr -lXcursor -lXt)
 endif()
 
 if(LFL_WINDOWS)

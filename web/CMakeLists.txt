@@ -1,7 +1,7 @@
 # $Id$
 
 lfl_add_target(app_null_css STATIC_LIBRARY SOURCES null_css.cpp)
-lfl_add_target(app_browser STATIC_LIBRARY SOURCES browser.cpp)
+lfl_add_target(app_browser STATIC_LIBRARY SOURCES browser/dom.cpp browser/browser.cpp)
 
 if(LFL_LIBCSS)
   lfl_add_target(app_libcss_css STATIC_LIBRARY SOURCES libcss_css.cpp

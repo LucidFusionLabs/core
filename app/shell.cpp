@@ -19,8 +19,8 @@
 #include "core/app/gl/view.h"
 #include "core/app/gl/editor.h"
 #include "core/app/ipc.h"
-#include "core/web/browser.h"
-#include "core/web/document.h"
+#include "core/web/browser/browser.h"
+#include "core/web/browser/document.h"
 #include "core/app/network.h"
 #include "core/app/shell.h"
 

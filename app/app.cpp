@@ -18,9 +18,9 @@
 
 #include "core/app/shell.h"
 #include "core/app/gl/view.h"
-#include "core/web/browser.h"
 #include "core/app/gl/toolkit.h"
 #include "core/app/ipc.h"
+#include "core/web/browser/browser.h"
 
 #include <time.h>
 #include <fcntl.h>
@@ -346,6 +346,7 @@ Application::Application(int ac, const char* const* av) :
 #endif
   SignalHandler::Set(this);
   Logger::Set(this, this);
+  if (FLAGS_enable_video) shaders = make_unique<Shaders>(this);
 }
 
 void Application::Log(int level, const char *file, int line, const char *message) {
@@ -591,7 +592,6 @@ int Application::Init() {
 
   if (focused) {
     if (FLAGS_enable_video) {
-      shaders = make_unique<Shaders>(this);
       if (!focused->gd) focused->gd = GraphicsDevice::Create(focused, shaders.get(), 2).release();
       focused->gd->Init(this, focused->Box());
 #ifdef LFL_WINDOWS
@@ -767,8 +767,12 @@ string Application::SystemError() {
   string ret(128, 0);
 #ifdef LFL_WINDOWS
   strerror_s(&ret[0], ret.size(), errno);
-#else
+#elif LFL_APPLE
   strerror_r(errno, &ret[0], ret.size());
+#else
+  auto b = &ret[0];
+  auto r = strerror_r(errno, b, ret.size());
+  if (r != b) return r;
 #endif
   ret.resize(strlen(ret.data()));
   return ret;

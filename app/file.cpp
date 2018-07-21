@@ -239,8 +239,12 @@ string LocalFileSystem::CurrentDirectory(int max_size) {
   string ret(max_size, 0); 
 #ifdef LFL_WINDOWS
   _getcwd(&ret[0], ret.size());
-#else
+#elif LFL_APPLE
   getcwd(&ret[0], ret.size());
+#else
+  auto b = &ret[0];
+  auto r = getcwd(b, ret.size());
+  if (r != b) return r;
 #endif
   ret.resize(strlen(ret.data()));
   return ret;

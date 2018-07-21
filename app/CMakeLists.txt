@@ -25,6 +25,7 @@ add_app_def(LFL_ANDROID)
 add_app_def(LFL_IOS)
 add_app_def(LFL_IOS_SIM)
 add_app_def(LFL_EMSCRIPTEN)
+add_app_def(LFL_QT)
 add_app_lib(LFL_FLATBUFFERS "${FLATBUFFERS_INCLUDE_DIR}" "")
 
 if(LFL_QT)

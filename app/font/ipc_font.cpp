@@ -18,7 +18,7 @@
 
 #include "core/app/gl/view.h"
 #include "core/app/ipc.h"
-#include "core/web/browser.h"
+#include "core/web/browser/browser.h"
 
 namespace LFL {
 unique_ptr<Font> IPCClientFontEngine::Open(const FontDesc &d) {

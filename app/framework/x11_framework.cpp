@@ -64,11 +64,47 @@ static int GetKeyCodeFromXEvent(Display *display, const XEvent &xev) {
   return XKeycodeToKeysym(display, xev.xkey.keycode, xev.xkey.state & ShiftMask);
 }
 
-struct X11FrameworkModule : public Module {
+struct X11Window : public Window {
+  ::Window win;
+  Display *surface;
+  GLXContext gl;
+  X11Window(Application *a) : Window(a) {}
+
+  void SetCaption(const string &v) override {}
+  void SetResizeIncrements(float x, float y) override {}
+  void SetTransparency(float v) override {}
+
+  bool Reshape(int w, int h) override {
+    XWindowChanges resize;
+    resize.width = w;
+    resize.height = h;
+    XConfigureWindow(surface, win, CWWidth|CWHeight, &resize);
+    return true;
+  }
+  
+  void Wakeup(int) override {
+    if (!parent->scheduler.wait_forever) return;
+    XEvent exp;
+    exp.type = Expose;
+    exp.xexpose.window = win;
+    XSendEvent(surface, exp.xexpose.window, 0, ExposureMask, &exp);
+  }
+
+  int Swap() override {
+    gd->Flush();
+    glXSwapBuffers(surface, win);
+    gd->CheckForError(__FILE__, __LINE__);
+    return 0;
+  }
+};
+
+struct X11Framework : public Framework {
+  Application *app;
   Display *display = 0;
   XVisualInfo *vi = 0;
+  X11Framework(Application *a) : app(a) {}
 
-  int Init() {
+  int Init() override {
     GLint dbb = FLAGS_depth_buffer_bits;
     GLint att[] = { GLX_RGBA, GLX_DEPTH_SIZE, dbb, GLX_DOUBLEBUFFER, None };
     if (!(display = XOpenDisplay(NULL))) return ERRORv(-1, "XOpenDisplay");
@@ -77,32 +113,68 @@ struct X11FrameworkModule : public Module {
     app->scheduler.AddMainWaitSocket(app->focused, app->scheduler.system_event_socket, SocketSet::READABLE);
     SystemNetwork::SetSocketCloseOnExec(app->scheduler.system_event_socket, true);
     INFO("X11VideoModule::Init()");
-    return Video::CreateWindow(app->focused) ? 0 : -1;
+    return CreateWindow(app, app->focused) ? 0 : -1;
   }
 
-  int Free() {
+  int Free() override {
     XFree(vi);
     XCloseDisplay(display);
     return 0;
   }
 
-  int Frame(unsigned clicks) {
+#if 0
+  void *BeginGLContextCreate(Window *W) {}
+  void *CompleteGLContextCreate(Window *W, void *gl_context) {
+    auto video = dynamic_cast<X11VideoModule*>(app->video->impl.get());
+    GLXContext glc = glXCreateContext(video->display, video->vi, dynamic_cast<X11Window*>(W)->gl, GL_TRUE);
+    glXMakeCurrent(video->display, (::Window)(W->id), glc);
+    return glc;
+  }
+#endif
+
+  unique_ptr<Window> ConstructWindow(Application *app) override { return make_unique<X11Window>(app); }
+  void StartWindow(Window*) override {}
+
+  bool CreateWindow(WindowHolder *H, Window *W) override {
+    auto w = dynamic_cast<X11Window*>(W);
+    auto fw = dynamic_cast<X11Framework*>(app->framework.get());
+    ::Window root = DefaultRootWindow(fw->display);
+    XSetWindowAttributes swa;
+    swa.colormap = XCreateColormap(fw->display, root, fw->vi->visual, AllocNone);
+    swa.event_mask = ExposureMask | KeyPressMask | KeyReleaseMask | PointerMotionMask |
+      ButtonPressMask | ButtonReleaseMask | StructureNotifyMask;
+    w->win = XCreateWindow(fw->display, root, 0, 0, W->gl_w, W->gl_h, 0, fw->vi->depth,
+                           InputOutput, fw->vi->visual, CWColormap | CWEventMask, &swa);
+    Atom protocols[] = { XInternAtom(fw->display, "WM_DELETE_WINDOW", 0) };
+    XSetWMProtocols(fw->display, w->win, protocols, sizeofarray(protocols));
+    if (!(w->id = Void(w->win))) return ERRORv(false, "XCreateWindow");
+    XMapWindow(fw->display, w->win);
+    XStoreName(fw->display, w->win, w->caption.c_str());
+    GLXContext share = app->windows.size() ? dynamic_cast<X11Window*>(app->windows.begin()->second)->gl : nullptr;
+    if (!(w->gl = glXCreateContext(fw->display, fw->vi, share, GL_TRUE))) return ERRORv(false, "glXCreateContext");
+    w->surface = fw->display;
+    app->windows[W->id] = W;
+    app->MakeCurrentWindow(W);
+    return true;
+  }
+
+  int Frame(unsigned clicks) override {
     Window *screen = app->focused;
-    Display *display = GetTyped<Display*>(screen->surface);
+    Display *display = dynamic_cast<X11Window*>(screen)->surface;
     static const Atom delete_win = XInternAtom(display, "WM_DELETE_WINDOW", 0);
     XEvent xev;
     while (XPending(display)) {
       XNextEvent(display, &xev);
-      if (app->windows.size() > 1) SetLFAppWindowByID(Void(xev.xany.window));
+      if (app->windows.size() > 1) app->SetFocusedWindowByID(Void(xev.xany.window));
       switch (xev.type) {
-        case XKeyPress:       if (app->input->KeyPress(GetKeyCodeFromXEvent(display, xev), 0, 1)) app->EventDrivenFrame(0); break;
-        case KeyRelease:      if (app->input->KeyPress(GetKeyCodeFromXEvent(display, xev), 0, 0)) app->EventDrivenFrame(0); break;
-        case ButtonPress:     if (screen && app->input->MouseClick(xev.xbutton.button, 1, point(xev.xbutton.x, screen->height-xev.xbutton.y))) app->EventDrivenFrame(0); break;
-        case ButtonRelease:   if (screen && app->input->MouseClick(xev.xbutton.button, 0, point(xev.xbutton.x, screen->height-xev.xbutton.y))) app->EventDrivenFrame(0); break;
-        case MotionNotify:    if (screen) { point p(xev.xmotion.x, screen->height-xev.xmotion.y); if (app->input->MouseMove(p, p - screen->mouse)) app->EventDrivenFrame(0); } break;
-        case ConfigureNotify: if (screen && (xev.xconfigure.width != screen->width || xev.xconfigure.height != screen->height)) { screen->Reshaped(Box(xev.xconfigure.width, xev.xconfigure.height)); app->EventDrivenFrame(0); } break;
-        case ClientMessage:   if (xev.xclient.data.l[0] == delete_win) LFL::app->CloseWindow(screen); break;
-        case Expose:          app->EventDrivenFrame(0);
+        case XKeyPress:       if (app->input->KeyPress(GetKeyCodeFromXEvent(display, xev), 0, 1)) app->EventDrivenFrame(false, true); break;
+        case KeyRelease:      if (app->input->KeyPress(GetKeyCodeFromXEvent(display, xev), 0, 0)) app->EventDrivenFrame(false, true); break;
+        case ButtonPress:     if (screen && app->input->MouseClick(xev.xbutton.button, 1, point(xev.xbutton.x, screen->gl_h-xev.xbutton.y))) app->EventDrivenFrame(false, true); break;
+        case ButtonRelease:   if (screen && app->input->MouseClick(xev.xbutton.button, 0, point(xev.xbutton.x, screen->gl_h-xev.xbutton.y))) app->EventDrivenFrame(false, true); break;
+        case MotionNotify:    if (screen) { point p(xev.xmotion.x, screen->gl_h-xev.xmotion.y); if (app->input->MouseMove(p, p - screen->mouse)) app->EventDrivenFrame(false, true); } break;
+        case ConfigureNotify: if (screen && (xev.xconfigure.width != screen->gl_w || xev.xconfigure.height != screen->gl_h)) { point d(xev.xconfigure.width, xev.xconfigure.height); screen->Reshaped(d, d); app->EventDrivenFrame(false, true); } break;
+        case ClientMessage:   if (xev.xclient.data.l[0] == delete_win) app->CloseWindow(screen); break;
+        case Expose:          app->EventDrivenFrame(false, true);
         default:              continue;
       }
     }
@@ -110,108 +182,51 @@ struct X11FrameworkModule : public Module {
   }
 };
 
+string Clipboard::GetClipboardText() { return string(); }
+void Clipboard::SetClipboardText(const string &s) {}
+
+void MouseFocus::GrabMouseFocus() {}
+void MouseFocus::ReleaseMouseFocus() {}
+
+void TouchKeyboard::ToggleTouchKeyboard() {}
+void TouchKeyboard::OpenTouchKeyboard() {}
+void TouchKeyboard::CloseTouchKeyboard() {}
+void TouchKeyboard::CloseTouchKeyboardAfterReturn(bool v) {}
+void TouchKeyboard::SetTouchKeyboardTiled(bool v) {}
+
+void WindowHolder::MakeCurrentWindow(Window *W) {
+  auto w = dynamic_cast<X11Window*>(W);
+  glXMakeCurrent(w->surface, w->win, w->gl);
+}
+
+void Application::SetDownScale(bool) {}
+void Application::SetAutoRotateOrientation(bool v) {}
+
 void Application::CloseWindow(Window *W) {
-  Display *display = GetTyped<Display*>(W->surface);
+  auto w = dynamic_cast<X11Window*>(W);
+  Display *display = w->surface;
   glXMakeCurrent(display, None, NULL);
-  glXDestroyContext(display, GetTyped<GLXContext>(W->gl));
-  XDestroyWindow(display, ::Window(W->id.v));
-  windows.erase(W->id.v);
+  glXDestroyContext(display, w->gl);
+  XDestroyWindow(display, w->win);
+  windows.erase(W->id);
   if (windows.empty()) run = false;
   if (window_closed_cb) window_closed_cb(W);
   focused = nullptr;
-  if (windows.size() == 1) SetLFAppWindow(windows.begin()->second);
+  if (windows.size() == 1) SetFocusedWindow(windows.begin()->second);
 }
 
-void Application::MakeCurrentWindow(Window *W) {
-  glXMakeCurrent(GetTyped<Display*>(W->surface), ::Window(W->id.v), GetTyped<GLXContext>(W->gl));
-}
-
-void Application::ReleaseMouseFocus() {}
-void Application::GrabMouseFocus() {}
-
-void Application::SetClipboardText(const string &s) {}
-string Application::GetClipboardText() { return string(); }
-void Application::ShowSystemContextMenu(const vector<MenuItem>&items) {}
-
-void Application::OpenTouchKeyboard(bool) {}
-void Application::SetTouchKeyboardTiled(bool v) {}
-void Application::SetAutoRotateOrientation(bool v) {}
-void Application::SetDownScale(bool) {}
-
-void Window::SetCaption(const string &v) {}
-void Window::SetResizeIncrements(float x, float y) {}
-void Window::SetTransparency(float v) {}
-bool Window::Reshape(int w, int h) {
-  auto fw = dynamic_cast<X11FrameworkModule*>(app->framework.get());
-  XWindowChanges resize;
-  resize.width = w;
-  resize.height = h;
-  XConfigureWindow(fw->display, ::Window(id.v), CWWidth|CWHeight, &resize);
-  return true;
-}
-
-bool Video::CreateWindow(Window *W) {
-  auto *fw = dynamic_cast<X11FrameworkModule*>(app->framework.get());
-  ::Window root = DefaultRootWindow(fw->display);
-  XSetWindowAttributes swa;
-  swa.colormap = XCreateColormap(fw->display, root, fw->vi->visual, AllocNone);
-  swa.event_mask = ExposureMask | KeyPressMask | KeyReleaseMask | PointerMotionMask |
-    ButtonPressMask | ButtonReleaseMask | StructureNotifyMask;
-  ::Window win = XCreateWindow(fw->display, root, 0, 0, W->width, W->height, 0, fw->vi->depth,
-                               InputOutput, fw->vi->visual, CWColormap | CWEventMask, &swa);
-  Atom protocols[] = { XInternAtom(fw->display, "WM_DELETE_WINDOW", 0) };
-  XSetWMProtocols(fw->display, win, protocols, sizeofarray(protocols));
-  if (!(W->id.v = Void(win))) return ERRORv(false, "XCreateWindow");
-  XMapWindow(fw->display, win);
-  XStoreName(fw->display, win, W->caption.c_str());
-  GLXContext share = app->windows.size() ? GetTyped<GLXContext>(app->windows.begin()->second->gl) : nullptr;
-  if (!(W->gl = MakeTyped(glXCreateContext(fw->display, fw->vi, share, GL_TRUE))).v)
-    return ERRORv(false, "glXCreateContext");
-  W->surface = MakeTyped(fw->display);
-  app->windows[W->id.v] = W;
-  app->MakeCurrentWindow(W);
-  return true;
-}
-
-void Video::StartWindow(Window*) {}
-int Video::Swap() {
-  Window *screen = app->focused;
-  screen->gd->Flush();
-  glXSwapBuffers(GetTyped<Display*>(screen->surface), ::Window(screen->id.v));
-  screen->gd->CheckForError(__FILE__, __LINE__);
-  return 0;
-}
-
-void *Video::BeginGLContextCreate(Window *W) {}
-void *Video::CompleteGLContextCreate(Window *W, void *gl_context) {
-  X11VideoModule *video = dynamic_cast<X11VideoModule*>(app->video->impl.get());
-  GLXContext glc = glXCreateContext(video->display, video->vi, GetTyped<GLXContext>(W->gl), GL_TRUE);
-  glXMakeCurrent(video->display, (::Window)(W->id), glc);
-  return glc;
-}
-
-FrameScheduler::FrameScheduler() :
-  maxfps(&FLAGS_target_fps), wakeup_thread(&frame_mutex, &wait_mutex), rate_limit(1), wait_forever(!FLAGS_target_fps),
+FrameScheduler::FrameScheduler(WindowHolder *w) :
+  window(w), maxfps(&FLAGS_target_fps), rate_limit(1), wait_forever(!FLAGS_target_fps),
   wait_forever_thread(0), synchronize_waits(0), monolithic_frame(1), run_main_loop(1) {}
   
-bool FrameScheduler::DoMainWait() {
+bool FrameScheduler::DoMainWait(bool only_pool) {
   unordered_set<Window*> wokeup;
-  main_wait_sockets.Select(-1);
+  main_wait_sockets.Select(only_pool ? 0 : -1);
   for (auto &s : main_wait_sockets.socket)
     if (main_wait_sockets.GetReadable(s.first))
       if (s.first != system_event_socket) wokeup.insert(static_cast<Window*>(s.second.second));
-  for (auto w : wokeup) app->scheduler.Wakeup(w);
+  for (auto w : wokeup) w->Wakeup();
   return false;
-}
-
-bool FrameScheduler::WakeupIn(Window *w, Time interval, bool force) {}
-void FrameScheduler::Wakeup(Window *w) { 
-  if (wait_forever && w) {
-    XEvent exp;
-    exp.type = Expose;
-    exp.xexpose.window = ::Window(w->id.v);
-    XSendEvent(GetTyped<Display*>(w->surface), exp.xexpose.window, 0, ExposureMask, &exp);
-  }
 }
 
 void FrameScheduler::UpdateWindowTargetFPS(Window *w) {}
@@ -219,22 +234,24 @@ void FrameScheduler::AddMainWaitMouse(Window *w) { }
 void FrameScheduler::DelMainWaitMouse(Window *w) {  }
 void FrameScheduler::AddMainWaitKeyboard(Window *w) {  }
 void FrameScheduler::DelMainWaitKeyboard(Window *w) {  }
+
 void FrameScheduler::AddMainWaitSocket(Window *w, Socket fd, int flag, function<bool()>) {
   if (fd == InvalidSocket) return;
-  if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, w);
   main_wait_sockets.Add(fd, flag, w);
 }
+
 void FrameScheduler::DelMainWaitSocket(Window *w, Socket fd) {
   if (fd == InvalidSocket) return;
-  if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd);
   main_wait_sockets.Del(fd);
 }
 
-unique_ptr<Module> CreateFrameworkModule() { return make_unique<X11FrameworkModule>(); }
+unique_ptr<Framework> Framework::Create(Application *a) { return make_unique<X11Framework>(a); }
 
 extern "C" int main(int argc, const char* const* argv) {
-  MyAppCreate(argc, argv);
-  return MyAppMain();
+  auto app = MyAppCreate(argc, argv);
+  //app->scheduler.wakeup_thread = make_unique<SocketWakeupThread>
+  //  (app, app, &app->scheduler.frame_mutex, &app->scheduler.wait_mutex);
+  return MyAppMain(app);
 }
 
 }; // namespace LFL

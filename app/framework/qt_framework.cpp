@@ -221,6 +221,11 @@ class QtWindow : public QWindow, public QtWindowInterface {
 };
 
 struct QtFramework : public Framework {
+  int Init() override {
+    INFO("QtFrameworkModule::Init()");
+    return 0;
+  }
+
   unique_ptr<Window> ConstructWindow(Application *app) override { return make_unique<QtWindow>(app); }
   void StartWindow(Window *W) override {}
 
@@ -328,8 +333,6 @@ void FrameScheduler::DelMainWaitSocket(Window *w, Socket fd) {
 extern "C" int main(int argc, const char *argv[]) {
   qapp = new QApplication(argc, const_cast<char**>(argv));
   auto app = static_cast<Application*>(MyAppCreate(argc, argv));
-  app->scheduler.wakeup_thread = make_unique<SocketWakeupThread>
-    (app, app, &app->scheduler.frame_mutex, &app->scheduler.wait_mutex);
   auto fw = static_cast<QtFramework*>(app->framework.get());
   app->focused->gd = GraphicsDevice::Create(app->focused, app->shaders.get(), 2).release();
   fw->CreateWindow(app, app->focused);
