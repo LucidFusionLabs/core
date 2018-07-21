@@ -14,7 +14,7 @@ lfl_add_target(tests EXECUTABLE
                app_null_audio app_null_camera ${LFL_APP_MATRIX} app_null_fft app_simple_loader
                app_simple_resampler ${LFL_APP_CONVERT} app_stdregex_regex app_null_sregex
                app_libpng_png app_null_jpeg app_null_gif app_null_ogg app_libcss_css app_null_ttf
-               app_null_ssl app_null_js app_null_tu app_null_toolkit app_null_crashreporting ${LFL_APP_OS}
+               app_null_ssl app_null_js app_null_toolkit app_null_crashreporting ${LFL_APP_OS}
                LIB_FILES ${LFL_APP_LIB_FILES} ${OPENCV_LIB_FILES})
 
 add_custom_command(TARGET tests POST_BUILD WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
@@ -28,7 +28,7 @@ lfl_add_target(datastructure_tests EXECUTABLE
                app_null_audio app_null_camera ${LFL_APP_MATRIX} app_null_fft app_simple_loader
                app_simple_resampler ${LFL_APP_CONVERT} app_stdregex_regex app_null_sregex
                app_libpng_png app_null_jpeg app_null_gif app_null_ogg app_null_css app_null_ttf
-               app_null_ssl app_null_js app_null_tu app_null_toolkit app_null_crashreporting ${LFL_APP_OS})
+               app_null_ssl app_null_js app_null_toolkit app_null_crashreporting ${LFL_APP_OS})
 
 lfl_add_target(regex_tests EXECUTABLE
                INCLUDE_DIRECTORIES ${GTEST_INCLUDE}
@@ -37,14 +37,14 @@ lfl_add_target(regex_tests EXECUTABLE
                app_null_audio app_null_camera ${LFL_APP_MATRIX} app_null_fft app_simple_loader
                app_simple_resampler ${LFL_APP_CONVERT} app_stdregex_regex app_null_sregex
                app_libpng_png app_null_jpeg app_null_gif app_null_ogg app_null_css app_null_ttf
-               app_null_ssl app_null_js app_null_tu app_null_toolkit app_null_crashreporting ${LFL_APP_OS})
+               app_null_ssl app_null_js app_null_toolkit app_null_crashreporting ${LFL_APP_OS})
 
 lfl_add_package(gl_tests SOURCES gl_tests.cpp INCLUDE_DIRECTORIES ${GTEST_INCLUDE}
                LINK_LIBRARIES ${LFL_APP_LIB} ${GTEST_LIB} ${LFL_APP_FRAMEWORK} ${LFL_APP_GRAPHICS}
                app_null_audio app_null_camera ${LFL_APP_MATRIX} app_null_fft app_simple_loader
                app_simple_resampler ${LFL_APP_CONVERT} app_stdregex_regex app_null_sregex
                app_libpng_png app_null_jpeg app_null_gif app_null_ogg app_null_css ${LFL_APP_FONT}
-               app_null_ssl app_null_js app_null_tu app_null_toolkit app_null_crashreporting ${LFL_APP_OS})
+               app_null_ssl app_null_js app_null_toolkit app_null_crashreporting ${LFL_APP_OS})
 set(LFL_APP_LIB_FILES ${OPENCV_LIB_FILES})
 lfl_post_build_start(gl_tests gl_tests GLTestsApp)
 
