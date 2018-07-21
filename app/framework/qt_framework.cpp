@@ -128,7 +128,7 @@ class QtWindow : public QWindow, public QtWindowInterface {
     if (qapp_init) app->StartNewWindow(this);
   }
 
-  bool event(QEvent *event) {
+  bool event(QEvent *event) override {
     if (event->type() != QEvent::UpdateRequest) return QWindow::event(event);
     if (!init && (init = 1)) MyWindowInit();
     auto app = QtWindowInterface::parent;
@@ -143,7 +143,7 @@ class QtWindow : public QWindow, public QtWindowInterface {
     return QWindow::event(event);
   }
 
-  void resizeEvent(QResizeEvent *ev) {
+  void resizeEvent(QResizeEvent *ev) override {
     QWindow::resizeEvent(ev);
     if (!init) return; 
     auto app = QtWindowInterface::parent;
@@ -153,8 +153,9 @@ class QtWindow : public QWindow, public QtWindowInterface {
     RequestRender();
   }
 
-  void keyPressEvent  (QKeyEvent *ev) { keyEvent(ev, true); }
-  void keyReleaseEvent(QKeyEvent *ev) { keyEvent(ev, false); }
+  void keyPressEvent  (QKeyEvent *ev) override { keyEvent(ev, true); }
+  void keyReleaseEvent(QKeyEvent *ev) override { keyEvent(ev, false); }
+
   void keyEvent       (QKeyEvent *ev, bool down) {
     if (!init) return;
     ev->accept();
@@ -163,8 +164,8 @@ class QtWindow : public QWindow, public QtWindowInterface {
     if (fired && frame_on_keyboard_input) RequestRender();
   }
 
-  void mouseReleaseEvent(QMouseEvent *ev) { QWindow::mouseReleaseEvent(ev); mouseClickEvent(ev, false); }
-  void mousePressEvent  (QMouseEvent *ev) { QWindow::mousePressEvent(ev);   mouseClickEvent(ev, true); }
+  void mouseReleaseEvent(QMouseEvent *ev) override { QWindow::mouseReleaseEvent(ev); mouseClickEvent(ev, false); }
+  void mousePressEvent  (QMouseEvent *ev) override { QWindow::mousePressEvent(ev);   mouseClickEvent(ev, true); }
 
   void mouseClickEvent(QMouseEvent *ev, bool down) {
     if (!init) return;
@@ -173,7 +174,7 @@ class QtWindow : public QWindow, public QtWindowInterface {
     if (fired && frame_on_mouse_input) RequestRender();
   }
 
-  void mouseMoveEvent(QMouseEvent *ev) {
+  void mouseMoveEvent(QMouseEvent *ev) override {
     QWindow::mouseMoveEvent(ev);
     if (!init) return;
     auto app = QtWindowInterface::parent;
@@ -202,7 +203,7 @@ class QtWindow : public QWindow, public QtWindowInterface {
   void SetResizeIncrements(float x, float y) override { window->windowHandle()->setSizeIncrement(QSize(x, y)); }
   void SetTransparency(float v) override { window->windowHandle()->setOpacity(1-v); }
   bool Reshape(int w, int h) override { window->resize(w, h); QtWindowInterface::parent->MakeCurrentWindow(this); return true; }
-  void Wakeup(int) { if (QtWindowInterface::parent->scheduler.wait_forever) RequestRender(); }
+  void Wakeup(int) override { if (QtWindowInterface::parent->scheduler.wait_forever) RequestRender(); }
   int Swap() override {
     glc->swapBuffers(opengl_window);
     gd->CheckForError(__FILE__, __LINE__);

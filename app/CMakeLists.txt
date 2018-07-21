@@ -95,5 +95,3 @@ set(LFL_APP_LIB ${LFL_APP_LIB} PARENT_SCOPE)
 set(LFL_APP_ASSET_FILES ${LFL_SOURCE_DIR}/core/app/shaders/default.*
     ${LFL_SOURCE_DIR}/core/app/assets/MenuAtlas*
     ${LFL_SOURCE_DIR}/core/app/assets/MobileAtlas* PARENT_SCOPE)
-
-add_subdirectory(tests)

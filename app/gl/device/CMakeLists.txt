@@ -23,8 +23,11 @@ if(LFL_GLEW)
 endif()
 
 lfl_add_target(app_null_graphics STATIC_LIBRARY SOURCES null_graphics.cpp)
-lfl_add_target(app_opengl_graphics STATIC_LIBRARY SOURCES opengl_graphics.cpp
-               COMPILE_DEFINITIONS ${defs} INCLUDE_DIRECTORIES ${incs} LINK_LIBRARIES ${libs})
+
+if(LFL_OPENGL)
+  lfl_add_target(app_opengl_graphics STATIC_LIBRARY SOURCES opengl_graphics.cpp
+                 COMPILE_DEFINITIONS ${defs} INCLUDE_DIRECTORIES ${incs} LINK_LIBRARIES ${libs})
+endif()
 
 if(LFL_QT)
   lfl_enable_qt()

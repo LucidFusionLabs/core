@@ -1,11 +1,11 @@
 FROM ubuntu:bionic
-LABEL maintainer="LucidFusionLabs@gmail.com"
+LABEL maintainer="support@lucidfusionlabs.com"
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-      yasm automake libtool libalut-dev libglu1-mesa-dev xorg-dev \
-      autotools-dev cmake cmake-data make g++ libjpeg-dev libbz2-dev libssl-dev \
-      libqt5opengl5 libqt5opengl5-dev && \
+      automake autotools-dev make cmake cmake-data g++ libtool yasm \
+      libalut-dev libglu1-mesa-dev xorg-dev libjpeg-dev libbz2-dev libssl-dev libqt5opengl5-dev \
+      lsb-release ccache && \
     apt-get clean
 
 ENV INSTALL_COMMND apt install -yqV *.deb

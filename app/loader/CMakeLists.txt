@@ -8,7 +8,6 @@ lfl_add_target(app_null_gif STATIC_LIBRARY SOURCES null_gif.cpp)
 lfl_add_target(app_null_archive STATIC_LIBRARY SOURCES null_archive.cpp)
 lfl_add_target(app_null_proto STATIC_LIBRARY SOURCES null_proto.cpp)
 lfl_add_target(app_null_ogg STATIC_LIBRARY SOURCES null_ogg.cpp)
-lfl_add_target(app_stb_ogg STATIC_LIBRARY SOURCES stb_ogg.cpp)
 
 if(LFL_PROTOBUF)
   add_library(app_protobuf_proto protobuf_proto.cpp)
@@ -33,6 +32,10 @@ endif()
 
 if(LFL_JPEG)
   lfl_add_target(app_libjpeg_jpeg STATIC_LIBRARY SOURCES libjpeg_jpeg.cpp LINK_LIBRARIES ${JPEG_LIB})
+endif()
+
+if(LFL_STB)
+  lfl_add_target(app_stb_ogg STATIC_LIBRARY SOURCES stb_ogg.cpp)
 endif()
 
 if(LFL_VORBIS)
