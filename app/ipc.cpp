@@ -231,7 +231,7 @@ int ProcessPipe::Open(const char* const* argv, const char *startdir) {
     dup2(pipeout[0], 0);
     dup2(pipein[1], 2);
     dup2(pipein[1], 1);
-    if (startdir) chdir(startdir);
+    if (startdir) if (chdir(startdir)) ERROR("chdir(", startdir, "): ", Application::SystemError());
     execvp(argv[0], const_cast<char*const*>(argv));
     FATAL("execvp ", argv[0], " from ", BlankNull(startdir), " failed");
   }
@@ -250,7 +250,7 @@ int ProcessPipe::OpenPTY(const char* const* argv, const char *startdir) {
     in = fdopen(fd, "r");
     out = fdopen(fd, "w");
   } else {
-    if (startdir) chdir(startdir);
+    if (startdir) if (chdir(startdir)) ERRORv("chdir(", startdir, "): ", Application::SystemError());
     execvp(argv[0], const_cast<char*const*>(argv));
   }
   return 0;

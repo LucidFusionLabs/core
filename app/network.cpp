@@ -1440,7 +1440,7 @@ bool NBFGets(FILE *f, char *buf, int len, ApplicationLifetime *life, int timeout
   ss.Add(fd, SocketSet::READABLE, 0);
   ss.Select(timeout);
   if ((life && !life->run) || !ss.GetReadable(fd)) return 0;
-  fgets(buf, len, f);
+  if (!fgets(buf, len, f)) return 0;
   return 1;
 #else
   return 0;
@@ -1451,7 +1451,7 @@ string PromptFGets(const string &p, int s) {
   printf("%s\n", p.c_str());
   fflush(stdout);
   string ret(s, 0);
-  fgets(&ret[0], ret.size(), stdin);
+  if (!fgets(&ret[0], ret.size(), stdin)) return string();
   return ret;
 }
 

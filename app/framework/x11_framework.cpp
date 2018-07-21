@@ -102,6 +102,8 @@ struct X11Framework : public Framework {
   Application *app;
   Display *display = 0;
   XVisualInfo *vi = 0;
+  XErrorEvent error;
+  int (*old_error_handler)(Display *, XErrorEvent *);
   X11Framework(Application *a) : app(a) {}
 
   int Init() override {
@@ -151,7 +153,16 @@ struct X11Framework : public Framework {
     XMapWindow(fw->display, w->win);
     XStoreName(fw->display, w->win, w->caption.c_str());
     GLXContext share = app->windows.size() ? dynamic_cast<X11Window*>(app->windows.begin()->second)->gl : nullptr;
+
+    TrapError();
     if (!(w->gl = glXCreateContext(fw->display, fw->vi, share, GL_TRUE))) return ERRORv(false, "glXCreateContext");
+    XSync(fw->display, false);
+    if (int error_code = UntrapError()) {
+      string text(256, 0);
+      if (!XGetErrorText(fw->display, error_code, &text[0], text.size())) text.clear();
+      return ERRORv(false, StringPrintf("glXCreateContext: error_code=%d %s", error_code, text.data()));
+    }
+
     w->surface = fw->display;
     app->windows[W->id] = W;
     app->MakeCurrentWindow(W);
@@ -180,7 +191,18 @@ struct X11Framework : public Framework {
     }
     return 0;
   }
+
+  void TrapError() { trapped_error_code = 0; old_error_handler = XSetErrorHandler(TrapErrorHandler); }
+  int UntrapError() { XSetErrorHandler(old_error_handler); return trapped_error_code; }
+
+  static int trapped_error_code;
+  static int TrapErrorHandler(Display*, XErrorEvent *error) {
+    if (!trapped_error_code) trapped_error_code = error->error_code;
+    return 0;
+  }
 };
+
+int X11Framework::trapped_error_code = 0;
 
 string Clipboard::GetClipboardText() { return string(); }
 void Clipboard::SetClipboardText(const string &s) {}
@@ -194,13 +216,29 @@ void TouchKeyboard::CloseTouchKeyboard() {}
 void TouchKeyboard::CloseTouchKeyboardAfterReturn(bool v) {}
 void TouchKeyboard::SetTouchKeyboardTiled(bool v) {}
 
+void ThreadDispatcher::RunCallbackInMainThread(Callback cb) {
+  message_queue.Write(make_unique<Callback>(move(cb)).release());
+  if (!FLAGS_target_fps) wakeup->Wakeup();
+}
+
 void WindowHolder::MakeCurrentWindow(Window *W) {
   auto w = dynamic_cast<X11Window*>(W);
   glXMakeCurrent(w->surface, w->win, w->gl);
 }
 
-void Application::SetDownScale(bool) {}
+int Application::SetExtraScale(bool v) { return false; }
+void Application::SetDownScale(bool v) {}
+void Application::SetTitleBar(bool v) {}
+void Application::SetKeepScreenOn(bool v) {}
 void Application::SetAutoRotateOrientation(bool v) {}
+void Application::SetVerticalSwipeRecognizer(int touches) {}
+void Application::SetHorizontalSwipeRecognizer(int touches) {}
+void Application::SetPanRecognizer(bool enabled) {}
+void Application::SetPinchRecognizer(bool enabled) {}
+void Application::ShowSystemStatusBar(bool v) {}
+void Application::ShowSystemFontChooser(const FontDesc &cur_font, const StringVecCB &choose_cb) {}
+void Application::SetTheme(const string &v) {}
+int Application::Suspended() { return 0; }
 
 void Application::CloseWindow(Window *W) {
   auto w = dynamic_cast<X11Window*>(W);
@@ -246,6 +284,11 @@ void FrameScheduler::DelMainWaitSocket(Window *w, Socket fd) {
 }
 
 unique_ptr<Framework> Framework::Create(Application *a) { return make_unique<X11Framework>(a); }
+unique_ptr<TimerInterface> SystemToolkit::CreateTimer(Callback cb) { return nullptr; }
+unique_ptr<AlertViewInterface> SystemToolkit::CreateAlert(Window *w, AlertItemVec items) { return nullptr; }
+unique_ptr<PanelViewInterface> SystemToolkit::CreatePanel(Window*, const Box &b, const string &title, PanelItemVec items) { return nullptr; }
+unique_ptr<MenuViewInterface> SystemToolkit::CreateMenu(Window*, const string &title, MenuItemVec items) { return nullptr; }
+unique_ptr<MenuViewInterface> SystemToolkit::CreateEditMenu(Window*, MenuItemVec items) { return nullptr; }
 
 extern "C" int main(int argc, const char* const* argv) {
   auto app = MyAppCreate(argc, argv);
