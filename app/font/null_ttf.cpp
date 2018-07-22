@@ -31,7 +31,7 @@ unique_ptr<Font> FreeTypeFontEngine::Open(const FontDesc &d) { return nullptr; }
 
 #ifdef LFL_LINUX
 void FCFontEngine::Shutdown() {}
-string FCFontEngine::DebugString(Font *f) const {}
+string FCFontEngine::DebugString(Font *f) const { return "NullFCFont"; }
 void FCFontEngine::SetDefault() {}
 int FCFontEngine::InitGlyphs(Font *f, Glyph *g, int n) { return 0; }
 int FCFontEngine::LoadGlyphs(Font *f, const Glyph *g, int n) { return 0; }

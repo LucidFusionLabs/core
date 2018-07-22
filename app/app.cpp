@@ -492,7 +492,8 @@ int Application::Create(const char *source_filename) {
     if (PrefixMatch(rpath, startdir+"/")) assetdir = StrCat(rpath + startdir.size()+1, "/assets/");
     else assetdir = StrCat(rpath, "/assets/"); 
 #elif defined(LFL_APP_ASSET_PATH)
-    assetdir = StrCat(bindir, PP_STRING(LFL_APP_ASSET_PATH));
+    assetdir = PP_STRING(LFL_APP_ASSET_PATH) + string(1, localfs.slash);
+    if (!localfs.IsAbsolutePath(assetdir)) assetdir = StrCat(bindir, assetdir, string(1, localfs.slash));
 #else
     assetdir = StrCat(bindir, "assets/"); 
 #endif
