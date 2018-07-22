@@ -443,9 +443,14 @@ int Application::Create(const char *source_filename) {
 #ifdef LFL_GLOG
   google::InstallFailureSignalHandler();
 #endif
+  pid = getpid();
   SetMainThread();
   time_started = Now();
+#ifdef LFL_LINUX
+  if ((progname = localfs.ReadLink(StrCat("/proc/", getpid(), "/exe"))).empty()) progname = argv[0];
+#else
   progname = argv[0];
+#endif
   startdir = localfs.CurrentDirectory();
 
 #ifdef LFL_WINDOWS
@@ -460,8 +465,8 @@ int Application::Create(const char *source_filename) {
   if (argc > 1) OpenSystemConsole(console_title.c_str());
 
 #else
-  pid = getpid();
-  bindir = localfs.JoinPath(startdir, progname.substr(0, DirNameLen(progname, true)));
+  bindir = progname.substr(0, DirNameLen(progname, true));
+  if (!localfs.IsAbsolutePath(bindir)) bindir = localfs.JoinPath(startdir, bindir);
 
   /* handle SIGINT */
   signal(SIGINT, SignalHandler::HandleSigInt);
@@ -486,6 +491,8 @@ int Application::Create(const char *source_filename) {
     CFRelease(respath);
     if (PrefixMatch(rpath, startdir+"/")) assetdir = StrCat(rpath + startdir.size()+1, "/assets/");
     else assetdir = StrCat(rpath, "/assets/"); 
+#elif defined(LFL_APP_ASSET_PATH)
+    assetdir = StrCat(bindir, PP_STRING(LFL_APP_ASSET_PATH));
 #else
     assetdir = StrCat(bindir, "assets/"); 
 #endif

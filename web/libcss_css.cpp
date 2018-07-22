@@ -18,8 +18,8 @@
 
 #include "core/app/gl/view.h"
 #include "core/app/ipc.h"
-#include "core/web/browser.h"
-#include "core/web/document.h"
+#include "core/web/browser/browser.h"
+#include "core/web/browser/document.h"
 extern "C" {
 #include "libcss/libcss.h"
 };

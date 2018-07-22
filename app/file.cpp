@@ -233,6 +233,14 @@ int LocalFileSystem::IsDirectory(const string &filename) {
   if (stat(filename.c_str(), &buf)) return false;
   return buf.st_mode & S_IFDIR;
 }
+
+string LocalFileSystem::ReadLink(const string &path) {
+  string ret(PATH_MAX, 0);
+  int len = readlink(path.data(), &ret[0], ret.size());
+  if (len == -1) return string();
+  ret.resize(len);
+  return ret;
+}
 #endif // LFL_WINDOWS
 
 string LocalFileSystem::CurrentDirectory(int max_size) {

@@ -53,6 +53,8 @@
   #define tvirtual
 #endif
 
+#define PP_STRING_IMPL(x) #x
+#define PP_STRING(x) PP_STRING_IMPL(x)
 #define memzero(x) memset(&(x), 0, sizeof(x))
 #define memzeros(x) memset((x), 0, sizeof(x))
 #define memzerop(x) memset((x), 0, sizeof(*(x)))

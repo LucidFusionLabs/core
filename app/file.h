@@ -104,10 +104,12 @@ struct FileSystem {
   virtual bool unlink(const string &fn) = 0;
   virtual int IsFile(const string &localfilename) = 0;
   virtual int IsDirectory(const string &localfilename) = 0;
+  virtual bool IsAbsolutePath(const string &path) { return path.size() && path[0] == slash; }
   virtual string CurrentDirectory(int max_size=1024) = 0;
   virtual string JoinPath(const string &x, const string &y) = 0;
   virtual unique_ptr<File> OpenFile(const string &fn, const string &mode, bool pre_create=false) = 0;
   virtual unique_ptr<DirectoryIter> ReadDirectory(const string &path, int dirs=0, const char *P=0, const char *S=0) = 0;
+  virtual string ReadLink(const string &path) { return path; }
 };
 
 struct BufferFile : public File {
@@ -176,6 +178,7 @@ struct LocalFileSystem : public FileSystem {
   string JoinPath(const string &x, const string &y) override;
   unique_ptr<File> OpenFile(const string &fn, const string &mode, bool pre_create=false) override;
   unique_ptr<DirectoryIter> ReadDirectory(const string &path, int dirs=0, const char *P=0, const char *S=0) override;
+  string ReadLink(const string &path) override;
 
   static int CreateTemporary(ApplicationInfo*, const string &prefix, string *localfilename_out);
   static string CreateTemporaryName(ApplicationInfo*, const string &prefix);
