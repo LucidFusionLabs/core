@@ -8,4 +8,5 @@ RUN apt-get update && \
       lsb-release ccache && \
     apt-get clean
 
-ENV INSTALL_COMMND apt install -yqV *.deb
+ENV PACKAGE_INSTALL apt install -yqV
+ENV PACKAGE_SUFFIX deb
