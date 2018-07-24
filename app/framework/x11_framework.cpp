@@ -70,10 +70,6 @@ struct X11Window : public Window {
   GLXContext gl;
   X11Window(Application *a) : Window(a) {}
 
-  void SetCaption(const string &v) override {}
-  void SetResizeIncrements(float x, float y) override {}
-  void SetTransparency(float v) override {}
-
   bool Reshape(int w, int h) override {
     XWindowChanges resize;
     resize.width = w;
@@ -96,6 +92,16 @@ struct X11Window : public Window {
     gd->CheckForError(__FILE__, __LINE__);
     return 0;
   }
+
+  void SetCaption(const string &v) override {
+    XChangeProperty(surface, win,
+                    XInternAtom(surface, "_NET_WM_NAME", False),
+                    XInternAtom(surface, "UTF8_STRING", False),
+                    8, PropModeReplace, MakeUnsigned(v.data()), v.size());
+  }
+
+  void SetResizeIncrements(float x, float y) override {}
+  void SetTransparency(float v) override {}
 };
 
 struct X11Framework : public Framework {
@@ -123,16 +129,6 @@ struct X11Framework : public Framework {
     XCloseDisplay(display);
     return 0;
   }
-
-#if 0
-  void *BeginGLContextCreate(Window *W) {}
-  void *CompleteGLContextCreate(Window *W, void *gl_context) {
-    auto video = dynamic_cast<X11VideoModule*>(app->video->impl.get());
-    GLXContext glc = glXCreateContext(video->display, video->vi, dynamic_cast<X11Window*>(W)->gl, GL_TRUE);
-    glXMakeCurrent(video->display, (::Window)(W->id), glc);
-    return glc;
-  }
-#endif
 
   unique_ptr<Window> ConstructWindow(Application *app) override { return make_unique<X11Window>(app); }
   void StartWindow(Window*) override {}
@@ -258,13 +254,16 @@ FrameScheduler::FrameScheduler(WindowHolder *w) :
   wait_forever_thread(0), synchronize_waits(0), monolithic_frame(1), run_main_loop(1) {}
   
 bool FrameScheduler::DoMainWait(bool only_pool) {
-  unordered_set<Window*> wokeup;
+  bool ret = false;
   main_wait_sockets.Select(only_pool ? 0 : -1);
-  for (auto &s : main_wait_sockets.socket)
-    if (main_wait_sockets.GetReadable(s.first))
-      if (s.first != system_event_socket) wokeup.insert(static_cast<Window*>(s.second.second));
-  for (auto w : wokeup) w->Wakeup();
-  return false;
+  for (auto i = main_wait_sockets.socket.begin(); i != main_wait_sockets.socket.end(); /**/) {
+    iter_socket = i->first;
+    auto f = static_cast<function<bool()>*>(i++->second.second);
+    if (iter_socket == system_event_socket) ret = true;
+    else { if (f) if ((*f)()) ret = true; }
+  }
+  iter_socket = InvalidSocket;
+  return ret;
 }
 
 void FrameScheduler::UpdateWindowTargetFPS(Window *w) {}
@@ -273,13 +272,18 @@ void FrameScheduler::DelMainWaitMouse(Window *w) {  }
 void FrameScheduler::AddMainWaitKeyboard(Window *w) {  }
 void FrameScheduler::DelMainWaitKeyboard(Window *w) {  }
 
-void FrameScheduler::AddMainWaitSocket(Window *w, Socket fd, int flag, function<bool()>) {
+void FrameScheduler::AddMainWaitSocket(Window *w, Socket fd, int flag, function<bool()> f) {
   if (fd == InvalidSocket) return;
-  main_wait_sockets.Add(fd, flag, w);
+  main_wait_sockets.Add(fd, flag, f ? new function<bool()>(move(f)) : nullptr);
 }
 
 void FrameScheduler::DelMainWaitSocket(Window *w, Socket fd) {
   if (fd == InvalidSocket) return;
+  if (iter_socket != InvalidSocket)
+    CHECK_EQ(iter_socket, fd) << "Can only remove current socket from wait callback";
+  auto it = main_wait_sockets.socket.find(fd);
+  if (it == main_wait_sockets.socket.end()) return;
+  if (auto f = static_cast<function<bool()>*>(it->second.second)) delete f;
   main_wait_sockets.Del(fd);
 }
 
@@ -292,8 +296,6 @@ unique_ptr<MenuViewInterface> SystemToolkit::CreateEditMenu(Window*, MenuItemVec
 
 extern "C" int main(int argc, const char* const* argv) {
   auto app = MyAppCreate(argc, argv);
-  //app->scheduler.wakeup_thread = make_unique<SocketWakeupThread>
-  //  (app, app, &app->scheduler.frame_mutex, &app->scheduler.wait_mutex);
   return MyAppMain(app);
 }
 

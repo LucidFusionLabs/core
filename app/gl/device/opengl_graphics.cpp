@@ -191,14 +191,16 @@ struct OpenGLES1 : public GraphicsDevice {
 #else
 struct OpenGLES1 : public GraphicsDevice, public QOpenGLFunctions {
 #endif
-#include "core/app/graphics/opengl_common.h"
+#include "core/app/gl/device/opengl_common.h"
   int target_matrix=-1;
-  OpenGLES1(Window *P) : GraphicsDevice(P) { default_color.push_back(Color(1.0, 1.0, 1.0, 1.0)); }
+  OpenGLES1(Window *P, LFL::Shaders *S) : GraphicsDevice(P, 1, S) {
+    default_color.push_back(Color(1.0, 1.0, 1.0, 1.0));
+  }
 
-  void Init(const Box &b) {
+  void Init(AssetLoading *loader, const Box &b) {
     done_init = true;
     GDDebug("Init");
-    shader = &app->shaders->shader_default; 
+    shader = &shaders->shader_default; 
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     glEnableClientState(GL_VERTEX_ARRAY);
 #ifndef LFL_MOBILE
@@ -216,7 +218,7 @@ struct OpenGLES1 : public GraphicsDevice, public QOpenGLFunctions {
   }
 
   void UpdateColor() { const Color &c = default_color.back(); glColor4f(c.r(), c.g(), c.b(), c.a()); }
-  bool ShaderSupport() const {
+  bool ShaderSupport() {
 #ifdef LFL_MOBILE
     return false;
 #endif
@@ -314,7 +316,7 @@ struct OpenGLES1 : public GraphicsDevice, public QOpenGLFunctions {
   }
 
   void UseShader(Shader *S) {
-    shader = X_or_Y(S, &app->shaders->shader_default); 
+    shader = X_or_Y(S, &shaders->shader_default); 
     glUseProgram(shader->ID);
     GDDebug("Shader=", shader->name);
   }
@@ -348,8 +350,7 @@ struct OpenGLES2 : public GraphicsDevice, public QOpenGLFunctions {
   LFL::Material material;
   LFL::Light light[4];
   Deferred deferred;
-  LFL::Shaders *shaders;
-  OpenGLES2(Window *P, LFL::Shaders *S) : GraphicsDevice(P, 2), shaders(S) {}
+  OpenGLES2(Window *P, LFL::Shaders *S) : GraphicsDevice(P, 2, S) {}
 
   void Init(AssetLoading *loader, const Box &b) {
     done_init = true;
@@ -385,7 +386,7 @@ struct OpenGLES2 : public GraphicsDevice, public QOpenGLFunctions {
     INFO("OpenGLES2::Init width=", b.w, ", height=", b.h);
   }
 
-  bool ShaderSupport() const { return true; }
+  bool ShaderSupport() { return true; }
   void MarkDirty() { dirty_matrix = dirty_color = 1; }
   void EnableLighting()     { lighting_on=1; GDDebug("Lighting=1"); }
   void DisableLighting()    { lighting_on=0; GDDebug("Lighting=0"); }
@@ -723,7 +724,7 @@ unique_ptr<GraphicsDevice> GraphicsDevice::Create(Window *w, Shaders *s, int ope
 #endif
 
 #ifdef LFL_GLES1  
-  if (opengles_version == 1) gd = make_unique<OpenGLES1>(w);
+  if (opengles_version == 1) gd = make_unique<OpenGLES1>(w, s);
 #endif
 
 #ifdef LFL_GLEW

@@ -52,7 +52,7 @@ Socket SSLSocket::Connect(CTXPtr sslctx, IPV4::Addr addr, int port) {
   bio = BIO_new_ssl_connect(FromVoid<SSL_CTX*>(sslctx));
   BIO *b = FromVoid<BIO*>(bio);
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L
-  BIO_set_conn_hostname(b, IPV4::Addr::Text(addr, port).c_str());
+  BIO_set_conn_hostname(b, IPV4::Text(addr, port).c_str());
 #else
   char addrbuf[sizeof(addr)], portbuf[sizeof(port)];
   memcpy(addrbuf, &addr, sizeof(addr));

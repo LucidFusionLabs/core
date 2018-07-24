@@ -369,6 +369,7 @@ struct GraphicsDevice {
   bool blend_enabled = 0, invert_view_matrix = 0, track_model_matrix = 0, dont_clear_deferred = 0;
   string vertex_shader, pixel_shader;
   Shader *shader = 0;
+  Shaders *shaders;
   v3 camera_pos;
   m44 invview_matrix, model_matrix;
   Color clear_color = Color::black;
@@ -377,10 +378,10 @@ struct GraphicsDevice {
   vector<int*> buffers;
   FrameBuffer *attached_framebuffer = 0;
 
-  GraphicsDevice(Window *W, int V) : parent(W), version(V), scissor_stack(1) {}
+  GraphicsDevice(Window *W, int V, Shaders *S) : parent(W), version(V), shaders(S), scissor_stack(1) {}
   virtual ~GraphicsDevice() {}
   virtual void Init(AssetLoading*, const Box&) = 0;
-  virtual bool ShaderSupport() const = 0;
+  virtual bool ShaderSupport() = 0;
   virtual void MarkDirty() = 0;
   virtual bool GetEnabled(int) = 0;
   virtual void EnableTexture() = 0;
