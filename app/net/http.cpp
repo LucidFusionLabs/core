@@ -229,13 +229,15 @@ struct HTTPClientHandler {
   struct Protocol : public Connection::Handler {
     int result_code, read_header_length, read_content_length, current_chunk_length, current_chunk_read;
     bool chunked_encoding, full_chunk_cb;
-    string content_type;
-
+    string content_type, content_buffer, headers_buffer;
     Protocol(bool full_chunks) : full_chunk_cb(full_chunks) { Reset(); }
+
     void Reset() {
       result_code=read_header_length=read_content_length=current_chunk_length=current_chunk_read=0;
       chunked_encoding=0;
       content_type.clear();  
+      content_buffer.clear();
+      headers_buffer.clear();
     }
 
     int Read(Connection *c) {
@@ -259,6 +261,7 @@ struct HTTPClientHandler {
         if (Headers(c, status_line, h)) { c->handler.reset(); return -1; }
         cur = headers_end+2;
       }
+
       for (;;) {
         if (chunked_encoding && !current_chunk_length) {
           char *cur_in = cur;
@@ -284,6 +287,7 @@ struct HTTPClientHandler {
       if (cur != c->rb.begin()) c->ReadFlush(cur - c->rb.begin());
       return 0;
     }
+
     virtual int Headers(Connection *c, const StringPiece &sl, const StringPiece &h) { return 0; }
     virtual int Content(Connection *c, const StringPiece &b) { return 0; }
   };
@@ -294,19 +298,26 @@ struct HTTPClientHandler {
     string host, path;
     int port=0, redirects=0;
     File *out=0;
-    HTTPClient::ResponseCB cb;
     StringCB redirect_cb;
+    HTTPClient::ResponseCB cb;
+    HTTPClient::ResultCB result_cb;
 
     virtual ~WGet() { if (out) INFO("close ", out->Filename()); delete out; }
+
     WGet(SocketService *Svc, bool SSL, const string &Host, int Port, const string &Path, File *Out,
          const HTTPClient::ResponseCB &CB=HTTPClient::ResponseCB(), const StringCB &RedirCB=StringCB()) :
-      Protocol(false), svc(Svc), ssl(SSL), host(Host), path(Path), port(Port), out(Out), cb(CB), redirect_cb(RedirCB) {}
+      Protocol(false), svc(Svc), ssl(SSL), host(Host), path(Path), port(Port), out(Out), redirect_cb(RedirCB), cb(CB) {}
+
+    WGet(SocketService *Svc, bool SSL, const string &Host, int Port, const string &Path,
+         const HTTPClient::ResultCB &CB, const StringCB &RedirCB=StringCB()) :
+      WGet(Svc, SSL, Host, Port, Path, nullptr, bind(&WGet::ResultCB, this, _1, _2, _3, _4, _5), RedirCB) { result_cb=CB; }
 
     bool LoadURL(const string &url, string *prot=0) {
       return HTTP::ResolveURL(url.c_str(), &ssl, 0, &port, &host, &path, 0, prot);
     }
 
     void Close(Connection *c) override { if (cb) cb(c, 0, content_type, 0, 0); }
+
     int Connected(Connection *c) override {
       return HTTPClient::WriteRequest(c, HTTPServer::Method::GET, host.c_str(), path.c_str(), 0, 0, 0, false);
     }
@@ -341,15 +352,29 @@ struct HTTPClientHandler {
           svc->SSLConnect(svc->net->ssl, ipv4_addr, port) :
           svc->Connect(ipv4_addr, port);
       }
+      HandleConnect(c);
+    }
+
+    void HandleConnect(Connection *c) {
       if (!c) { if (cb) cb(0, 0, string(), 0, 0); delete this; }
       else c->handler = unique_ptr<Connection::Handler>(this);
+    }
+
+    int ResultCB(Connection*, const char *h, const string&, const char *b, int l) {
+      if      (h) headers_buffer = h;
+      else if (l) content_buffer.append(b, l);
+      else if (result_cb) result_cb(result_code, headers_buffer, content_buffer);
+      return 0;
     }
   };
 
   struct WPost : public WGet {
     string mimetype, postdata;
     WPost(SocketService *Svc, bool SSL, const string &Host, int Port, const string &Path, const string &Mimetype, const char *Postdata, int Postlen,
-          HTTPClient::ResponseCB CB=HTTPClient::ResponseCB()) : WGet(Svc, SSL, Host, Port, Path, 0, CB), mimetype(Mimetype), postdata(Postdata,Postlen) {}
+          HTTPClient::ResponseCB CB=HTTPClient::ResponseCB()) : WGet(Svc, SSL, Host, Port, Path, 0, CB), mimetype(Mimetype), postdata(Postdata, Postlen) {}
+    WPost(SocketService *Svc, bool SSL, const string &Host, int Port, const string &Path, const string &Mimetype, const char *Postdata, int Postlen,
+          HTTPClient::ResultCB CB) : WGet(Svc, SSL, Host, Port, Path, CB), mimetype(Mimetype), postdata(Postdata, Postlen) {}
+
     int Connected(Connection *c) {
       return HTTPClient::WriteRequest(c, HTTPServer::Method::POST, host.c_str(), path.c_str(),
                                       mimetype.data(), postdata.data(), postdata.size(), false);
@@ -386,19 +411,24 @@ int HTTPClient::WriteRequest(Connection *c, int method, const char *host, const 
   return c->Write(postdata, postlen);
 }
 
-bool HTTPClient::WGet(SocketServices *net, ApplicationInfo *appinfo, const string &url, File *out, const ResponseCB &cb, const StringCB &redirect_cb) {
-  unique_ptr<HTTPClientHandler::WGet> handler = make_unique<HTTPClientHandler::WGet>
-    (net->tcp_client.get(), 0, "", 0, "", out, cb, redirect_cb);
-
+static bool HTTPClientWGet(unique_ptr<HTTPClientHandler::WGet> handler, const string &url) {
   string prot;
   if (!handler->LoadURL(url, &prot)) {
     if (prot != "file") return false;
     string fn = StrCat(!handler->host.empty() ? "/" : "", handler->host , "/", handler->path);
     string content = LocalFile(fn, "r").Contents();
-    if (!content.empty() && cb) cb(0, 0, string(), content.data(), content.size());
-    if (cb)                     cb(0, 0, string(), 0,              0);
+    if (!content.empty() && handler->cb) handler->cb(0, 0, string(), content.data(), content.size());
+    if (handler->cb)                     handler->cb(0, 0, string(), 0,              0);
     return true;
   }
+
+  handler.release()->ResolveHost();
+  return true;
+}
+
+bool HTTPClient::WGet(SocketServices *net, ApplicationInfo *appinfo, const string &url, File *out, const ResponseCB &cb, const StringCB &redirect_cb) {
+  unique_ptr<HTTPClientHandler::WGet> handler = make_unique<HTTPClientHandler::WGet>
+    (net->tcp_client.get(), 0, "", 0, "", out, cb, redirect_cb);
 
   if (!out && !cb) {
     if (!appinfo) return ERRORv(false, "unknown savedir");
@@ -409,8 +439,35 @@ bool HTTPClient::WGet(SocketServices *net, ApplicationInfo *appinfo, const strin
     handler->out = f.release();
   }
 
-  handler.release()->ResolveHost();
+  return HTTPClientWGet(move(handler), url);
+}
+
+bool HTTPClient::WGet(SocketServices *net, const string &url, const ResultCB &cb, const StringCB &redirect_cb) {
+  return HTTPClientWGet(make_unique<HTTPClientHandler::WGet>(net->tcp_client.get(), 0, "", 0, "", cb, redirect_cb), url);
+}
+
+static bool HTTPClientWGetLocal(unique_ptr<HTTPClientHandler::WGet> handler, const string &endpoint, const string &path) {
+  handler->host = endpoint;
+  handler->path = path;
+  auto c = handler->svc->ConnectLocal(endpoint, move(handler));
   return true;
+}
+
+bool HTTPClient::WGetLocal(SocketServices *net, const string &endpoint, const string &path, const ResponseCB &cb, const StringCB &redirect_cb) {
+  return HTTPClientWGetLocal(make_unique<HTTPClientHandler::WGet>
+                             (net->unix_client.get(), 0, "", 0, "", nullptr, cb, redirect_cb), endpoint, path);
+}
+
+bool HTTPClient::WGetLocal(SocketServices *net, const string &endpoint, const string &path, const ResultCB &cb, const StringCB &redirect_cb) {
+  return HTTPClientWGetLocal(make_unique<HTTPClientHandler::WGet>
+                             (net->unix_client.get(), 0, "", 0, "", cb, redirect_cb), endpoint, path);
+}
+
+bool HTTPClientWPost(SocketServices *net, unique_ptr<HTTPClientHandler::WPost> handler) {
+  if (!net->system_resolver->QueueResolveRequest
+      (Resolver::Request(handler->host, DNS::Type::A, bind(&HTTPClientHandler::WGet::ResolverResponseCB, handler.get(), _1, _2))))
+    return ERRORv(0, "resolver: ", handler->host);
+  return handler.release();
 }
 
 bool HTTPClient::WPost(SocketServices *net, const string &url, const string &mimetype, const char *postdata, int postlen, ResponseCB cb) {
@@ -418,14 +475,34 @@ bool HTTPClient::WPost(SocketServices *net, const string &url, const string &mim
   int tcp_port;
   string host, path;
   if (!HTTP::ResolveURL(url.c_str(), &ssl, 0, &tcp_port, &host, &path)) return 0;
+  return HTTPClientWPost(net, make_unique<HTTPClientHandler::WPost>
+                         (net->tcp_client.get(), ssl, host, tcp_port, path, mimetype, postdata, postlen, cb));
+}
 
-  HTTPClientHandler::WPost *handler = new HTTPClientHandler::WPost
-    (net->tcp_client.get(), ssl, host, tcp_port, path, mimetype, postdata, postlen, cb);
+bool HTTPClient::WPost(SocketServices *net, const string &url, const string &mimetype, const char *postdata, int postlen, ResultCB cb) {
+  bool ssl;
+  int tcp_port;
+  string host, path;
+  if (!HTTP::ResolveURL(url.c_str(), &ssl, 0, &tcp_port, &host, &path)) return 0;
+  return HTTPClientWPost(net, make_unique<HTTPClientHandler::WPost>
+                         (net->tcp_client.get(), ssl, host, tcp_port, path, mimetype, postdata, postlen, cb));
+}
 
-  if (!net->system_resolver->QueueResolveRequest
-      (Resolver::Request(host, DNS::Type::A, bind(&HTTPClientHandler::WGet::ResolverResponseCB, handler, _1, _2))))
-  { ERROR("resolver: ", url); delete handler; return 0; }
+static bool HTTPClientWPostLocal(unique_ptr<HTTPClientHandler::WPost> handler, const string &endpoint, const string &path) {
+  handler->host = endpoint;
+  handler->path = path;
+  auto c = handler->svc->ConnectLocal(endpoint, move(handler));
   return true;
+}
+
+bool HTTPClient::WPostLocal(SocketServices *net, const string &endpoint, const string &path, const string &mimetype, const char *postdata, int postlen, ResponseCB cb) {
+  return HTTPClientWPostLocal(make_unique<HTTPClientHandler::WPost>
+                              (net->unix_client.get(), 0, endpoint, 0, path, mimetype, postdata, postlen, cb), endpoint, path);
+}
+
+bool HTTPClient::WPostLocal(SocketServices *net, const string &endpoint, const string &path, const string &mimetype, const char *postdata, int postlen, ResultCB cb) {
+  return HTTPClientWPostLocal(make_unique<HTTPClientHandler::WPost>
+                              (net->unix_client.get(), 0, endpoint, 0, path, mimetype, postdata, postlen, cb), endpoint, path);
 }
 
 Connection *HTTPClient::PersistentConnection(SocketServices *net, const string &url, string *host, string *path, ResponseCB responseCB) {
@@ -512,7 +589,7 @@ struct HTTPServerConnection : public Connection::Handler {
       else {
         HTTP::GrepHeaders(headers, end, 1, "Connection", &cnhv);
       }
-      persistent = PrefixMatch(BlankNull(cnhv.data()), "close\r\n");
+      persistent = !PrefixMatch(BlankNull(cnhv.data()), "close\r\n");
 
       int ret = dispatcher.Thunk(this, c);
       if (ret < 0) return ret;
@@ -575,7 +652,7 @@ HTTPServer::Response HTTPServer::Response::_400
   "<hr>\r\n"
   "</body></html>\r\n"));
 
-int HTTPServer::Connected(Connection *c) { c->handler = make_unique<HTTPServerConnection>(this); return 0; }
+int HTTPServer::Connected(SocketConnection *c) { c->handler = make_unique<HTTPServerConnection>(this); return 0; }
 
 HTTPServer::Response HTTPServer::Request(Connection *c, int method, const char *url, const char *args, const char *headers, const char *postdata, int postlen) {
   Resource *requested = FindOrNull(urlmap, url);
@@ -616,6 +693,10 @@ HTTPServer::FileResource::FileResource(const string &fn, const char *mimetype) :
 HTTPServer::Response HTTPServer::FileResource::Request(Connection *, int method, const char *url, const char *args, const char *headers, const char *postdata, int postlen) {
   if (!size) return HTTPServer::Response::_400;
   return Response(type, size, new HTTPServerFileResourceHandler(filename));
+}
+
+HTTPServer::Response HTTPServer::FunctionResource::Request(Connection *c, int method, const char *url, const char *args, const char *headers, const char *postdata, int postlen) {
+  return cb(c, method, url, args, headers, postdata, postlen);
 }
 
 HTTPServer::Response HTTPServer::SessionResource::Request(Connection *c, int method, const char *url, const char *args, const char *headers, const char *postdata, int postlen) {

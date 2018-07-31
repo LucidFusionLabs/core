@@ -32,6 +32,11 @@ struct NTService {
   static int WrapMain (const char *name, MainCB main_cb, int argc, const char* const* argv);
 };
 
+struct SingleProcess {
+  static bool RunLocalHTTPServerOrPost(ApplicationLifetime *app, SocketServices *net, HTTPServer *server,
+                                       const string &endpoint, const string &path, const string &postdata);
+};
+
 struct ProcessPipe {
   int pid=0;
   FILE *in=0, *out=0;

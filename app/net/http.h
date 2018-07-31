@@ -44,9 +44,21 @@ struct HTTP {
 };
 
 struct HTTPClient {
+  typedef function<void(int, const string&, const string&)> ResultCB;
   typedef function<int(Connection*, const char*, const string&, const char*, int)> ResponseCB;
+
   static bool WGet(SocketServices*, ApplicationInfo*, const string &url, File *out=0, const ResponseCB &responseCB=ResponseCB(), const StringCB &redirectCB=StringCB());
+  static bool WGet(SocketServices*, const string &url, const ResultCB &cb, const StringCB &redirect_cb);
+
+  static bool WGetLocal(SocketServices*, const string &endpoint, const string &path, const ResponseCB &responseCB, const StringCB &redirectCB=StringCB());
+  static bool WGetLocal(SocketServices*, const string &endpoint, const string &path, const ResultCB &resultCB, const StringCB &redirectCB=StringCB());
+
   static bool WPost(SocketServices*, const string &url, const string &mimetype, const char *postdata, int postlen, ResponseCB=ResponseCB());
+  static bool WPost(SocketServices*, const string &url, const string &mimetype, const char *postdata, int postlen, ResultCB);
+
+  static bool WPostLocal(SocketServices*, const string &endpoint, const string &path, const string &mimetype, const char *postdata, int postlen, ResponseCB=ResponseCB());
+  static bool WPostLocal(SocketServices*, const string &endpoint, const string &path, const string &mimetype, const char *postdata, int postlen, ResultCB);
+
   static Connection *PersistentConnection(SocketServices*, const string &url, string *hostOut, string *pathOut, ResponseCB responseCB);
   static int WriteRequest(Connection *c, int method, const char *host, const char *path, const char *postmime, const char *postdata, int postlen, bool persist);
 };
@@ -82,9 +94,10 @@ struct HTTPServer : public SocketService {
   map<string, Resource*> urlmap;
   HTTPServer(SocketServices *N, IPV4::Addr addr, int port, bool SSL) : SocketService(N, "HTTPServer", Protocol::TCP) { QueueListen(addr, port, SSL); }
   HTTPServer(SocketServices *N,                  int port, bool SSL) : SocketService(N, "HTTPServer", Protocol::TCP) { QueueListen(0,    port, SSL); }
+  HTTPServer(SocketServices *N, const string &name,        bool SSL) : SocketService(N, "HTTPServer", Protocol::UNIX){ QueueListenLocal(name,  SSL); }
   virtual ~HTTPServer() { ClearURL(); }
 
-  int Connected(Connection *c);
+  int Connected(SocketConnection *c) override;
   void AddURL(const string &url, Resource *resource) { urlmap[url] = resource; }
   void ClearURL() { for (auto i = urlmap.begin(); i != urlmap.end(); i++) delete (*i).second; }
   virtual Response Request(Connection *c, int method, const char *url, const char *args, const char *headers, const char *postdata, int postlen);
@@ -107,6 +120,13 @@ struct HTTPServer : public SocketService {
     int size=0;
 
     FileResource(const string &fn, const char *mimetype=0);
+    Response Request(Connection *, int method, const char *url, const char *args, const char *headers, const char *postdata, int postlen);
+  };
+
+  struct FunctionResource : public Resource {
+    typedef function<Response(Connection*, int, const char*, const char*, const char*, const char*, int)> CB;
+    CB cb;
+    FunctionResource(CB Cb) : cb(move(Cb)) {}
     Response Request(Connection *, int method, const char *url, const char *args, const char *headers, const char *postdata, int postlen);
   };
 

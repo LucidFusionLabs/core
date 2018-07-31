@@ -134,7 +134,7 @@ struct IPV4EndpointPoolFilter : public IPV4EndpointSource {
 
 struct SystemNetwork {
   static void CloseSocket(Socket);
-  static Socket OpenSocket(int protocol);
+  static Socket OpenSocket(int protocol, bool close_on_exec=true);
   static bool OpenSocketPair(Socket *fd_out, int sock_type=SocketType::Stream, bool close_on_exec=true);
   static int SetSocketBlocking(Socket fd, int blocking);
   static int SetSocketCloseOnExec(Socket fd, int close);
@@ -144,8 +144,11 @@ struct SystemNetwork {
 
   static int Bind(int fd, IPV4::Addr addr, int port);
   static Socket Accept(Socket listener, IPV4::Addr *addr, int *port, bool blocking=false);
+  static Socket AcceptLocal(Socket listener, bool blocking=false);
   static Socket Listen(int protocol, IPV4::Addr addr, int port, int backlog=32, bool blocking=false);
+  static Socket ListenLocal(int protocol, const string &name, int backlog=32, bool blocking=false);
   static int Connect(Socket fd, IPV4::Addr addr, int port, int *connected);
+  static int ConnectLocal(Socket fd, const string &name, int *connected);
   static int SendTo(Socket fd, IPV4::Addr addr, int port, const char *buf, int len);
   static int GetSockName(Socket fd, IPV4::Addr *addr_out, int *port_out);
   static int GetPeerName(Socket fd, IPV4::Addr *addr_out, int *port_out);
@@ -378,10 +381,10 @@ struct SocketConnection : public Connection {
   int port, src_port=0;
   SSLSocket bio;
 
-  SocketConnection(SocketService *s, unique_ptr<Handler> h,                          CB *Detach=0) : Connection(s, Error, move(h), Detach), socket(-1),   addr(0),    port(0)    {}
-  SocketConnection(SocketService *s, int State, int Sock,                            CB *Detach=0) : Connection(s, State, 0,       Detach), socket(Sock), addr(0),    port(0)    {}
-  SocketConnection(SocketService *s, int State, int Sock, IPV4::Addr Addr, int Port, CB *Detach=0) : Connection(s, State, 0,       Detach), socket(Sock), addr(Addr), port(Port) {}
-  SocketConnection(SocketService *s, int State,           IPV4::Addr Addr, int Port, CB *Detach=0) : Connection(s, State, 0,       Detach), socket(-1),   addr(Addr), port(Port) {}
+  SocketConnection(SocketService *s, unique_ptr<Handler> h,                          CB *Detach=0) : Connection(s, Error, move(h), Detach), socket(InvalidSocket), addr(0),    port(0)    {}
+  SocketConnection(SocketService *s, int State, int Sock,                            CB *Detach=0) : Connection(s, State, 0,       Detach), socket(Sock),          addr(0),    port(0)    {}
+  SocketConnection(SocketService *s, int State, int Sock, IPV4::Addr Addr, int Port, CB *Detach=0) : Connection(s, State, 0,       Detach), socket(Sock),          addr(Addr), port(Port) {}
+  SocketConnection(SocketService *s, int State,           IPV4::Addr Addr, int Port, CB *Detach=0) : Connection(s, State, 0,       Detach), socket(InvalidSocket), addr(Addr), port(Port) {}
 
   IPV4Endpoint RemoteIPV4() const override { return IPV4Endpoint(addr, port); }
   IPV4Endpoint LocalIPV4() const override { return IPV4Endpoint(src_addr, src_port); }
@@ -420,21 +423,28 @@ struct SocketService {
   map<string, unique_ptr<SocketConnection>> endpoint;
   IPV4EndpointSource *connect_src_pool=0;
   SocketConnection fake;
+  static string local_endpoint_prefix;
   SocketService(SocketServices *N, const string &n, int prot=Protocol::TCP) : net(N), name(n), protocol(prot), fake(this, Connection::Connected, 0) {}
 
   void QueueListen(IPV4::Addr addr, int port, bool SSL=false) { QueueListen(IPV4Endpoint(addr,port).ToString(), SSL); }
+  void QueueListenLocal(const string &n, bool SSL=false) { QueueListen(StrCat(local_endpoint_prefix, n), SSL); }
   void QueueListen(const string &n, bool SSL=false) { listen[n] = make_unique<SocketListener>(this, SSL); }
   SocketListener *GetListener() { return listen.size() ? listen.begin()->second.get() : 0; }
 
   int OpenSocket(SocketConnection *c, int protocol, int blocking, IPV4EndpointSource*);
   Socket Listen(IPV4::Addr addr, int port, SocketListener*);
+  Socket ListenLocal(const string &name, SocketListener*);
   SocketConnection *Accept(int state, Socket socket, IPV4::Addr addr, int port);
   SocketConnection *Connect(IPV4::Addr addr, int port, IPV4EndpointSource *src_addr=0, Connection::CB *detach=0);
   SocketConnection *Connect(IPV4::Addr addr, int port, IPV4::Addr src_addr, int src_port, Connection::CB *detach=0);
   SocketConnection *Connect(const string &hostport, int default_port=0, Connection::CB *detach=0);
+  SocketConnection *Connect(unique_ptr<SocketConnection>, IPV4EndpointSource *src_pool=0);
+  SocketConnection *ConnectLocal(const string &endpoint, unique_ptr<Connection::Handler>, Connection::CB *detach=0);
+  SocketConnection *ConnectLocal(unique_ptr<SocketConnection>, const string &endpoint);
   SocketConnection *SSLConnect(SSLSocket::CTXPtr sslctx, IPV4::Addr addr, int port, Connection::CB *detach=0);
   SocketConnection *SSLConnect(SSLSocket::CTXPtr sslctx, const string &hostport, int default_port=0, Connection::CB *detach=0);
   SocketConnection *AddConnectedSocket(Socket socket, unique_ptr<Connection::Handler>);
+  SocketConnection *HandleSystemConnect(unique_ptr<SocketConnection>, int connected);
   SocketConnection *EndpointConnect(const string &endpoint_name);
   void EndpointReadCB(string *endpoint_name, string *packet);
   void EndpointRead(const string &endpoint_name, const char *buf, int len);
@@ -461,7 +471,7 @@ struct SocketServiceEndpointEraseList {
 };
 
 struct UnixClient : public SocketService { UnixClient(SocketServices *N)                  : SocketService(N, "UnixClient", Protocol::UNIX) {} };
-struct UnixServer : public SocketService { UnixServer(SocketServices *N, const string &n) : SocketService(N, "UnixServer", Protocol::UNIX) { QueueListen(n); } };
+struct UnixServer : public SocketService { UnixServer(SocketServices *N, const string &n) : SocketService(N, "UnixServer", Protocol::UNIX) { QueueListenLocal(n); } };
 
 struct UDPClient : public SocketService {
   static const int MTU = 1500;
@@ -538,6 +548,7 @@ struct SocketServices : public Module {
   unique_ptr<TCPClient> tcp_client;
   unique_ptr<UnixClient> unix_client;
   unique_ptr<SystemResolver> system_resolver;
+  vector<unique_ptr<SocketService>> my_service;
   LazyInitializedPtr<RecursiveResolver> recursive_resolver;
   LazyInitializedPtr<InProcessClient> inprocess_client;
   LazyInitializedPtr<GPlusClient> gplus_client;
@@ -546,7 +557,7 @@ struct SocketServices : public Module {
   virtual ~SocketServices();
 
   int Init() override;
-  int Enable(SocketService *svc);
+  int Enable(SocketService *svc, bool allow_error=true);
   int Disable(SocketService *svc);
   int Shutdown(SocketService *svc);
   int Enable(const vector<SocketService*> &svc);
@@ -566,6 +577,8 @@ struct SocketServices : public Module {
   void EndpointCloseAll(SocketService *svc);
 
   void UpdateActive(SocketConnection *c);
+
+  template <class X> X* AddService(unique_ptr<X> s) { return VectorAddUnique(&my_service, move(s)); }
 };
 
 /// SocketServicesThread runs the SocketServices Module in a thread with a multiplexed Callback queue

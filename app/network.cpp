@@ -28,6 +28,7 @@ extern "C" {
 #ifndef LFL_WINDOWS
 #include <sys/socket.h>
 #include <sys/uio.h>
+#include <sys/un.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
@@ -175,9 +176,10 @@ void SystemNetwork::CloseSocket(Socket fd) {
 #endif
 }
 
-Socket SystemNetwork::OpenSocket(int protocol) {
+Socket SystemNetwork::OpenSocket(int protocol, bool close_on_exec) {
   Socket ret = InvalidSocket;
-  if (protocol == Protocol::TCP) ret = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
+  if      (protocol == Protocol::TCP)  ret = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
+  else if (protocol == Protocol::UNIX) ret = socket(PF_UNIX, SOCK_STREAM, 0);
   else if (protocol == Protocol::UDP) {
     if ((ret = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP)) < 0) return InvalidSocket;
 #ifdef LFL_WINDOWS
@@ -188,7 +190,8 @@ Socket SystemNetwork::OpenSocket(int protocol) {
     BOOL bNewBehavior = FALSE;
     DWORD status = WSAIoctl(ret, SIO_UDP_CONNRESET, &bNewBehavior, sizeof(bNewBehavior), 0, 0, &dwBytesReturned, 0, 0);
 #endif
-  }
+  } else return InvalidSocket;
+  if (close_on_exec) SetSocketCloseOnExec(ret, true);
   return ret;
 }
 
@@ -199,7 +202,7 @@ bool SystemNetwork::OpenSocketPair(Socket *fd, int socket_type, bool close_on_ex
   int listen_port = 0, connect_port = 0;
   IPV4::Addr listen_addr = 0, connect_addr = 0;
   if ((l = SystemNetwork::Listen(Protocol::TCP, IPV4::Parse("127.0.0.1"), 0, 1, true)) == -1) return -1;
-  if ((fd[1] = SystemNetwork::OpenSocket(Protocol::TCP)) == -1) { SystemNetwork::CloseSocket(l); return ERRORv(-1, "OSP.OpenSocket ", SystemNetwork::LastError()); }
+  if ((fd[1] = SystemNetwork::OpenSocket(Protocol::TCP, close_on_exec)) == -1) { SystemNetwork::CloseSocket(l); return ERRORv(-1, "OSP.OpenSocket ", SystemNetwork::LastError()); }
   if (SystemNetwork::GetSockName(l, &listen_addr, &listen_port)) { SystemNetwork::CloseSocket(l); SystemNetwork::CloseSocket(fd[1]); return -1; }
   if (SystemNetwork::Connect(fd[1], listen_addr, listen_port, 0)) { SystemNetwork::CloseSocket(l); SystemNetwork::CloseSocket(fd[1]); return -1; }
   if ((fd[0] = SystemNetwork::Accept(l, &connect_addr, &connect_port)) == -1) { SystemNetwork::CloseSocket(l); SystemNetwork::CloseSocket(fd[1]); return -1; }
@@ -293,14 +296,29 @@ Socket SystemNetwork::Accept(Socket listener, IPV4::Addr *addr, int *port, bool 
   if (addr) *addr = sin.sin_addr.s_addr;
   if (port) *port = ntohs(sin.sin_port);
   if (!blocking && SetSocketBlocking(socket, 0))
-  { ERROR("Network::socket_blocking: ", SystemNetwork::LastError()); CloseSocket(socket); return InvalidSocket; }
+  { ERROR("SetSocketBlocking: ", SystemNetwork::LastError()); CloseSocket(socket); return InvalidSocket; }
+  return socket;
+}
+
+Socket SystemNetwork::AcceptLocal(Socket listener, bool blocking) {
+  sockaddr_un sun;
+  memset(&sun, 0, sizeof(sockaddr_un));
+#ifdef __APPLE__
+  sun.sun_len = sizeof(sockaddr_un);
+#endif
+  socklen_t sun_len = SUN_LEN(&sun);
+
+  Socket socket = ::accept(listener, reinterpret_cast<sockaddr*>(&sun), &sun_len); 
+  if (socket == -1 && !SystemNetwork::EWouldBlock()) return ERRORv(InvalidSocket, "accept: ", SystemNetwork::LastError());
+  if (!blocking && SetSocketBlocking(socket, 0))
+  { ERROR("SetSocketBlocking: ", SystemNetwork::LastError()); CloseSocket(socket); return InvalidSocket; }
   return socket;
 }
 
 Socket SystemNetwork::Listen(int protocol, IPV4::Addr addr, int port, int backlog, bool blocking) {
   Socket fd;
   if ((fd = OpenSocket(protocol)) < 0) 
-    return ERRORv(InvalidSocket, "network_socket_open: ", SystemNetwork::LastError());
+    return ERRORv(InvalidSocket, "OpenSocket: ", SystemNetwork::LastError());
 
   if (Bind(fd, addr, port) == -1) { CloseSocket(fd); return InvalidSocket; }
 
@@ -316,6 +334,41 @@ Socket SystemNetwork::Listen(int protocol, IPV4::Addr addr, int port, int backlo
   return fd;
 }
 
+Socket SystemNetwork::ListenLocal(int protocol, const string &name, int backlog, bool blocking) {
+  Socket fd;
+  if ((fd = OpenSocket(protocol)) < 0) 
+    return ERRORv(InvalidSocket, "OpenSocket: ", SystemNetwork::LastError());
+
+  sockaddr_un sun;
+  memset(&sun, 0, sizeof(sockaddr_un));
+#ifdef __APPLE__
+  sun.sun_len = sizeof(sockaddr_un);
+#endif
+  sun.sun_family = PF_UNIX;
+  strncpy(sun.sun_path, name.data(), sizeof(sun.sun_path)-1);
+
+  if (FLAGS_network_debug) INFO("bind(", fd, ", ", name, ")");
+  for (int retries = 0; retries < 2; retries++) {
+    if (::bind(fd, reinterpret_cast<const sockaddr*>(&sun), SUN_LEN(&sun)) == 0) break;
+    if (errno == EADDRINUSE && !retries) {
+      Socket test_fd = OpenSocket(protocol);
+      bool test = ::connect(test_fd, reinterpret_cast<const sockaddr*>(&sun), SUN_LEN(&sun)) == 0;
+      CloseSocket(test_fd);
+      if (test) return ERRORv(InvalidSocket, "ListenLocal: Address already in use");
+      else { unlink(sun.sun_path); continue; }
+    } else { ERROR("bind: ", SystemNetwork::LastError()); CloseSocket(fd); return InvalidSocket; }
+  }
+
+  if (::listen(fd, backlog) == -1)
+  { ERROR("listen: ", SystemNetwork::LastError()); CloseSocket(fd); return InvalidSocket; }
+
+  if (!blocking && SetSocketBlocking(fd, 0))
+  { ERROR("SetSocketBlocking: ", SystemNetwork::LastError()); CloseSocket(fd); return InvalidSocket; }
+
+  INFO("listen(name=", name, "), socket=", fd);
+  return fd;
+}
+
 int SystemNetwork::Connect(Socket fd, IPV4::Addr addr, int port, int *connected) {
   struct sockaddr_in sin;
   memset(&sin, 0, sizeof(struct sockaddr_in));
@@ -327,6 +380,24 @@ int SystemNetwork::Connect(Socket fd, IPV4::Addr addr, int port, int *connected)
   int ret = ::connect(fd, reinterpret_cast<struct sockaddr*>(&sin), sizeof(struct sockaddr_in));
   if (ret == -1 && !SystemNetwork::EWouldBlock())
     return ERRORv(-1, "connect(", IPV4::Text(addr, port), "): ", SystemNetwork::LastError());
+
+  if (connected) *connected = !ret;
+  return 0;
+}
+
+int SystemNetwork::ConnectLocal(Socket fd, const string &name, int *connected) {
+  sockaddr_un sun;
+  memset(&sun, 0, sizeof(sockaddr_un));
+#ifdef __APPLE__
+  sun.sun_len = sizeof(sockaddr_un);
+#endif
+  sun.sun_family = PF_UNIX;
+  strncpy(sun.sun_path, name.data(), sizeof(sun.sun_path)-1);
+
+  if (FLAGS_network_debug) INFO("connect(", fd, ", ", name, ")");
+  int ret = ::connect(fd, reinterpret_cast<struct sockaddr*>(&sun), SUN_LEN(&sun));
+  if (ret == -1 && !SystemNetwork::EWouldBlock())
+    return ERRORv(-1, "connect(", name, "): ", SystemNetwork::LastError());
 
   if (connected) *connected = !ret;
   return 0;
@@ -685,6 +756,8 @@ void SocketConnection::AddToMainWait(Window *w, function<bool()> readable_cb) {
 
 /* SocketService */
 
+string SocketService::local_endpoint_prefix = "local://";
+
 void SocketService::Close(SocketConnection *c) {
   net->active.Del(c->socket);
   if (c->detach) conn[c->socket].release();
@@ -694,7 +767,7 @@ void SocketService::Close(SocketConnection *c) {
 
 int SocketService::OpenSocket(SocketConnection *c, int protocol, int blocking, IPV4EndpointSource* src_pool) {
   Socket fd = SystemNetwork::OpenSocket(protocol);
-  if (fd == -1) return -1;
+  if (fd == InvalidSocket) return -1;
 
   if (!blocking) {
     if (SystemNetwork::SetSocketBlocking(fd, 0))
@@ -719,14 +792,21 @@ int SocketService::OpenSocket(SocketConnection *c, int protocol, int blocking, I
 }
 
 Socket SocketService::Listen(IPV4::Addr addr, int port, SocketListener *listener) {
-  Socket fd = -1;
   if (listener->ssl) {
     if ((listener->socket = listener->bio.Listen(net->ssl, port, true)) == InvalidSocket)
-      return ERRORv(-1, "ssl_listen: ", -1);
+      return ERRORv(InvalidSocket, "ssl_listen: ", -1);
   } else {
     if ((listener->socket = SystemNetwork::Listen(protocol, addr, port)) == InvalidSocket)
-      return ERRORv(-1, "SystemNetwork::Listen(", protocol, ", ", port, "): ", SystemNetwork::LastError());
+      return ERRORv(InvalidSocket, "SystemNetwork::Listen(", protocol, ", ", port, "): ", SystemNetwork::LastError());
   }
+  net->active.Add(listener->socket, SocketSet::READABLE, &listener->self_reference);
+  return listener->socket;
+}
+
+Socket SocketService::ListenLocal(const string &name, SocketListener *listener) {
+  if ((listener->socket = SystemNetwork::ListenLocal(protocol, name)) == InvalidSocket)
+    return ERRORv(InvalidSocket, "SystemNetwork::Listen(", protocol, ", ", name, "): ", SystemNetwork::LastError());
+
   net->active.Add(listener->socket, SocketSet::READABLE, &listener->self_reference);
   return listener->socket;
 }
@@ -743,33 +823,21 @@ SocketConnection *SocketService::Connect(IPV4::Addr addr, int port, IPV4::Addr s
 }
 
 SocketConnection *SocketService::Connect(IPV4::Addr addr, int port, IPV4EndpointSource *src_pool, Connection::CB *detach) {
-  auto c = new SocketConnection(this, Connection::Connecting, addr, port, detach);
-  if (SocketService::OpenSocket(c, protocol, 0, src_pool ? src_pool : connect_src_pool))
-  { ERROR(c->Name(), ": connecting: ", SystemNetwork::LastError()); delete c; return 0; }
+  return Connect(make_unique<SocketConnection>(this, Connection::Connecting, addr, port, detach), src_pool);
+}
+
+SocketConnection *SocketService::Connect(unique_ptr<SocketConnection> c, IPV4EndpointSource *src_pool) {
+  if (SocketService::OpenSocket(c.get(), protocol, 0, src_pool ? src_pool : connect_src_pool))
+    return ERRORv(nullptr, c->Name(), ": connecting: ", SystemNetwork::LastError());
 
   int connected = 0;
   if (SystemNetwork::Connect(c->socket, c->addr, c->port, &connected) == -1) {
     ERROR(c->Name(), ": connecting: ", SystemNetwork::LastError());
     SystemNetwork::CloseSocket(c->socket);
-    delete c;
-    return 0;
+    return nullptr;
   }
-  INFO(c->Name(), ": connecting, socket=", c->socket);
-  conn[c->socket] = unique_ptr<SocketConnection>(c);
 
-  if (connected) {
-    /* connected 3 */ 
-    c->SetConnected();
-    c->SetSourceAddress();
-    INFO(c->Name(), ": connected, socket=", c->socket);
-    if (this->Connected(c) < 0) c->SetError();
-    if (c->handler) { if (c->handler->Connected(c) < 0) { ERROR(c->Name(), ": handler connected"); c->SetError(); } }
-    if (c->detach) { Detach(c); conn.erase(c->socket); }
-    else net->UpdateActive(c);
-  } else {
-    net->active.Add(c->socket, SocketSet::READABLE|SocketSet::WRITABLE, &c->self_reference);
-  }
-  return c;
+  return HandleSystemConnect(move(c), connected);
 }
 
 SocketConnection *SocketService::Connect(const string &hostport, int default_port, Connection::CB *detach) {
@@ -777,6 +845,26 @@ SocketConnection *SocketService::Connect(const string &hostport, int default_por
   IPV4::Addr addr;
   if (!HTTP::ResolveHost(hostport.c_str(), 0, &addr, &port, 0, default_port)) return ERRORv(nullptr, "resolve ", hostport, " failed");
   return Connect(addr, port, NULL, detach);
+}
+
+SocketConnection *SocketService::ConnectLocal(const string &endpoint, unique_ptr<Connection::Handler> h, Connection::CB *detach) {
+  auto c = make_unique<SocketConnection>(this, move(h), detach);
+  c->state = Connection::Connecting;
+  return ConnectLocal(move(c), endpoint);
+}
+
+SocketConnection *SocketService::ConnectLocal(unique_ptr<SocketConnection> c, const string &endpoint) {
+  if (SocketService::OpenSocket(c.get(), protocol, 0, nullptr))
+    return ERRORv(nullptr, c->Name(), ": connecting: ", SystemNetwork::LastError());
+
+  int connected = 0;
+  if (SystemNetwork::ConnectLocal(c->socket, endpoint, &connected) == -1) {
+    ERROR(c->Name(), ": connecting: ", SystemNetwork::LastError());
+    SystemNetwork::CloseSocket(c->socket);
+    return 0;
+  }
+
+  return HandleSystemConnect(move(c), connected);
 }
 
 SocketConnection *SocketService::SSLConnect(SSLSocket::CTXPtr sslctx, const string &hostport, int default_port, Connection::CB *detach) {
@@ -822,6 +910,26 @@ SocketConnection *SocketService::AddConnectedSocket(Socket conn_socket, unique_p
   conn->svc->conn[conn->socket] = unique_ptr<SocketConnection>(conn);
   net->active.Add(conn->socket, SocketSet::READABLE, &conn->self_reference);
   return conn;
+}
+
+SocketConnection *SocketService::HandleSystemConnect(unique_ptr<SocketConnection> cin, int connected) {
+  Socket fd = cin->socket;
+  auto c = (conn[fd] = unique_ptr<SocketConnection>(move(cin))).get();
+  INFO(c->Name(), ": connecting, socket=", c->socket);
+
+  if (connected) {
+    /* connected 3 */ 
+    c->SetConnected();
+    c->SetSourceAddress();
+    INFO(c->Name(), ": connected, socket=", c->socket);
+    if (this->Connected(c) < 0) c->SetError();
+    if (c->handler) { if (c->handler->Connected(c) < 0) { ERROR(c->Name(), ": handler connected"); c->SetError(); } }
+    if (c->detach) { Detach(c); conn.erase(c->socket); }
+    else net->UpdateActive(c);
+  } else {
+    net->active.Add(c->socket, SocketSet::READABLE|SocketSet::WRITABLE, &c->self_reference);
+  }
+  return c;
 }
 
 SocketConnection *SocketService::EndpointConnect(const string &endpoint_name) {
@@ -902,17 +1010,24 @@ int SocketServices::Shutdown(const vector<SocketService*> &st) { int ret = 0; fo
 int SocketServices::Disable (const vector<SocketService*> &st) { int ret = 0; for (auto s : st) if (Disable (s) < 0) ret = -1; return ret; }
 int SocketServices::Enable  (const vector<SocketService*> &st) { int ret = 0; for (auto s : st) if (Enable  (s) < 0) ret = -1; return ret; }
 
-int SocketServices::Enable(SocketService *s) {
+int SocketServices::Enable(SocketService *s, bool allow_error) {
   /* listen */
-  if (s->listen.size() && !s->initialized) {
-    s->initialized = true;
+  int listeners = s->listen.size();
+  if (listeners && !s->initialized) {
     vector<string> removelist;
     for (auto i = s->listen.begin(); i != s->listen.end(); ++i) {
-      const IPV4Endpoint *listen_addr = IPV4Endpoint::FromString(i->first.c_str());
-      if (s->Listen(listen_addr->addr, listen_addr->port, i->second.get()) == -1)
-        removelist.push_back(i->first);
+      if (PrefixMatch(i->first, SocketService::local_endpoint_prefix)) {
+        if (s->ListenLocal(i->first.substr(SocketService::local_endpoint_prefix.size()), i->second.get()) == InvalidSocket)
+          removelist.push_back(i->first);
+      } else {
+        const IPV4Endpoint *listen_addr = IPV4Endpoint::FromString(i->first.c_str());
+        if (s->Listen(listen_addr->addr, listen_addr->port, i->second.get()) == InvalidSocket)
+          removelist.push_back(i->first);
+      }
     }
     for (auto i = removelist.begin(); i != removelist.end(); ++i) s->listen.erase(*i);
+    if (!allow_error && s->listen.size() != listeners) return -1;
+    s->initialized = true;
   }
 
   /* insert */
@@ -1072,11 +1187,17 @@ void SocketServices::AcceptFrame(SocketService *svc, SocketListener *listener) {
       { ERROR(c->Name(), ": addpacket(", len, ")"); c->SetError(); continue; }
       if (!inserted) continue;
     }
+    else if (svc->protocol == Protocol::UNIX) {
+      Socket socket = SystemNetwork::AcceptLocal(listener->socket);
+      if (socket == InvalidSocket) break;
+      c = svc->Accept(Connection::Connected, socket, 0, 0);
+      if (!c) { SystemNetwork::CloseSocket(socket); continue; }
+    }
     else { /* TCP accept */
       IPV4::Addr accept_addr = 0; 
       int accept_port = 0;
       Socket socket = SystemNetwork::Accept(listener->socket, &accept_addr, &accept_port);
-      if (socket == -1) break;
+      if (socket == InvalidSocket) break;
 
       /* insert socket */
       c = svc->Accept(Connection::Connected, socket, accept_addr, accept_port);

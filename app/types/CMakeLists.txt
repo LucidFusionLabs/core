@@ -24,3 +24,8 @@ endif()
 if(LFL_ICONV)
   lfl_add_target(app_iconv_convert STATIC_LIBRARY SOURCES iconv_convert.cpp)
 endif()
+
+if(LFL_JSONCPP)
+  lfl_add_target(app_jsoncpp_json STATIC_LIBRARY SOURCES jsoncpp_json.cpp
+                 INCLUDE_DIRECTORIES ${JSONCPP_INCLUDE} LINK_LIBRARIES ${JSONCPP_LIB})
+endif()

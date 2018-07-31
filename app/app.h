@@ -281,7 +281,7 @@ class Logger {
 #include "core/app/types/time.h"
 
 namespace LFL {
-extern const bool DEBUG, MOBILE, IOS, ANDROIDOS;
+extern const bool DEBUG, MOBILE, IOS, ANDROIDOS, LINUXOS, WINDOWSOS, MACOS;
 struct HAlign { enum { Left  =1, Center=2, Right=3 }; };
 struct VAlign { enum { Bottom=1, Center=2, Top  =3 }; };
 
@@ -810,7 +810,7 @@ struct Application : public ::LFApp, public ApplicationInfo, public ApplicationS
   void DrawSplash(const Color &c);
   void ResetGL(int flag);
   void CloseWindow(Window*);
-  void CreateNewWindow();
+  Window *CreateNewWindow();
   void StartNewWindow(Window*);
   void LoseFocus();
   SocketServicesThread *CreateNetworkThread(bool detach_existing_module, bool start);

@@ -1076,6 +1076,27 @@ template <class X> struct CategoricalVariable {
   void Off() { ind = 0; }
 };
 
+struct JSON {
+  struct Value {
+    VoidPtr impl;
+    bool owner;
+
+    Value();
+    Value(Void v);
+    Value(Value &&v);
+    virtual ~Value();
+
+    int Size() const;
+    bool Empty() const;
+    string GetString() const;
+    bool IsMember(const string&) const;
+    Value operator[](int i);
+    Value operator[](const string&);
+    operator bool() const noexcept { return impl; }
+  };
+  static Value Parse(const string &s);
+};
+
 struct GraphViz {
   static string DigraphHeader(const string &name);
   static string NodeColor(const string &s);

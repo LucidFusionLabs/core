@@ -42,6 +42,30 @@ int NTService::Uninstall(const char *name)                   { FATAL("not implem
 int NTService::WrapMain (const char *name, MainCB main_cb, int argc, const char* const* argv) { return main_cb(argc, argv); }
 #endif
 
+bool SingleProcess::RunLocalHTTPServerOrPost(ApplicationLifetime *app, SocketServices *net, HTTPServer *server,
+                                             const string &endpoint, const string &path, const string &postdata) {
+  int select_time = net->select_time;
+  net->select_time = -1;
+
+  bool post_succeeded = false;
+  while (!post_succeeded && app->run) {
+    if (!net->Enable(server, false)) break;
+
+    bool post_done = false;
+    HTTPClient::WPostLocal(net, endpoint, path.substr(1), "application/json", postdata.data(), postdata.size(),
+                           [&](int rc, const string &h, const string &c) {
+      if (rc == 200) post_succeeded = true;
+      post_done = true;
+      return 0;
+    });
+
+    while(!post_done && app->run) net->Frame(0);
+  }
+  
+  net->select_time = select_time;
+  return app->run && !post_succeeded;
+}
+
 #if defined(LFL_MOBILE)
 int ProcessPipe::OpenPTY(const char* const* argv, const char *startdir) { FATAL("not implemented"); }
 int ProcessPipe::Open   (const char* const* argv, const char *startdir) { FATAL("not implemented"); }

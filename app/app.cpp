@@ -90,6 +90,21 @@ const bool ANDROIDOS = true;
 #else
 const bool ANDROIDOS = false;
 #endif
+#ifdef LFL_LINUX
+const bool LINUXOS = true;
+#else
+const bool LINUXOS = false;
+#endif
+#ifdef LFL_WINDOWS
+const bool WINDOWSOS = true;
+#else
+const bool WINDOWSOS = false;
+#endif
+#ifdef LFL_APPLE
+const bool MACOS = true;
+#else
+const bool MACOS = false;
+#endif
 
 ApplicationShutdown *SignalHandler::shutdown=0;
 ApplicationInfo *Logger::appinfo=0;
@@ -363,7 +378,7 @@ void Application::Log(int level, const char *file, int line, const char *message
   if (run && FLAGS_enable_video && focused && focused->console && MainThread()) focused->console->Write(message);
 }
 
-void Application::CreateNewWindow() {
+Window *Application::CreateNewWindow() {
   Window *orig_window = focused, *new_window = framework->ConstructWindow(this).release();
   if (window_init_cb) window_init_cb(new_window);
   new_window->gd = GraphicsDevice::Create(new_window, shaders.get(), 2).release();
@@ -373,6 +388,7 @@ void Application::CreateNewWindow() {
     StartNewWindow(new_window);
     MakeCurrentWindow(orig_window);
   }
+  return new_window;
 }
 
 void Application::StartNewWindow(Window *new_window) {
@@ -608,12 +624,12 @@ int Application::Init() {
     } else { windows[focused->id] = focused; }
   }
 
-  if (FLAGS_enable_audio) {
+  if (FLAGS_enable_audio && !audio) {
     if (LoadModule((audio = make_unique<Audio>(this, this)).get())) return ERRORv(-1, "audio init failed");
   }
   else { FLAGS_chans_in=FLAGS_chans_out=1; }
 
-  if (FLAGS_enable_audio || FLAGS_enable_video) {
+  if ((FLAGS_enable_audio || FLAGS_enable_video) && !asset_loader) {
     if ((asset_loader = make_unique<AssetLoader>(this))->Init()) return ERRORv(-1, "asset loader init failed");
   }
 
@@ -622,15 +638,15 @@ int Application::Init() {
     focused->default_font = FontRef(nullptr, FontDesc::Default());
   }
 
-  if (FLAGS_enable_input) {
+  if (FLAGS_enable_input && !input) {
     if (LoadModule((input = make_unique<Input>(this, this, this)).get())) return ERRORv(-1, "input init failed");
   }
 
-  if (FLAGS_enable_network) {
+  if (FLAGS_enable_network && !net) {
     if (LoadModule((net = make_unique<SocketServices>(this, this)).get())) return ERRORv(-1, "network init failed");
   }
 
-  if (FLAGS_enable_camera) {
+  if (FLAGS_enable_camera && !camera) {
     if (LoadModule((camera = make_unique<Camera>()).get())) return ERRORv(-1, "camera init failed");
   }
 
