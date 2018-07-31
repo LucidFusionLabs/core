@@ -51,8 +51,14 @@ bool Crypto::DiffieHellman::GeneratePair(int secret_bits, BigNumContext ctx) {
 string Crypto::DiffieHellman::GenerateModulus(int generator, int bits) {
   DH *dh = DH_new();
   DH_generate_parameters_ex(dh, bits, generator, NULL);
-  string ret(BN_num_bytes(dh->p), 0);
-  BN_bn2bin(dh->p, MakeUnsigned(&ret[0]));
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+  const BIGNUM *p = nullptr;
+  DH_get0_pqg(dh, &p, nullptr, nullptr);
+#else
+  const BIGNUM *p = dh->p;
+#endif
+  string ret(BN_num_bytes(p), 0);
+  BN_bn2bin(p, MakeUnsigned(&ret[0]));
   DH_free(dh);
   return ret;
 }

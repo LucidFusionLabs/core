@@ -56,20 +56,147 @@ bool GetECName(ECDef curve_id, string *algo_name, string *curve_name, Crypto::Di
   else return false;
 }
 
-RSAKey NewRSAPubKey() { RSA *v=RSA_new(); v->e=FromVoid<BIGNUM*>(NewBigNum()); v->n=FromVoid<BIGNUM*>(NewBigNum()); return RSAKey{v}; }
-DSAKey NewDSAPubKey() { DSA *v=DSA_new(); v->p=FromVoid<BIGNUM*>(NewBigNum()); v->q=FromVoid<BIGNUM*>(NewBigNum()); v->g=FromVoid<BIGNUM*>(NewBigNum()); v->pub_key=FromVoid<BIGNUM*>(NewBigNum()); return DSAKey{v}; }
-DSASig NewDSASig() { DSA_SIG *v=DSA_SIG_new(); v->r=FromVoid<BIGNUM*>(NewBigNum()); v->s=FromVoid<BIGNUM*>(NewBigNum()); return DSASig{v}; }
+RSAKey NewRSAPubKey() {
+  BIGNUM *e = BN_new(), *n = BN_new();
+  RSA *v = RSA_new();
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+  RSA_set0_key(v, n, e, nullptr);
+#else
+  v->e = e;
+  v->n = n;
+#endif
+  return RSAKey{v};
+}
+
+DSAKey NewDSAPubKey() {
+  BIGNUM *p = BN_new(), *q = BN_new(), *g = BN_new(), *pub_key = BN_new();
+  DSA *v = DSA_new();
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+  DSA_set0_pqg(v, p, q, g);
+  DSA_set0_key(v, pub_key, nullptr);
+#else
+  v->p       = p;
+  v->q       = q;
+  v->g       = g;
+  v->pub_key = pub_key;
+#endif
+  return DSAKey{v};
+}
+
+DSASig NewDSASig() {
+  BIGNUM *r = BN_new(), *s = BN_new();
+  DSA_SIG *v = DSA_SIG_new();
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+  DSA_SIG_set0(v, r, s);
+#else
+  v->r = r;
+  v->s = s;
+#endif
+  return DSASig{v};
+}
+
 ECDSASig NewECDSASig() { return ECDSASig{ECDSA_SIG_new()}; }
-BigNum GetRSAKeyE(RSAKey k) { return FromVoid<RSA*>(k)->e; }
-BigNum GetRSAKeyN(RSAKey k) { return FromVoid<RSA*>(k)->n; }
-BigNum GetDSAKeyP(DSAKey k) { return FromVoid<DSA*>(k)->p; }
-BigNum GetDSAKeyQ(DSAKey k) { return FromVoid<DSA*>(k)->q; }
-BigNum GetDSAKeyG(DSAKey k) { return FromVoid<DSA*>(k)->g; }
-BigNum GetDSAKeyK(DSAKey k) { return FromVoid<DSA*>(k)->pub_key; }
-BigNum GetDSASigR(DSASig k) { return FromVoid<DSA_SIG*>(k)->r; }
-BigNum GetDSASigS(DSASig k) { return FromVoid<DSA_SIG*>(k)->s; }
-BigNum GetECDSASigR(ECDSASig k) { return FromVoid<ECDSA_SIG*>(k)->r; }
-BigNum GetECDSASigS(ECDSASig k) { return FromVoid<ECDSA_SIG*>(k)->s; }
+
+BigNum GetRSAKeyE(RSAKey k) {
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+  const BIGNUM *e = nullptr;
+  RSA_get0_key(FromVoid<RSA*>(k), nullptr, &e, nullptr);
+  return const_cast<BIGNUM*>(e);
+#else
+  return FromVoid<RSA*>(k)->e;
+#endif
+}
+
+BigNum GetRSAKeyN(RSAKey k) {
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+  const BIGNUM *n = nullptr;
+  RSA_get0_key(FromVoid<RSA*>(k), &n, nullptr, nullptr);
+  return const_cast<BIGNUM*>(n);
+#else
+  return FromVoid<RSA*>(k)->n;
+#endif
+}
+
+BigNum GetDSAKeyP(DSAKey k) {
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+  const BIGNUM *p = nullptr;
+  DSA_get0_pqg(FromVoid<DSA*>(k), &p, nullptr, nullptr);
+  return const_cast<BIGNUM*>(p);
+#else
+  return FromVoid<DSA*>(k)->p;
+#endif
+}
+
+BigNum GetDSAKeyQ(DSAKey k) {
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+  const BIGNUM *q = nullptr;
+  DSA_get0_pqg(FromVoid<DSA*>(k), nullptr, &q, nullptr);
+  return const_cast<BIGNUM*>(q);
+#else
+  return FromVoid<DSA*>(k)->q;
+#endif
+}
+
+BigNum GetDSAKeyG(DSAKey k) {
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+  const BIGNUM *g = nullptr;
+  DSA_get0_pqg(FromVoid<DSA*>(k), nullptr, nullptr, &g);
+  return const_cast<BIGNUM*>(g);
+#else
+  return FromVoid<DSA*>(k)->g;
+#endif
+}
+
+BigNum GetDSAKeyK(DSAKey k) {
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+  const BIGNUM *pub_key = nullptr;
+  DSA_get0_key(FromVoid<DSA*>(k), &pub_key, nullptr);
+  return const_cast<BIGNUM*>(pub_key);
+#else
+  return FromVoid<DSA*>(k)->pub_key;
+#endif
+}
+
+BigNum GetDSASigR(DSASig k) {
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+  const BIGNUM *r = nullptr;
+  DSA_SIG_get0(FromVoid<DSA_SIG*>(k), &r, nullptr);
+  return const_cast<BIGNUM*>(r);
+#else
+  return FromVoid<DSA_SIG*>(k)->r; 
+#endif
+}
+
+BigNum GetDSASigS(DSASig k) {
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+  const BIGNUM *s = nullptr;
+  DSA_SIG_get0(FromVoid<DSA_SIG*>(k), nullptr, &s);
+  return const_cast<BIGNUM*>(s);
+#else
+  return FromVoid<DSA_SIG*>(k)->s; 
+#endif
+}
+
+BigNum GetECDSASigR(ECDSASig k) {
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+  const BIGNUM *r = nullptr;
+  ECDSA_SIG_get0(FromVoid<ECDSA_SIG*>(k), &r, nullptr);
+  return const_cast<BIGNUM*>(r);
+#else
+  return FromVoid<ECDSA_SIG*>(k)->r;
+#endif
+}
+
+BigNum GetECDSASigS(ECDSASig k) {
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+  const BIGNUM *s = nullptr;
+  ECDSA_SIG_get0(FromVoid<ECDSA_SIG*>(k), nullptr, &s);
+  return const_cast<BIGNUM*>(s);
+#else
+  return FromVoid<ECDSA_SIG*>(k)->s;
+#endif
+}
+
 void RSAKeyFree(RSAKey k) { RSA_free(FromVoid<RSA*>(k)); }
 void DSAKeyFree(DSAKey k) { DSA_free(FromVoid<DSA*>(k)); }
 void DSASigFree(DSASig s) { DSA_SIG_free(FromVoid<DSA_SIG*>(s)); }

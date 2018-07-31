@@ -80,21 +80,40 @@ int Crypto::CipherFinal(Cipher c, char *out, int outlen) {
   return outlen;
 }
 
-Crypto::Digest Crypto::DigestOpen(DigestAlgo algo) { CHECK(algo); EVP_MD_CTX *d=new EVP_MD_CTX(); EVP_DigestInit(d, FromVoid<const EVP_MD*>(algo)); return d; }
+Crypto::Digest Crypto::DigestOpen(DigestAlgo algo) {
+  CHECK(algo);
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+  EVP_MD_CTX *d = EVP_MD_CTX_new();
+#else
+  EVP_MD_CTX *d = new EVP_MD_CTX();
+#endif
+  EVP_DigestInit(d, FromVoid<const EVP_MD*>(algo));
+  return d;
+}
+
 void Crypto::DigestUpdate(Digest d, const StringPiece &in) { EVP_DigestUpdate(FromVoid<EVP_MD_CTX*>(d), in.data(), in.size()); }
 int Crypto::DigestGetHashSize(Digest d) { return EVP_MD_CTX_size(FromVoid<EVP_MD_CTX*>(d)); }
 string Crypto::DigestFinish(Digest d) {
   unsigned len = 0;
   string ret(EVP_MAX_MD_SIZE, 0);
   EVP_DigestFinal(FromVoid<EVP_MD_CTX*>(d), MakeUnsigned(&ret[0]), &len);
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+  EVP_MD_CTX_free(FromVoid<EVP_MD_CTX*>(d));
+#else
   delete FromVoid<EVP_MD_CTX*>(d);
+#endif
   ret.resize(len);
   return ret;
 }
 
 Crypto::MAC Crypto::MACOpen(MACAlgo algo, const StringPiece &k) {
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+  HMAC_CTX *m = HMAC_CTX_new();
+  HMAC_Init_ex(m, k.data(), k.size(), FromVoid<const EVP_MD*>(algo), nullptr);
+#else
   HMAC_CTX *m = new HMAC_CTX();
   HMAC_Init(m, k.data(), k.size(), FromVoid<const EVP_MD*>(algo));
+#endif
   return m;
 }
 
@@ -102,8 +121,12 @@ void Crypto::MACUpdate(MAC m, const StringPiece &in) { HMAC_Update(FromVoid<HMAC
 int Crypto::MACFinish(MAC m, char *out, int outlen) { 
   unsigned len = outlen;
   HMAC_Final(FromVoid<HMAC_CTX*>(m), MakeUnsigned(out), &len);
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+  HMAC_CTX_free(FromVoid<HMAC_CTX*>(m));
+#else
   HMAC_CTX_cleanup(FromVoid<HMAC_CTX*>(m));
   delete FromVoid<HMAC_CTX*>(m);
+#endif
   return len;
 }
 
