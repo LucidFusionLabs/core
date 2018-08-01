@@ -564,6 +564,7 @@ struct Window : public ::LFAppWindow, public GraphicsDeviceHolder, public Wakeup
   Callback reshaped_cb, focused_cb, unfocused_cb;
   FrameCB frame_cb;
   Timer frame_time;
+  bool frame_pending=false;
   RollingAvg<unsigned> fps;
   unique_ptr<Console> console;
   vector<View*> view;

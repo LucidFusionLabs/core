@@ -187,8 +187,8 @@ struct SocketSet {
   enum { READABLE=1, WRITABLE=2, EXCEPTION=4 };
   virtual ~SocketSet() {}
   virtual void Del(Socket fd) = 0;
-  virtual void Add(Socket fd, int flag, void *val) = 0;
-  virtual void Set(Socket fd, int flag, void *val) = 0;
+  virtual void Add(Socket fd, int flag, void *val, void *v2=0) = 0;
+  virtual void Set(Socket fd, int flag, void *val, void *v2=0) = 0;
   virtual int GetReadable(Socket fd) { return 0; };
   virtual int GetWritable(Socket fd) { return 0; };
   virtual int GetException(Socket fd) { return 0; };
@@ -196,14 +196,15 @@ struct SocketSet {
 };
 
 struct SelectSocketSet : public SocketSet {
-  unordered_map<Socket, pair<int, void*> > socket;
+  typedef Triple<int, void*, void*> SocketData;
+  unordered_map<Socket, SocketData > socket;
   fd_set rfds, wfds, xfds;
   SocketSet *mirror=0;
 
   int Select(int wait_time) override;
-  void Del(Socket fd)                    override { socket.erase(fd);                if (mirror) mirror->Del(fd); }
-  void Add(Socket fd, int flag, void *v) override { socket[fd] = make_pair(flag, v); if (mirror) mirror->Add(fd, flag, v); }
-  void Set(Socket fd, int flag, void *v) override { socket[fd] = make_pair(flag, v); if (mirror) mirror->Set(fd, flag, v); }
+  void Del(Socket fd)                                override { socket.erase(fd);                     if (mirror) mirror->Del(fd); }
+  void Add(Socket fd, int flag, void *v, void *v2=0) override { socket[fd] = SocketData(flag, v, v2); if (mirror) mirror->Add(fd, flag, v, v2); }
+  void Set(Socket fd, int flag, void *v, void *v2=0) override { socket[fd] = SocketData(flag, v, v2); if (mirror) mirror->Set(fd, flag, v, v2); }
   int Get(Socket fd, fd_set *set) { return FD_ISSET(fd, set); } 
   int GetReadable(Socket fd) override { return Get(fd, &rfds); }
   int GetWritable(Socket fd) override { return Get(fd, &wfds); }
@@ -231,8 +232,8 @@ struct WFMOSocketSet : public SocketSet {
     return 0;
   }
   void Del(Socket fd) override {}
-  void Add(Socket fd, int flag, void *val) override {}
-  void Set(Socket fd, int flag, void *val) override {}
+  void Add(Socket fd, int flag, void *val, void *v2=0) override {}
+  void Set(Socket fd, int flag, void *val, void *v2=0) override {}
   int GetReadable(Socket fd) override { return 0; }
   int GetWritable(Socket fd) override { return 0; }
   int GetException(Socket fd) override { return 0; }
@@ -259,9 +260,9 @@ template <int S> struct EPollSocketSet : public SocketSet {
     ev.events = ((flag & READABLE) ? EPOLLIN : 0) | ((flag & WRITABLE) ? EPOLLOUT : 0);
     if (epoll_ctl(epollfd, op, fd, &ev) == -1) ERROR("epoll_ctl(", epollfd, ", ", op, ", ", events, "): ", strerror(errno)); 
   }
-  void Del(Socket fd)                      override { Change(fd, EPOLL_CTL_DEL, READABLE|WRITABLE, 0);   }
-  void Add(Socket fd, int flag, void *val) override { Change(fd, EPOLL_CTL_ADD, flag,              val); }
-  void Set(Socket fd, int flag, void *val) override { Change(fd, EPOLL_CTL_MOD, flag,              val); }
+  void Del(Socket fd)                                  override { Change(fd, EPOLL_CTL_DEL, READABLE|WRITABLE, 0);   }
+  void Add(Socket fd, int flag, void *val, void *v2=0) override { Change(fd, EPOLL_CTL_ADD, flag,              val); }
+  void Set(Socket fd, int flag, void *val, void *v2=0) override { Change(fd, EPOLL_CTL_MOD, flag,              val); }
   int GetReadable(Socket fd) override { return Get(fd)->events & (EPOLLIN  | EPOLLERR | EPOLLHUP); }
   int GetWritable(Socket fd) override { return Get(fd)->events & (EPOLLOUT | EPOLLERR | EPOLLHUP); }
   int GetException(Socket fd) override { return 0; }
@@ -292,9 +293,9 @@ struct SocketWakeupThread : public SocketSet {
     window(W), dispatch(D), frame_mutex(FM), wait_mutex(WM),
     thread(bind(&SocketWakeupThread::ThreadProc, this)) { pipe[0] = pipe[1] = -1; }
 
-  void Add(Socket s, int f, void *v) override { { ScopedMutex m(sockets_mutex); sockets.Add(s, f, v); } Wakeup(); }
-  void Set(Socket s, int f, void *v) override { { ScopedMutex m(sockets_mutex); sockets.Set(s, f, v); } Wakeup(); }
-  void Del(Socket s)                 override { { ScopedMutex m(sockets_mutex); sockets.Del(s);       } Wakeup(); }
+  void Add(Socket s, int f, void *v, void *v2=0) override { { ScopedMutex m(sockets_mutex); sockets.Add(s, f, v, v2); } Wakeup(); }
+  void Set(Socket s, int f, void *v, void *v2=0) override { { ScopedMutex m(sockets_mutex); sockets.Set(s, f, v, v2); } Wakeup(); }
+  void Del(Socket s)                             override { { ScopedMutex m(sockets_mutex); sockets.Del(s);           } Wakeup(); }
   void Start();
   void Wait() { Wakeup(); thread.Wait(); }
   void Wakeup();

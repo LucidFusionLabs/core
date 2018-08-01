@@ -334,7 +334,7 @@ extern "C" int main(int argc, const char *argv[]) {
   qapp = new QApplication(argc, const_cast<char**>(argv));
   auto app = static_cast<Application*>(MyAppCreate(argc, argv));
   auto fw = static_cast<QtFramework*>(app->framework.get());
-  app->focused->gd = GraphicsDevice::Create(app->focused, app->shaders.get(), 2).release();
+  app->focused->gd = GraphicsDevice::Create(app->focused, app->shaders.get()).release();
   fw->CreateWindow(app, app->focused);
   auto w = dynamic_cast<QtWindow*>(app->focused);
   if ((w->init = true)) { w->MyWindowInit(); if (app->splash_color) app->DrawSplash(*app->splash_color); }

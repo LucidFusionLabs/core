@@ -381,7 +381,7 @@ void Application::Log(int level, const char *file, int line, const char *message
 Window *Application::CreateNewWindow() {
   Window *orig_window = focused, *new_window = framework->ConstructWindow(this).release();
   if (window_init_cb) window_init_cb(new_window);
-  new_window->gd = GraphicsDevice::Create(new_window, shaders.get(), 2).release();
+  new_window->gd = GraphicsDevice::Create(new_window, shaders.get()).release();
   CHECK(framework->CreateWindow(this, new_window));
   if (!new_window->started && (new_window->started = true)) {
     MakeCurrentWindow(new_window);
@@ -616,7 +616,7 @@ int Application::Init() {
 
   if (focused) {
     if (FLAGS_enable_video) {
-      if (!focused->gd) focused->gd = GraphicsDevice::Create(focused, shaders.get(), 2).release();
+      if (!focused->gd) focused->gd = GraphicsDevice::Create(focused, shaders.get()).release();
       focused->gd->Init(this, focused->Box());
 #ifdef LFL_WINDOWS
       if (splash_color) DrawSplash(*splash_color);
@@ -709,8 +709,9 @@ int Application::TimerDrivenFrame(bool got_wakeup) {
 #ifdef LFL_ANDROID
     if (w->minimized || (!w->target_fps && !events)) continue;
 #else
-    if (w->minimized || !w->target_fps) continue;
+    if (w->minimized || (!w->target_fps && !w->frame_pending)) continue;
 #endif
+    w->frame_pending = false;
     int ret = w->Frame(clicks, 0);
     if (FLAGS_frame_debug) INFO("frame_debug Application::Frame Window ", w->id, " = ", ret,
                                 " target_fps=", w->target_fps, ", events=", events);

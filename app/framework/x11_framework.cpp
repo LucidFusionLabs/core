@@ -68,6 +68,7 @@ struct X11Window : public Window {
   ::Window win;
   Display *surface;
   GLXContext gl;
+  bool frame_on_mouse_input=0, frame_on_keyboard_input=0;
   X11Window(Application *a) : Window(a) {}
 
   bool Reshape(int w, int h) override {
@@ -120,7 +121,7 @@ struct X11Framework : public Framework {
     app->scheduler.system_event_socket = ConnectionNumber(display);
     app->scheduler.AddMainWaitSocket(app->focused, app->scheduler.system_event_socket, SocketSet::READABLE);
     SystemNetwork::SetSocketCloseOnExec(app->scheduler.system_event_socket, true);
-    INFO("X11VideoModule::Init()");
+    INFO("X11Framework::Init()");
     return CreateWindow(app, app->focused) ? 0 : -1;
   }
 
@@ -166,26 +167,34 @@ struct X11Framework : public Framework {
   }
 
   int Frame(unsigned clicks) override {
-    Window *screen = app->focused;
-    Display *display = dynamic_cast<X11Window*>(screen)->surface;
+    int events = 0;
+    auto screen = dynamic_cast<X11Window*>(app->focused);
+    auto display = screen->surface;
     static const Atom delete_win = XInternAtom(display, "WM_DELETE_WINDOW", 0);
+
     XEvent xev;
     while (XPending(display)) {
       XNextEvent(display, &xev);
-      if (app->windows.size() > 1) app->SetFocusedWindowByID(Void(xev.xany.window));
+      if (app->windows.size() > 1) {
+        app->SetFocusedWindowByID(Void(xev.xany.window));
+        screen = dynamic_cast<X11Window*>(app->focused);
+        display = screen->surface;
+      }
+
       switch (xev.type) {
-        case XKeyPress:       if (app->input->KeyPress(GetKeyCodeFromXEvent(display, xev), 0, 1)) app->EventDrivenFrame(false, true); break;
-        case KeyRelease:      if (app->input->KeyPress(GetKeyCodeFromXEvent(display, xev), 0, 0)) app->EventDrivenFrame(false, true); break;
-        case ButtonPress:     if (screen && app->input->MouseClick(xev.xbutton.button, 1, point(xev.xbutton.x, screen->gl_h-xev.xbutton.y))) app->EventDrivenFrame(false, true); break;
-        case ButtonRelease:   if (screen && app->input->MouseClick(xev.xbutton.button, 0, point(xev.xbutton.x, screen->gl_h-xev.xbutton.y))) app->EventDrivenFrame(false, true); break;
-        case MotionNotify:    if (screen) { point p(xev.xmotion.x, screen->gl_h-xev.xmotion.y); if (app->input->MouseMove(p, p - screen->mouse)) app->EventDrivenFrame(false, true); } break;
-        case ConfigureNotify: if (screen && (xev.xconfigure.width != screen->gl_w || xev.xconfigure.height != screen->gl_h)) { point d(xev.xconfigure.width, xev.xconfigure.height); screen->Reshaped(d, d); app->EventDrivenFrame(false, true); } break;
+        case XKeyPress:       if (app->input->KeyPress(GetKeyCodeFromXEvent(display, xev), 0, 1) && screen->frame_on_keyboard_input) { screen->frame_pending = true; events++; } break;
+        case KeyRelease:      if (app->input->KeyPress(GetKeyCodeFromXEvent(display, xev), 0, 0) && screen->frame_on_keyboard_input) { screen->frame_pending = true; events++; } break;
+        case ButtonPress:     if (app->input->MouseClick(xev.xbutton.button, 1, point(xev.xbutton.x, screen->gl_h-xev.xbutton.y)) && screen->frame_on_mouse_input) { screen->frame_pending = true; events++; } break;
+        case ButtonRelease:   if (app->input->MouseClick(xev.xbutton.button, 0, point(xev.xbutton.x, screen->gl_h-xev.xbutton.y)) && screen->frame_on_mouse_input) { screen->frame_pending = true; events++; } break;
+        case MotionNotify:    { point p(xev.xmotion.x, screen->gl_h-xev.xmotion.y); if (app->input->MouseMove(p, p - screen->mouse) && screen->frame_on_mouse_input) { screen->frame_pending = true; events++; } } break;
+        case ConfigureNotify: if (xev.xconfigure.width != screen->gl_w || xev.xconfigure.height != screen->gl_h) { point d(xev.xconfigure.width, xev.xconfigure.height); screen->Reshaped(d, d); screen->frame_pending = true; events++; } break;
         case ClientMessage:   if (xev.xclient.data.l[0] == delete_win) app->CloseWindow(screen); break;
-        case Expose:          app->EventDrivenFrame(false, true);
+        case Expose:          { screen->frame_pending = true; events++; } break;
         default:              continue;
       }
     }
-    return 0;
+
+    return events;
   }
 
   void TrapError() { trapped_error_code = 0; old_error_handler = XSetErrorHandler(TrapErrorHandler); }
@@ -258,23 +267,24 @@ bool FrameScheduler::DoMainWait(bool only_pool) {
   main_wait_sockets.Select(only_pool ? 0 : -1);
   for (auto i = main_wait_sockets.socket.begin(); i != main_wait_sockets.socket.end(); /**/) {
     iter_socket = i->first;
+    auto w = static_cast<Window*>(i->second.third);
     auto f = static_cast<function<bool()>*>(i++->second.second);
     if (iter_socket == system_event_socket) ret = true;
-    else { if (f) if ((*f)()) ret = true; }
+    else { if (f) if ((*f)()) { w->frame_pending = true; ret = true; } }
   }
   iter_socket = InvalidSocket;
   return ret;
 }
 
 void FrameScheduler::UpdateWindowTargetFPS(Window *w) {}
-void FrameScheduler::AddMainWaitMouse(Window *w) { }
-void FrameScheduler::DelMainWaitMouse(Window *w) {  }
-void FrameScheduler::AddMainWaitKeyboard(Window *w) {  }
-void FrameScheduler::DelMainWaitKeyboard(Window *w) {  }
+void FrameScheduler::AddMainWaitMouse(Window *w) { dynamic_cast<X11Window*>(w)->frame_on_mouse_input = 1; }
+void FrameScheduler::DelMainWaitMouse(Window *w) { dynamic_cast<X11Window*>(w)->frame_on_mouse_input = 0;  }
+void FrameScheduler::AddMainWaitKeyboard(Window *w) { dynamic_cast<X11Window*>(w)->frame_on_keyboard_input = 1; }
+void FrameScheduler::DelMainWaitKeyboard(Window *w) { dynamic_cast<X11Window*>(w)->frame_on_keyboard_input = 0; }
 
 void FrameScheduler::AddMainWaitSocket(Window *w, Socket fd, int flag, function<bool()> f) {
   if (fd == InvalidSocket) return;
-  main_wait_sockets.Add(fd, flag, f ? new function<bool()>(move(f)) : nullptr);
+  main_wait_sockets.Add(fd, flag, f ? new function<bool()>(move(f)) : nullptr, w);
 }
 
 void FrameScheduler::DelMainWaitSocket(Window *w, Socket fd) {

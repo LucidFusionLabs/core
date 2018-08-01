@@ -221,7 +221,6 @@ void LogVersion() {
   INFO("GL_SHADING_LANGUAGE_VERSION: ", glslver);
   INFO("GL_EXTENSIONS: ", glexts);
 
-  version = 1 + (glslver != NULL);
 #ifdef LFL_MOBILE
   have_cubemap = strstr(glexts, "GL_EXT_texture_cube_map") != 0;
 #else

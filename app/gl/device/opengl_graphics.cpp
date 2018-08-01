@@ -213,7 +213,7 @@ struct OpenGLES1 : public GraphicsDevice, public QOpenGLFunctions {
     ViewPort(b);
     DrawMode(default_draw_mode);
     InitDefaultLight();
-    INFO("OpenGLES1::Init width=", b.w, ", height=", b.h);
+    INFO("OpenGLES1::Init width=", b.w, ", height=", b.h, ", shaders=", ShaderSupport());
     LogVersion();
   }
 
@@ -704,9 +704,10 @@ struct OpenGLES2 : public GraphicsDevice, public QOpenGLFunctions {
 };
 #endif // LFL_GLES2
 
-unique_ptr<GraphicsDevice> GraphicsDevice::Create(Window *w, Shaders *s, int opengles_version) {
+unique_ptr<GraphicsDevice> GraphicsDevice::Create(Window *w, Shaders *s) {
   unique_ptr<GraphicsDevice> gd;
 #ifdef LFL_GLEW
+  glewExperimental = GL_TRUE;
 #ifdef GLEW_MX
   auto glew_context = new GLEWContext();
 #endif
@@ -715,6 +716,8 @@ unique_ptr<GraphicsDevice> GraphicsDevice::Create(Window *w, Shaders *s, int ope
     if ((glew_err = glewInit()) != GLEW_OK) return ERRORv(nullptr, "glewInit: ", glewGetErrorString(glew_err));
   });
 #endif
+
+  int opengles_version = 1 + (glGetString(GraphicsDevice::ShaderVersion) != nullptr);
 
 #ifdef LFL_GLES2
   if (opengles_version == 2) gd = make_unique<OpenGLES2>(w, s);
