@@ -270,7 +270,7 @@ int ProcessPipe::OpenPTY(const char* const* argv, const char *startdir) {
   int fd = -1;
   if ((pid = forkpty(&fd, name, 0, 0))) {
     if (pid < 0) { close(fd); return -1; }
-    fcntl(fd, F_SETFL, O_NONBLOCK);
+    if (fcntl(fd, F_SETFL, O_NONBLOCK) == -1) ERRORf("fcntl(%d, set, O_NONBLOCK): %s", fd, Application::SystemError().c_str());
     in = fdopen(fd, "r");
     out = fdopen(fd, "w");
   } else {

@@ -17,13 +17,21 @@
  */
 
 #include <X11/Xlib.h>
+#include <X11/Xatom.h>
 #include <X11/keysym.h>
 #include <GL/glx.h>
 static const int XKeyPress = KeyPress, XButton1 = Button1;
 #undef KeyPress
 #undef Button1
+#ifdef X_HAVE_UTF8_STRING
+#define XA_UTF8String(x) XInternAtom(x, "UTF8_STRING", 0)
+#else
+#define XA_UTF8String(x) XA_String
+#endif
 
 namespace LFL {
+DECLARE_bool(frame_debug);
+
 const int Key::Escape = XK_Escape;
 const int Key::Return = XK_Return;
 const int Key::Up = XK_Up;
@@ -95,9 +103,7 @@ struct X11Window : public Window {
   }
 
   void SetCaption(const string &v) override {
-    XChangeProperty(surface, win,
-                    XInternAtom(surface, "_NET_WM_NAME", False),
-                    XInternAtom(surface, "UTF8_STRING", False),
+    XChangeProperty(surface, win, XInternAtom(surface, "_NET_WM_NAME", 0), XA_UTF8String(surface),
                     8, PropModeReplace, MakeUnsigned(v.data()), v.size());
   }
 
@@ -107,11 +113,15 @@ struct X11Window : public Window {
 
 struct X11Framework : public Framework {
   Application *app;
-  Display *display = 0;
-  XVisualInfo *vi = 0;
+  Display *display = nullptr;
+  XVisualInfo *vi = nullptr;
+  ::Window clipboard = 0;
+  Atom clipboard_format;
   XErrorEvent error;
   int (*old_error_handler)(Display *, XErrorEvent *);
-  X11Framework(Application *a) : app(a) {}
+
+  X11Framework(Application *a) : app(a) { CHECK(!instance); instance=this; }
+  ~X11Framework() { CHECK_EQ(instance, this); instance=nullptr; if (clipboard) XDestroyWindow(display, clipboard); }
 
   int Init() override {
     GLint dbb = FLAGS_depth_buffer_bits;
@@ -121,7 +131,11 @@ struct X11Framework : public Framework {
     app->scheduler.system_event_socket = ConnectionNumber(display);
     app->scheduler.AddMainWaitSocket(app->focused, app->scheduler.system_event_socket, SocketSet::READABLE);
     SystemNetwork::SetSocketCloseOnExec(app->scheduler.system_event_socket, true);
+
     INFO("X11Framework::Init()");
+    clipboard_id = XInternAtom(display, "LFL_CLIPBOARD", 0);
+    cutbuffer_id = XInternAtom(display, "LFL_CUTBUFFER", 0);
+    selection_id = XInternAtom(display, "LFL_SELECTION", 0);
     return CreateWindow(app, app->focused) ? 0 : -1;
   }
 
@@ -132,7 +146,6 @@ struct X11Framework : public Framework {
   }
 
   unique_ptr<Window> ConstructWindow(Application *app) override { return make_unique<X11Window>(app); }
-  void StartWindow(Window*) override {}
 
   bool CreateWindow(WindowHolder *H, Window *W) override {
     auto w = dynamic_cast<X11Window*>(W);
@@ -166,6 +179,8 @@ struct X11Framework : public Framework {
     return true;
   }
 
+  void StartWindow(Window*) override {}
+
   int Frame(unsigned clicks) override {
     int events = 0;
     auto screen = dynamic_cast<X11Window*>(app->focused);
@@ -197,6 +212,17 @@ struct X11Framework : public Framework {
     return events;
   }
 
+  ::Window GetClipboard() {
+    if (!clipboard) {
+      XSetWindowAttributes xattr;
+      ::Window parent = RootWindow(display, DefaultScreen(display));
+      clipboard = XCreateWindow
+        (display, parent, -10, -10, 1, 1, 0, CopyFromParent, InputOnly, CopyFromParent, 0, &xattr);
+      XFlush(display);
+    }
+    return clipboard;
+  }
+
   void TrapError() { trapped_error_code = 0; old_error_handler = XSetErrorHandler(TrapErrorHandler); }
   int UntrapError() { XSetErrorHandler(old_error_handler); return trapped_error_code; }
 
@@ -205,12 +231,73 @@ struct X11Framework : public Framework {
     if (!trapped_error_code) trapped_error_code = error->error_code;
     return 0;
   }
+
+  static X11Framework *instance;
+  static Atom clipboard_id, cutbuffer_id, selection_id;
 };
 
+Atom X11Framework::clipboard_id;
+Atom X11Framework::cutbuffer_id;
+Atom X11Framework::selection_id;
 int X11Framework::trapped_error_code = 0;
+X11Framework *X11Framework::instance = nullptr;
 
-string Clipboard::GetClipboardText() { return string(); }
-void Clipboard::SetClipboardText(const string &s) {}
+void Clipboard::SetClipboardText(const string &s) {
+  auto fw = X11Framework::instance;
+  auto clipboard = fw->GetClipboard();
+  auto display = fw->display;
+  if (!clipboard) return;
+
+  fw->clipboard_format = XA_UTF8String(display);
+  XChangeProperty(display, DefaultRootWindow(display), fw->cutbuffer_id, fw->clipboard_format,
+                  8, PropModeReplace, MakeUnsigned(s.data()), s.size());
+
+  Atom XA_CLIPBOARD = XInternAtom(display, "CLIPBOARD", 0);
+  if (XA_CLIPBOARD != None && XGetSelectionOwner(display, XA_CLIPBOARD) != clipboard)
+    XSetSelectionOwner(display, XA_CLIPBOARD, clipboard, CurrentTime);
+
+  if (XGetSelectionOwner(display, XA_PRIMARY) != clipboard)
+    XSetSelectionOwner(display, XA_PRIMARY, clipboard, CurrentTime);
+}
+
+string Clipboard::GetClipboardText() {
+  auto fw = X11Framework::instance;
+  auto display = fw->display;
+  auto clipboard = fw->GetClipboard();
+  if (!clipboard) return ERRORv(string(), "No clipboard window");
+
+  Atom XA_CLIPBOARD = XInternAtom(display, "CLIPBOARD", 0), selection, format;
+  if (XA_CLIPBOARD == None) return ERRORv(string(), "No clipboard");
+  ::Window owner = XGetSelectionOwner(display, XA_CLIPBOARD);
+
+  if (owner == None) {
+    owner = DefaultRootWindow(display);
+    selection = XA_CUT_BUFFER0;
+    format = XA_STRING;
+  } else if (owner == clipboard) {
+    owner = DefaultRootWindow(display);
+    selection = fw->cutbuffer_id;
+    format = fw->clipboard_format;
+  } else {
+    owner = clipboard;
+    selection = fw->selection_id;
+    format = XA_UTF8String(display);
+    XConvertSelection(display, XA_CLIPBOARD, format, selection, owner, CurrentTime);
+    for (XEvent event; !XCheckTypedEvent(display, SelectionNotify, &event); /**/) {}
+  }
+
+  string ret;
+  Atom selection_type=0;
+  int selection_format=0;
+  unsigned char *buf=0;
+  unsigned long len=0, overflow=0;
+  if (XGetWindowProperty(display, owner, selection, 0, INT_MAX/4, False, format,
+                         &selection_type, &selection_format, &len, &overflow, &buf) == Success) {
+    if (selection_type == format) { ret.resize(len); memcpy(&ret[0], buf, ret.size()); }
+    XFree(buf);
+  }
+  return ret; 
+}
 
 void MouseFocus::GrabMouseFocus() {}
 void MouseFocus::ReleaseMouseFocus() {}
@@ -263,17 +350,21 @@ FrameScheduler::FrameScheduler(WindowHolder *w) :
   wait_forever_thread(0), synchronize_waits(0), monolithic_frame(1), run_main_loop(1) {}
   
 bool FrameScheduler::DoMainWait(bool only_pool) {
-  bool ret = false;
+  bool system_event_pending = false, window_frame_pending = false;
   main_wait_sockets.Select(only_pool ? 0 : -1);
   for (auto i = main_wait_sockets.socket.begin(); i != main_wait_sockets.socket.end(); /**/) {
     iter_socket = i->first;
     auto w = static_cast<Window*>(i->second.third);
     auto f = static_cast<function<bool()>*>(i++->second.second);
-    if (iter_socket == system_event_socket) ret = true;
-    else { if (f) if ((*f)()) { w->frame_pending = true; ret = true; } }
+    if (iter_socket == system_event_socket) system_event_pending = true;
+    else if (f && (*f)()) {
+      if (FLAGS_frame_debug) INFOf("FrameScheduler::DoMainWait socket=%d readable", iter_socket);
+      window_frame_pending = w->frame_pending = true;
+    }
   }
   iter_socket = InvalidSocket;
-  return ret;
+  if (FLAGS_frame_debug) INFOf("FrameScheduler::DoMainWait app-pending=%d, window-pending=%d", system_event_pending, window_frame_pending);
+  return system_event_pending || window_frame_pending;
 }
 
 void FrameScheduler::UpdateWindowTargetFPS(Window *w) {}

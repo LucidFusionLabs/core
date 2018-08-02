@@ -497,7 +497,8 @@ TextBox::LineUpdate::~LineUpdate() {
   else fb->Update(v);
 }
 
-TextBox::TextBox(Window *W, const FontRef &F, int LC) : View(W), style(F), cmd_fb(W?W->parent:0), cmd_last(LC) {
+TextBox::TextBox(Window *W, const FontRef &F, int LC) :
+  View(W), TextboxController(W->parent), style(F), cmd_fb(W?W->parent:0), cmd_last(LC) {
   if (style.font.Load(W)) cmd_line.GetAttrId(Drawable::Attr(style.font));
   layout.pad_wide_chars = 1;
   cmd_line.Init(this, 0);
