@@ -20,7 +20,7 @@
 #define LFL_CORE_APP_RPC_H__
 
 #ifdef LFL_IPC_DEBUG
-#define IPCTrace(...) DebugPrintf(stderr, __VA_ARGS__)
+#define IPCTrace(...) DebugPrintf(__VA_ARGS__)
 #else
 #define IPCTrace(...)
 #endif
@@ -145,7 +145,7 @@ namespace LFL {
     typedef IPC::name Type; \
     static const int Id = id; \
     static const char *Name() { return #name; } \
-    static string DebugString(const IPC::name *x, const mpt &mpv) { return StrCat("{", __VA_ARGS__, "}"); } \
+    static string DebugString(const IPC::name *x, const mpt &mpv=mpt(nullptr)) { return StrCat("{", __VA_ARGS__, "}"); } \
   };
 
 #else /* LFL_IPC */
@@ -270,7 +270,7 @@ struct InterProcessComm {
   template <class X> bool SendIPCRequest(Connection *c, int seq, const FlatBufferPiece &q, int th=-1) {
     bool ok = Write(c, X::Id, seq, MakeStringPiece(q), th);
     IPCTrace("%s Send %s=%d seq=%d %s\n", ipc_name.c_str(), X::Name(), ok, seq,
-             X::DebugString(flatbuffers::GetRoot<typename X::Type>(q.first.get())).c_str());
+             X::DebugString(flatbuffers::GetRoot<typename X::Type>(q.data())).c_str());
     return ok;
   }
   static bool Write(Connection *conn, IPC::Id id, IPC::Seq seq, const StringPiece &ipc_text, int transfer_handle=-1);

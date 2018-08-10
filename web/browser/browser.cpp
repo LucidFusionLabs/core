@@ -29,7 +29,7 @@
 
 namespace LFL {
 Browser::Browser(ThreadDispatcher *d, Window *w, AssetLoading *l, Fonts *f, SocketServices *n, ProcessAPI *A, SystemBrowser *B, View *v, const Box &b) :
-  doc(d, l, f, w, n, b), dispatch(d), window(w), missing_image(w->parent), v_scrollbar(v), h_scrollbar(v, Widget::Slider::Flag::AttachedHorizontal), system_browser(B) {
+  doc(d, l, f, w->parent, n, b), dispatch(d), window(w), missing_image(w->parent), v_scrollbar(v), h_scrollbar(v, Widget::Slider::Flag::AttachedHorizontal), system_browser(B) {
   if (Font *maf = f->Get(window->GD()->parent->gl_h, "MenuAtlas", "", 0, Color::white, Color::clear, 0, 0)) {
     missing_image = maf->FindGlyph(0)->tex;
     missing_image.width = missing_image.height = 16;

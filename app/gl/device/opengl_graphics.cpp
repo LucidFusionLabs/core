@@ -280,7 +280,7 @@ struct OpenGLES1 : public GraphicsDevice, public QOpenGLFunctions {
     GDDebug("ActiveTexture=", n);
   }
 
-  void BindTexture(int t, int n) { glBindTexture(t, n); GDDebug("BindTexture=", t, ",", n); }
+  void BindTexture(int t, int n) { EnableTexture(); glBindTexture(t, n); GDDebug("BindTexture=", t, ",", n); }
   bool VertexPointer(int m, int t, int w, int o, float *verts, int l, int *out, bool ud, int) { glVertexPointer  (m, t, w, verts + o/sizeof(float)); GDDebug("VertexPointer"); return true; }
   void TexPointer   (int m, int t, int w, int o, float *tex,   int l, int *out, bool ud)      { glTexCoordPointer(m, t, w, tex   + o/sizeof(float)); GDDebug("TexPointer"); }
   void ColorPointer (int m, int t, int w, int o, float *verts, int l, int *out, bool ud)      { glColorPointer   (m, t, w, verts + o/sizeof(float)); GDDebug("ColorPointer"); }

@@ -743,6 +743,7 @@ int Application::MainLoop() {
 
 void Application::Exit() {
   INFO("Application::Exit");
+  if (exit_cb) exit_cb();
   delete this;
 }
 
@@ -778,7 +779,6 @@ Application::~Application() {
   if (!FLAGS_threadpool_size && thread_pool.worker.size()) thread_pool.worker[0].queue->HandleMessages();
   else thread_pool.Stop();
   message_queue.HandleMessages();
-  if (exit_cb) exit_cb();
   if (cuda) cuda->Free();
   for (auto &m : modules) m->Free();
   scheduler.Free();

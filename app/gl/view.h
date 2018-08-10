@@ -525,6 +525,7 @@ struct PropertyTree : public PropertyView {
 
 struct DirectoryTree : public PropertyTree {
   FileSystem *fs;
+  DirectoryTree(Window *W, const FontRef &F=FontRef()) : PropertyTree(W, F), fs(&W->parent->localfs) {}
   DirectoryTree(Window *W, FileSystem *FS, const FontRef &F=FontRef()) : PropertyTree(W, F), fs(FS) {}
   void Open(const string &p) { tree.Clear(); SetRoot(AddDir(p)); Reload(); }
   Id AddDir (const string &p) { return AddNode(menuicon_white->FindGlyph(13), BaseName(StringPiece(p.data(), p.size()?p.size()-1:0)), p); }

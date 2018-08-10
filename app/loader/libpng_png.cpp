@@ -66,6 +66,7 @@ int PngReader::Read(File *lf, Texture *out) {
 }
 
 int PngWriter::Write(File *lf, const Texture &tex) {
+  if (!tex.buf) return ERRORv(-1, "Texture must have software buffer");
   png_structp png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, 0, 0, 0);
   if (!png_ptr) return ERRORv(-1, "png_create_read_struct: ", lf->Filename());
 

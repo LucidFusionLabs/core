@@ -89,6 +89,7 @@ struct DirectoryIter {
   Map filemap;
   Map::iterator iter;
   const char *P=0, *S=0;
+  virtual ~DirectoryIter() {}
   virtual const char *Next() = 0;
   static void Add(void *self, const char *k, int v) { static_cast<DirectoryIter*>(self)->filemap[k] = v; }
 };
