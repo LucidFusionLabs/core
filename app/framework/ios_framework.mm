@@ -415,7 +415,7 @@ static void ReachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReach
   - (void)glkView:(GLKView *)v drawInRect:(CGRect)rect {
     LFL::Window *screen = uiapp.app->focused;
     if (!screen->gd->default_framebuffer)
-      screen->gd->GetIntegerv(LFL::GraphicsDevice::FramebufferBinding, &screen->gd->default_framebuffer);
+      screen->gd->GetIntegerv(screen->gd->c.FramebufferBinding, &screen->gd->default_framebuffer);
     if (_needs_gl_reset && !(_needs_gl_reset = false)) {
       uiapp.app->ResetGL(LFL::ResetGLFlag::Delete | LFL::ResetGLFlag::Reload);
       LFL::FrameBuffer(screen).Release();

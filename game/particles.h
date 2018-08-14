@@ -107,8 +107,7 @@ template <int MP, int MH, bool PerParticleColor> struct Particles : public Parti
     }
   };
 
-  int num_particles, nops=0, texture=0, verts_id=-1, trailverts_id=-1, num_trailverts, emitter_type=0;
-  int blend_mode_s=GraphicsDevice::SrcAlpha, blend_mode_t=GraphicsDevice::One, burst=0;
+  int num_particles, nops=0, texture=0, verts_id=-1, trailverts_id=-1, num_trailverts, emitter_type=0, blend_mode_s=0, blend_mode_t=0, burst=0;
   float floorval=0, gravity=0, radius_min, radius_max, age_min=.05, age_max=1, rand_initpos, rand_initvel, emitter_angle=0, color_fade=0;
   long long ticks_seen=0, ticks_processed=0, ticks_step=0;
   float verts[NumFloats], trailverts[NumTrailFloats];
@@ -254,7 +253,10 @@ template <int MP, int MH, bool PerParticleColor> struct Particles : public Parti
   }
 
   void Draw(GraphicsDevice *GD) {
-    gd = GD;
+    if (!gd && (gd = GD)) {
+      if (!blend_mode_s) blend_mode_s = gd->c.SrcAlpha;
+      if (!blend_mode_t) blend_mode_t = gd->c.One;
+    }
     gd->DisableDepthTest();
     gd->DisableLighting();
     gd->DisableNormals();
@@ -265,11 +267,11 @@ template <int MP, int MH, bool PerParticleColor> struct Particles : public Parti
     if (PerParticleColor) gd->EnableVertexColor();
     if (texture) {
       gd->EnableTexture();
-      gd->BindTexture(GraphicsDevice::Texture2D, texture);
+      gd->BindTexture(gd->c.Texture2D, texture);
     }
 
     int update_size = verts_id < 0 ? sizeof(verts) : num_particles * ParticleSize;
-    DrawParticles(GraphicsDevice::Triangles, num_particles*ParticleVerts, verts, update_size);
+    DrawParticles(gd->c.Triangles, num_particles*ParticleVerts, verts, update_size);
 
     if (trails) {
       int trail_update_size = trailverts_id < 0 ? sizeof(trailverts) : num_trailverts * TrailVertSize;
@@ -280,17 +282,17 @@ template <int MP, int MH, bool PerParticleColor> struct Particles : public Parti
   }
 
   void DrawParticles(int prim_type, int num_verts, float *v, int l) {
-    if (1)                gd->VertexPointer(3, GraphicsDevice::Float, VertSize, 0,               v, l, &verts_id, true, prim_type);
-    if (1)                gd->TexPointer   (2, GraphicsDevice::Float, VertSize, 3*sizeof(float), v, l, &verts_id, false);
-    if (PerParticleColor) gd->ColorPointer (4, GraphicsDevice::Float, VertSize, 5*sizeof(float), v, l, &verts_id, true);
+    if (1)                gd->VertexPointer(3, gd->c.Float, VertSize, 0,               v, l, &verts_id, true, prim_type);
+    if (1)                gd->TexPointer   (2, gd->c.Float, VertSize, 3*sizeof(float), v, l, &verts_id, false);
+    if (PerParticleColor) gd->ColorPointer (4, gd->c.Float, VertSize, 5*sizeof(float), v, l, &verts_id, true);
     gd->DrawArrays(prim_type, 0, num_verts);
   }
 
   void DrawTrails(float *v, int l) {
     gd->DisableTexture();
-    if (1)                gd->VertexPointer(3, GraphicsDevice::Float, TrailVertSize, 0,               v, l, &trailverts_id, true, GraphicsDevice::Triangles);
-    if (PerParticleColor) gd->ColorPointer (4, GraphicsDevice::Float, TrailVertSize, 3*sizeof(float), v, l, &trailverts_id, true);
-    gd->DrawArrays(GraphicsDevice::Triangles, 0, num_trailverts);
+    if (1)                gd->VertexPointer(3, gd->c.Float, TrailVertSize, 0,               v, l, &trailverts_id, true, gd->c.Triangles);
+    if (PerParticleColor) gd->ColorPointer (4, gd->c.Float, TrailVertSize, 3*sizeof(float), v, l, &trailverts_id, true);
+    gd->DrawArrays(gd->c.Triangles, 0, num_trailverts);
   }
 
   void AssetDrawCB(GraphicsDevice *d, Asset *out, Entity *e) { pos = e->pos; Draw(d); }

@@ -90,7 +90,7 @@ class QTWebKitBrowser : public QObject, public BrowserInterface {
     int instride = image.bytesPerLine(), bpp = Pixel::Size(tex.pf);
     int mx = dirtyRect.x(), my = dirtyRect.y(), mw = dirtyRect.width(), mh = dirtyRect.height();
     const unsigned char *in = (const unsigned char *)image.bits();
-    gd->BindTexture(GraphicsDevice::Texture2D, tex.ID);
+    gd->BindTexture(gd->c.Texture2D, tex.ID);
 
     unsigned char *buf = tex.buf;
     for (int j = 0; j < mh; j++) {

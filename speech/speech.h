@@ -428,7 +428,7 @@ struct PhoneticSegmentationGUI : public View {
       mouse.AddClickBox(segments[i].win, Callback([&,beg,len](){ Play(beg, len); }));
     }
 
-    if (verts.size()) geometry = make_unique<Geometry>(GraphicsDevice::Lines, verts.size(), &verts[0],
+    if (verts.size()) geometry = make_unique<Geometry>(Geometry::Primitive::Lines, verts.size(), &verts[0],
                                                        nullptr, nullptr, Color(1.0,1.0,1.0));
   }
 

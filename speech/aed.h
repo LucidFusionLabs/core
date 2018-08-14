@@ -305,7 +305,7 @@ struct AcousticEventGUI {
     AED->alloc.Reset();
 
     int maxverts = AED->words.size()*6+SpeechClientFlood()*2;
-    auto geom = make_unique<Geometry>(GraphicsDevice::Lines, maxverts, NullPointer<v2>(), nullptr, nullptr, Color(1.0,1.0,1.0));
+    auto geom = make_unique<Geometry>(Geometry::Primitive::Lines, maxverts, NullPointer<v2>(), nullptr, nullptr, Color(1.0,1.0,1.0));
     v2 *verts = reinterpret_cast<v2*>(&geom->vert[0]);
     geom->count = 0;
 

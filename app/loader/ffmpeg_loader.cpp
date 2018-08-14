@@ -292,7 +292,8 @@ struct FFMpegAssetLoader : public AssetLoaderInterface {
           char errstr[128]; av_strerror(ret, errstr, sizeof(errstr));
           ERROR("avcodec_decode_video2 ", ret, ": ", errstr);
         } else {
-          va->parent->window->GD()->BindTexture(GraphicsDevice::Texture2D, va->tex.ID);
+          auto gd = va->parent->window->GD();
+          gd->BindTexture(gd->c.Texture2D, va->tex.ID);
           va->tex.UpdateBuffer(*frame->data, point(avctx->width, avctx->height), PixelFromFFMpegId(avctx->pix_fmt), 
                                frame->linesize[0], Texture::Flag::Resample);
           va->tex.UpdateGL();
