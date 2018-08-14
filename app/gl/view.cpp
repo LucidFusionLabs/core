@@ -553,10 +553,10 @@ void TextBox::DrawCursor(point p, Shader *shader) {
   GraphicsContext gc(root->gd);
   if (cursor.type == Cursor::Block) {
     gc.gd->EnableBlend();
-    gc.gd->BlendMode(GraphicsDevice::OneMinusDstColor, GraphicsDevice::OneMinusSrcAlpha);
+    gc.gd->BlendMode(gc.gd->c.OneMinusDstColor, gc.gd->c.OneMinusSrcAlpha);
     gc.gd->FillColor(cmd_color);
     gc.DrawTexturedBox(Box(p.x, p.y - style.font->Height(), style.font->max_width, style.font->Height()) * scale);
-    gc.gd->BlendMode(GraphicsDevice::SrcAlpha, GraphicsDevice::One);
+    gc.gd->BlendMode(gc.gd->c.SrcAlpha, gc.gd->c.One);
     gc.gd->DisableBlend();
   } else {
     bool blinking = false;

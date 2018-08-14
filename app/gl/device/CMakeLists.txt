@@ -35,3 +35,8 @@ if(LFL_QT)
                  COMPILE_DEFINITIONS -DLFL_QTGL ${qt_defs}
                  INCLUDE_DIRECTORIES ${QT_INCLUDE} ${qt_incs} LINK_LIBRARIES ${qt_libs})
 endif()
+
+if(LFL_DIRECTX)
+  lfl_add_target(app_directx_graphics STATIC_LIBRARY SOURCES directx_graphics.cpp
+                 INCLUDE_DIRECTORIES ${DIRECTX_INCLUDE} LINK_LIBRARIES ${DIRECTX_LIB})
+endif()

@@ -24,6 +24,8 @@ DECLARE_int(soundasset_seconds);
 DECLARE_float(shadertoy_blend);
 
 struct Geometry {
+  struct Primitive { enum { Lines=1, Triangles=2, TriangleStrip=3 }; };
+  static int VertsPerPrimitive(int gl_primtype);
   static const int TD=2, CD=4;
 
   int vd, td, cd, primtype, count, material=0, color=0;
@@ -112,7 +114,7 @@ struct Asset {
   int translate=0, rotate=0;
   Geometry *geometry=0, *hull=0;
   Texture tex;
-  unsigned texgen=0, typeID=0, particleTexID=0, blends=GraphicsDevice::SrcAlpha, blendt=GraphicsDevice::OneMinusSrcAlpha;
+  unsigned texgen=0, typeID=0, particleTexID=0, blends, blendt;
   Color col;
   bool color=0, zsort=0;
 

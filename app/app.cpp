@@ -459,7 +459,11 @@ int Application::Create(const char *source_filename) {
 #ifdef LFL_GLOG
   google::InstallFailureSignalHandler();
 #endif
+#ifdef LFL_WINDOWS
+  pid = _getpid();
+#else
   pid = getpid();
+#endif
   SetMainThread();
   time_started = Now();
 #ifdef LFL_LINUX
@@ -821,8 +825,7 @@ void Application::CloseSystemConsole() {
 
 /* Window */
 
-Window::Window(Application *A) : parent(A), caption(A->name), fps(128), default_font(nullptr, FontDesc::Default()),
-  tex_mode(2, 1, 0), grab_mode(2, 0, 1), fill_mode(3, GraphicsDevice::Fill, GraphicsDevice::Line, GraphicsDevice::Point) {
+Window::Window(Application *A) : parent(A), caption(A->name), fps(128), default_font(nullptr, FontDesc::Default()), grab_mode(2, 0, 1) {
   id = 0;
   started = minimized = cursor_grabbed = animating = 0;
   resize_increment_x = resize_increment_y = 0;

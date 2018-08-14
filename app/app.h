@@ -579,7 +579,7 @@ struct Window : public ::LFAppWindow, public GraphicsDeviceHolder, public Wakeup
   KeyboardController *active_textbox=0;
   Dialog *top_dialog=0;
   unique_ptr<Shell> shell;
-  CategoricalVariable<int> tex_mode, grab_mode, fill_mode;
+  CategoricalVariable<int> grab_mode;
 
   Window(Application*);
   virtual ~Window();

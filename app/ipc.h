@@ -33,6 +33,7 @@ struct NTService {
 };
 
 struct SingleProcess {
+  static string GetEndpointName(const string &n);
   static bool RunLocalHTTPServerOrPost(ApplicationLifetime *app, SocketServices *net, HTTPServer *server,
                                        const string &endpoint, const string &path, const string &postdata);
 };

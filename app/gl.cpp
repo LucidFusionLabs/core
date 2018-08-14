@@ -191,9 +191,9 @@ void GraphicsContext::DrawTexturedBox1(GraphicsDevice *gd, const Box &b, const f
 
   if (gd->version == 2) {
 #define DrawTexturedBoxTriangles(gd, v) \
-    bool changed = gd->VertexPointer(2, GraphicsDevice::Float, sizeof(float)*4, 0,               v, sizeof(v), NULL, true, GraphicsDevice::Triangles); \
-    if (changed)   gd->TexPointer   (2, GraphicsDevice::Float, sizeof(float)*4, sizeof(float)*2, v, sizeof(v), NULL, false); \
-    if (1)         gd->DeferDrawArrays(GraphicsDevice::Triangles, 0, 6);
+    bool changed = gd->VertexPointer(2, gd->c.Float, sizeof(float)*4, 0,               v, sizeof(v), NULL, true, gd->c.Triangles); \
+    if (changed)   gd->TexPointer   (2, gd->c.Float, sizeof(float)*4, sizeof(float)*2, v, sizeof(v), NULL, false); \
+    if (1)         gd->DeferDrawArrays(gd->c.Triangles, 0, 6);
 
     if (orientation == 0) {
       float verts[] = { float(b.x),     float(b.y),     tc[Texture::minx_coord_ind], tc[Texture::miny_coord_ind],
@@ -214,9 +214,9 @@ void GraphicsContext::DrawTexturedBox1(GraphicsDevice *gd, const Box &b, const f
     }
   } else {
 #define DrawTexturedBoxTriangleStrip(gd, v) \
-    bool changed = gd->VertexPointer(2, GraphicsDevice::Float, sizeof(float)*4, 0,               verts, sizeof(verts), NULL, true, GraphicsDevice::TriangleStrip); \
-    if  (changed)  gd->TexPointer   (2, GraphicsDevice::Float, sizeof(float)*4, sizeof(float)*2, verts, sizeof(verts), NULL, false); \
-    if (1)         gd->DeferDrawArrays(GraphicsDevice::TriangleStrip, 0, 4);
+    bool changed = gd->VertexPointer(2, gd->c.Float, sizeof(float)*4, 0,               verts, sizeof(verts), NULL, true, gd->c.TriangleStrip); \
+    if  (changed)  gd->TexPointer   (2, gd->c.Float, sizeof(float)*4, sizeof(float)*2, verts, sizeof(verts), NULL, false); \
+    if (1)         gd->DeferDrawArrays(gd->c.TriangleStrip, 0, 4);
 
     if (orientation == 0) {
       float verts[] = { float(b.x),     float(b.y),     tc[Texture::minx_coord_ind], tc[Texture::miny_coord_ind],
@@ -245,9 +245,9 @@ void GraphicsContext::DrawGradientBox1(GraphicsDevice *gd, const Box &b, const C
                     float(b.x),     float(b.y+b.h), c[3].r(), c[3].g(), c[3].b(), c[3].a(),
                     float(b.x+b.w), float(b.y),     c[1].r(), c[1].g(), c[1].b(), c[1].a(),
                     float(b.x+b.w), float(b.y+b.h), c[2].r(), c[2].g(), c[2].b(), c[2].a() };
-  bool changed = gd->VertexPointer(2, GraphicsDevice::Float, sizeof(float)*6, 0,               verts, sizeof(verts), NULL, true, GraphicsDevice::TriangleStrip);
-  if  (changed)  gd->ColorPointer (4, GraphicsDevice::Float, sizeof(float)*6, sizeof(float)*2, verts, sizeof(verts), NULL, false);
-  if (1)         gd->DeferDrawArrays(GraphicsDevice::TriangleStrip, 0, 4);
+  bool changed = gd->VertexPointer(2, gd->c.Float, sizeof(float)*6, 0,               verts, sizeof(verts), NULL, true, gd->c.TriangleStrip);
+  if  (changed)  gd->ColorPointer (4, gd->c.Float, sizeof(float)*6, sizeof(float)*2, verts, sizeof(verts), NULL, false);
+  if (1)         gd->DeferDrawArrays(gd->c.TriangleStrip, 0, 4);
 #endif
 }
 
@@ -261,12 +261,12 @@ void GraphicsContext::DrawCrimpedBox1(GraphicsDevice *gd, const Box &b, const fl
   scrollY = Box::ScrollCrimped(texcoord[1], texcoord[3], scrollY, &texMinY, &texMidY1, &texMidY2, &texMaxY);
 
 #define DrawCrimpedBoxTriangleStrip() \
-  gd->VertexPointer(2, GraphicsDevice::Float, 4*sizeof(float), 0,               verts, sizeof(verts), NULL, true, GraphicsDevice::TriangleStrip); \
-  gd->TexPointer   (2, GraphicsDevice::Float, 4*sizeof(float), 2*sizeof(float), verts, sizeof(verts), NULL, false); \
-  gd->DeferDrawArrays(GraphicsDevice::TriangleStrip, 0, 4); \
-  gd->DeferDrawArrays(GraphicsDevice::TriangleStrip, 4, 4); \
-  gd->DeferDrawArrays(GraphicsDevice::TriangleStrip, 8, 4); \
-  gd->DeferDrawArrays(GraphicsDevice::TriangleStrip, 12, 4);
+  gd->VertexPointer(2, gd->c.Float, 4*sizeof(float), 0,               verts, sizeof(verts), NULL, true, gd->c.TriangleStrip); \
+  gd->TexPointer   (2, gd->c.Float, 4*sizeof(float), 2*sizeof(float), verts, sizeof(verts), NULL, false); \
+  gd->DeferDrawArrays(gd->c.TriangleStrip, 0, 4); \
+  gd->DeferDrawArrays(gd->c.TriangleStrip, 4, 4); \
+  gd->DeferDrawArrays(gd->c.TriangleStrip, 8, 4); \
+  gd->DeferDrawArrays(gd->c.TriangleStrip, 12, 4);
 
   switch (orientation) {
     case 0: {
@@ -368,8 +368,10 @@ void Drawable::DrawGD(GraphicsDevice *gd, const LFL::Box &b) const { GraphicsCon
 
 /* Texture */
 
-int Texture::GLBufferType() const {
-  return pf == preferred_pf ? GraphicsDevice::GLPreferredBuffer : GraphicsDevice::UnsignedByte;
+int Texture::GDPixelType(GraphicsDevice *gd) const { return gd->GetPixel(pf); }
+int Texture::GDTexType(GraphicsDevice *gd) const { return gd->GetCubeMap(cubemap); }
+int Texture::GDBufferType(GraphicsDevice *gd) const {
+  return pf == preferred_pf ? gd->c.GLPreferredBuffer : gd->c.UnsignedByte;
 }
 
 void Texture::Coordinates(float *texcoord, int w, int h, int wd, int hd) { return Coordinates(texcoord, Box(w,h), wd, hd); }
@@ -395,21 +397,21 @@ void Texture::Resize(int W, int H, int PF, int flag) {
   if (!ID && (flag & Flag::CreateGL)) {
     if (!cubemap) {
       gd->DisableCubeMap();
-      gd->GenTextures(GraphicsDevice::Texture2D, 1, &ID);
+      gd->GenTextures(gd->c.Texture2D, 1, &ID);
     } else if (cubemap == CubeMap::PX) {
       gd->ActiveTexture(0);
-      gd->GenTextures(GraphicsDevice::TextureCubeMap, 1, &ID);
+      gd->GenTextures(gd->c.TextureCubeMap, 1, &ID);
     }
     if (!(flag & Flag::RepeatGL)) {
-      gd->TexParameter(GraphicsDevice::Texture2D, GraphicsDevice::TextureWrapS, GraphicsDevice::ClampToEdge);
-      gd->TexParameter(GraphicsDevice::Texture2D, GraphicsDevice::TextureWrapT, GraphicsDevice::ClampToEdge);
+      gd->TexParameter(gd->c.Texture2D, gd->c.TextureWrapS, gd->c.ClampToEdge);
+      gd->TexParameter(gd->c.Texture2D, gd->c.TextureWrapT, gd->c.ClampToEdge);
     }
   }
   if (ID || cubemap) {
     int opengl_width = gd->TextureDim(width), opengl_height = gd->TextureDim(height);
-    int gl_tt = GLTexType(), gl_pt = GLPixelType(), gl_bt = GLBufferType();
+    int gl_tt = GDTexType(gd), gl_pt = GDPixelType(gd), gl_bt = GDBufferType(gd);
     if (ID) gd->BindTexture(gl_tt, ID);
-    gd->TexImage2D(gl_tt, 0, GraphicsDevice::GLInternalFormat, opengl_width, opengl_height, 0, gl_pt, gl_bt, 0);
+    gd->TexImage2D(gl_tt, 0, gd->c.GLInternalFormat, opengl_width, opengl_height, 0, gl_pt, gl_bt, 0);
     Coordinates(coord, width, height, opengl_width, opengl_height);
   }
 }
@@ -433,7 +435,7 @@ void Texture::UpdateBuffer(const unsigned char *B, const ::LFL::Box &box, int PF
   SimpleVideoResampler::Blit(B, buf, box.w, box.h, PF, linesize, 0, 0, pf, LineSize(), box.x, box.y, blit_flag);
 }
 
-void Texture::Bind() const { parent->GD()->BindTexture(GLTexType(), ID); }
+void Texture::Bind() const { auto gd = parent->GD(); gd->BindTexture(GDTexType(gd), ID); }
 void Texture::ClearGL() { 
   if (ID) {
     auto gd = parent->GD();
@@ -456,10 +458,10 @@ void Texture::LoadGL(const unsigned char *B, const point &dim, int PF, int lines
 
 void Texture::UpdateGL(const unsigned char *B, const ::LFL::Box &box, int pf, int flag) {
   auto gd = parent->GD();
-  int gl_tt = GLTexType(), gl_y = (flag & Flag::FlipY) ? (height - box.y - box.h) : box.y;
+  int gl_tt = GDTexType(gd), gl_y = (flag & Flag::FlipY) ? (height - box.y - box.h) : box.y;
   gd->BindTexture(gl_tt, ID);
   gd->TexSubImage2D(gl_tt, 0, box.x, gl_y, box.w, box.h,
-                    pf ? Pixel::OpenGLID(pf) : GLPixelType(), GLBufferType(), B);
+                    pf ? gd->GetPixel(pf) : GDPixelType(gd), GDBufferType(gd), B);
 }
 
 void Texture::ResetGL(int flag) {
@@ -522,7 +524,7 @@ void DepthTexture::Resize(int W, int H, int DF, int flag) {
   int opengl_width = gd->TextureDim(width), opengl_height = gd->TextureDim(height);
   if (ID) {
     gd->BindRenderBuffer(ID);
-    gd->RenderBufferStorage(Depth::OpenGLID(df), opengl_width, opengl_height);
+    gd->RenderBufferStorage(gd->GetDepth(df), opengl_width, opengl_height);
   }
 }
 
@@ -557,7 +559,7 @@ void FrameBuffer::Resize(int W, int H, int flag) {
   }
   Attach(tex.ID, depth.ID);
   int status = gd->CheckFrameBufferStatus();
-  if (status != GraphicsDevice::FramebufferComplete) {
+  if (status != gd->c.FramebufferComplete) {
 #if 0
     ERROR("FrameBuffer Resize(", W, ", ", H, ") status ", status);
 #else
@@ -646,14 +648,14 @@ int Shader::Create(GraphicsDeviceHolder *parent, const string &name, const strin
   hdr += defines.text + string("\r\n");
 
   if (vertex_shader.size()) {
-    int vs = gd->CreateShader(GraphicsDevice::VertexShader);
+    int vs = gd->CreateShader(gd->c.VertexShader);
     gd->CompileShader(vs, { hdr.c_str(), vertex_shader.c_str() });
     gd->AttachShader(p, vs);
     gd->DelShader(vs);
   }
 
   if (fragment_shader.size()) {
-    int fs = gd->CreateShader(GraphicsDevice::FragmentShader);
+    int fs = gd->CreateShader(gd->c.FragmentShader);
     gd->CompileShader(fs, { hdr.c_str(), fragment_shader.c_str() });
     gd->AttachShader(p, fs);
     gd->DelShader(fs);
@@ -670,12 +672,12 @@ int Shader::Create(GraphicsDeviceHolder *parent, const string &name, const strin
   } else INFO("Shader::Create ", name);
 
   int active_uniforms=0, max_uniform_components=0, active_attributes=0, max_attributes=0;
-  gd->GetProgramiv(p, GraphicsDevice::ActiveUniforms, &active_uniforms);
-  gd->GetProgramiv(p, GraphicsDevice::ActiveAttributes, &active_attributes);
+  gd->GetProgramiv(p, gd->c.ActiveUniforms, &active_uniforms);
+  gd->GetProgramiv(p, gd->c.ActiveAttributes, &active_attributes);
 #ifndef LFL_MOBILE
-  gd->GetIntegerv(GraphicsDevice::MaxVertexUniformComp, &max_uniform_components);
+  gd->GetIntegerv(gd->c.MaxVertexUniformComp, &max_uniform_components);
 #endif
-  gd->GetIntegerv(GraphicsDevice::MaxVertexAttributes, &max_attributes);
+  gd->GetIntegerv(gd->c.MaxVertexAttributes, &max_attributes);
   INFO("shader=", name, ", mu=", active_uniforms, " avg_comps/", max_uniform_components, ", ma=", active_attributes, "/", max_attributes);
 
   bool log_missing_attrib = false;
@@ -759,11 +761,6 @@ void Shader::ClearGL() {
   }
 }
 
-int GraphicsDevice::VertsPerPrimitive(int primtype) {
-  if (primtype == GraphicsDevice::Triangles) return 3;
-  return 0;
-}
-
 void GraphicsDevice::PushColor() { default_color.push_back(default_color.back()); UpdateColor();  }
 void GraphicsDevice::PopColor() {
   if      (default_color.size() >  1) default_color.pop_back();
@@ -845,15 +842,28 @@ void GraphicsDevice::PopScissorStack() {
   else { Scissor(parent->Box()); DisableScissor(); }
 }
 
-Box GraphicsDevice::GetViewport() { Box vp; GetIntegerv(ViewportBox, &vp.x); return vp; }
+Box GraphicsDevice::GetViewport() { Box vp; GetIntegerv(c.ViewportBox, &vp.x); return vp; }
 Box GraphicsDevice::GetScissorBox() {
   auto &ss = scissor_stack.back();
   Box ret = ss.size() ? ss.back() : Box(-1,-1);
 #ifdef LFL_DEBUG
-  if (GetEnabled(ScissorTest)) { Box glb; GetIntegerv(ScissorBox, &glb.x); CHECK_EQ(glb,         ret); }
-  else                                                                   { CHECK_EQ(Box(-1, -1), ret); }
+  if (GetEnabled(c.ScissorTest)) { Box glb; GetIntegerv(c.ScissorBox, &glb.x); CHECK_EQ(glb,         ret); }
+  else                                                                       { CHECK_EQ(Box(-1, -1), ret); }
 #endif
   return ret;
+}
+
+int GraphicsDevice::GetPrimitive(int geometry_primtype) {
+  switch (geometry_primtype) {
+  case Geometry::Primitive::Lines:
+    return c.Lines;
+  case Geometry::Primitive::Triangles:
+    return c.Triangles;
+  case Geometry::Primitive::TriangleStrip:
+    return c.TriangleStrip;
+  default:
+    FATAL("unknown primitive: ", geometry_primtype);
+  }
 }
   
 void GraphicsDevice::DrawPixels(const Box &b, const Texture &tex) {

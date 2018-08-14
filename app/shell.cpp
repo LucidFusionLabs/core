@@ -152,7 +152,7 @@ void Shell::fillmode(const vector<string>&) {
 }
 
 void Shell::grabmode(const vector<string> &a) { if (parent->grab_mode.Next()) mousein(a); else mouseout(a); }
-void Shell::texmode(const vector<string>&) { if (parent->tex_mode.Next()) parent->gd->EnableTexture(); else parent->gd->DisableTexture(); }
+void Shell::texmode(const vector<string>&) { if (parent->GD()->tex_mode.Next()) parent->gd->EnableTexture(); else parent->gd->DisableTexture(); }
 void Shell::swapaxis(const vector<string>&) { parent->SwapAxis(); }
 
 void Shell::snap(const vector<string> &arg) {

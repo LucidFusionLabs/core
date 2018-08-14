@@ -216,6 +216,10 @@ int LocalFileSystem::IsDirectory(const string &filename) {
   return attr & FILE_ATTRIBUTE_DIRECTORY;
 }
 
+string LocalFileSystem::ReadLink(const string &path) {
+  return path;
+}
+
 #else // LFL_WINDOWS
 const char LocalFileSystem::Slash = '/';
 LocalFileSystem::LocalFileSystem() : FileSystem(Slash, "") {}

@@ -51,7 +51,7 @@ void CheckForError(const char *file, int line) {
   GLint gl_error=0, gl_validate_status=0;
   if ((gl_error = glGetError())) {
     int framebuffer_id = 0;
-    GetIntegerv(FramebufferBinding, &framebuffer_id);
+    GetIntegerv(c.FramebufferBinding, &framebuffer_id);
 
     ERROR(file, ":", line, " gl error: ", gl_error, ", framebuffer = ", framebuffer_id);
     BreakHook();
@@ -127,7 +127,7 @@ void ScreenshotBox(Texture *out, const Box &b, int flag) {
   ClearDeferred();
   out->Resize(b.w, b.h, Texture::preferred_pf, Texture::Flag::CreateBuf);
   auto pixels = out->NewBuffer();
-  glReadPixels(b.x, b.y, b.w, b.h, out->GLPixelType(), out->GLBufferType(), pixels.get());
+  glReadPixels(b.x, b.y, b.w, b.h, out->GDPixelType(this), out->GDBufferType(this), pixels.get());
   out->UpdateBuffer(pixels.get(), point(b.w, b.h), out->pf, b.w*4, flag);
   GDDebug("ScreenshotBox");
 }
@@ -135,7 +135,7 @@ void ScreenshotBox(Texture *out, const Box &b, int flag) {
 void DumpTexture(Texture *out, unsigned tex_id) {
 #if !defined(LFL_MOBILE) && !defined(LFL_EMSCRIPTEN)
   if (tex_id) {
-    GLint gl_tt = out->GLTexType(), tex_w = 0, tex_h = 0;
+    GLint gl_tt = out->GDTexType(this), tex_w = 0, tex_h = 0;
     BindTexture(gl_tt, tex_id);
     glGetTexLevelParameteriv(gl_tt, 0, GL_TEXTURE_WIDTH, &tex_w);
     glGetTexLevelParameteriv(gl_tt, 0, GL_TEXTURE_WIDTH, &tex_h);
@@ -143,7 +143,7 @@ void DumpTexture(Texture *out, unsigned tex_id) {
     CHECK_GT((out->height = tex_h), 0);
   }
   out->RenewBuffer();
-  glGetTexImage(out->GLTexType(), 0, out->GLPixelType(), out->GLBufferType(), out->buf);
+  glGetTexImage(out->GDTexType(this), 0, out->GDPixelType(this), out->GDBufferType(this), out->buf);
 #endif
 }
 
@@ -204,20 +204,20 @@ void Uniform3fv(int u, int n, const float *v) { glUniform3fv(u, n, v); }
 void InitDefaultLight() {
   float pos[]={-.5,1,-.3f,0}, grey20[]={.2f,.2f,.2f,1}, white[]={1,1,1,1}, black[]={0,0,0,1};
   EnableLight(0);
-  Light(0, GraphicsDevice::Position, pos);
-  Light(0, GraphicsDevice::Ambient,  grey20);
-  Light(0, GraphicsDevice::Diffuse,  white);
-  Light(0, GraphicsDevice::Specular, white);
-  Material(GraphicsDevice::Emission, black);
-  Material(GraphicsDevice::Specular, grey20);
+  Light(0, c.Position, pos);
+  Light(0, c.Ambient,  grey20);
+  Light(0, c.Diffuse,  white);
+  Light(0, c.Specular, white);
+  Material(c.Emission, black);
+  Material(c.Specular, grey20);
 }
 
 void LogVersion() {
-  const char *glslver = GetString(ShaderVersion);
-  const char *glexts = GetString(Extensions);
-  INFO("OpenGL Version: ", GetString(Version));
-  INFO("OpenGL Vendor: ", GetString(Vendor));
-  INFO("GLEW Version: ", GetGLEWString(GLEWVersion));
+  const char *glslver = GetString(c.ShaderVersion);
+  const char *glexts = GetString(c.Extensions);
+  INFO("OpenGL Version: ", GetString(c.Version));
+  INFO("OpenGL Vendor: ", GetString(c.Vendor));
+  INFO("GLEW Version: ", GetGLEWString(c.GLEWVersion));
   INFO("GL_SHADING_LANGUAGE_VERSION: ", glslver);
   INFO("GL_EXTENSIONS: ", glexts);
 
@@ -227,7 +227,7 @@ void LogVersion() {
   have_cubemap = strstr(glexts, "GL_ARB_texture_cube_map") != 0;
 #endif
   int depth_bits=0;
-  GetIntegerv(DepthBits, &depth_bits);
+  GetIntegerv(c.DepthBits, &depth_bits);
   INFO("opengles_version = ", version, ", depth_bits = ", depth_bits);
   INFO("have_cubemap = ", have_cubemap ? "true" : "false");
 
@@ -236,4 +236,37 @@ void LogVersion() {
   screen->gd->GetIntegerv(GraphicsDevice::MaxViewportDims, dim);
   INFO("max_viewport_dims = ", dim[0], ", ", dim[1]);
 #endif
+}
+
+int GetDepth(int id) {
+  switch (id) {
+  case Depth::_16: return GL_DEPTH_COMPONENT16;
+  default: return 0;
+  }
+}
+
+int GetCubeMap(int id) {
+  switch (id) {
+  case CubeMap::NX: return GL_TEXTURE_CUBE_MAP_NEGATIVE_X;
+  case CubeMap::PX: return GL_TEXTURE_CUBE_MAP_POSITIVE_X;
+  case CubeMap::NY: return GL_TEXTURE_CUBE_MAP_NEGATIVE_Y;
+  case CubeMap::PY: return GL_TEXTURE_CUBE_MAP_POSITIVE_Y;
+  case CubeMap::NZ: return GL_TEXTURE_CUBE_MAP_NEGATIVE_Z;
+  case CubeMap::PZ: return GL_TEXTURE_CUBE_MAP_POSITIVE_Z;
+  default:          return GL_TEXTURE_2D;
+  }
+}
+
+int GetPixel(int p) {
+  switch (p) {
+  case Pixel::RGBA:   case Pixel::RGB32: return GL_RGBA;
+  case Pixel::RGB24:                     return GL_RGB;
+#if !defined(LFL_MOBILE) && !defined(LFL_EMSCRIPTEN)
+  case Pixel::BGRA:   case Pixel::BGR32: return GL_BGRA;
+  case Pixel::BGR24:                     return GL_BGR;
+#endif
+  case Pixel::GRAYA8:                    return GL_LUMINANCE_ALPHA;
+  case Pixel::GRAY8:                     return GL_LUMINANCE;
+  default:                               return -1;
+  }
 }

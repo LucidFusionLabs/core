@@ -25,6 +25,11 @@ DEFINE_int(soundasset_seconds, 10, "Soundasset buffer seconds");
 
 const int SoundAsset::FlagNoRefill = 1;
 
+int Geometry::VertsPerPrimitive(int primtype) {
+  if (primtype == Primitive::Triangles) return 3;
+  return 0;
+}
+
 void Geometry::SetPosition(const float *v) {
   vector<float> delta(vd);
   if (Vec<float>::Equals(v, &last_position[0], vd)) return;
@@ -34,7 +39,7 @@ void Geometry::SetPosition(const float *v) {
 }
 
 void Geometry::ScrollTexCoord(GraphicsDevice *gd, float dx, float dx_extra, int *subtract_max_int) {
-  int vpp = GraphicsDevice::VertsPerPrimitive(primtype), prims = count / vpp, max_int = 0;
+  int vpp = VertsPerPrimitive(primtype), prims = count / vpp, max_int = 0;
   int texcoord_offset = vd * (norm_offset < 0 ? 1 : 2);
   for (int prim = 0; prim < prims; prim++) {
     for (int i = 0; i < vpp; i++) {
@@ -47,7 +52,7 @@ void Geometry::ScrollTexCoord(GraphicsDevice *gd, float dx, float dx_extra, int 
   if (subtract_max_int) *subtract_max_int = max_int;
   int width_bytes = width * sizeof(float);
   int vert_size = count * width_bytes;
-  gd->VertexPointer(vd, GraphicsDevice::Float, width_bytes, 0, &vert[0], vert_size, &vert_ind, true, primtype);
+  gd->VertexPointer(vd, gd->c.Float, width_bytes, 0, &vert[0], vert_size, &vert_ind, true, primtype);
 }
 
 string AssetLoading::FileName(const string &asset_fn) {
@@ -123,11 +128,13 @@ void AssetLoading::LoadTextureArray(const string &fmt, const string &prefix, con
     LoadTexture(StringPrintf(fmt.c_str(), prefix.c_str(), i, suffix.c_str()), &out->a[i], 0, flag);
 }
 
-Asset::Asset(AssetLoading *P) : parent(P), tex(P->window) {}
+Asset::Asset(AssetLoading *P)
+  : Asset(P, "", "", 0, 0, 0, nullptr, nullptr, 0, 0) {}
 Asset::Asset(AssetLoading *P, const string &N, const string &Tex, float S, int T, int R, const char *G, Geometry *H, unsigned CM, const DrawCB &CB)
-  : parent(P), name(N), texture(Tex), geom_fn(BlankNull(G)), cb(CB), scale(S), translate(T), rotate(R), hull(H), tex(P->window) { tex.cubemap=CM; }
+  : Asset(P, N, Tex, S, T, R, nullptr, H, CM, 0, CB) { geom_fn = BlankNull(G); }
 Asset::Asset(AssetLoading *P, const string &N, const string &Tex, float S, int T, int R, Geometry *G, Geometry *H, unsigned CM, unsigned TG, const DrawCB &CB)
-  : parent(P), name(N), texture(Tex), cb(CB), scale(S), translate(T), rotate(R), geometry(G), hull(H), tex(P->window), texgen(TG) { tex.cubemap=CM; }
+  : parent(P), name(N), texture(Tex), cb(CB), scale(S), translate(T), rotate(R), geometry(G), hull(H), tex(P->window), texgen(TG),
+  blends(P->window->GD()->c.SrcAlpha), blendt(P->window->GD()->c.OneMinusSrcAlpha) { tex.cubemap=CM; }
 
 void Asset::Unload() {
   if (storage) storage->Unloaded(this);
@@ -211,10 +218,10 @@ void glLine(GraphicsDevice *gd, const point &p1, const point &p2, const Color *c
   gd->DisableTexture();
 
   float verts[] = { /*1*/ float(p1.x), float(p1.y), /*2*/ float(p2.x), float(p2.y) };
-  gd->VertexPointer(2, GraphicsDevice::Float, 0, 0, verts, sizeof(verts), &verts_ind, true);
+  gd->VertexPointer(2, gd->c.Float, 0, 0, verts, sizeof(verts), &verts_ind, true);
 
   if (color) gd->Color4f(color->r(), color->g(), color->b(), color->a());
-  gd->DrawArrays(GraphicsDevice::LineLoop, 0, 2);
+  gd->DrawArrays(gd->c.LineLoop, 0, 2);
 }
 
 void glAxis(GraphicsDevice *gd, Asset*, Entity*) {
@@ -227,30 +234,30 @@ void glAxis(GraphicsDevice *gd, Asset*, Entity*) {
   gd->DisableTexture();
 
   float vert[] = { /*1*/ 0, 0, 0, /*2*/ step, 0, 0, /*3*/ 0, 0, 0, /*4*/ 0, step, 0, /*5*/ 0, 0, 0, /*6*/ 0, 0, step };
-  gd->VertexPointer(3, GraphicsDevice::Float, 0, 0, vert, sizeof(vert), &vert_id, false);
+  gd->VertexPointer(3, gd->c.Float, 0, 0, vert, sizeof(vert), &vert_id, false);
 
   /* origin */
   gd->PointSize(7);
   gd->Color4f(1, 1, 0, 1);
-  gd->DrawArrays(GraphicsDevice::Points, 0, 1);
+  gd->DrawArrays(gd->c.Points, 0, 1);
 
   /* R=X */
   gd->PointSize(5);
   gd->Color4f(1, 0, 0, 1);
-  gd->DrawArrays(GraphicsDevice::Points, 1, 1);
+  gd->DrawArrays(gd->c.Points, 1, 1);
 
   /* G=Y */
   gd->Color4f(0, 1, 0, 1);
-  gd->DrawArrays(GraphicsDevice::Points, 3, 1);
+  gd->DrawArrays(gd->c.Points, 3, 1);
 
   /* B=Z */
   gd->Color4f(0, 0, 1, 1);
-  gd->DrawArrays(GraphicsDevice::Points, 5, 1);
+  gd->DrawArrays(gd->c.Points, 5, 1);
 
   /* axis */
   gd->PointSize(1);
   gd->Color4f(.5, .5, .5, 1);
-  gd->DrawArrays(GraphicsDevice::Lines, 0, 5);
+  gd->DrawArrays(gd->c.Lines, 0, 5);
 }
 
 void glRoom(GraphicsDevice *gd, Asset*, Entity*) {
@@ -263,20 +270,20 @@ void glRoom(GraphicsDevice *gd, Asset*, Entity*) {
     /*4*/ 0,0,2, /*5*/ 0,2,0, /*6*/ 0,0,0,
     /*7*/ 0,0,0, /*8*/ 2,0,0, /*9*/ 0,0,2 
   };
-  gd->VertexPointer(3, GraphicsDevice::Float, 0, 0, verts, sizeof(verts), &verts_id, false);
+  gd->VertexPointer(3, gd->c.Float, 0, 0, verts, sizeof(verts), &verts_id, false);
 
   gd->Color4f(.8,.8,.8,1);
-  gd->DrawArrays(GraphicsDevice::Triangles, 0, 3);
+  gd->DrawArrays(gd->c.Triangles, 0, 3);
 
   gd->Color4f(.7,.7,.7,1);
-  gd->DrawArrays(GraphicsDevice::Triangles, 3, 3);
+  gd->DrawArrays(gd->c.Triangles, 3, 3);
 
   gd->Color4f(.6,.6,.6,1);
-  gd->DrawArrays(GraphicsDevice::Triangles, 6, 3);;
+  gd->DrawArrays(gd->c.Triangles, 6, 3);;
 }
 
 void glIntersect(GraphicsDevice *gd, int x, int y, Color *c) {
-  unique_ptr<Geometry> geom = make_unique<Geometry>(GraphicsDevice::Lines, 4, NullPointer<v2>(), NullPointer<v3>(), NullPointer<v2>(), *c);
+  unique_ptr<Geometry> geom = make_unique<Geometry>(gd->c.Lines, 4, NullPointer<v2>(), NullPointer<v3>(), NullPointer<v2>(), *c);
   v2 *vert = reinterpret_cast<v2*>(&geom->vert[0]);
 
   vert[0] = v2(0, y);
@@ -322,8 +329,8 @@ void BoxOutline::Draw(GraphicsContext *gc, const LFL::Box &b) const {
     static int verts_ind = gc->gd->RegisterBuffer(&verts_ind);
     float verts[] = { /*1*/ float(b.x),     float(b.y),     /*2*/ float(b.x),     float(b.y+b.h),
                       /*3*/ float(b.x+b.w), float(b.y+b.h), /*4*/ float(b.x+b.w), float(b.y) };
-    gc->gd->VertexPointer(2, GraphicsDevice::Float, 0, 0, verts, sizeof(verts), &verts_ind, true);
-    gc->gd->DrawArrays(GraphicsDevice::LineLoop, 0, 4);
+    gc->gd->VertexPointer(2, gc->gd->c.Float, 0, 0, verts, sizeof(verts), &verts_ind, true);
+    gc->gd->DrawArrays(gc->gd->c.LineLoop, 0, 4);
   } else {
     static int verts_ind = gc->gd->RegisterBuffer(&verts_ind);
     int lw = line_width-1;
@@ -337,8 +344,8 @@ void BoxOutline::Draw(GraphicsContext *gc, const LFL::Box &b) const {
       /*4.3*/ float(b.x+b.w),    float(b.y),        /*4.4*/ float(b.x+b.w+lw), float(b.y-lw),
       /*4.2*/ float(b.x),        float(b.y),        /*4.1*/ float(b.x-lw),     float(b.y-lw)
     };
-    gc->gd->VertexPointer(2, GraphicsDevice::Float, 0, 0, verts, sizeof(verts), &verts_ind, true);
-    gc->gd->DrawArrays(GraphicsDevice::TriangleStrip, 0, 16);
+    gc->gd->VertexPointer(2, gc->gd->c.Float, 0, 0, verts, sizeof(verts), &verts_ind, true);
+    gc->gd->DrawArrays(gc->gd->c.TriangleStrip, 0, 16);
   }
 }
 
@@ -349,8 +356,8 @@ void BoxTopLeftOutline::Draw(GraphicsContext *gc, const LFL::Box &b) const {
     static int verts_ind = gc->gd->RegisterBuffer(&verts_ind);
     float verts[] = { /*1*/ float(b.x), float(b.y),     /*2*/ float(b.x),     float(b.y+b.h),
                       /*2*/ float(b.x), float(b.y+b.h), /*3*/ float(b.x+b.w), float(b.y+b.h) };
-    gc->gd->VertexPointer(2, GraphicsDevice::Float, 0, 0, verts, sizeof(verts), &verts_ind, true);
-    gc->gd->DrawArrays(GraphicsDevice::Lines, 0, 4);
+    gc->gd->VertexPointer(2, gc->gd->c.Float, 0, 0, verts, sizeof(verts), &verts_ind, true);
+    gc->gd->DrawArrays(gc->gd->c.Lines, 0, 4);
   } else {
     static int verts_ind = gc->gd->RegisterBuffer(&verts_ind);
     int lw = line_width-1;
@@ -360,8 +367,8 @@ void BoxTopLeftOutline::Draw(GraphicsContext *gc, const LFL::Box &b) const {
       /*2.1*/ float(b.x),        float(b.y+b.h),    /*2.2*/ float(b.x-lw),     float(b.y+b.h+lw),
       /*2.4*/ float(b.x+b.w),    float(b.y+b.h),    /*2.3*/ float(b.x+b.w+lw), float(b.y+b.h+lw),
     };
-    gc->gd->VertexPointer(2, GraphicsDevice::Float, 0, 0, verts, sizeof(verts), &verts_ind, true);
-    gc->gd->DrawArrays(GraphicsDevice::TriangleStrip, 0, 8);
+    gc->gd->VertexPointer(2, gc->gd->c.Float, 0, 0, verts, sizeof(verts), &verts_ind, true);
+    gc->gd->DrawArrays(gc->gd->c.TriangleStrip, 0, 8);
   }
 }
 
@@ -372,8 +379,8 @@ void BoxBottomRightOutline::Draw(GraphicsContext *gc, const LFL::Box &b) const {
     static int verts_ind = gc->gd->RegisterBuffer(&verts_ind);
     float verts[] = { /*1*/ float(b.x),     float(b.y), /*4*/ float(b.x+b.w), float(b.y),
                       /*4*/ float(b.x+b.w), float(b.y), /*3*/ float(b.x+b.w), float(b.y+b.h) };
-    gc->gd->VertexPointer(2, GraphicsDevice::Float, 0, 0, verts, sizeof(verts), &verts_ind, true);
-    gc->gd->DrawArrays(GraphicsDevice::Lines, 0, 4);
+    gc->gd->VertexPointer(2, gc->gd->c.Float, 0, 0, verts, sizeof(verts), &verts_ind, true);
+    gc->gd->DrawArrays(gc->gd->c.Lines, 0, 4);
   } else {
     static int verts_ind = gc->gd->RegisterBuffer(&verts_ind);
     int lw = line_width-1;
@@ -383,8 +390,8 @@ void BoxBottomRightOutline::Draw(GraphicsContext *gc, const LFL::Box &b) const {
       /*4.3*/ float(b.x+b.w),    float(b.y),        /*4.4*/ float(b.x+b.w+lw), float(b.y-lw),
       /*4.2*/ float(b.x),        float(b.y),        /*4.1*/ float(b.x-lw),     float(b.y-lw)
     };
-    gc->gd->VertexPointer(2, GraphicsDevice::Float, 0, 0, verts, sizeof(verts), &verts_ind, true);
-    gc->gd->DrawArrays(GraphicsDevice::TriangleStrip, 0, 8);
+    gc->gd->VertexPointer(2, gc->gd->c.Float, 0, 0, verts, sizeof(verts), &verts_ind, true);
+    gc->gd->DrawArrays(gc->gd->c.TriangleStrip, 0, 8);
   }
 }
 
@@ -395,7 +402,7 @@ Waveform::Waveform(point dim, const Color *c, const Vec<float> *sbh) : width(dim
     ymax = max(ymax,sbh->Read(i));
   }
 
-  geom = make_unique<Geometry>(GraphicsDevice::Lines, int(xmax-1)*2, NullPointer<v2>(), NullPointer<v3>(), NullPointer<v2>(), *c);
+  geom = make_unique<Geometry>(Geometry::Primitive::Lines, int(xmax-1)*2, NullPointer<v2>(), NullPointer<v3>(), NullPointer<v2>(), *c);
   v2 *vert = reinterpret_cast<v2*>(&geom->vert[0]);
 
   for (int i=0; i<geom->count/2; i++) {
@@ -469,7 +476,7 @@ void glSpectogram(GraphicsDevice *gd, Matrix *m, Texture *t, float *max, float c
 
   glSpectogram(gd, m, t->buf, t->pf, m->M, m->N, t->width, Max, clip, 0, pd);
 
-  gd->BindTexture(GraphicsDevice::Texture2D, t->ID);
+  gd->BindTexture(gd->c.Texture2D, t->ID);
   t->UpdateGL();
 }
 
@@ -528,7 +535,7 @@ unique_ptr<Geometry> Cube::Create(float rx, float ry, float rz, bool normals) {
   PushBack(&verts, &norms, v3( rx, -ry,  rz), v3(0, 1, 0));
   PushBack(&verts, &norms, v3(-rx, -ry, -rz), v3(0, 1, 0));
 
-  return make_unique<Geometry>(GraphicsDevice::Triangles, verts.size(), &verts[0], normals ? &norms[0] : 0, nullptr, nullptr);
+  return make_unique<Geometry>(Geometry::Primitive::Triangles, verts.size(), &verts[0], normals ? &norms[0] : 0, nullptr, nullptr);
 }
 
 unique_ptr<Geometry> Cube::CreateFrontFace(float r) {
@@ -540,7 +547,7 @@ unique_ptr<Geometry> Cube::CreateFrontFace(float r) {
   PushBack(&verts, &tex, v3( r,  r, -r), v2(0, 1)); 
   PushBack(&verts, &tex, v3(-r,  r, -r), v2(1, 1)); 
   PushBack(&verts, &tex, v3( r, -r, -r), v2(0, 0)); 
-  return make_unique<Geometry>(GraphicsDevice::Triangles, verts.size(), &verts[0], nullptr, &tex[0]);
+  return make_unique<Geometry>(Geometry::Primitive::Triangles, verts.size(), &verts[0], nullptr, &tex[0]);
 }
 
 unique_ptr<Geometry> Cube::CreateBackFace(float r) {
@@ -552,7 +559,7 @@ unique_ptr<Geometry> Cube::CreateBackFace(float r) {
   PushBack(&verts, &tex, v3(-r,  r,  r), v2(0, 1)); 
   PushBack(&verts, &tex, v3( r,  r,  r), v2(1, 1)); 
   PushBack(&verts, &tex, v3(-r, -r,  r), v2(0, 0)); 
-  return make_unique<Geometry>(GraphicsDevice::Triangles, verts.size(), &verts[0], nullptr, &tex[0]);
+  return make_unique<Geometry>(Geometry::Primitive::Triangles, verts.size(), &verts[0], nullptr, &tex[0]);
 }
 
 unique_ptr<Geometry> Cube::CreateLeftFace(float r) {
@@ -564,7 +571,7 @@ unique_ptr<Geometry> Cube::CreateLeftFace(float r) {
   PushBack(&verts, &tex, v3(r,  r,  r), v2(0, 1));
   PushBack(&verts, &tex, v3(r,  r, -r), v2(1, 1));
   PushBack(&verts, &tex, v3(r, -r,  r), v2(0, 0));
-  return make_unique<Geometry>(GraphicsDevice::Triangles, verts.size(), &verts[0], nullptr, &tex[0]);
+  return make_unique<Geometry>(Geometry::Primitive::Triangles, verts.size(), &verts[0], nullptr, &tex[0]);
 }
 
 unique_ptr<Geometry> Cube::CreateRightFace(float r) {
@@ -576,7 +583,7 @@ unique_ptr<Geometry> Cube::CreateRightFace(float r) {
   PushBack(&verts, &tex, v3(-r,  r, -r), v2(0, 1));
   PushBack(&verts, &tex, v3(-r,  r,  r), v2(1, 1));
   PushBack(&verts, &tex, v3(-r, -r, -r), v2(0, 0));
-  return make_unique<Geometry>(GraphicsDevice::Triangles, verts.size(), &verts[0], nullptr, &tex[0]);
+  return make_unique<Geometry>(Geometry::Primitive::Triangles, verts.size(), &verts[0], nullptr, &tex[0]);
 }
 
 unique_ptr<Geometry> Cube::CreateTopFace(float r) {
@@ -588,7 +595,7 @@ unique_ptr<Geometry> Cube::CreateTopFace(float r) {
   PushBack(&verts, &tex, v3(-r,  r, -r), v2(0, 1));
   PushBack(&verts, &tex, v3( r,  r, -r), v2(1, 1));
   PushBack(&verts, &tex, v3(-r,  r,  r), v2(0, 0));
-  return make_unique<Geometry>(GraphicsDevice::Triangles, verts.size(), &verts[0], nullptr, &tex[0]);
+  return make_unique<Geometry>(Geometry::Primitive::Triangles, verts.size(), &verts[0], nullptr, &tex[0]);
 }
 
 unique_ptr<Geometry> Cube::CreateBottomFace(float r) {
@@ -600,7 +607,7 @@ unique_ptr<Geometry> Cube::CreateBottomFace(float r) {
   PushBack(&verts, &tex, v3(-r, -r,  r), v2(0, 1));
   PushBack(&verts, &tex, v3( r, -r,  r), v2(1, 1));
   PushBack(&verts, &tex, v3(-r, -r, -r), v2(0, 0));
-  return make_unique<Geometry>(GraphicsDevice::Triangles, verts.size(), &verts[0], nullptr, &tex[0]);
+  return make_unique<Geometry>(Geometry::Primitive::Triangles, verts.size(), &verts[0], nullptr, &tex[0]);
 }
 
 unique_ptr<Geometry> Grid::Grid3D() {
@@ -612,7 +619,7 @@ unique_ptr<Geometry> Grid::Grid3D() {
     verts.push_back(v3(d,0,range));
     verts.push_back(v3(d,0,-range));
   }
-  return make_unique<Geometry>(GraphicsDevice::Lines, verts.size(), &verts[0], nullptr, nullptr, Color(.5,.5,.5));
+  return make_unique<Geometry>(Geometry::Primitive::Lines, verts.size(), &verts[0], nullptr, nullptr, Color(.5,.5,.5));
 }
 
 unique_ptr<Geometry> Grid::Grid2D(float x, float y, float range, float step) {
@@ -623,7 +630,7 @@ unique_ptr<Geometry> Grid::Grid2D(float x, float y, float range, float step) {
     verts.push_back(v2(x+d, y+range));
     verts.push_back(v2(x+d, y));
   }
-  return make_unique<Geometry>(GraphicsDevice::Lines, verts.size(), &verts[0], nullptr, nullptr, Color(0,0,0));
+  return make_unique<Geometry>(Geometry::Primitive::Lines, verts.size(), &verts[0], nullptr, nullptr, Color(0,0,0));
 }
 
 Skybox::Skybox(AssetLoading *p) :

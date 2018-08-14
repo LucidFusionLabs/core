@@ -89,101 +89,77 @@
 #endif
 
 namespace LFL {
-const int GraphicsDevice::Float                = GL_FLOAT;
-const int GraphicsDevice::Points               = GL_POINTS;
-const int GraphicsDevice::Lines                = GL_LINES;
-const int GraphicsDevice::LineLoop             = GL_LINE_LOOP;
-const int GraphicsDevice::Triangles            = GL_TRIANGLES;
-const int GraphicsDevice::TriangleStrip        = GL_TRIANGLE_STRIP;
-const int GraphicsDevice::Texture2D            = GL_TEXTURE_2D;
-const int GraphicsDevice::TextureCubeMap       = GL_TEXTURE_CUBE_MAP;
-const int GraphicsDevice::UnsignedByte         = GL_UNSIGNED_BYTE;
-const int GraphicsDevice::UnsignedInt          = GL_UNSIGNED_INT;
-const int GraphicsDevice::FramebufferComplete  = GL_FRAMEBUFFER_COMPLETE;
-const int GraphicsDevice::Ambient              = GL_AMBIENT;
-const int GraphicsDevice::Diffuse              = GL_DIFFUSE;
-const int GraphicsDevice::Specular             = GL_SPECULAR;
-const int GraphicsDevice::Position             = GL_POSITION;
-const int GraphicsDevice::Emission             = GL_EMISSION;
-const int GraphicsDevice::One                  = GL_ONE;
-const int GraphicsDevice::SrcAlpha             = GL_SRC_ALPHA;
-const int GraphicsDevice::OneMinusSrcAlpha     = GL_ONE_MINUS_SRC_ALPHA;
-const int GraphicsDevice::OneMinusDstColor     = GL_ONE_MINUS_DST_COLOR;
-const int GraphicsDevice::TextureWrapS         = GL_TEXTURE_WRAP_S;
-const int GraphicsDevice::TextureWrapT         = GL_TEXTURE_WRAP_T;
-const int GraphicsDevice::ClampToEdge          = GL_CLAMP_TO_EDGE;
-const int GraphicsDevice::VertexShader         = GL_VERTEX_SHADER;
-const int GraphicsDevice::FragmentShader       = GL_FRAGMENT_SHADER;
-const int GraphicsDevice::ShaderVersion        = GL_SHADING_LANGUAGE_VERSION;
-const int GraphicsDevice::Extensions           = GL_EXTENSIONS;
+struct OpenGLGraphicsDeviceConstants : public GraphicsDevice::Constants {
+  OpenGLGraphicsDeviceConstants() {
+    Float = GL_FLOAT;
+    Points = GL_POINTS;
+    Lines = GL_LINES;
+    LineLoop = GL_LINE_LOOP;
+    Triangles = GL_TRIANGLES;
+    TriangleStrip = GL_TRIANGLE_STRIP;
+    Texture2D = GL_TEXTURE_2D;
+    TextureCubeMap = GL_TEXTURE_CUBE_MAP;
+    UnsignedByte = GL_UNSIGNED_BYTE;
+    UnsignedInt = GL_UNSIGNED_INT;
+    FramebufferComplete = GL_FRAMEBUFFER_COMPLETE;
+    Ambient = GL_AMBIENT;
+    Diffuse = GL_DIFFUSE;
+    Specular = GL_SPECULAR;
+    Position = GL_POSITION;
+    Emission = GL_EMISSION;
+    One = GL_ONE;
+    SrcAlpha = GL_SRC_ALPHA;
+    OneMinusSrcAlpha = GL_ONE_MINUS_SRC_ALPHA;
+    OneMinusDstColor = GL_ONE_MINUS_DST_COLOR;
+    TextureWrapS = GL_TEXTURE_WRAP_S;
+    TextureWrapT = GL_TEXTURE_WRAP_T;
+    ClampToEdge = GL_CLAMP_TO_EDGE;
+    VertexShader = GL_VERTEX_SHADER;
+    FragmentShader = GL_FRAGMENT_SHADER;
+    ShaderVersion = GL_SHADING_LANGUAGE_VERSION;
+    Extensions = GL_EXTENSIONS;
 #ifdef LFL_GLEW
-const int GraphicsDevice::GLEWVersion          = GLEW_VERSION;
+    GLEWVersion = GLEW_VERSION;
 #else
-const int GraphicsDevice::GLEWVersion          = 0;
+    GLEWVersion = 0;
 #endif
-const int GraphicsDevice::Version              = GL_VERSION;
-const int GraphicsDevice::Vendor               = GL_VENDOR;
-const int GraphicsDevice::DepthBits            = GL_DEPTH_BITS;
-const int GraphicsDevice::ScissorTest          = GL_SCISSOR_TEST;
-const int GraphicsDevice::ActiveUniforms       = GL_ACTIVE_UNIFORMS;
-const int GraphicsDevice::ActiveAttributes     = GL_ACTIVE_ATTRIBUTES;
-const int GraphicsDevice::MaxVertexAttributes  = GL_MAX_VERTEX_ATTRIBS;
-const int GraphicsDevice::MaxViewportDims      = GL_MAX_VIEWPORT_DIMS;
-const int GraphicsDevice::ViewportBox          = GL_VIEWPORT;
-const int GraphicsDevice::ScissorBox           = GL_SCISSOR_BOX;
+    Version = GL_VERSION;
+    Vendor = GL_VENDOR;
+    DepthBits = GL_DEPTH_BITS;
+    ScissorTest = GL_SCISSOR_TEST;
+    ActiveUniforms = GL_ACTIVE_UNIFORMS;
+    ActiveAttributes = GL_ACTIVE_ATTRIBUTES;
+    MaxVertexAttributes = GL_MAX_VERTEX_ATTRIBS;
+    MaxViewportDims = GL_MAX_VIEWPORT_DIMS;
+    ViewportBox = GL_VIEWPORT;
+    ScissorBox = GL_SCISSOR_BOX;
 #if defined(LFL_MOBILE) || defined(LFL_EMSCRIPTEN)
-const int GraphicsDevice::Fill                 = 0;
-const int GraphicsDevice::Line                 = 0;
-const int GraphicsDevice::Point                = 0;
-const int GraphicsDevice::Polygon              = 0;
-const int GraphicsDevice::GLPreferredBuffer    = GL_UNSIGNED_BYTE;
-const int GraphicsDevice::GLInternalFormat     = GL_RGBA;
-const int GraphicsDevice::MaxVertexUniformComp = 0;
-const int GraphicsDevice::FramebufferBinding   = GL_FRAMEBUFFER_BINDING_OES;
-const int GraphicsDevice::FramebufferUndefined = 0;
+    Fill = 0;
+    Line = 0;
+    Point = 0;
+    Polygon = 0;
+    GLPreferredBuffer = GL_UNSIGNED_BYTE;
+    GLInternalFormat = GL_RGBA;
+    MaxVertexUniformComp = 0;
+    FramebufferBinding = GL_FRAMEBUFFER_BINDING_OES;
+    FramebufferUndefined = 0;
 #else                                         
-const int GraphicsDevice::Fill                 = GL_FILL;
-const int GraphicsDevice::Line                 = GL_LINE;
-const int GraphicsDevice::Point                = GL_POINT;
-const int GraphicsDevice::Polygon              = GL_POLYGON;
+    Fill = GL_FILL;
+    Line = GL_LINE;
+    Point = GL_POINT;
+    Polygon = GL_POLYGON;
 #ifdef __APPLE__                               
-const int GraphicsDevice::GLPreferredBuffer    = GL_UNSIGNED_INT_8_8_8_8_REV;
+    GLPreferredBuffer = GL_UNSIGNED_INT_8_8_8_8_REV;
 #else                                          
-const int GraphicsDevice::GLPreferredBuffer    = GL_UNSIGNED_BYTE;
+    GLPreferredBuffer = GL_UNSIGNED_BYTE;
 #endif                                         
-const int GraphicsDevice::GLInternalFormat     = GL_RGBA;
-const int GraphicsDevice::MaxVertexUniformComp = GL_MAX_VERTEX_UNIFORM_COMPONENTS;
-const int GraphicsDevice::FramebufferBinding   = GL_FRAMEBUFFER_BINDING;
-const int GraphicsDevice::FramebufferUndefined = GL_FRAMEBUFFER_UNDEFINED;
+    GLInternalFormat = GL_RGBA;
+    MaxVertexUniformComp = GL_MAX_VERTEX_UNIFORM_COMPONENTS;
+    FramebufferBinding = GL_FRAMEBUFFER_BINDING;
+    FramebufferUndefined = GL_FRAMEBUFFER_UNDEFINED;
 #endif
-
-int Depth::OpenGLID(int id) {
-  switch(id) {
-    case _16: return GL_DEPTH_COMPONENT16;
-  } return 0;
-}
-
-int CubeMap::OpenGLID(int id) {
-  switch (id) {
-    case NX: return GL_TEXTURE_CUBE_MAP_NEGATIVE_X;    case PX: return GL_TEXTURE_CUBE_MAP_POSITIVE_X;
-    case NY: return GL_TEXTURE_CUBE_MAP_NEGATIVE_Y;    case PY: return GL_TEXTURE_CUBE_MAP_POSITIVE_Y;
-    case NZ: return GL_TEXTURE_CUBE_MAP_NEGATIVE_Z;    case PZ: return GL_TEXTURE_CUBE_MAP_POSITIVE_Z;
-  } return GL_TEXTURE_2D;
-}
-
-int Pixel::OpenGLID(int p) {
-  switch (p) {
-    case RGBA:   case RGB32: return GL_RGBA;
-    case RGB24:              return GL_RGB;
-#if !defined(LFL_MOBILE) && !defined(LFL_EMSCRIPTEN)
-    case BGRA:   case BGR32: return GL_BGRA;
-    case BGR24:              return GL_BGR;
-#endif
-    case GRAYA8:             return GL_LUMINANCE_ALPHA;
-    case GRAY8:              return GL_LUMINANCE;
-    default:                 return -1;
   }
-}
+};
 
 #ifdef LFL_GLES1
 #ifndef LFL_QTGL
@@ -193,7 +169,7 @@ struct OpenGLES1 : public GraphicsDevice, public QOpenGLFunctions {
 #endif
 #include "core/app/gl/device/opengl_common.h"
   int target_matrix=-1;
-  OpenGLES1(Window *P, LFL::Shaders *S) : GraphicsDevice(P, 1, S) {
+  OpenGLES1(Window *P, LFL::Shaders *S) : GraphicsDevice(GraphicsDevice::Type::OPENGL, OpenGLGraphicsDeviceConstants(), P, 1, S) {
     default_color.push_back(Color(1.0, 1.0, 1.0, 1.0));
   }
 
@@ -350,7 +326,7 @@ struct OpenGLES2 : public GraphicsDevice, public QOpenGLFunctions {
   LFL::Material material;
   LFL::Light light[4];
   Deferred deferred;
-  OpenGLES2(Window *P, LFL::Shaders *S) : GraphicsDevice(P, 2, S) {}
+  OpenGLES2(Window *P, LFL::Shaders *S) : GraphicsDevice(GraphicsDevice::Type::OPENGL, OpenGLGraphicsDeviceConstants(), P, 2, S) {}
 
   void Init(AssetLoading *loader, const Box &b) {
     done_init = true;
@@ -633,7 +609,7 @@ struct OpenGLES2 : public GraphicsDevice, public QOpenGLFunctions {
     bool first = !(deferred.vertexbuffer_len - deferred.vertexbuffer_appended);
     if (first) { PushDirtyState(); deferred.vertex_size = vertex_attr.w; }
 #if 1
-    if (type == Triangles && o == 0 && n == deferred.vertexbuffer_appended / deferred.vertex_size) {
+    if (type == c.Triangles && o == 0 && n == deferred.vertexbuffer_appended / deferred.vertex_size) {
       deferred.draw_calls++;
     } else  {
       glDrawArrays(type, o, n);
@@ -717,7 +693,7 @@ unique_ptr<GraphicsDevice> GraphicsDevice::Create(Window *w, Shaders *s) {
   });
 #endif
 
-  int opengles_version = 1 + (glGetString(GraphicsDevice::ShaderVersion) != nullptr);
+  int opengles_version = 1 + (glGetString(GL_SHADING_LANGUAGE_VERSION) != nullptr);
 
 #ifdef LFL_GLES2
   if (opengles_version == 2) gd = make_unique<OpenGLES2>(w, s);
@@ -731,10 +707,10 @@ unique_ptr<GraphicsDevice> GraphicsDevice::Create(Window *w, Shaders *s) {
 #endif
 
 #ifdef LFL_GLEW
-  gd->have_framebuffer = GLEW_EXT_framebuffer_object;
 #ifdef GLEW_MX
   gd->glew_context = glew_context;
 #endif
+  gd->have_framebuffer = GLEW_EXT_framebuffer_object;
 #endif
 
   return gd;

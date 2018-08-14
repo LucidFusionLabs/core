@@ -301,6 +301,9 @@ Socket SystemNetwork::Accept(Socket listener, IPV4::Addr *addr, int *port, bool 
 }
 
 Socket SystemNetwork::AcceptLocal(Socket listener, bool blocking) {
+#ifdef WIN32
+  return InvalidSocket;
+#else
   sockaddr_un sun;
   memset(&sun, 0, sizeof(sockaddr_un));
 #ifdef __APPLE__
@@ -313,6 +316,7 @@ Socket SystemNetwork::AcceptLocal(Socket listener, bool blocking) {
   if (!blocking && SetSocketBlocking(socket, 0))
   { ERROR("SetSocketBlocking: ", SystemNetwork::LastError()); CloseSocket(socket); return InvalidSocket; }
   return socket;
+#endif
 }
 
 Socket SystemNetwork::Listen(int protocol, IPV4::Addr addr, int port, int backlog, bool blocking) {
@@ -335,6 +339,9 @@ Socket SystemNetwork::Listen(int protocol, IPV4::Addr addr, int port, int backlo
 }
 
 Socket SystemNetwork::ListenLocal(int protocol, const string &name, int backlog, bool blocking) {
+#ifdef WIN32
+  return InvalidSocket;
+#else
   Socket fd;
   if ((fd = OpenSocket(protocol)) < 0) 
     return ERRORv(InvalidSocket, "OpenSocket: ", SystemNetwork::LastError());
@@ -367,6 +374,7 @@ Socket SystemNetwork::ListenLocal(int protocol, const string &name, int backlog,
 
   INFO("listen(name=", name, "), socket=", fd);
   return fd;
+#endif
 }
 
 int SystemNetwork::Connect(Socket fd, IPV4::Addr addr, int port, int *connected) {
@@ -386,6 +394,9 @@ int SystemNetwork::Connect(Socket fd, IPV4::Addr addr, int port, int *connected)
 }
 
 int SystemNetwork::ConnectLocal(Socket fd, const string &name, int *connected) {
+#ifdef WIN32
+  return -1;
+#else
   sockaddr_un sun;
   memset(&sun, 0, sizeof(sockaddr_un));
 #ifdef __APPLE__
@@ -401,6 +412,7 @@ int SystemNetwork::ConnectLocal(Socket fd, const string &name, int *connected) {
 
   if (connected) *connected = !ret;
   return 0;
+#endif
 }
 
 int SystemNetwork::SendTo(Socket fd, IPV4::Addr addr, int port, const char *buf, int len) {

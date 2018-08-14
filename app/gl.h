@@ -30,17 +30,8 @@ DECLARE_bool(gd_debug);
 struct DrawMode { enum { _2D=0, _3D=1, NullOp=2 }; int m; };
 struct ResetGLFlag { enum { Forget=0, Delete=1, Reload=2 }; };
 struct TexGen { enum { LINEAR=1, REFLECTION=2 }; };
-
-struct Depth {
-  enum { _16=1 }; 
-  static int OpenGLID(int d);
-};
-
-struct CubeMap {
-  enum { PX=1, NX=2, PY=3, NY=4, PZ=5, NZ=6 };
-  static int OpenGLID(int target);
-};
-
+struct Depth { enum { _16=1 };  };
+struct CubeMap { enum { PX=1, NX=2, PY=3, NY=4, PZ=5, NZ=6 }; };
 struct ColorChannel {
   enum { Red=1, Green=2, Blue=3, Alpha=4 };
   static int PixelOffset(int c);
@@ -56,7 +47,6 @@ struct Pixel {
 
   static const char *Name(int id);
   static int Size(int p);
-  static int OpenGLID(int p);
   static int GetNumComponents(int p);
   static int GetRGBAIndex(int p, int i);
 };
@@ -202,9 +192,9 @@ struct Texture : public Drawable {
   int PixelSize() const { return Pixel::Size(pf); }
   int LineSize() const { return width * PixelSize(); }
   int BufferSize() const { return height * LineSize(); }
-  int GLPixelType() const { return Pixel::OpenGLID(pf); }
-  int GLTexType() const { return CubeMap::OpenGLID(cubemap); }
-  int GLBufferType() const;
+  int GDPixelType(GraphicsDevice*) const;
+  int GDTexType(GraphicsDevice*) const;
+  int GDBufferType(GraphicsDevice*) const;
 
   /// ClearGL() is thread-safe.
   void ClearGL();
@@ -353,21 +343,25 @@ struct Shaders {
 };
 
 struct GraphicsDevice {
-  static const int Float, Points, Lines, LineLoop, Triangles, TriangleStrip, Polygon;
-  static const int Texture2D, TextureCubeMap, UnsignedByte, UnsignedInt, FramebufferComplete, FramebufferBinding, FramebufferUndefined;
-  static const int Ambient, Diffuse, Specular, Emission, Position;
-  static const int One, SrcAlpha, OneMinusSrcAlpha, OneMinusDstColor, TextureWrapS, TextureWrapT, ClampToEdge;
-  static const int VertexShader, FragmentShader, ShaderVersion, Extensions;
-  static const int GLEWVersion, Version, Vendor, DepthBits, ScissorTest;
-  static const int ActiveUniforms, ActiveAttributes, MaxVertexAttributes, MaxVertexUniformComp, MaxViewportDims, ViewportBox, ScissorBox;
-  static const int Fill, Line, Point, GLPreferredBuffer, GLInternalFormat;
+  struct Type { enum { OPENGL = 1, DIRECTX = 2, METAL = 3 }; };
+  struct Constants {
+    int Float, Points, Lines, LineLoop, Triangles, TriangleStrip, Polygon;
+    int Texture2D, TextureCubeMap, UnsignedByte, UnsignedInt, FramebufferComplete, FramebufferBinding, FramebufferUndefined;
+    int Ambient, Diffuse, Specular, Emission, Position;
+    int One, SrcAlpha, OneMinusSrcAlpha, OneMinusDstColor, TextureWrapS, TextureWrapT, ClampToEdge;
+    int VertexShader, FragmentShader, ShaderVersion, Extensions;
+    int GLEWVersion, Version, Vendor, DepthBits, ScissorTest;
+    int ActiveUniforms, ActiveAttributes, MaxVertexAttributes, MaxVertexUniformComp, MaxViewportDims, ViewportBox, ScissorBox;
+    int Fill, Line, Point, GLPreferredBuffer, GLInternalFormat;
+  };
 
+  Constants c;
   Window *parent;
-  Void glew_context = 0;
-  const int version;
+  const int type, version;
   int default_draw_mode = DrawMode::_2D, draw_mode = 0, default_framebuffer = 0;
   bool done_init = 0, have_framebuffer = 1, have_cubemap = 1, have_npot_textures = 1;
   bool blend_enabled = 0, invert_view_matrix = 0, track_model_matrix = 0, dont_clear_deferred = 0;
+  CategoricalVariable<int> tex_mode, fill_mode;
   string vertex_shader, pixel_shader;
   Shader *shader = 0;
   Shaders *shaders;
@@ -378,8 +372,11 @@ struct GraphicsDevice {
   vector<vector<Box>> scissor_stack;
   vector<int*> buffers;
   FrameBuffer *attached_framebuffer = 0;
+  Void glew_context = 0;
 
-  GraphicsDevice(Window *W, int V, Shaders *S) : parent(W), version(V), shaders(S), scissor_stack(1) {}
+  GraphicsDevice(int T, const Constants &cs, Window *W, int V, Shaders *S) : 
+    c(cs), parent(W), version(V), type(T), tex_mode(2, 1, 0), fill_mode(3, c.Fill, c.Line, c.Point), shaders(S), scissor_stack(1) {}
+
   virtual ~GraphicsDevice() {}
   virtual void Init(AssetLoading*, const Box&) = 0;
   virtual bool ShaderSupport() = 0;
@@ -487,6 +484,9 @@ struct GraphicsDevice {
   virtual void Uniform3f(int u, float v1, float v2, float v3) = 0;
   virtual void Uniform4f(int u, float v1, float v2, float v3, float v4) = 0;
   virtual void Uniform3fv(int u, int n, const float *v) = 0;
+  virtual int GetCubeMap(int cubemap_face) = 0;
+  virtual int GetPixel(int pixel_format) = 0;
+  virtual int GetDepth(int depth_format) = 0;
 
   void DelTexture(unsigned id) { DelTextures(1, &id); }
   int TextureDim(int x) { return have_npot_textures ? x : NextPowerOfTwo(x); }
@@ -509,10 +509,10 @@ struct GraphicsDevice {
   void PopScissorStack();
   Box GetViewport();
   Box GetScissorBox();
+  int GetPrimitive(int geometry_primtype);
   void DrawPixels(const Box &b, const Texture &tex);
 
   static unique_ptr<GraphicsDevice> Create(Window*, Shaders*);
-  static int VertsPerPrimitive(int gl_primtype);
 };
 
 struct Scissor {

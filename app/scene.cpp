@@ -71,19 +71,19 @@ void Scene::Select(GraphicsDevice *gd, Geometry *geom) {
   if (geom) {
     width = geom->width * sizeof(float);
     vert_size = geom->count * width;
-    gd->VertexPointer(geom->vd, GraphicsDevice::Float, width, 0, &geom->vert[0], vert_size, &geom->vert_ind, false, geom->primtype);
+    gd->VertexPointer(geom->vd, gd->c.Float, width, 0, &geom->vert[0], vert_size, &geom->vert_ind, false, geom->primtype);
   }
 
   if (geom && geom->tex_offset >= 0) {
     gd->EnableTexture();
-    gd->TexPointer(geom->td, GraphicsDevice::Float, width, geom->tex_offset, &geom->vert[0], vert_size, &geom->vert_ind, false);
+    gd->TexPointer(geom->td, gd->c.Float, width, geom->tex_offset, &geom->vert[0], vert_size, &geom->vert_ind, false);
   }
   else gd->DisableTexture();
 
   if (geom && geom->norm_offset >= 0) {
     gd->EnableLighting();
     gd->EnableNormals();
-    gd->NormalPointer(geom->vd, GraphicsDevice::Float, width, geom->norm_offset, &geom->vert[0], vert_size, &geom->vert_ind, false);
+    gd->NormalPointer(geom->vd, gd->c.Float, width, geom->norm_offset, &geom->vert[0], vert_size, &geom->vert_ind, false);
   }
   else {
     gd->DisableLighting();
@@ -92,7 +92,7 @@ void Scene::Select(GraphicsDevice *gd, Geometry *geom) {
 
   if (geom && geom->color_offset >= 0) {
     gd->EnableVertexColor();
-    gd->ColorPointer(4, GraphicsDevice::Float, width, geom->color_offset, &geom->vert[0], vert_size, &geom->vert_ind, false);
+    gd->ColorPointer(4, gd->c.Float, width, geom->color_offset, &geom->vert[0], vert_size, &geom->vert_ind, false);
   }
   else {
     gd->DisableVertexColor();
@@ -114,7 +114,7 @@ void Scene::Select(GraphicsDevice *gd, const Asset *a) {
     } else {
       gd->DisableCubeMap();
       gd->EnableTexture();
-      gd->BindTexture(GraphicsDevice::Texture2D, a->tex.ID);
+      gd->BindTexture(gd->c.Texture2D, a->tex.ID);
     }
 
     gd->EnableBlend();

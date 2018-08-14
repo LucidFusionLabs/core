@@ -265,7 +265,7 @@ template<class CB, class CBL, class CBLI, class CBLCA> struct TilesT : public Ti
         Tile *tile = GetTile(x, y);
         if (!tile || !tile->id) continue;
         GetSpaceCoords(y, x, &sx, &sy);
-        gd->BindTexture(GraphicsDevice::Texture2D, tile->id);
+        gd->BindTexture(gd->c.Texture2D, tile->id);
         GraphicsContext::DrawTexturedBox1
           (gd, Box(sx - doc_to_view.x, sy - doc_to_view.y, W, H), Texture::unit_texcoord);
       }

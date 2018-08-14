@@ -42,6 +42,14 @@ int NTService::Uninstall(const char *name)                   { FATAL("not implem
 int NTService::WrapMain (const char *name, MainCB main_cb, int argc, const char* const* argv) { return main_cb(argc, argv); }
 #endif
 
+string SingleProcess::GetEndpointName(const string &n) {
+#ifdef WIN32
+  return StrCat("\\\\.\\pipe\\", n);
+#else
+  return StrCat("/tmp/", n, ".", getuid());
+#endif
+}
+
 bool SingleProcess::RunLocalHTTPServerOrPost(ApplicationLifetime *app, SocketServices *net, HTTPServer *server,
                                              const string &endpoint, const string &path, const string &postdata) {
   int select_time = net->select_time;

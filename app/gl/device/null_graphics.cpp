@@ -17,60 +17,60 @@
  */
 
 namespace LFL {
-const int GraphicsDevice::Float = 0;
-const int GraphicsDevice::Points = 0;
-const int GraphicsDevice::Lines = 0;
-const int GraphicsDevice::LineLoop = 0;
-const int GraphicsDevice::Triangles = 0;
-const int GraphicsDevice::TriangleStrip = 0;
-const int GraphicsDevice::Polygon = 0;
-const int GraphicsDevice::Texture2D = 0;
-const int GraphicsDevice::TextureCubeMap = 0;
-const int GraphicsDevice::UnsignedByte = 0;
-const int GraphicsDevice::UnsignedInt = 0;
-const int GraphicsDevice::FramebufferComplete = 0;
-const int GraphicsDevice::FramebufferUndefined = 0;
-const int GraphicsDevice::FramebufferBinding = 0;
-const int GraphicsDevice::Ambient = 0;
-const int GraphicsDevice::Diffuse = 0;
-const int GraphicsDevice::Specular = 0;
-const int GraphicsDevice::Emission = 0;
-const int GraphicsDevice::Position = 0;
-const int GraphicsDevice::One = 0;
-const int GraphicsDevice::SrcAlpha = 0;
-const int GraphicsDevice::OneMinusSrcAlpha = 0;
-const int GraphicsDevice::OneMinusDstColor = 0;
-const int GraphicsDevice::TextureWrapS = 0;
-const int GraphicsDevice::TextureWrapT = 0;
-const int GraphicsDevice::ClampToEdge = 0;
-const int GraphicsDevice::VertexShader = 0;
-const int GraphicsDevice::FragmentShader = 0;
-const int GraphicsDevice::ShaderVersion = 0;
-const int GraphicsDevice::Extensions = 0;
-const int GraphicsDevice::GLEWVersion = 0;
-const int GraphicsDevice::Version = 0;
-const int GraphicsDevice::Vendor = 0;
-const int GraphicsDevice::DepthBits = 0;
-const int GraphicsDevice::ScissorTest = 0;
-const int GraphicsDevice::ActiveUniforms = 0;
-const int GraphicsDevice::ActiveAttributes = 0;
-const int GraphicsDevice::MaxVertexAttributes = 0;
-const int GraphicsDevice::MaxVertexUniformComp = 0;
-const int GraphicsDevice::MaxViewportDims = 0;
-const int GraphicsDevice::ViewportBox = 0;
-const int GraphicsDevice::ScissorBox = 0;
-const int GraphicsDevice::Fill = 0;
-const int GraphicsDevice::Line = 0;
-const int GraphicsDevice::Point = 0;
-const int GraphicsDevice::GLPreferredBuffer = 0;
-const int GraphicsDevice::GLInternalFormat = 0;
-
-int Depth::OpenGLID(int id) { return 0; }
-int CubeMap::OpenGLID(int id) { return 0; }
-int Pixel::OpenGLID(int p) { return 0; }
+struct NullGraphicsDeviceConstants : public GraphicsDevice::Constants {
+  NullGraphicsDeviceConstants() {
+    Float = 0;
+    Points = 0;
+    Lines = 0;
+    LineLoop = 0;
+    Triangles = 0;
+    TriangleStrip = 0;
+    Polygon = 0;
+    Texture2D = 0;
+    TextureCubeMap = 0;
+    UnsignedByte = 0;
+    UnsignedInt = 0;
+    FramebufferComplete = 0;
+    FramebufferUndefined = 0;
+    FramebufferBinding = 0;
+    Ambient = 0;
+    Diffuse = 0;
+    Specular = 0;
+    Emission = 0;
+    Position = 0;
+    One = 0;
+    SrcAlpha = 0;
+    OneMinusSrcAlpha = 0;
+    OneMinusDstColor = 0;
+    TextureWrapS = 0;
+    TextureWrapT = 0;
+    ClampToEdge = 0;
+    VertexShader = 0;
+    FragmentShader = 0;
+    ShaderVersion = 0;
+    Extensions = 0;
+    GLEWVersion = 0;
+    Version = 0;
+    Vendor = 0;
+    DepthBits = 0;
+    ScissorTest = 0;
+    ActiveUniforms = 0;
+    ActiveAttributes = 0;
+    MaxVertexAttributes = 0;
+    MaxVertexUniformComp = 0;
+    MaxViewportDims = 0;
+    ViewportBox = 0;
+    ScissorBox = 0;
+    Fill = 0;
+    Line = 0;
+    Point = 0;
+    GLPreferredBuffer = 0;
+    GLInternalFormat = 0;
+  }
+};
 
 struct NullGraphicsDevice : public GraphicsDevice {
-  NullGraphicsDevice(Window *w, Shaders *s) : GraphicsDevice(w, 2, s) {}
+  NullGraphicsDevice(Window *w, Shaders *s) : GraphicsDevice(0, NullGraphicsDeviceConstants(), w, 0, s) {}
   void Init(AssetLoading*, const Box&) {}
   bool GetEnabled(int) { return 0; }
   bool ShaderSupport() { return 0; }
@@ -175,6 +175,9 @@ struct NullGraphicsDevice : public GraphicsDevice {
   void Uniform3f(int u, float v1, float v2, float v3) {}
   void Uniform4f(int u, float v1, float v2, float v3, float v4) {}
   void Uniform3fv(int u, int n, const float *v) {}
+  int GetDepth(int id) { return 0; }
+  int GetCubeMap(int id) { return 0; }
+  int GetPixel(int p) { return 0; }
 };
 
 unique_ptr<GraphicsDevice> GraphicsDevice::Create(Window *w, Shaders *s) { return make_unique<NullGraphicsDevice>(w, s); }

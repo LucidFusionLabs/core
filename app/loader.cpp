@@ -222,7 +222,7 @@ struct AliasWavefrontObjLoader {
     }
 
     unique_ptr<Geometry> ret =
-      make_unique<Geometry>(GraphicsDevice::Triangles, vert_out.size(), &vert_out[0],
+      make_unique<Geometry>(Geometry::Primitive::Triangles, vert_out.size(), &vert_out[0],
                             norm_out.size() ? &norm_out[0] : 0, tex_out.size() ? &tex_out[0] : 0);
     ret->material = material;
     ret->mat = mat;
@@ -261,7 +261,7 @@ unique_ptr<Geometry> Geometry::LoadOBJ(File *f, const float *map_tex_coord) {
 }
 
 string Geometry::ExportOBJ(const Geometry *geom, const set<int> *prim_filter, bool prim_filter_invert) {
-  int vpp = GraphicsDevice::VertsPerPrimitive(geom->primtype), prims = geom->count / vpp;
+  int vpp = VertsPerPrimitive(geom->primtype), prims = geom->count / vpp;
   int vert_attr = 1 + (geom->norm_offset >= 0) + (geom->tex_offset >= 0);
   CHECK_EQ(geom->count, prims * vpp);
   string vert_prefix, verts, faces;
