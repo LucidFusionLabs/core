@@ -28,7 +28,7 @@ struct VoiceModel {
     WavReader wav;
   } unit[LFL_PHONES];
 
-  int Read(const char *dir);
+  int Read(FileSystem*, const char *dir);
   unique_ptr<RingSampler> Synth(AssetLoading*, const char *text, int start=0);
 
   int NextPhone(int phone, int lastphone, int lastphoneindex);

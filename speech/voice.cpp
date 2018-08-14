@@ -22,10 +22,10 @@
 #include "voice.h"
 
 namespace LFL {
-int VoiceModel::Read(const char *dir) {
+int VoiceModel::Read(FileSystem *fs, const char *dir) {
   string pre = "seg", post = ".mat";
-  DirectoryIter d(dir, 0, pre.c_str(), post.c_str());
-  for (const char *fn = d.Next(); fn; fn = d.Next()) {
+  auto d = fs->ReadDirectory(dir, 0, pre.c_str(), post.c_str());
+  for (const char *fn = d->Next(); fn; fn = d->Next()) {
     const char *nb=fn+pre.length(), *ne=strstr(nb,post.c_str());
     int phoneme = Phoneme::Id(nb, ne?ne-nb:0);
     if (phoneme == -1) continue;

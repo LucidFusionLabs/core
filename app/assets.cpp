@@ -52,7 +52,7 @@ void Geometry::ScrollTexCoord(GraphicsDevice *gd, float dx, float dx_extra, int 
   if (subtract_max_int) *subtract_max_int = max_int;
   int width_bytes = width * sizeof(float);
   int vert_size = count * width_bytes;
-  gd->VertexPointer(vd, gd->c.Float, width_bytes, 0, &vert[0], vert_size, &vert_ind, true, primtype);
+  gd->VertexPointer(vd, gd->c.Float, width_bytes, 0, &vert[0], vert_size, &vert_ind, true, gd->GetPrimitive(primtype));
 }
 
 string AssetLoading::FileName(const string &asset_fn) {

@@ -1107,22 +1107,22 @@ unique_ptr<AcousticModel::Compiled> AcousticModel::FromModel1(StateCollection *m
   return hmm;
 }
 
-int AcousticModelFile::Open(const char *name, const char *dir, int lastiter, bool rebuild_transit) {
+int AcousticModelFile::Open(FileSystem *fs, const char *name, const char *dir, int lastiter, bool rebuild_transit) {
   Reset();
   string flags;
-  lastiter = MatrixFile::ReadVersioned(dir, name, "transition", &transit, &flags, lastiter);
+  lastiter = MatrixFile::ReadVersioned(fs, dir, name, "transition", &transit, &flags, lastiter);
   if (!transit) { ERROR("no acoustic model: ", name); return -1; }
 
   if (flags.size()) AcousticModel::LoadFlags(flags.c_str());
 
   unique_ptr<Matrix> mapdata;
-  if (MatrixFile::ReadVersioned(dir, name, "prior",      &initial, 0, lastiter)<0) { ERROR(name, ".", lastiter, ".prior"  ); return -1; }
-  if (MatrixFile::ReadVersioned(dir, name, "emMeans",    &mean,    0, lastiter)<0) { ERROR(name, ".", lastiter, ".emMean" ); return -1; }
-  if (MatrixFile::ReadVersioned(dir, name, "emCov",      &covar,   0, lastiter)<0) { ERROR(name, ".", lastiter, ".emCov"  ); return -1; }
-  if (MatrixFile::ReadVersioned(dir, name, "emPrior",    &prior,   0, lastiter)<0) { ERROR(name, ".", lastiter, ".emPrior"); return -1; }
-  if (MatrixFile::ReadVersioned(dir, name, "map",        &mapdata, 0, lastiter)<0) { ERROR(name, ".", lastiter, ".map"    ); return -1; }
-  if (StringFile::ReadVersioned(dir, name, "name",       &names,   0, lastiter)<0) { ERROR(name, ".", lastiter, ".name"   ); return -1; }
-  if (MatrixFile::ReadVersioned(dir, name, "tiedstates", &tied,    0, lastiter)<0) { ERROR(name, ".", lastiter, ".tied"   );       /**/ }
+  if (MatrixFile::ReadVersioned(fs, dir, name, "prior",      &initial, 0, lastiter)<0) { ERROR(name, ".", lastiter, ".prior"  ); return -1; }
+  if (MatrixFile::ReadVersioned(fs, dir, name, "emMeans",    &mean,    0, lastiter)<0) { ERROR(name, ".", lastiter, ".emMean" ); return -1; }
+  if (MatrixFile::ReadVersioned(fs, dir, name, "emCov",      &covar,   0, lastiter)<0) { ERROR(name, ".", lastiter, ".emCov"  ); return -1; }
+  if (MatrixFile::ReadVersioned(fs, dir, name, "emPrior",    &prior,   0, lastiter)<0) { ERROR(name, ".", lastiter, ".emPrior"); return -1; }
+  if (MatrixFile::ReadVersioned(fs, dir, name, "map",        &mapdata, 0, lastiter)<0) { ERROR(name, ".", lastiter, ".map"    ); return -1; }
+  if (StringFile::ReadVersioned(fs, dir, name, "name",       &names,   0, lastiter)<0) { ERROR(name, ".", lastiter, ".name"   ); return -1; }
+  if (MatrixFile::ReadVersioned(fs, dir, name, "tiedstates", &tied,    0, lastiter)<0) { ERROR(name, ".", lastiter, ".tied"   );       /**/ }
   map.map = move(mapdata);
 
   if (prior->M != names->size()) { ERROR("mismatch ", prior->M, " != ", names->size()); return -1; }

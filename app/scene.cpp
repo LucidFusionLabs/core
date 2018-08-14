@@ -71,7 +71,7 @@ void Scene::Select(GraphicsDevice *gd, Geometry *geom) {
   if (geom) {
     width = geom->width * sizeof(float);
     vert_size = geom->count * width;
-    gd->VertexPointer(geom->vd, gd->c.Float, width, 0, &geom->vert[0], vert_size, &geom->vert_ind, false, geom->primtype);
+    gd->VertexPointer(geom->vd, gd->c.Float, width, 0, &geom->vert[0], vert_size, &geom->vert_ind, false, gd->GetPrimitive(geom->primtype));
   }
 
   if (geom && geom->tex_offset >= 0) {
@@ -137,7 +137,7 @@ void Scene::Select(GraphicsDevice *gd) {
 }
 
 void Scene::Draw(GraphicsDevice *gd, const Geometry *geom, Entity*, int start_vert, int num_verts) {
-  gd->DrawArrays(geom->primtype, start_vert, num_verts ? num_verts : geom->count);
+  gd->DrawArrays(gd->GetPrimitive(geom->primtype), start_vert, num_verts ? num_verts : geom->count);
 }
 
 void Scene::Draw(GraphicsDevice *gd, Asset *a, Entity *e) {

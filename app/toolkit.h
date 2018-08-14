@@ -38,7 +38,7 @@ struct FontDesc {
   bool unicode;
   FontDesc(const IPC::FontDescription&);
   FontDesc(const string &n="", const string &fam="", int s=0,
-           ColorDesc fgc=0xffffff, ColorDesc bgc=0, int f=0, bool U=1, int E=0);
+           ColorDesc fgc=0xffffffff, ColorDesc bgc=0, int f=0, bool U=1, int E=0);
 
   string Filename() const;
   string DebugString() const;

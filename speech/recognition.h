@@ -45,14 +45,14 @@ struct RecognitionModel {
 
   RecognitionModel() : recognition_network_in(&acoustic_model), recognition_network(&semiring), grammar(&semiring), nameCB(this) {}
 
-  int Read(const char *name, const char *dir, int want_iter=-1) {
+  int Read(FileSystem *fs, const char *name, const char *dir, int want_iter=-1) {
     int amiter, recogiter, ret;
-    if ((amiter = acoustic_model.Open("AcousticModel", dir, want_iter)) < 0) { ERROR("acoustic_model ", dir, " ", amiter); return -1; }
+    if ((amiter = acoustic_model.Open(fs, "AcousticModel", dir, want_iter)) < 0) { ERROR("acoustic_model ", dir, " ", amiter); return -1; }
     emissions = acoustic_model.state.size();
 
-    if ((recogiter = recognition_network.Read("recognition", dir, want_iter)) < 0) { ERROR("recognition ", dir, " ", recogiter); return -1; }
-    if ((ret = recognition_network_out.Read(dir, "recognition", "out", recogiter))) { ERROR("recognition out ", dir, " ", ret, " != ", 0); return -1; }
-    if (recogiter != (ret = grammar.Read("grammar", dir, recogiter))) { ERROR("grammar ", dir, " ", ret, " != ", recogiter); return -1; }
+    if ((recogiter = recognition_network.Read(fs, "recognition", dir, want_iter)) < 0) { ERROR("recognition ", dir, " ", recogiter); return -1; }
+    if ((ret = recognition_network_out.Read(fs, dir, "recognition", "out", recogiter))) { ERROR("recognition out ", dir, " ", ret, " != ", 0); return -1; }
+    if (recogiter != (ret = grammar.Read(fs, "grammar", dir, recogiter))) { ERROR("grammar ", dir, " ", ret, " != ", recogiter); return -1; }
 
     recognition_network.A = &recognition_network_in;
     recognition_network.B = &recognition_network_out;

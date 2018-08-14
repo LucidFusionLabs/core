@@ -17,7 +17,7 @@
  */
 
 #include "core/app/gl/view.h"
-#include "core/web/browser.h"
+#include "core/web/browser/browser.h"
 #include <v8.h>
 
 namespace LFL {

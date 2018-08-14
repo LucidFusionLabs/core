@@ -215,7 +215,7 @@ struct AcousticModelFile : public AcousticModel::Compiled {
   AcousticModel::State *GetState(unsigned hash) { double *he = GetHashEntry(hash); return he ? &state[int(he[1])] : 0; }
   double *GetHashEntry(unsigned hash) { return map.Get(hash); }
   Matrix *TiedStates() { return tied.get(); }
-  int Open(const char *name, const char *dir, int lastiter=-1, bool rebuildTransit=0);
+  int Open(FileSystem*, const char *name, const char *dir, int lastiter=-1, bool rebuildTransit=0);
 };
 
 struct AcousticModelBuilder : public AcousticModel::StateCollection {

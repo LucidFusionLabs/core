@@ -24,13 +24,13 @@ struct Corpus {
   Callback start_cb, finish_cb;
   virtual ~Corpus() {}
   virtual void RunFile(const string &filename) {}
-  virtual void Run(const string &file_or_dir, ApplicationLifetime *lifetime=0) {
+  virtual void Run(FileSystem *fs, const string &file_or_dir, ApplicationLifetime *lifetime=0) {
     if (start_cb) start_cb();
-    if (!file_or_dir.empty() && !LocalFile::IsDirectory(file_or_dir)) RunFile(file_or_dir);
+    if (!file_or_dir.empty() && !fs->IsDirectory(file_or_dir)) RunFile(file_or_dir);
     else {
-      DirectoryIter iter(file_or_dir, -1);
-      for (auto fn = iter.Next(); (!lifetime || lifetime->run) && fn; fn = iter.Next()) 
-        Run(StrCat(file_or_dir, fn));
+      auto iter = fs->ReadDirectory(file_or_dir, -1);
+      for (auto fn = iter->Next(); (!lifetime || lifetime->run) && fn; fn = iter->Next()) 
+        Run(fs, StrCat(file_or_dir, fn), lifetime);
     }
     if (finish_cb) finish_cb();
   }  

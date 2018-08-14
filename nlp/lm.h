@@ -29,14 +29,14 @@ struct LanguageModel {
   LanguageModel() : map(0, map_values) {}
 
   void Reset() { prior.reset(); transit.reset(); map.map.reset(); names.reset(); total=0; }
-  int Open(const char *name, const char *dir) {
+  int Open(FileSystem *fs, const char *name, const char *dir) {
     string flags;
     unique_ptr<Matrix> map_data;
-    int lastiter = MatrixFile::ReadVersioned(dir, name, "transition", &transit, &flags);
+    int lastiter = MatrixFile::ReadVersioned(fs, dir, name, "transition", &transit, &flags);
     if (!transit) return ERRORv(-1, "no language model: ", name);
-    if (MatrixFile::ReadVersioned(dir, name, "prior", &prior,    0, lastiter) < 0) return ERRORv(-1, name, ".", lastiter, ".prior");
-    if (MatrixFile::ReadVersioned(dir, name, "map",   &map_data, 0, lastiter) < 0) return ERRORv(-1, name, ".", lastiter, ".map"  );
-    if (StringFile::ReadVersioned(dir, name, "name",  &names,    0, lastiter) < 0) return ERRORv(-1, name, ".", lastiter, ".name" );
+    if (MatrixFile::ReadVersioned(fs, dir, name, "prior", &prior,    0, lastiter) < 0) return ERRORv(-1, name, ".", lastiter, ".prior");
+    if (MatrixFile::ReadVersioned(fs, dir, name, "map",   &map_data, 0, lastiter) < 0) return ERRORv(-1, name, ".", lastiter, ".map"  );
+    if (StringFile::ReadVersioned(fs, dir, name, "name",  &names,    0, lastiter) < 0) return ERRORv(-1, name, ".", lastiter, ".name" );
     MatrixRowIter(prior) total += prior->row(i)[0];
     map.map = move(map_data);
     return lastiter;

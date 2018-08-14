@@ -95,10 +95,10 @@ struct WFST {
     void Begin(Iterator *iter) const { iter->impl = 0; iter->done = 0; Next(iter); }
     void Next(Iterator *iter) const { if ((iter->id = iter->impl++) >= str->size()) iter->done = 1; else iter->name = (*str)[iter->id].c_str(); }
 
-    int Read(const char *dir, const char *name1, const char *name2, int iteration) {
+    int Read(FileSystem *fs, const char *dir, const char *name1, const char *name2, int iteration) {
       unique_ptr<Matrix> mapdata;
-      if (StringFile::ReadVersioned(dir, name1, name2, &str,     0, iteration)<0) { ERROR(name2, ".", iteration, ".in.string"); return -1; }
-      if (MatrixFile::ReadVersioned(dir, name1, name2, &mapdata, 0, iteration)<0) { ERROR(name2, ".", iteration, ".in.matrix"); return -1; }
+      if (StringFile::ReadVersioned(fs, dir, name1, name2, &str,     0, iteration)<0) { ERROR(name2, ".", iteration, ".in.string"); return -1; }
+      if (MatrixFile::ReadVersioned(fs, dir, name1, name2, &mapdata, 0, iteration)<0) { ERROR(name2, ".", iteration, ".in.matrix"); return -1; }
       map.map = move(mapdata);
       return 0;
     }
@@ -764,18 +764,18 @@ struct WFST {
     return f.Write(v.data(), v.size()) == v.size();
   }
 
-  int Read(const char *name, const char *dir, int lastiter=-1) {
+  int Read(FileSystem *fs, const char *name, const char *dir, int lastiter=-1) {
     Reset();
 
     unique_ptr<Matrix> state, transit;
-    lastiter = MatrixFile::ReadVersioned(dir, name, "state", &state, 0, lastiter);
+    lastiter = MatrixFile::ReadVersioned(fs, dir, name, "state", &state, 0, lastiter);
     if (!state) { ERROR("no WFST: ", name); return -1; }
-    if (MatrixFile::ReadVersioned(dir, name, "transition", &transit, 0, lastiter)<0) { ERROR(name, ".", lastiter, ".transition.matrix"); return -1; }
+    if (MatrixFile::ReadVersioned(fs, dir, name, "transition", &transit, 0, lastiter)<0) { ERROR(name, ".", lastiter, ".transition.matrix"); return -1; }
     E = make_unique<TransitMapMatrix>(move(state), move(transit));
 
     unique_ptr<Matrix> initial, final;
-    if (MatrixFile::ReadVersioned(dir, name, "initial", &initial, 0, lastiter)<0) { ERROR(name, ".", lastiter, ".initial.matrix"); return -1; }
-    if (MatrixFile::ReadVersioned(dir, name, "final",   &final,   0, lastiter)<0) { ERROR(name, ".", lastiter, ".final.matrix"  ); return -1; }
+    if (MatrixFile::ReadVersioned(fs, dir, name, "initial", &initial, 0, lastiter)<0) { ERROR(name, ".", lastiter, ".initial.matrix"); return -1; }
+    if (MatrixFile::ReadVersioned(fs, dir, name, "final",   &final,   0, lastiter)<0) { ERROR(name, ".", lastiter, ".final.matrix"  ); return -1; }
     I = make_unique<StateSetMatrix>(move(initial));
     F = make_unique<StateSetMatrix>(move(final));
     return lastiter;

@@ -16,7 +16,7 @@ The key implementation files are:
 * **[LTerminal](http://lucidfusionlabs.com/LTerminal)**:             modern terminal
 * **[TepidFusion](http://lucidfusionlabs.com/TepidFusion)**:         text editor and IDE
 * **[TinyBrowser](http://lucidfusionlabs.com/TinyBrowser)**:         HTML4/CSS2 web browser with V8 javascript
-* **[AncientChess](http://lucidfusionlabs.com/AncientChess)**:       magic bitboard chess engine and FICS client
+* **[OldChess](http://lucidfusionlabs.com/OldChess)**:               magic bitboard chess engine and FICS client
 * **[FusionSensor](http://lucidfusionlabs.com/FusionSensor)**:       speech and image recognition client/server
 * **[SpaceballFuture](http://lucidfusionlabs.com/SpaceballFuture)**: multiplayer 3d game
 
