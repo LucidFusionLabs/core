@@ -19,7 +19,6 @@
 #import <Cocoa/Cocoa.h>
 #include "core/app/app.h"
 #include "core/app/framework/apple_common.h"
-#include "core/app/framework/osx_common.h"
 
 namespace LFL {
 void SystemBrowser::OpenSystemBrowser(const string &url_text) {

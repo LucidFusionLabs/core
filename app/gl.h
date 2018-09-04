@@ -375,7 +375,7 @@ struct GraphicsDevice {
   Void glew_context = 0;
 
   GraphicsDevice(int T, const Constants &cs, Window *W, int V, Shaders *S) : 
-    c(cs), parent(W), version(V), type(T), tex_mode(2, 1, 0), fill_mode(3, c.Fill, c.Line, c.Point), shaders(S), scissor_stack(1) {}
+    c(cs), parent(W), type(T), version(V), tex_mode(2, 1, 0), fill_mode(3, c.Fill, c.Line, c.Point), shaders(S), scissor_stack(1) {}
 
   virtual ~GraphicsDevice() {}
   virtual void Init(AssetLoading*, const Box&) = 0;

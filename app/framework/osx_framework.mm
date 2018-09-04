@@ -34,7 +34,7 @@
 
     NSPoint prev_mouse_pos;
     BOOL initialized, needs_reshape, needs_frame;
-    BOOL use_timer, use_display_link, video_thread_init;
+    BOOL use_timer, use_display_link;
     BOOL cmd_down, ctrl_down, shift_down;
   };
 

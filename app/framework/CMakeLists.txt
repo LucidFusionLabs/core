@@ -76,6 +76,13 @@ if(LFL_OSX)
   target_include_directories(app_osx_toolkit PUBLIC ${LFL_APP_INCLUDE})
   target_compile_definitions(app_osx_toolkit PUBLIC ${LFL_APP_DEF})
   target_compile_options(app_osx_toolkit PUBLIC -fobjc-abi-version=2 -fobjc-legacy-dispatch)
+
+  add_library(app_osx_screensaver STATIC osx_screensaver.mm osx_common.h)
+  lfl_set_xcode_properties(app_osx_screensaver)
+  target_include_directories(app_osx_screensaver PUBLIC ${LFL_APP_INCLUDE})
+  target_compile_definitions(app_osx_screensaver PUBLIC ${LFL_APP_DEF} -DLFL_SCREENSAVER=1)
+  target_compile_options(app_osx_screensaver PUBLIC -fobjc-abi-version=2 -fobjc-legacy-dispatch)
+  target_link_libraries(app_osx_screensaver "-framework Screensaver")
 endif()
 
 if(LFL_APPLE)

@@ -798,7 +798,7 @@ struct Application : public ::LFApp, public ApplicationInfo, public ApplicationS
   string PrintCallStack();
 
   void Log(int level, const char *file, int line, const char *message);
-  int Create(const char *source_filename);
+  int Create(const char *source_filename, const char *app_id=0);
   int Init();
   int Start();
   int HandleEvents(unsigned clicks);

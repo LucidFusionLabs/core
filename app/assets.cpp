@@ -303,7 +303,7 @@ void glShadertoyShader(GraphicsDevice *gd, Shader *shader, const Texture *tex) {
   gd->UseShader(shader);
   shader->SetUniform1f("iGlobalTime", ToFSeconds(Now() - a->time_started).count());
   shader->SetUniform1f("iBlend", FLAGS_shadertoy_blend);
-  shader->SetUniform4f("iMouse", screen->mouse.x, screen->mouse.y, a->input->MouseButton1Down(), 0);
+  shader->SetUniform4f("iMouse", screen->mouse.x, screen->mouse.y, a->input ? a->input->MouseButton1Down() : 0, 0);
   shader->SetUniform3f("iResolution", XY_or_Y(scale, screen->gl_x + screen->gl_w), XY_or_Y(scale, screen->gl_y + screen->gl_h), 0);
   if (tex) {
     shader->SetUniform3f("iChannelResolution", XY_or_Y(scale, tex->width), XY_or_Y(scale, tex->height), 1);

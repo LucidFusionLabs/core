@@ -329,7 +329,7 @@ Window *WindowHolder::SetFocusedWindowByID(void *id) { return SetFocusedWindow(F
 Window *WindowHolder::SetFocusedWindow(Window *W) {
   CHECK(W);
   if (W == focused) return W;
-  MakeCurrentWindow((focused = static_cast<Window*>(W)));
+  MakeCurrentWindow((focused = W));
   return W;
 }
 
@@ -455,7 +455,7 @@ void Application::Daemonize(FILE *fout, FILE *ferr) {
 #endif
 }
 
-int Application::Create(const char *source_filename) {
+int Application::Create(const char *source_filename, const char *app_id) {
 #ifdef LFL_GLOG
   google::InstallFailureSignalHandler();
 #endif
@@ -505,7 +505,13 @@ int Application::Create(const char *source_filename) {
 #if defined(LFL_ANDROID)
 #elif defined(LFL_APPLE)
     char rpath[1024];
-    CFBundleRef mainBundle = CFBundleGetMainBundle();
+    CFBundleRef mainBundle = nullptr;
+    if (app_id) {
+      CFStringRef appid = CFStringCreateWithBytes(0, MakeUnsigned(app_id), strlen(app_id), kCFStringEncodingASCII, 0);
+      mainBundle = CFBundleGetBundleWithIdentifier(appid);
+      CFRelease(appid);
+    }
+    if (!mainBundle) mainBundle = CFBundleGetMainBundle();
     CFURLRef respath = CFBundleCopyResourcesDirectoryURL(mainBundle);
     CFURLGetFileSystemRepresentation(respath, true, MakeUnsigned(rpath), sizeof(rpath));
     CFRelease(respath);
