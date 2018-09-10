@@ -104,7 +104,7 @@ void Widget::Button::LayoutComplete(Flow *flow, Font *f, const Box &b) {
     flow->SetFont(font);
     flow->SetFGColor(0);
     flow->p = box.Position() + point(dim.centerX(textsize.x),
-                                     v_align == VAlign::Center ? dim.centerY(textsize.y) : v_offset);
+                                     v_align == Align::VerticalCenter ? dim.centerY(textsize.y) : v_offset);
     flow->AppendText(text);
     flow->p = save_p;
   }

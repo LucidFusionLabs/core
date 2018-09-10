@@ -21,6 +21,8 @@
 #include "core/app/framework/windows_common.h"
 
 namespace LFL {
+const int Texture::updatesystemimage_pf = Pixel::RGB24;
+
 struct WindowsToolbarView : public ToolbarViewInterface {
   string theme;
   void Show(bool show_or_hide) {}
@@ -107,9 +109,9 @@ struct WindowsNavigationView : public NavigationViewInterface {
   void SetTheme(const string &theme) {}
 };
 
-int Application::LoadSystemImage(const string &n) { static int ret = 0; return ++ret; }
-void Application::UpdateSystemImage(int n, Texture&) {}
-void Application::UnloadSystemImage(int n) {}
+int SystemToolkit::LoadImage(const string &n) { static int ret = 0; return ++ret; }
+void SystemToolkit::UpdateImage(int n, Texture&) {}
+void SystemToolkit::UnloadImage(int n) {}
 
 unique_ptr<ToolbarViewInterface> SystemToolkit::CreateToolbar(Window*, const string &theme, MenuItemVec items, int flag) { return make_unique<WindowsToolbarView>(); }
 unique_ptr<CollectionViewInterface> SystemToolkit::CreateCollectionView(Window*, const string &title, const string &style, const string &theme, vector<CollectionItem> items) { return make_unique<WindowsCollectionView>(title, style, move(items)); }

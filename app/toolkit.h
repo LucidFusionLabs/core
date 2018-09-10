@@ -19,6 +19,7 @@
 #ifndef LFL_CORE_APP_TOOLKIT_H__
 #define LFL_CORE_APP_TOOLKIT_H__
 namespace LFL {
+struct Align { enum { Left=1, Center=2, Right=4, Bottom=8, VerticalCenter=16, Top=32, Max=32, Mask=0x3f }; };
 
 typedef unsigned ColorDesc;
 struct FontDesc {
@@ -188,8 +189,8 @@ struct PanelViewInterface {
 };
 
 struct ToolbarViewInterface {
-  enum { BORDERLESS_BUTTONS=1 };
-  int selected=-1;
+  enum { BORDERLESS_BUTTONS=Align::Max*2 };
+  int align=Align::Bottom, selected=-1;
   virtual ~ToolbarViewInterface() {}
   virtual void Show(bool show_or_hide) = 0;
   virtual void ToggleButton(const string &n) = 0;
@@ -214,6 +215,8 @@ struct CollectionViewInterface : public StackViewInterface {
   int selected=-1;
   bool shown=0, changed=0;
   CollectionViewInterface() { show_cb = [=](){ changed=0; }; }
+  virtual pair<int, int> GetSelectedRow() = 0;
+  virtual void SelectRow(int section, int row) = 0;
   virtual void SetToolbar(ToolbarViewInterface*) = 0;
   virtual ~CollectionViewInterface() {}
 };
@@ -315,6 +318,14 @@ struct NagInterface {
 };
 
 struct ToolkitInterface {
+  ApplicationInfo *app_info;
+  ToolkitInterface(ApplicationInfo *a) : app_info(a) {}
+
+  virtual int LoadImage(const string &fn) = 0;
+  virtual void UpdateImage(int n, Texture&) = 0;
+  virtual void UnloadImage(int n) = 0;
+  virtual int LoadTexture(Texture &t) { int ret=LoadImage(""); UpdateImage(ret, t); return ret; }
+
   virtual unique_ptr<AlertViewInterface> CreateAlert(Window*, AlertItemVec items) = 0;
   virtual unique_ptr<PanelViewInterface> CreatePanel(Window*, const Box&, const string &title, PanelItemVec) = 0;
   virtual unique_ptr<ToolbarViewInterface> CreateToolbar(Window*, const string &theme, MenuItemVec items, int flag) = 0;
@@ -330,6 +341,10 @@ struct ToolkitInterface {
 };
 
 struct SystemToolkit : public ToolkitInterface {
+  using ToolkitInterface::ToolkitInterface;
+  int LoadImage(const string &fn) override;
+  void UpdateImage(int n, Texture&) override;
+  void UnloadImage(int n) override;
   unique_ptr<AlertViewInterface> CreateAlert(Window*, AlertItemVec items) override;
   unique_ptr<PanelViewInterface> CreatePanel(Window*, const Box&, const string &title, PanelItemVec) override;
   unique_ptr<ToolbarViewInterface> CreateToolbar(Window*, const string &theme, MenuItemVec items, int flag) override;

@@ -60,8 +60,6 @@ const int Key::Home       = Qt::Key_Home;
 const int Key::End        = Qt::Key_End;
 const int Key::Insert     = Qt::Key_Insert;
 
-const int Texture::updatesystemimage_pf = Pixel::RGB24;
-
 StringVec GetQStringList(const QStringList &v) {
   StringVec ret;
   for (auto i = v.constBegin(), e = v.constEnd(); i != e; ++i) ret.push_back(GetQString(*i));

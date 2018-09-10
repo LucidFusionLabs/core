@@ -92,7 +92,7 @@ struct Widget {
     Color *solid=0, *outline=0, *outline_topleft=0, *outline_bottomright=0;
     MouseControllerCallback cb;
     bool init=0, hover=0;
-    int decay=0, v_align=VAlign::Center, v_offset=0, outline_w=3;
+    int decay=0, v_align=Align::VerticalCenter, v_offset=0, outline_w=3;
     Button() : Interface(0) {}
     Button(View *V, Drawable *I, const string &T, const MouseControllerCallback &CB)
       : Interface(V), text(T), image(I), cb(CB), init(1) {}

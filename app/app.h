@@ -282,8 +282,6 @@ class Logger {
 
 namespace LFL {
 extern const bool DEBUG, MOBILE, IOS, ANDROIDOS, LINUXOS, WINDOWSOS, MACOS;
-struct HAlign { enum { Left  =1, Center=2, Right=3 }; };
-struct VAlign { enum { Bottom=1, Center=2, Top  =3 }; };
 
 struct FatalMessage {
   const char *file; int line; string msg; std::stringstream stream;
@@ -774,7 +772,8 @@ struct Application : public ::LFApp, public ApplicationInfo, public ApplicationS
 
   Time time_started;
   Timer frame_time;
-  ToolkitInterface *system_toolkit, *toolkit;
+  unique_ptr<ToolkitInterface> system_toolkit, gl_toolkit;
+  ToolkitInterface *toolkit=0;
   const Color *splash_color = &Color::black;
   StringCB open_url_cb;
   Callback exit_cb;
@@ -819,9 +818,6 @@ struct Application : public ::LFApp, public ApplicationInfo, public ApplicationS
   void ShowSystemFontChooser(const FontDesc &cur_font, const StringVecCB&);
   void ShowSystemFileChooser(bool files, bool dirs, bool multi, const StringVecCB&);
   void ShowSystemStatusBar(bool);
-  int LoadSystemImage(const string &fn);
-  void UpdateSystemImage(int n, Texture&);
-  void UnloadSystemImage(int n);
   bool OpenSystemAppPreferences();
   void SetAutoRotateOrientation(bool);
   void SetVerticalSwipeRecognizer(int touches);

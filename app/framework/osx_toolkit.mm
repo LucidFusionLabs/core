@@ -449,6 +449,8 @@ static LFL::FreeListVector<NSImage*> app_images;
 @end
 
 namespace LFL {
+const int Texture::updatesystemimage_pf = Pixel::RGB24;
+
 struct OSXToolbarView : public ToolbarViewInterface {
   string theme;
   ~OSXToolbarView() {}
@@ -461,6 +463,8 @@ struct OSXToolbarView : public ToolbarViewInterface {
 
 struct OSXCollectionView : public CollectionViewInterface {
   OSXCollectionView(const string &title, const string &style, vector<CollectionItem> items) {}
+  pair<int, int> GetSelectedRow() { return make_pair(-1, -1); }
+  void SelectRow(int section, int row) {}
   void SetToolbar(ToolbarViewInterface *t) {}
   void Show(bool show_or_hide) {}
 };
@@ -574,16 +578,16 @@ struct OSXNavigationView : public NavigationViewInterface {
   void SetTheme(const string &theme) {}
 };
 
-int Application::LoadSystemImage(const string &n) {
-  NSImage *image = [[NSImage alloc] initWithContentsOfFile: MakeNSString(StrCat(assetdir, "../drawable-xhdpi/", n, ".png")) ];
+int SystemToolkit::LoadImage(const string &n) {
+  NSImage *image = [[NSImage alloc] initWithContentsOfFile: MakeNSString(StrCat(app_info->assetdir, "../drawable-xhdpi/", n, ".png")) ];
   if (!image) return 0;
   return app_images.Insert(move(image)) + 1;
 }
 
-void Application::UpdateSystemImage(int n, Texture&) {
+void SystemToolkit::UpdateImage(int n, Texture&) {
 }
 
-void Application::UnloadSystemImage(int n) {
+void SystemToolkit::UnloadImage(int n) {
   if (auto image = app_images[n-1]) { [image release]; app_images[n-1] = nullptr; }
   app_images.Erase(n-1);
 }

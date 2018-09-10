@@ -493,6 +493,8 @@ template <class X> struct FreeListVector {
   vector<X> data;
   vector<int> free_list;
   function<void(X*)> free_func;
+  FreeListVector() {}
+  FreeListVector(function<void(X*)> ff) : free_func(move(ff)) {}
 
   int size() const { return data.size(); }
   const X& back() const { return data.back(); }

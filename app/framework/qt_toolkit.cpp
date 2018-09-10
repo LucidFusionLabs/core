@@ -28,6 +28,7 @@
 #include "qt_common.h"
 
 namespace LFL {
+const int Texture::updatesystemimage_pf = Pixel::RGB24;
 static FreeListVector<unique_ptr<QIcon>> app_images;
 struct QtTableView;
 
@@ -749,19 +750,19 @@ void Application::ShowSystemContextMenu(const vector<MenuItem> &items) {
               (MakeQPoint(Input::TransformMouseCoordinate(focused, focused->mouse))));
 }
 
-int Application::LoadSystemImage(const string &n) {
+int SystemToolkit::LoadImage(const string &n) {
   return app_images.Insert
     (make_unique<QIcon>(MakeQString(StrCat(assetdir, "../drawable-xhdpi/", n, ".png")))) + 1;
 }
 
-void Application::UpdateSystemImage(int n, Texture &t) {
+void SystemToolkit::UpdateImage(int n, Texture &t) {
   CHECK_RANGE(n-1, 0, app_images.size());
   QPixmap pixmap;
   pixmap.convertFromImage(MakeQImage(t));
   app_images[n-1] = make_unique<QIcon>(move(pixmap));
 }
 
-void Application::UnloadSystemImage(int n) {
+void SystemToolkit::UnloadImage(int n) {
   if (app_images[n-1]) app_images[n-1].reset();
   app_images.Erase(n-1);
 }

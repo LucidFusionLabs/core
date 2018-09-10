@@ -147,6 +147,7 @@ struct Drawable {
   virtual int  Advance    (const LFL::Box *B, const Attr *A=0) const { return B ? B->w : 0; }
   virtual int  Layout     (      LFL::Box *B, const Attr *A=0) const { return B ? B->w : 0; }
   virtual void Draw       (GraphicsContext*,  const LFL::Box&) const = 0;
+  virtual string DebugString() const { return ""; } 
   void DrawGD(GraphicsDevice *gd, const LFL::Box &b) const;
 };
 
@@ -186,7 +187,7 @@ struct Texture : public Drawable {
   void Bind() const;
   int TexId() const override { return ID; }
   string CoordString() const { return StrCat("[", coord[0], ", ", coord[1], ", ", coord[2], ", ", coord[3], "]"); } 
-  string DebugString() const { return StrCat("Texture(", ID, ": ", width, ", ", height, ", ", Pixel::Name(pf), ", ", CoordString(), ")"); }
+  string DebugString() const override { return StrCat("Texture(", ID, ": ", width, ", ", height, ", ", Pixel::Name(pf), ", ", CoordString(), ")"); }
   string HexDump() const { string v; for (int ls=LineSize(), i=0; i<height; i++) StrAppend(&v, Vec<unsigned char>::Str(buf+i*ls, ls, "%02x"), "\n"); return v; }
   point Dimension() const { return point(width, height); }
   int PixelSize() const { return Pixel::Size(pf); }

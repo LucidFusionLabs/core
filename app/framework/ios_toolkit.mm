@@ -999,6 +999,8 @@ struct iOSTableItem { enum { GUILoaded=LFL::TableItem::Flag::User1 }; };
 @end
 
 namespace LFL {
+const int Texture::updatesystemimage_pf = Pixel::RGB24;
+
 struct iOSToolbarView : public ToolbarViewInterface {
   string theme;
   IOSToolbar *toolbar;
@@ -1112,27 +1114,6 @@ struct iOSNavigationView : public NavigationViewInterface {
   void SetTheme(const string &x) { [nav setTheme: (theme=x)]; }
 };
 
-int Application::LoadSystemImage(const string &n) {
-  if (n.empty()) return app_images.Insert(nullptr) + 1;
-  UIImage *image = [UIImage imageNamed:MakeNSString(StrCat("drawable-xhdpi/", n, ".png"))];
-  if (!image) return 0;
-  [image retain];
-  return app_images.Insert(move(image)) + 1;
-}
-
-void Application::UpdateSystemImage(int n, Texture &t) {
-  CHECK_RANGE(n-1, 0, app_images.size());
-  CGImageRef image = MakeCGImage(t);
-  if (app_images[n-1]) [app_images[n-1] release];
-  if (!(app_images[n-1] = [[UIImage alloc] initWithCGImage:image])) ERROR("UpdateSystemImage failed");
-  CGImageRelease(image);
-}
-
-void Application::UnloadSystemImage(int n) {
-  if (auto image = app_images[n-1]) { [image release]; app_images[n-1] = nullptr; }
-  app_images.Erase(n-1);
-}
-
 iOSCollectionView::iOSCollectionView(const string &title, const string &style, const string &theme, vector<CollectionItem> items) {}
 void iOSCollectionView::SetToolbar(ToolbarViewInterface *t) {}
 void iOSCollectionView::Show(bool show_or_hide) {}
@@ -1216,6 +1197,27 @@ void iOSTableView::ApplyChangeList(const TableSectionInterface::ChangeList &chan
 void iOSTableView::ReplaceRow(int section, int row, TableItem h) { [table replaceRow:section row:row val:move(h)]; }
 void iOSTableView::ReplaceSection(int section, TableItem h, int flag, TableItemVec item)
 { [table replaceSection:section items:move(item) header:move(h) flag:flag]; }
+
+int SystemToolkit::LoadImage(const string &n) {
+  if (n.empty()) return app_images.Insert(nullptr) + 1;
+  UIImage *image = [UIImage imageNamed:MakeNSString(StrCat("drawable-xhdpi/", n, ".png"))];
+  if (!image) return 0;
+  [image retain];
+  return app_images.Insert(move(image)) + 1;
+}
+
+void SystemToolkit::UpdateImage(int n, Texture &t) {
+  CHECK_RANGE(n-1, 0, app_images.size());
+  CGImageRef image = MakeCGImage(t);
+  if (app_images[n-1]) [app_images[n-1] release];
+  if (!(app_images[n-1] = [[UIImage alloc] initWithCGImage:image])) ERROR("UpdateImage failed");
+  CGImageRelease(image);
+}
+
+void SystemToolkit::UnloadImage(int n) {
+  if (auto image = app_images[n-1]) { [image release]; app_images[n-1] = nullptr; }
+  app_images.Erase(n-1);
+}
 
 unique_ptr<ToolbarViewInterface> SystemToolkit::CreateToolbar(Window*, const string &theme, MenuItemVec items, int flag) { return make_unique<iOSToolbarView>(theme, move(items)); }
 unique_ptr<TableViewInterface> SystemToolkit::CreateTableView(Window *w, const string &title, const string &style, const string &theme, TableItemVec items) { return make_unique<iOSTableView>(w->parent, title, style, theme, move(items)); }

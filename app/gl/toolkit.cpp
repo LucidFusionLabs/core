@@ -21,6 +21,8 @@
 #include "core/web/browser/browser.h"
 
 namespace LFL {
+static FreeListVector<Texture> app_images([](Texture *t) { t->Clear(); });
+
 ToolbarView::ToolbarView(Window *w, const string &t, MenuItemVec items, Font *F, Font *SF, Color *SO) :
   View(w), theme(t), font(F), selected_font(SF), selected_outline(SO) {
   for (auto &i : items) data.emplace_back(move(i));
@@ -36,7 +38,12 @@ void ToolbarView::ToggleButton(const string &n) {
 }
 
 View *ToolbarView::AppendFlow(Flow *flow) {
-  LayoutBox(*flow->container);
+  int row_height=0;
+  Box tb_box(*flow->container);
+  if (!(row_height = flow->cur_attr.font->Height())) row_height = 16;
+  tb_box.y = tb_box.TopLeft().y - row_height;
+  tb_box.h = row_height;
+  LayoutBox(tb_box);
   out = flow->out;
   for (int ind=0, l=data.size(); ind != l; ++ind) {
     auto &i = data[ind];
@@ -83,17 +90,15 @@ void CollectionView::OnClick(int but, point p, point d, int down) {
 
 void CollectionView::Draw() {
   View::Draw();
+  GraphicsContext gc(root->gd);
   if (out && decay_box_line >= 0 && decay_box_line < out->line.size() && decay_box_left > 0) {
-      BoxOutline().DrawGD(root->gd, out->line[decay_box_line] + box.TopLeft());
-      decay_box_left--;
+    BoxOutline().DrawGD(gc.gd, out->line[decay_box_line] + box.TopLeft());
+    decay_box_left--;
   }
-  if (0) { /* border */
-    // gc.gd->SetColor(Color::grey80); BoxTopLeftOutline    ().Draw(&gc, box);
-    // gc.gd->SetColor(Color::grey40); BoxBottomRightOutline().Draw(&gc, box);
-  }
-  if (selected) {
-    // gc.gd->SetColor(Color::grey20); BoxTopLeftOutline    ().Draw(&gc, team_buttons[home_team].GetHitBoxBox());
-    // gc.gd->SetColor(Color::grey60); BoxBottomRightOutline().Draw(&gc, team_buttons[home_team].GetHitBoxBox());
+  if (selected_section >=0 && selected_row >= 0) {
+    auto b = data[selected_section].item[selected_row].button->GetHitBox().box;
+    gc.gd->SetColor(Color::grey20); BoxTopLeftOutline    ().Draw(&gc, b);
+    gc.gd->SetColor(Color::grey60); BoxBottomRightOutline().Draw(&gc, b);
   }
 }
 
@@ -102,45 +107,48 @@ View *CollectionView::AppendFlow(Flow *flow) {
   if (!(row_height = flow->cur_attr.font->Height())) row_height = 16;
   out = flow->out;
 
+  auto font = flow->cur_attr.font;
   scrollbar.LayoutAttached(Box(0, -box.h, box.w, box.h - row_height));
   flow->p.y += (scrolled = int(scrollbar.scrolled * scrollbar.doc_height));
-
+  int bpl=4, bw=box.w*2/13.0, bh=bw, sx=bw/2, px=(box.w - (bw*bpl + sx*(bpl-1)))/2;
   flow->AppendNewline();
-  for (auto &s : data)
+  flow->p.x += px;
+
+  for (auto &s : data) {
+    int ind=0;
     for (auto &i : s.item) {
       if (!i.button) {
         i.button = make_unique<Widget::Button>(this, nullptr, "", MouseControllerCallback());
         i.button->outline_w           = 1;
         i.button->outline_topleft     = &Color::grey60;
         i.button->outline_bottomright = &Color::grey20;
+        i.button->v_align = Align::Bottom;
       }
-      flow->AppendNewlines(1);
-    }
+      i.button->box = Box(bw, bh);
+      i.button->text = i.key;
+      i.button->image = i.icon ? &app_images[i.icon-1] : nullptr;
+      i.button->cb = i.cb ? MouseController::CB(i.cb) : MouseControllerCallback();
+      i.button->Layout(flow, flow->cur_attr.font);
+      flow->p.x += sx;
 
-  /*
-    slider.LayoutAttached(Box(0, -box.h, box.w, box.h));
-    flow.AppendNewlines(1);
-    flow.p.x += px;
-    for (int i = 0; i < team_buttons.size(); i++) {
-      team_buttons[i].v_align = VAlign::Bottom;
-      team_buttons[i].box = Box(bw, bh);
-      team_buttons[i].Layout(&flow, home_team == i ? glow_font : font);
-      flow.p.x += sx;
-
-      if ((i+1) % 4 != 0) continue;
-      flow.AppendNewlines(2);
-      if (i+1 < team_buttons.size()) flow.p.x += px;
+      if (++ind % bpl != 0) continue;
+      flow->AppendNewlines(2);
+      if (ind < s.item.size()) flow->p.x += px;
     }
-    flow.layout.align_center = 1;
-    start_button.box = root->Box(.4, .05);
-    start_button.Layout(&flow, bright_font);
-   */
+  }
+
+  if (toolbar) {
+    Box b = root->Box(.4, .05);
+    Flow toolbarflow(&b, font, out);
+    toolbarflow.layout.align_center = 1;
+    if (auto v = toolbar->AppendFlow(&toolbarflow)) child_view.push_back(v);
+  }
 
   scrollbar.SetDocHeight(flow->Height());
   return this;
 }
 
-void CollectionView::SetToolbar(ToolbarViewInterface *tb) { toolbar = tb;}
+void CollectionView::SetToolbar(ToolbarViewInterface *tb) { toolbar = tb; }
 void CollectionView::Show(bool show_or_hide) {}
 
 TableView::TableView(Window *w, const string &t, const string &s, const string &th, TableItemVec items) :
@@ -281,6 +289,7 @@ View *TableView::AppendFlow(Flow *flow) {
             i.textbox->SetToggleKey(0, true);
             i.textbox->UpdateCursor();
           } else i.textbox->style.font = flow->cur_attr.font;
+          i.textbox->AssignInput(i.val);
           i.textbox->runcb = i.right_cb;
           flow->AppendRow(.6, .4, &i.val_box);
           flow->out->PushBack(i.val_box, flow->cur_attr, i.textbox.get());
@@ -291,6 +300,27 @@ View *TableView::AppendFlow(Flow *flow) {
           flow->AppendRow(.6, .35, &i.val_box);
           i.slider->LayoutFixed(i.val_box);
           i.slider->Update();
+        }; break;
+
+        case TableItem::Selector: {
+          vector<string> options;
+          Split(i.val, iscomma, nullptr, &options);
+          const string &v = options.size() ? options[i.selected % options.size()] : *Singleton<string>::Get();
+          flow->AppendText(.6, v);
+        }; break;
+
+        case TableItem::Button: {
+          if (!i.button) {
+            i.button = make_unique<Widget::Button>(this, nullptr, "", MouseControllerCallback());
+            i.button->outline_topleft     = &Color::grey80;
+            i.button->outline_bottomright = &Color::grey40;
+          }
+          flow->AppendRow(.6, .35, &i.val_box);
+          i.button->box = i.val_box;
+          i.button->text = i.key;
+          i.button->cb = i.cb ? MouseController::CB(i.cb) : MouseControllerCallback();
+          i.button->solid = theme == "Clear" ? nullptr : &Color::grey60;
+          i.button->Layout(flow, flow->cur_attr.font);
         }; break;
 
         case TableItem::WebView: {
@@ -360,10 +390,17 @@ void NavigationView::Layout() {}
 void NavigationView::Draw() {}
 View *NavigationView::AppendFlow(Flow *flow) { return stack.size() ? stack.back()->AppendFlow(flow) : nullptr; }
 
-unique_ptr<AlertViewInterface> Toolkit::CreateAlert(Window *w, AlertItemVec items) { return Singleton<SystemToolkit>::Set()->CreateAlert(w, move(items)); }
-unique_ptr<PanelViewInterface> Toolkit::CreatePanel(Window *w, const Box &b, const string &title, PanelItemVec items) { return Singleton<SystemToolkit>::Set()->CreatePanel(w, b, title, move(items)); }
-unique_ptr<MenuViewInterface> Toolkit::CreateMenu(Window *w, const string &title, MenuItemVec items) { return Singleton<SystemToolkit>::Set()->CreateMenu(w, title, move(items)); }
-unique_ptr<MenuViewInterface> Toolkit::CreateEditMenu(Window *w, MenuItemVec items) { return Singleton<SystemToolkit>::Set()->CreateEditMenu(w, move(items)); }
+void Toolkit::UnloadImage(int n) { app_images.Erase(n-1); }
+int Toolkit::LoadImage(const string &n) { return app_images.Insert(Texture(win)) + 1; }
+void Toolkit::UpdateImage(int n, Texture &t) {
+  CHECK_RANGE(n-1, 0, app_images.size());
+  app_images[n-1] = Texture(t);
+}
+
+unique_ptr<AlertViewInterface> Toolkit::CreateAlert(Window *w, AlertItemVec items) { return system_toolkit->CreateAlert(w, move(items)); }
+unique_ptr<PanelViewInterface> Toolkit::CreatePanel(Window *w, const Box &b, const string &title, PanelItemVec items) { return system_toolkit->CreatePanel(w, b, title, move(items)); }
+unique_ptr<MenuViewInterface> Toolkit::CreateMenu(Window *w, const string &title, MenuItemVec items) { return system_toolkit->CreateMenu(w, title, move(items)); }
+unique_ptr<MenuViewInterface> Toolkit::CreateEditMenu(Window *w, MenuItemVec items) { return system_toolkit->CreateEditMenu(w, move(items)); }
 unique_ptr<ToolbarViewInterface> Toolkit::CreateToolbar(Window *w, const string &theme, MenuItemVec items, int flag) { return make_unique<ToolbarView>(w, theme, move(items)); }
 unique_ptr<CollectionViewInterface> Toolkit::CreateCollectionView(Window *w, const string &title, const string &style, const string &theme, vector<CollectionItem> items) { return make_unique<CollectionView>(w, title, style, theme, move(items)); }
 unique_ptr<TableViewInterface> Toolkit::CreateTableView(Window *w, const string &title, const string &style, const string &theme, TableItemVec items) { return make_unique<TableView>(w, title, style, theme, move(items)); }

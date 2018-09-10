@@ -60,8 +60,6 @@ const int Key::Home       = -33;
 const int Key::End        = -34;
 const int Key::Insert     = -35;
 
-const int Texture::updatesystemimage_pf = Pixel::BGRA;
-
 struct AndroidWindow : public Window {
   AndroidWindow(Application *a) : Window(a) {}
 

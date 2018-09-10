@@ -345,7 +345,7 @@ Clipboard::Clipboard() {
 
 Application::Application(int ac, const char* const* av) :
   ThreadDispatcher(this), AssetLoading(this, this, this), MouseFocus(this),
-  system_toolkit(Singleton<SystemToolkit>::Set()) {
+  system_toolkit(make_unique<SystemToolkit>(this)) {
   initialized = 0;
   pid = 0;
   argc = ac;
@@ -355,9 +355,10 @@ Application::Application(int ac, const char* const* av) :
   fonts = make_unique<Fonts>(this, this, this);
   framework = Framework::Create(this);
 #ifdef LFL_MOBILE
-  toolkit = system_toolkit;
+  toolkit = system_toolkit.get();
 #else
-  toolkit = Singleton<Toolkit>::Set();
+  gl_toolkit = make_unique<Toolkit>(this, system_toolkit.get(), this);
+  toolkit = gl_toolkit.get();
 #endif
   SignalHandler::Set(this);
   Logger::Set(this, this);

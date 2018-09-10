@@ -36,7 +36,7 @@ struct GameMenuGUI : public View, public Connection::Handler {
   FontRef font, bright_font, glow_font;
   Box titlewin, menuhdr, menuftr1, menuftr2;
   int default_port, last_selected=-1, last_sub_selected=-1, master_server_selected=-1;
-  unique_ptr<ToolbarViewInterface> toplevel, sublevel, server_start, server_join;
+  unique_ptr<ToolbarViewInterface> toplevel, sublevel;
   unique_ptr<TableViewInterface> singleplayer, startserver, serverlist, options, gplus_invite;
   unique_ptr<AdvertisingViewInterface> ads;
   unique_ptr<NavigationViewInterface> nav;
@@ -70,38 +70,31 @@ struct GameMenuGUI : public View, public Connection::Handler {
     toplevel->selected = 0;
 
     sublevel = make_unique<ToolbarView>(root, "Clear", MenuItemVec{
-      { "g+",    "", [=]() { sublevel->selected=0; }},
-      { "join",  "", [=]() { sublevel->selected=1; }},
-      { "start", "", [=]() { sublevel->selected=2; }},
+      { "g+",    "", [=]() { sublevel->selected=0; Layout(); }},
+      { "join",  "", [=]() { sublevel->selected=1; Layout(); }},
+      { "start", "", [=]() { sublevel->selected=2; Layout(); }},
       }, font, glow_font, &Color::white);
     sublevel->selected = 1;
-
-    server_start = TK->CreateToolbar(root, "Light", MenuItemVec{
-      { "start", "", bind(&GameMenuGUI::MenuServerStart, this) },
-    }, 0);
-
-    server_join = TK->CreateToolbar(root, "Light", MenuItemVec{
-      { "join", "", bind(&GameMenuGUI::MenuServerJoin, this) },
-    }, 0);
 
     TableItemVec settings_items;
     for (auto &i : settings->vec)
       settings_items.emplace_back(i.key, TableItem::Selector, Join(i.value->data, ","));
+    settings_items.emplace_back("Start", TableItem::Button,  "", "", 0, 0, 0, bind(&GameMenuGUI::MenuServerStart, this)); 
     singleplayer = TK->CreateTableView(root, "Single Player", "", "Clear", move(settings_items));
-    singleplayer->SetToolbar(server_start.get());
+
     startserver = TK->CreateTableView(root, "Start Server", "", "Clear", TableItemVec{});
     serverlist = TK->CreateTableView(root, "Multiplayer", "", "Clear", TableItemVec{
       TableItem("", TableItem::Separator),
       TableItem("[ add server ]", TableItem::TextInput, "", "", 0, 0, 0, Callback(), bind(&GameMenuGUI::MenuAddServer, this, _1)),
+      TableItem("Join",           TableItem::Button,    "", "", 0, 0, 0, bind(&GameMenuGUI::MenuServerJoin, this))
     });
-    serverlist->SetToolbar(server_start.get());
 
     TableItemVec options_items{
 #ifdef LFL_ANDROID
       // LayoutGPlusSigninButton(&menuflow, gplus->GetSignedIn());
       // gplus_signin_button.EnableHover();
 #endif
-      TableItem("Player Name",         TableItem::TextInput, "", "", 0, 0, 0, Callback()),
+      TableItem("Player Name",         TableItem::TextInput, Singleton<FlagMap>::Get()->Get("player_name"), "", 0, 0, 0, Callback()),
       TableItem("Control Sensitivity", TableItem::Slider,    ""),
       TableItem("Volume",              TableItem::Slider,    ""),
       TableItem("Move Forward:",       TableItem::Label,     "W"),

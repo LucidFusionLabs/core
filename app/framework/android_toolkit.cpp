@@ -20,6 +20,7 @@
 #include "core/app/framework/android_toolkit.h"
 
 namespace LFL {
+const int Texture::updatesystemimage_pf = Pixel::BGRA;
 static JNI *jni = Singleton<JNI>::Set();
 
 struct AndroidToolbarView : public ToolbarViewInterface {
@@ -387,7 +388,7 @@ void AndroidTableView::SetHeader(int section, TableItem header) {
   jni->env->CallVoidMethod(impl.v, mid, jni->activity, jint(section), v.v);
 }
 
-void Application::UpdateSystemImage(int n, Texture &t) {
+void SystemToolkit::UpdateImage(int n, Texture &t) {
   if (!t.buf) return;
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->activity_class, "updateBitmap", "(IIII[I)V"));
@@ -398,7 +399,7 @@ void Application::UpdateSystemImage(int n, Texture &t) {
   jni->env->CallVoidMethod(jni->activity, mid, jint(n), jint(t.width), jint(t.height), jint(t.pf), arr.v);
 }
 
-int Application::LoadSystemImage(const string &n) {
+int SystemToolkit::LoadImage(const string &n) {
   static jmethodID mid = CheckNotNull
     (jni->env->GetMethodID(jni->activity_class, "getDrawableResId", "(Ljava/lang/String;)I"));
   LocalJNIString nstr(jni->env, JNI::ToJString(jni->env, n));
@@ -406,7 +407,7 @@ int Application::LoadSystemImage(const string &n) {
   return ret;
 }
 
-void Application::UnloadSystemImage(int n) {
+void SystemToolkit::UnloadImage(int n) {
   static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "unloadBitmap", "(I)V"));
   jni->env->CallVoidMethod(jni->activity, mid, jint(n));
 }

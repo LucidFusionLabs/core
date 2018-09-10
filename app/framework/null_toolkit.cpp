@@ -17,6 +17,8 @@
  */
 
 namespace LFL {
+const int Texture::updatesystemimage_pf = Pixel::RGB24;
+
 struct NullToolbarView : public ToolbarViewInterface {
   string theme;
   void Show(bool show_or_hide) {}
@@ -29,6 +31,8 @@ struct NullCollectionView : public CollectionViewInterface {
   vector<TableSection<CollectionItem>> data;
   NullCollectionView(const string &title, const string &style, vector<CollectionItem> items) :
     data(TableSection<CollectionItem>::Convert(move(items))) {}
+  pair<int, int> GetSelectedRow() { return make_pair(-1, -1); }
+  void SelectRow(int section, int row) {}
   void SetToolbar(ToolbarViewInterface *t) {}
   void Show(bool show_or_hide) {}
 };
@@ -103,9 +107,9 @@ struct NullNavigationView : public NavigationViewInterface {
   void SetTheme(const string &theme) {}
 };
 
-int Application::LoadSystemImage(const string &n) { static int ret=0; return ++ret; }
-void Application::UpdateSystemImage(int n, Texture&) {}
-void Application::UnloadSystemImage(int n) {}
+int SystemToolkit::LoadImage(const string &n) { static int ret=0; return ++ret; }
+void SystemToolkit::UpdateImage(int n, Texture&) {}
+void SystemToolkit::UnloadImage(int n) {}
 
 unique_ptr<ToolbarViewInterface> SystemToolkit::CreateToolbar(Window*, const string &theme, MenuItemVec items, int flag) { return make_unique<NullToolbarView>(); }
 unique_ptr<CollectionViewInterface> SystemToolkit::CreateCollectionView(Window*, const string &title, const string &style, const string &theme, vector<CollectionItem> items) { return make_unique<NullCollectionView>(title, style, move(items)); }

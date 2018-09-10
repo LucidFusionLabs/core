@@ -55,7 +55,7 @@ struct CollectionView : public View, public CollectionViewInterface {
   typedef TableSection<CollectionViewItem> CollectionViewSection;
 
   vector<CollectionViewSection> data;
-  ToolbarViewInterface *toolbar;
+  ToolbarViewInterface *toolbar=0;
   string title, style, theme;
   Widget::Slider scrollbar;
   DrawableBoxArray *out=0;
@@ -67,15 +67,19 @@ struct CollectionView : public View, public CollectionViewInterface {
   void OnClick(int, point, point, int);
   void CheckExists(int section, int row);
   View *AppendFlow(Flow*) override;
+
   void Show(bool show_or_hide) override;
   void SetToolbar(ToolbarViewInterface*) override;
+  pair<int, int> GetSelectedRow() override { return make_pair(selected_section, selected_row); }
+  void SelectRow(int section, int row) override { selected_section=section; selected_row=row; }
 };
 
 struct TableView : public View, public TableViewInterface {
   struct TableViewItem : public TableItem {
     Box val_box;
-    unique_ptr<TextBox> textbox;
+    unique_ptr<Widget::Button> button;
     unique_ptr<Widget::Slider> slider;
+    unique_ptr<TextBox> textbox;
     unique_ptr<Browser> browser;
     TableViewItem(TableItem i) : TableItem(move(i)) {}
     TableViewItem() {}
@@ -149,6 +153,14 @@ struct NavigationView : public View, public NavigationViewInterface {
 };
 
 struct Toolkit : public ToolkitInterface {
+  ToolkitInterface *system_toolkit;
+  WindowHolder *win;
+  Toolkit(ApplicationInfo *a, ToolkitInterface *st, WindowHolder *w) : ToolkitInterface(a), system_toolkit(st), win(w) {}
+
+  int LoadImage(const string &fn) override;
+  void UpdateImage(int n, Texture&) override;
+  void UnloadImage(int n) override;
+
   unique_ptr<AlertViewInterface> CreateAlert(Window*, AlertItemVec items) override;
   unique_ptr<PanelViewInterface> CreatePanel(Window*, const Box&, const string &title, PanelItemVec) override;
   unique_ptr<ToolbarViewInterface> CreateToolbar(Window*, const string &theme, MenuItemVec items, int flag) override;
