@@ -52,9 +52,11 @@ void View::IncrementBoxY(int y, int draw_box_ind, int input_box_ind) {
   if (input_box_ind >= 0) mouse.hit     [input_box_ind].box.y += y;
 }
 
-void View::Draw() {
-  if (child_box.data.empty()) Layout();
-  child_box.Draw(root->gd, box.TopLeft());
+void View::Draw(const point &d) {
+  if (child_box.data.empty() && child_view.empty()) Layout();
+  auto p = d + box.TopLeft();
+  child_box.Draw(root->gd, p);
+  for (auto v : child_view) if (v->child_box.Size() || v->child_view.size()) v->Draw(p);
 }
 
 void Widget::Button::Layout(Flow *flow, Font *f) {
@@ -1184,7 +1186,7 @@ void Console::StartAnimating() {
   if (animating && !last_animating && animating_cb) animating_cb();
 }
 
-void Console::Draw() {
+void Console::Draw(const point &p) {
   drawing = 1;
   Time now = Now(), elapsed;
   bool active = Active(), last_animating = animating;
@@ -1221,7 +1223,7 @@ Dialog::Dialog(Window *W, float w, float h, int flag) : View(W),
   font    (W, FontDesc(FLAGS_font, "", 14, Color(Color::white,.8), Color::clear, FLAGS_font_flag)),
   menuicon(W, FontDesc("MenuAtlas", "", 0, Color::white, Color::clear, 0)), deleted_cb([=]{ deleted=true; })
 {
-  box = root->Box().center(root->Box(w, h));
+  box = root->Box().center(root->Box().Scale(w, h));
   fullscreen = flag & Flag::Fullscreen;
   Activate();
 }
@@ -1233,13 +1235,14 @@ void Dialog::LayoutTabbed(int tab, const Box &b, const point &tab_dim, MouseCont
   LayoutTitle(Box(box.x+tab*tab_dim.x, 0, tab_dim.x, tab_dim.y), oc, od);
 }
 
-void Dialog::Layout() {
+View *Dialog::Layout(Flow *flow) {
   ResetView();
   int fh = font->Height();
   content = Box(0, -box.h, box.w, box.h + ((fullscreen && !tabbed) ? 0 : -fh));
-  if (fullscreen) return;
+  if (fullscreen) return this;
   LayoutTitle(Box(box.w, fh), &mouse, &child_box);
   LayoutReshapeControls(box.Dimension(), &mouse);
+  return this;
 }
 
 void Dialog::LayoutTitle(const Box &b, MouseController *oc, DrawableBoxArray *od) {
@@ -1281,7 +1284,7 @@ bool Dialog::HandleReshape(Box *outline) {
   return moving || resizing_left || resizing_right || resizing_bottom;
 }
 
-void Dialog::Draw() {
+void Dialog::Draw(const point &p) {
   GraphicsContext gc(root->gd);
   if (fullscreen) { child_box.Draw(gc.gd, box.TopLeft()); return; }
 
@@ -1312,7 +1315,7 @@ void DialogTab::Draw(GraphicsDevice *gd, const Box &b, const point &tab_dim, con
 }
 
 TabbedDialogInterface::TabbedDialogInterface(View *v, const point &d) : view(v), tab_dim(d) {}
-void TabbedDialogInterface::Layout() {
+View *TabbedDialogInterface::Layout(Flow *flow) {
   for (auto b=tab_list.begin(), e=tab_list.end(), t=b; t != e; ++t) {
     int tab_no = t-b;
     t->dialog->LayoutTabbed(tab_no, box, tab_dim, &view->mouse, &t->child_box);
@@ -1327,19 +1330,21 @@ void TabbedDialogInterface::Layout() {
     view->child_box.PushBack(Box(box.x,          -fh, fh, fh), attr_id, menuicon ? menuicon->FindGlyph(6) : 0);
     view->child_box.PushBack(Box(box.right()-fh, -fh, fh, fh), attr_id, menuicon ? menuicon->FindGlyph(7) : 0);
   }
+  return view;
 }
 
-void MessageBoxDialog::Layout() {
-  Dialog::Layout();
+View *MessageBoxDialog::Layout(Flow *flow_in) {
+  Dialog::Layout(flow_in);
   Box dim(box.Dimension());
   Flow flow(&dim, font, &child_box);
   flow.p = point(dim.centerX(message_size.w), dim.centerY(message_size.h) - dim.h);
   flow.AppendText(message);
+  return this;
 }
 
-void MessageBoxDialog::Draw() {
+void MessageBoxDialog::Draw(const point &p) {
   Scissor scissor(root->gd, box);
-  Dialog::Draw();
+  Dialog::Draw(p);
 }
 
 SliderDialog::SliderDialog(Window *w, const string &t, const SliderDialog::UpdatedCB &cb, float scrolled, float total, float inc) :
@@ -1449,7 +1454,7 @@ HelperView::Label::Label(const Box &w, const string &d, int h, Font *f, const po
   AssignLabelBox();
 }
 
-void HelperView::Draw() {
+void HelperView::Draw(const point &p) {
   GraphicsContext gc(root->gd);
   for (auto i = label.begin(); i != label.end(); ++i) {
     glLine(root->gd, point(i->label_center.x, i->label_center.y),

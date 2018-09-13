@@ -33,11 +33,10 @@ struct ToolbarView : public View, public ToolbarViewInterface {
   string theme;
   Font *font=0, *selected_font=0;
   Color *selected_outline=0;
-  ToolbarView(Window *w, const string &theme, MenuItemVec items, Font *F=0, Font *SF=0, Color *SO=0);
+  ToolbarView(Window *w, const string &theme, MenuItemVec items, Font *F=0, Font *SF=0, Color *SO=0, int flag=0);
 
-  void Layout() override;
-  void Draw() override;
-  View *AppendFlow(Flow*) override;
+  View *Layout(Flow*) override;
+  void Draw(const point &p) override;
 
   void Show(bool show_or_hide) override;
   void ToggleButton(const string &n) override;
@@ -62,11 +61,10 @@ struct CollectionView : public View, public CollectionViewInterface {
   int row_height=0, decay_box_line=-1, decay_box_left=0, selected_section=-1, selected_row=-1, scrolled=0;
   CollectionView(Window *w, const string &title, const string &style, const string &theme, vector<CollectionItem> items);
 
-  void Layout() override;
-  void Draw() override;
+  View *Layout(Flow*) override;
+  void Draw(const point &p) override;
   void OnClick(int, point, point, int);
   void CheckExists(int section, int row);
-  View *AppendFlow(Flow*) override;
 
   void Show(bool show_or_hide) override;
   void SetToolbar(ToolbarViewInterface*) override;
@@ -95,11 +93,10 @@ struct TableView : public View, public TableViewInterface {
   int row_height=0, decay_box_line=-1, decay_box_left=0, selected_section=-1, selected_row=-1, scrolled=0;
   TableView(Window *w, const string &title, const string &style, const string &theme, TableItemVec items);
 
-  void Layout() override;
-  void Draw() override;
+  View *Layout(Flow*) override;
+  void Draw(const point &p) override;
   void OnClick(int, point, point, int);
   void CheckExists(int section, int row);
-  View *AppendFlow(Flow*) override;
 
   void DelNavigationButton(int id) override;
   void AddNavigationButton(int id, const TableItem &item) override;
@@ -138,9 +135,8 @@ struct NavigationView : public View, public NavigationViewInterface {
   vector<StackViewInterface*> stack;
   NavigationView(Window *w, const string &style, const string &theme);
 
-  View *AppendFlow(Flow*) override;
-  void Layout() override;
-  void Draw() override;
+  View *Layout(Flow*) override;
+  void Draw(const point &p) override;
 
   TableViewInterface *Back() override;
   void Show(bool show_or_hide) override;

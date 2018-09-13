@@ -82,6 +82,15 @@ Box::Box(const float *v4, bool round) {
   else       { x=   int(v4[0]); y=   int(v4[1]); w=   int(v4[2]); h=   int(v4[3]); }
 }
 
+Box Box::Scale(float xp, float yp, float xs, float ys, float xbl, float ybt, float xbr, float ybb) const {
+  if (isinf(xbr)) xbr = xbl;
+  if (isinf(ybb)) ybb = ybt;
+  return LFL::Box(x + w * (xp + xbl),
+                  y + h * (yp + ybb),
+                  w * xs - w * (xbl + xbr),
+                  h * ys - h * (ybt + ybb), false);
+}
+
 Box Box::FromString(const string &v) {
   Box box;
   StringWordIter csv(v, iscomma);

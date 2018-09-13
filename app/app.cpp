@@ -854,15 +854,6 @@ void Window::ClearChildren() {
   my_input.clear();
 }
 
-Box Window::Box(float xp, float yp, float xs, float ys, float xbl, float ybt, float xbr, float ybb) const {
-  if (isinf(xbr)) xbr = xbl;
-  if (isinf(ybb)) ybb = ybt;
-  return LFL::Box(gl_x + gl_w * (xp + xbl),
-                  gl_y + gl_h * (yp + ybb),
-                  gl_w * xs - gl_w * (xbl + xbr),
-                  gl_h * ys - gl_h * (ybt + ybb), false);
-}
-
 void Window::SetBox(const point &wd, const LFL::Box &b) {
   Assign(&w,    &h,    wd.x, wd.y);
   Assign(&gl_x, &gl_y, b.x, b.y);
@@ -899,8 +890,8 @@ void Window::GiveDialogFocusAway(Dialog *d) {
 }
 
 void Window::DrawDialogs() {
-  for (auto i = dialogs.begin(), e = dialogs.end(); i != e; ++i) (*i)->Draw();
-  if (console) console->Draw();
+  for (auto i = dialogs.begin(), e = dialogs.end(); i != e; ++i) (*i)->Draw(point());
+  if (console) console->Draw(point());
   if (FLAGS_draw_grid) {
     Color c(.7, .7, .7);
     glIntersect(gd, mouse.x, mouse.y, &c);

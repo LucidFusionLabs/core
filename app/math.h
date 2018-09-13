@@ -312,6 +312,8 @@ struct Box {
   point  TopRight  () const { return point(right(), top()); }
   point BottomLeft () const { return point(x,       y);     }
   point BottomRight() const { return point(right(), y);     }
+  Box Scale(float xs, float ys) const { return LFL::Box(w*xs, h*ys); }
+  Box Scale(float xp, float yp, float xs, float ys, float xbl=0, float ybt=0, float xbr=-INFINITY, float ybb=-INFINITY) const;
 
   static float ScrollCrimped(float tex0, float tex1, float scroll, float *min, float *mid1, float *mid2, float *max);
   static bool   VerticalIntersect(const Box &w1, const Box &w2) { return w1.y < (w2.y + w2.h) && w2.y < (w1.y + w1.h); }

@@ -23,27 +23,23 @@
 namespace LFL {
 static FreeListVector<Texture> app_images([](Texture *t) { t->Clear(); });
 
-ToolbarView::ToolbarView(Window *w, const string &t, MenuItemVec items, Font *F, Font *SF, Color *SO) :
+ToolbarView::ToolbarView(Window *w, const string &t, MenuItemVec items, Font *F, Font *SF, Color *SO, int flag) :
   View(w), theme(t), font(F), selected_font(SF), selected_outline(SO) {
   for (auto &i : items) data.emplace_back(move(i));
+  if (flag) align = flag & Align::Mask;
   Activate();
 }
 
-void ToolbarView::Layout() { ClearView(); }
-void ToolbarView::Draw() { View::Draw(); }
+void ToolbarView::Draw(const point &p) { View::Draw(p); }
 void ToolbarView::Show(bool show_or_hide) {}
 void ToolbarView::SetTheme(const string &t) { theme=t; }
 void ToolbarView::ToggleButton(const string &n) {
   for (auto &i : data) if (i.shortcut == n) i.down = !i.down;
 }
 
-View *ToolbarView::AppendFlow(Flow *flow) {
-  int row_height=0;
-  Box tb_box(*flow->container);
-  if (!(row_height = flow->cur_attr.font->Height())) row_height = 16;
-  tb_box.y = tb_box.TopLeft().y - row_height;
-  tb_box.h = row_height;
-  LayoutBox(tb_box);
+View *ToolbarView::Layout(Flow *flow) {
+  ClearView();
+  box = *flow->container;
   out = flow->out;
   for (int ind=0, l=data.size(); ind != l; ++ind) {
     auto &i = data[ind];
@@ -64,47 +60,27 @@ View *ToolbarView::AppendFlow(Flow *flow) {
 
 CollectionView::CollectionView(Window *w, const string &t, const string &s, const string &th, vector<CollectionItem> items) :
   View(w), data(CollectionViewSection::Convert(move(items))), title(t), style(s), theme(th), scrollbar(this) { Activate(); }
-  
-void CollectionView::Layout() {
-  ClearView();
-  mouse.AddClickBox(Box(0, -box.h, box.w - scrollbar.dot_size, box.h),
-                    MouseController::CoordCB(bind(&CollectionView::OnClick, this, _1, _2, _3, _4)));
-}
 
 void CollectionView::CheckExists(int section, int row) {
   CHECK_RANGE(section, 0, data.size());
   CHECK_RANGE(row, 0, data[section].item.size());
 }
 
-void CollectionView::OnClick(int but, point p, point d, int down) {
-  if (!down) return;
-  int line_clicked = -RelativePosition(root->mouse).y / row_height, section_id = -1, row = -1;
-  if (line_clicked < 0) return;
-  decay_box_line = line_clicked;
-  decay_box_left = 10;
-  CollectionViewSection::FindSectionOffset(data, line_clicked, &section_id, &row);
-  if (section_id < 0 || section_id >= data.size() || row < 0 || row >= data[section_id].item.size()) return;
-  CollectionViewSection &section = data[section_id];
-  CollectionViewItem &item = section.item[row];
-}
-
-void CollectionView::Draw() {
-  View::Draw();
+void CollectionView::OnClick(int but, point p, point d, int down) {}
+void CollectionView::Draw(const point &p) {
+  View::Draw(p);
   GraphicsContext gc(root->gd);
-  if (out && decay_box_line >= 0 && decay_box_line < out->line.size() && decay_box_left > 0) {
-    BoxOutline().DrawGD(gc.gd, out->line[decay_box_line] + box.TopLeft());
-    decay_box_left--;
-  }
   if (selected_section >=0 && selected_row >= 0) {
-    auto b = data[selected_section].item[selected_row].button->GetHitBox().box;
+    auto b = data[selected_section].item[selected_row].button->box + p + box.TopLeft();
     gc.gd->SetColor(Color::grey20); BoxTopLeftOutline    ().Draw(&gc, b);
     gc.gd->SetColor(Color::grey60); BoxBottomRightOutline().Draw(&gc, b);
   }
 }
 
-View *CollectionView::AppendFlow(Flow *flow) {
-  LayoutBox(*flow->container);
+View *CollectionView::Layout(Flow *flow_in) {
+  Flow child_flow(flow_in->container, flow_in->cur_attr.font, ResetView()), *flow = &child_flow;
   if (!(row_height = flow->cur_attr.font->Height())) row_height = 16;
+  box = flow->container->RelativeCoordinatesBox();
   out = flow->out;
 
   auto font = flow->cur_attr.font;
@@ -138,13 +114,22 @@ View *CollectionView::AppendFlow(Flow *flow) {
   }
 
   if (toolbar) {
-    Box b = root->Box(.4, .05);
-    Flow toolbarflow(&b, font, out);
+    Box tb_box = box; // (0, -box.h, box.w, box.h);
+    if (toolbar->align & Align::Top) tb_box.y = tb_box.TopLeft().y - row_height;
+    else tb_box.y = tb_box.BottomLeft().y;
+    tb_box.h = row_height;
+    Flow toolbarflow(&tb_box, font, dynamic_cast<ToolbarView*>(toolbar)->ResetView());
     toolbarflow.layout.align_center = 1;
-    if (auto v = toolbar->AppendFlow(&toolbarflow)) child_view.push_back(v);
+    if (auto v = toolbar->Layout(&toolbarflow)) {
+      v->box = tb_box;
+      child_view.push_back(v);
+    }
   }
 
+  mouse.AddClickBox(Box(0, -box.h, box.w - scrollbar.dot_size, box.h),
+                    MouseController::CoordCB(bind(&CollectionView::OnClick, this, _1, _2, _3, _4)));
   scrollbar.SetDocHeight(flow->Height());
+  child_flow.Complete();
   return this;
 }
 
@@ -156,7 +141,7 @@ TableView::TableView(Window *w, const string &t, const string &s, const string &
 
 void TableView::DelNavigationButton(int id) { nav_left.type=0; }
 void TableView::AddNavigationButton(int id, const TableItem &item) { nav_left = item; }
-void TableView::SetToolbar(ToolbarViewInterface *tb) { toolbar = tb;}
+void TableView::SetToolbar(ToolbarViewInterface *tb) { toolbar = tb; }
 void TableView::Show(bool show_or_hide) {}
 
 string        TableView::GetKey   (int s, int r) { CheckExists(s, r); return data[s].item[r].key; }
@@ -227,12 +212,6 @@ void TableView::SetColor   (int s, int r, const Color &val)  { CheckExists(s, r)
 void TableView::SetTitle(const string &t) { title = t; }
 void TableView::SetTheme(const string &t) { theme = t; }
 
-void TableView::Layout() {
-  ClearView();
-  mouse.AddClickBox(Box(0, -box.h, box.w - scrollbar.dot_size, box.h),
-                    MouseController::CoordCB(bind(&TableView::OnClick, this, _1, _2, _3, _4)));
-}
-
 void TableView::CheckExists(int section, int row) {
   CHECK_RANGE(section, 0, data.size());
   CHECK_RANGE(row, 0, data[section].item.size());
@@ -240,7 +219,7 @@ void TableView::CheckExists(int section, int row) {
 
 void TableView::OnClick(int but, point p, point d, int down) {
   if (!down) return;
-  int line_clicked = -RelativePosition(root->mouse).y / row_height, section_id = -1, row = -1;
+  int line_clicked = -p.y / row_height, section_id = -1, row = -1;
   if (line_clicked < 0) return;
   decay_box_line = line_clicked;
   decay_box_left = 10;
@@ -254,10 +233,10 @@ void TableView::OnClick(int but, point p, point d, int down) {
   }
 }
 
-void TableView::Draw() {
-  View::Draw();
+void TableView::Draw(const point &p) {
+  View::Draw(p);
   if (out && decay_box_line >= 0 && decay_box_line < out->line.size() && decay_box_left > 0) {
-      BoxOutline().DrawGD(root->gd, out->line[decay_box_line] + box.TopLeft());
+      BoxOutline().DrawGD(root->gd, out->line[decay_box_line] + p + box.TopLeft());
       decay_box_left--;
   }
   // browser.Paint(&menuflow, box.TopLeft() + point(0, 0 /*scrolled*/));
@@ -265,15 +244,16 @@ void TableView::Draw() {
   // browser.UpdateScrollbar();
 }
 
-View *TableView::AppendFlow(Flow *flow) {
-  LayoutBox(*flow->container);
+View *TableView::Layout(Flow *flow_in) {
+  Flow child_flow(flow_in->container, flow_in->cur_attr.font, ResetView()), *flow = &child_flow;
   if (!(row_height = flow->cur_attr.font->Height())) row_height = 16;
+  box = flow->container->RelativeCoordinatesBox();
   out = flow->out;
 
   scrollbar.LayoutAttached(Box(0, -box.h, box.w, box.h - row_height));
   flow->p.y += (scrolled = int(scrollbar.scrolled * scrollbar.doc_height));
-
   flow->AppendNewline();
+
   for (auto &s : data)
     for (auto &i : s.item) {
       flow->AppendText(0, i.key);
@@ -339,7 +319,7 @@ View *TableView::AppendFlow(Flow *flow) {
   if (toolbar) {
     Box b(box.x, box.h, box.w, row_height);
     Flow toolbarflow(&b, flow->cur_attr.font, out);
-    if (auto v = toolbar->AppendFlow(&toolbarflow)) child_view.push_back(v);
+    if (auto v = toolbar->Layout(&toolbarflow)) child_view.push_back(v);
   }
 
 #if 0
@@ -348,6 +328,9 @@ View *TableView::AppendFlow(Flow *flow) {
         app->SetVolume(int(tab3_volume.scrolled * tab3_volume.doc_height));
       }
 #endif
+  mouse.AddClickBox(Box(0, -box.h, box.w - scrollbar.dot_size, box.h),
+                    MouseController::CoordCB(bind(&TableView::OnClick, this, _1, _2, _3, _4)));
+  child_flow.Complete();
   return this;
 }
 
@@ -386,9 +369,8 @@ void NavigationView::PopAll() {
 }
 
 void NavigationView::SetTheme(const string &t) { theme = t; }
-void NavigationView::Layout() {}
-void NavigationView::Draw() {}
-View *NavigationView::AppendFlow(Flow *flow) { return stack.size() ? stack.back()->AppendFlow(flow) : nullptr; }
+void NavigationView::Draw(const point &p) {}
+View *NavigationView::Layout(Flow *flow) { return stack.size() ? stack.back()->Layout(flow) : nullptr; }
 
 void Toolkit::UnloadImage(int n) { app_images.Erase(n-1); }
 int Toolkit::LoadImage(const string &n) { return app_images.Insert(Texture(win)) + 1; }
@@ -401,7 +383,7 @@ unique_ptr<AlertViewInterface> Toolkit::CreateAlert(Window *w, AlertItemVec item
 unique_ptr<PanelViewInterface> Toolkit::CreatePanel(Window *w, const Box &b, const string &title, PanelItemVec items) { return system_toolkit->CreatePanel(w, b, title, move(items)); }
 unique_ptr<MenuViewInterface> Toolkit::CreateMenu(Window *w, const string &title, MenuItemVec items) { return system_toolkit->CreateMenu(w, title, move(items)); }
 unique_ptr<MenuViewInterface> Toolkit::CreateEditMenu(Window *w, MenuItemVec items) { return system_toolkit->CreateEditMenu(w, move(items)); }
-unique_ptr<ToolbarViewInterface> Toolkit::CreateToolbar(Window *w, const string &theme, MenuItemVec items, int flag) { return make_unique<ToolbarView>(w, theme, move(items)); }
+unique_ptr<ToolbarViewInterface> Toolkit::CreateToolbar(Window *w, const string &theme, MenuItemVec items, int flag) { return make_unique<ToolbarView>(w, theme, move(items), nullptr, nullptr, nullptr, flag); }
 unique_ptr<CollectionViewInterface> Toolkit::CreateCollectionView(Window *w, const string &title, const string &style, const string &theme, vector<CollectionItem> items) { return make_unique<CollectionView>(w, title, style, theme, move(items)); }
 unique_ptr<TableViewInterface> Toolkit::CreateTableView(Window *w, const string &title, const string &style, const string &theme, TableItemVec items) { return make_unique<TableView>(w, title, style, theme, move(items)); }
 unique_ptr<TextViewInterface> Toolkit::CreateTextView(Window *w, const string &title, File *file) { return nullptr; }

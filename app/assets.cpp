@@ -312,12 +312,13 @@ void glShadertoyShader(GraphicsDevice *gd, Shader *shader, const Texture *tex) {
 }
 
 void glShadertoyShaderWindows(GraphicsDevice *gd, Shader *shader, const Color &backup_color, const Box &w,                   const Texture *tex) { glShadertoyShaderWindows(gd, shader, backup_color, vector<const Box*>(1, &w), tex); }
-void glShadertoyShaderWindows(GraphicsDevice *gd, Shader *shader, const Color &backup_color, const vector<const Box*> &wins, const Texture *tex) {
+void glShadertoyShaderWindows(GraphicsDevice *gd, Shader *shader, const Color &backup_color, const vector<const Box*> &wins, const Texture *tex, point p) {
   if (shader) glShadertoyShader(gd, shader, tex);
   else gd->SetColor(backup_color);
   if (tex) { gd->EnableLayering(); tex->Bind(); }
   else gd->DisableTexture();
-  for (auto w : wins) GraphicsContext::DrawTexturedBox1(gd, *w, tex ? tex->coord : 0);
+  if (p.x || p.y) { for (auto w : wins) { Box b = *w + p; GraphicsContext::DrawTexturedBox1(gd,  b, tex ? tex->coord : 0); } }
+  else            { for (auto w : wins) {                 GraphicsContext::DrawTexturedBox1(gd, *w, tex ? tex->coord : 0); } }
   if (shader) gd->UseShader(0);
 }
 

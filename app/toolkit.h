@@ -196,7 +196,7 @@ struct ToolbarViewInterface {
   virtual void ToggleButton(const string &n) = 0;
   virtual void SetTheme(const string &theme) = 0;
   virtual string GetTheme() = 0;
-  virtual View *AppendFlow(Flow*) { return nullptr; }
+  virtual View *Layout(Flow*) { return nullptr; }
 };
 
 struct MenuViewInterface {
@@ -208,7 +208,7 @@ struct StackViewInterface {
   Callback hide_cb, show_cb;
   virtual ~StackViewInterface() {}
   virtual void Show(bool show_or_hide) = 0;
-  virtual View *AppendFlow(Flow*) { return nullptr; }
+  virtual View *Layout(Flow*) { return nullptr; }
 };
 
 struct CollectionViewInterface : public StackViewInterface {
@@ -283,7 +283,7 @@ struct NavigationViewInterface {
   virtual void PopToRoot() = 0;
   virtual void PopAll() = 0;
   virtual void SetTheme(const string &theme) = 0;
-  virtual View *AppendFlow(Flow*) { return nullptr; }
+  virtual View *Layout(Flow*) { return nullptr; }
 };
 
 struct AdvertisingViewInterface {

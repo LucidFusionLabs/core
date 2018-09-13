@@ -143,12 +143,13 @@ struct GameMenuGUI : public View, public Connection::Handler {
     particles.texture = parts->ID;
   }
 
-  bool Activate  () {                active=1; topbar.active=1; toplevel->selected=last_selected=-1; root->shell->mouseout(vector<string>()); if (ads) ads->Show(false); return 1; }
-  bool Deactivate() { nav->PopAll(); active=0; topbar.active=0; UpdateSettings(); if (ads) ads->Show(true); return 1; }
+  bool Activate  () override {                active=1; topbar.active=1; toplevel->selected=last_selected=-1; root->shell->mouseout(vector<string>()); if (ads) ads->Show(false); return 1; }
+  bool Deactivate() override { nav->PopAll(); active=0; topbar.active=0; UpdateSettings(); if (ads) ads->Show(true); return 1; }
 
   void UpdateSettings() {
-    // root->shell->Run(StrCat("name ", String::ToUTF8(tab3_player_name.Text16())));
-    // root->shell->Run(StrCat("msens ", StrCat(tab3_sensitivity.scrolled * tab3_sensitivity.doc_height)));
+    auto settings = options->GetSectionText(0);
+    root->shell->Run(StrCat("name ", settings[0].second));
+    root->shell->Run(StrCat("msens ", settings[1].second));
   }
 
   void MenuQuit() { toplevel->selected=3; root->parent->Shutdown(); }
@@ -189,8 +190,8 @@ struct GameMenuGUI : public View, public Connection::Handler {
     return 0;
   }
 
-  void Close(Connection *c) { c->handler.release(); }
-  int Read(Connection *c) {
+  void Close(Connection *c) override { c->handler.release(); }
+  int Read(Connection *c) override {
     for (int i=0; i<c->packets.size(); i++) {
       string reply(c->rb.begin() + c->packets[i].offset, c->packets[i].len);
       PingResponseCB(c, reply);
@@ -214,20 +215,21 @@ struct GameMenuGUI : public View, public Connection::Handler {
     master_server_list.push_back(s);
   }
 
-  void Layout() {
-    topbar.box = Box::DelBorder(root->Box(0, .95, 1, .05), Border(1,1,1,1));
-    titlewin   = Box::DelBorder(root->Box(.15, .9, .7, .05), Border(1,1,1,1)); 
-    box        = Box::DelBorder(root->Box(.15, .4, .7, .5), Border(1,1,1,1));
+  View *Layout(Flow *flow=nullptr) override {
+    topbar.box = Box::DelBorder(root->ViewBox().Scale(0, .95, 1, .05), Border(1,1,1,1));
+    titlewin   = Box::DelBorder(root->ViewBox().Scale(.15, .9, .7, .05), Border(1,1,1,1)); 
+    box        = Box::DelBorder(root->ViewBox().Scale(.15, .4, .7, .5), Border(1,1,1,1));
     menuhdr    = Box (box.x, box.y+box.h-font->Height(), box.w, font->Height());
     menuftr1   = Box (box.x, box.y+font->Height()*4, box.w, box.h-font->Height()*5);
     menuftr2   = Box (box.x, box.y+font->Height()*4, box.w, box.h-font->Height()*6);
     LayoutTopbar();
     LayoutMenu();
+    return this;
   }
 
   void LayoutTopbar() {
     Flow topbarflow(&topbar.box, font, topbar.ResetView());
-    if (auto v = toplevel->AppendFlow(&topbarflow)) topbar.child_view.push_back(v);
+    if (auto v = toplevel->Layout(&topbarflow)) topbar.child_view.push_back(v);
   }
 
   void LayoutMenu() {
@@ -237,7 +239,7 @@ struct GameMenuGUI : public View, public Connection::Handler {
 
     int my_selected = toplevel->selected;
     if (my_selected == 1) {
-      if (auto v = sublevel->AppendFlow(&menuflow)) child_view.push_back(v);
+      if (auto v = sublevel->Layout(&menuflow)) child_view.push_back(v);
       menuflow.SetFont(bright_font);
       menuflow.AppendNewline();
 
@@ -263,16 +265,10 @@ struct GameMenuGUI : public View, public Connection::Handler {
       }
     }
     if (my_selected == 0) {
-      if (auto v = nav->AppendFlow(&menuflow)) {
-        child_view.push_back(v);
-        child_box.PushBack(box, menuflow.out->attr.GetAttrId(menuflow.cur_attr), v);
-      }
+      if (auto v = nav->Layout(&menuflow)) child_view.push_back(v);
     }
     else if (my_selected == 2) {
-      if (auto v = nav->AppendFlow(&menuflow)) {
-        child_view.push_back(v);
-        child_box.PushBack(box, menuflow.out->attr.GetAttrId(menuflow.cur_attr), v);
-      }
+      if (auto v = nav->Layout(&menuflow)) child_view.push_back(v);
       menuflow.AppendNewlines(1);
     }
   }
@@ -293,17 +289,17 @@ struct GameMenuGUI : public View, public Connection::Handler {
 #endif
   }
 
-  void Draw(unsigned clicks, Shader *MyShader) {
+  void Draw(const point &p, unsigned clicks, Shader *MyShader) {
     GraphicsContext gc(root->gd);
     gc.gd->EnableBlend();
     vector<const Box*> bgwins;
     bgwins.push_back(&topbar.box);
     if (toplevel->selected >= 0) bgwins.push_back(&box);
-    glShadertoyShaderWindows(gc.gd, MyShader, Color(25, 60, 130, 120), bgwins);
+    glShadertoyShaderWindows(gc.gd, MyShader, Color(25, 60, 130, 120), bgwins, nullptr, p);
 
     if (title && toplevel->selected >= 0) {
       gc.gd->DisableBlend();
-      title->Draw(&gc, titlewin);
+      title->Draw(&gc, titlewin + p);
       gc.gd->EnableBlend();
       gc.gd->SetColor(font->fg);
       gc.gd->SetColor(Color::grey80); BoxTopLeftOutline    ().Draw(&gc, titlewin);
@@ -311,10 +307,10 @@ struct GameMenuGUI : public View, public Connection::Handler {
     }
 
     {
-      Scissor s(gc.gd, box);
-      View::Draw();
+      Scissor s(gc.gd, box + p);
+      View::Draw(p);
     }
-    topbar.Draw();
+    topbar.Draw(p);
 
     if (particles.texture) {
       particles.Update(cam, clicks, root->mouse.x, root->mouse.y, root->parent->input->MouseButton1Down());
@@ -322,8 +318,8 @@ struct GameMenuGUI : public View, public Connection::Handler {
     }
 
     if (toplevel->selected >= 0) {
-      gc.gd->SetColor(Color::grey80); BoxTopLeftOutline    ().Draw(&gc, box);
-      gc.gd->SetColor(Color::grey40); BoxBottomRightOutline().Draw(&gc, box);
+      gc.gd->SetColor(Color::grey80); BoxTopLeftOutline    ().Draw(&gc, box + p);
+      gc.gd->SetColor(Color::grey40); BoxBottomRightOutline().Draw(&gc, box + p);
     }
 
     last_selected = toplevel->selected;
@@ -369,11 +365,11 @@ struct GamePlayerListGUI : public View {
   }
 
   void Draw(Shader *MyShader) {
-    View::Draw();
+    View::Draw(point());
     if (!toggled) Deactivate();
     GraphicsContext gc(root->gd);
     gc.gd->EnableBlend();
-    Box win = root->Box(.1, .1, .8, .8, false);
+    Box win = root->Box().Scale(.1, .1, .8, .8, false);
     glShadertoyShaderWindows(gc.gd, MyShader, Color(255, 255, 255, 120), win);
 
     int fh = win.h/2-font->Height()*2;

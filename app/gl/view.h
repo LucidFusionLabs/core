@@ -52,11 +52,10 @@ struct View : public Drawable {
   virtual bool NotActive(const point &p) const { return !active; }
   virtual bool ToggleActive() { if ((active = !active)) Activate(); else Deactivate(); return active; }
   virtual point RelativePosition(const point &p) const { return p - box.TopLeft(); }
-  virtual void SetLayoutDirty() { child_box.Clear(); }
-  virtual void LayoutBox(const Box &b) { box=b; Layout(); }
-  virtual void Layout() {}
-  virtual void Draw(GraphicsContext*, const LFL::Box&) const override { const_cast<View*>(this)->Draw(); }
-  virtual void Draw();
+  virtual void SetLayoutDirty() { child_box.Clear(); child_view.clear(); }
+  virtual View *Layout(Flow *flow=nullptr) { return this; }
+  virtual void Draw(GraphicsContext*, const LFL::Box &b) const override { const_cast<View*>(this)->Draw(b.TopLeft()); }
+  virtual void Draw(const point &p);
   virtual void ResetGL(int flag) {}
   virtual void HandleTextMessage(const string &s) {}
 };
@@ -330,8 +329,8 @@ struct TextBox : public View, public TextboxController {
   virtual point RelativePosition(const point&) const override;
   virtual void Run(const string &cmd) { if (runcb) runcb(cmd); }
   virtual int CommandLines() const { return 0; }
-  virtual bool NotActive(const point &p) const override { return !box.within(p) && mouse.drag.empty(); }
   virtual bool Active() const { return root->active_textbox == this; }
+  virtual bool NotActive(const point &p) const override { return !box.RelativeCoordinatesBox().within(p) && mouse.drag.empty(); }
   virtual bool Activate() override { if ( Active()) return 0; if (auto g = dynamic_cast<View*>(root->active_textbox)) g->Deactivate(); root->active_textbox = this; return 1; }
   virtual bool Deactivate() override { if (!Active()) return 0; root->active_textbox = root->default_textbox(); return 1; }
   virtual bool ToggleActive() override { if (!Active()) Activate(); else Deactivate(); return Active(); }
@@ -555,7 +554,7 @@ struct Console : public TextArea {
   virtual bool Activate()   override { bool ret = TextBox::Activate();   StartAnimating(); return ret; }
   virtual bool Deactivate() override { bool ret = TextBox::Deactivate(); StartAnimating(); return ret; }
   virtual void Draw(const Box &b, int flag=DrawFlag::Default, Shader *shader=0) override;
-  virtual void Draw() override;
+  virtual void Draw(const point &p) override;
   void StartAnimating();
 };
 
@@ -573,10 +572,10 @@ struct Dialog : public View {
 
   Dialog(Window*, float w, float h, int flag=0);
   virtual ~Dialog() {}
-  virtual void Layout() override;
-  virtual void Draw() override;
   virtual void TakeFocus() {}
   virtual void LoseFocus() {}
+  virtual View *Layout(Flow *flow=nullptr) override;
+  virtual void Draw(const point &p) override;
 
   void LayoutTabbed(int, const Box &b, const point &d, MouseController*, DrawableBoxArray*);
   void LayoutTitle(const Box &b, MouseController*, DrawableBoxArray*);
@@ -606,8 +605,8 @@ struct TabbedDialogInterface {
   vector<DialogTab> tab_list;
   TabbedDialogInterface(View *V, const point &d=point(200,16));
   virtual void SelectTabIndex(size_t i) {}
-  virtual void Layout();
-  virtual void Draw() { DialogTab::Draw(view->root->gd, box, tab_dim, tab_list); }
+  virtual View *Layout(Flow *flow=nullptr);
+  virtual void Draw(const point &p) { DialogTab::Draw(view->root->gd, box, tab_dim, tab_list); }
 };
 
 template <class D=Dialog> struct TabbedDialog : public TabbedDialogInterface {
@@ -622,7 +621,7 @@ template <class D=Dialog> struct TabbedDialog : public TabbedDialogInterface {
   void SelectTabIndex(size_t i) override { CHECK_LT(i, tab_list.size()); SelectTab(dynamic_cast<D*>(tab_list[i].dialog)); }
   void SelectNextTab() { if (top) SelectTabIndex(RingIndex::Wrap(TabIndex(top)+1, tab_list.size())); }
   void SelectPrevTab() { if (top) SelectTabIndex(RingIndex::Wrap(TabIndex(top)-1, tab_list.size())); }
-  void Draw() override { TabbedDialogInterface::Draw(); if (top) top->Draw(); }
+  void Draw(const point &p) override { TabbedDialogInterface::Draw(p); if (top) top->Draw(p); }
 };
 
 struct MessageBoxDialog : public Dialog {
@@ -630,15 +629,15 @@ struct MessageBoxDialog : public Dialog {
   Box message_size;
   MessageBoxDialog(Window *w, const string &m) :
     Dialog(w, .25, .2), message(m) { font->Size(message, &message_size); }
-  void Layout() override;
-  void Draw() override;
+  View *Layout(Flow *flow=nullptr) override;
+  void Draw(const point &p) override;
 };
 
 struct TextureBoxDialog : public Dialog {
   Texture tex;
   TextureBoxDialog(Window *w, const string &m) :
     Dialog(w, .33, .33), tex(w->parent) { tex.ID = ::atoi(m.c_str()); tex.owner = false; }
-  void Draw() override { Dialog::Draw(); tex.DrawGD(root->gd, content + box.TopLeft()); }
+  void Draw(const point &p) override { Dialog::Draw(p); tex.DrawGD(root->gd, content + box.TopLeft()); }
 };
 
 struct SliderDialog : public Dialog {
@@ -648,8 +647,8 @@ struct SliderDialog : public Dialog {
   Widget::Slider slider;
   SliderDialog(Window *w, const string &title="", const UpdatedCB &cb=UpdatedCB(),
                float scrolled=0, float total=100, float inc=1);
-  void Layout() override { Dialog::Layout(); slider.LayoutFixed(content); }
-  void Draw() override { Dialog::Draw(); if (slider.dirty) { slider.Update(); if (updated) updated(&slider); } }
+  View *Layout(Flow *flow=nullptr) override { Dialog::Layout(flow); slider.LayoutFixed(content); return this; }
+  void Draw(const point &p) override { Dialog::Draw(p); if (slider.dirty) { slider.Update(); if (updated) updated(&slider); } }
 };
 
 struct FlagSliderDialog : public SliderDialog {
@@ -665,17 +664,18 @@ template <class X> struct TextViewDialogT  : public Dialog {
   TextViewDialogT(Window *W, const FontRef &F, float w=0.5, float h=.5, int flag=0) :
     Dialog(W, w, h, flag), view(W, F), v_scrollbar(this, Widget::Slider::Flag::AttachedNoCorner),
     h_scrollbar(this, Widget::Slider::Flag::AttachedHorizontalNoCorner) {}
-  void Layout() override {
-    Dialog::Layout();
+  View *Layout(Flow *flow=nullptr) override {
+    Dialog::Layout(flow);
     Widget::Slider::AttachContentBox(&content, &v_scrollbar, view.Wrap() ? nullptr : &h_scrollbar);
     child_view.push_back(&view);
+    return this;
   }
-  void Draw() override { 
+  void Draw(const point &p) override { 
     bool wrap = view.Wrap();
     if (1)     view.v_scrolled = v_scrollbar.AddScrollDelta(view.v_scrolled);
     if (!wrap) view.h_scrolled = h_scrollbar.AddScrollDelta(view.h_scrolled);
     if (1)     view.UpdateScrolled();
-    if (1)     Dialog::Draw();
+    if (1)     Dialog::Draw(p);
     if (1)     view.Draw(content + box.TopLeft(), TextArea::DrawFlag::CheckResized |
                          (view.cursor_enabled ? TextArea::DrawFlag::DrawCursor : 0));
     if (1)     v_scrollbar.Update();
@@ -708,7 +708,7 @@ struct HelperView : public View {
   void AddLabel(const Box &w, const string &d, int h, const point &p) { label.emplace_back(w, d, h, font, p); }
   bool Activate() override { if (active) return 0; active=1; /* ForceDirectedLayout(); */ return 1; }
   void ForceDirectedLayout();
-  void Draw() override;
+  void Draw(const point &p) override;
 };
 
 }; // namespace LFL

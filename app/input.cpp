@@ -400,11 +400,11 @@ int Input::MouseClick(int button, bool down, const point &p) {
   return fired;
 }
 
-int Input::MouseEventDispatch(InputEvent::Id event, const point &p, const point &d, int down) {
+int Input::MouseEventDispatch(InputEvent::Id event, const point &pp, const point &d, int down) {
   Window *w = window->focused;
   if      (event == clipboard->paste_bind.key) return KeyEventDispatch(event, down);
-  else if (event == Mouse::Event::Wheel) w->mouse_wheel = p;
-  else                                   w->mouse       = p;
+  else if (event == Mouse::Event::Wheel) w->mouse_wheel = pp;
+  else                                   w->mouse       = pp;
   InputDebug("Input::MouseEventDispatch %s %s down=%d",
              InputEvent::Name(event), w->mouse.DebugString().c_str(), down);
 
@@ -412,8 +412,9 @@ int Input::MouseEventDispatch(InputEvent::Id event, const point &p, const point 
   Dialog *bring_to_front = 0;
   for (auto i = w->dialogs.begin(); i != w->dialogs.end(); /**/) {
     Dialog *g = i->get();
-    if (g->NotActive(w->mouse)) { i++; continue; }
-    fired += g->mouse.SendMouseEvent(event, g->RelativePosition(w->mouse), d, down, 0);
+    point p = g->RelativePosition(pp);
+    if (g->NotActive(p)) { i++; continue; }
+    fired += g->mouse.SendMouseEvent(event, p, d, down, 0);
     if (g->deleted) { w->GiveDialogFocusAway(g); i = w->dialogs.erase(i); continue; }
     if (event == Mouse::Event::Click && down && g->box.within(w->mouse)) { bring_to_front = g; break; }
     i++;
@@ -421,12 +422,12 @@ int Input::MouseEventDispatch(InputEvent::Id event, const point &p, const point 
   if (bring_to_front) w->BringDialogToFront(bring_to_front);
 
   if (auto mc = w->active_controller) {
-    if ((events = mc->SendMouseEvent(event, mc->parent_view ? mc->parent_view->RelativePosition(p) : p, d, down, 0))) {
+    if ((events = mc->SendMouseEvent(event, mc->parent_view ? mc->parent_view->RelativePosition(pp) : pp, d, down, 0))) {
       InputDebug("Input::MouseEventDispatch sent MouseController[%p] %s events = %d", mc, InputEvent::Name(event), events);
       return events;
     }
   } else for (auto b = w->view.begin(), e = w->view.end(), i = b; i != e; ++i) {
-    if ((events = MouseEventDispatchView(event, p, d, down, *i, &active_guis))) {
+    if ((events = MouseEventDispatchView(event, pp - w->Box().TopLeft(), d, down, *i, &active_guis))) {
       InputDebug("Input::MouseEventDispatch sent View[%d] %s events = %d", i - b, InputEvent::Name(event), events);
       return events;
     }
@@ -437,10 +438,11 @@ int Input::MouseEventDispatch(InputEvent::Id event, const point &p, const point 
   return fired;
 }
 
-int Input::MouseEventDispatchView(InputEvent::Id event, const point &p, const point &d, int down, View *v, int *active_views) {
-  if (v->NotActive(v->root->mouse)) return 0;
+int Input::MouseEventDispatchView(InputEvent::Id event, const point &pp, const point &d, int down, View *v, int *active_views) {
+  point p = v->RelativePosition(pp);
+  if (v->NotActive(p)) return 0;
   else (*active_views)++;
-  int events = v->mouse.SendMouseEvent(event, v->RelativePosition(v->root->mouse), d, down, 0);
+  int events = v->mouse.SendMouseEvent(event, p, d, down, 0);
   for (auto i=v->child_view.begin(), e=v->child_view.end(); !events && i != e; ++i)
     events += MouseEventDispatchView(event, p, d, down, *i, active_views);
   return events;

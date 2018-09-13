@@ -372,8 +372,8 @@ struct GameMultiTouchControls {
 
   GameMultiTouchControls(Window *W, GameClient *C) : parent(W), client(C),
   dpad_font(W->parent->fonts->Get(W->gl_h, "dpad_atlas", "", 0, Color::white)),
-  lpad_win(W->Box(.03, .05, .2, .2)),
-  rpad_win(W->Box(.78, .05, .2, .2)),
+  lpad_win(W->Box().Scale(.03, .05, .2, .2)),
+  rpad_win(W->Box().Scale(.78, .05, .2, .2)),
   lpad_tbx(RoundF(lpad_win.w * .6)), lpad_tby(RoundF(lpad_win.h *.6)),
   rpad_tbx(RoundF(rpad_win.w * .6)), rpad_tby(RoundF(rpad_win.h *.6)) {}
 

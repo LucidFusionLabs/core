@@ -166,6 +166,7 @@ struct Font {
 
   short Height() const { return ascender + descender; }
   short FixedWidth() const { return X_or_Y(fixed_width, mono ? max_width : 0); }
+  string DebugString() { return engine ? engine->DebugString(this) : string(); }
 
   Glyph *FindGlyph        (char16_t gind);
   Glyph *FindOrInsertGlyph(char16_t gind);

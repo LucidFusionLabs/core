@@ -589,10 +589,8 @@ struct Window : public ::LFAppWindow, public GraphicsDeviceHolder, public Wakeup
   virtual int  Swap()                                = 0;
 
   GraphicsDevice *GD() override { return gd; };
-  LFL::Box Box()                   const { return LFL::Box(gl_x, gl_y, gl_w, gl_h); }
-  LFL::Box Box(float xs, float ys) const { return LFL::Box(gl_w*xs, gl_h*ys); }
-  LFL::Box Box(float xp, float yp, float xs, float ys,
-               float xbl=0, float ybt=0, float xbr=-INFINITY, float ybb=-INFINITY) const;
+  LFL::Box ViewBox() const { return Box().RelativeCoordinatesBox(); }
+  LFL::Box Box() const { return LFL::Box(gl_x, gl_y, gl_w, gl_h); }
   void SetBox  (const point &win_d, const LFL::Box &gl_box);
   void Reshaped(const point &win_d, const LFL::Box &gl_box);
   void Minimized()   { minimized=1; }
