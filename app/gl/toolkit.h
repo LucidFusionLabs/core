@@ -29,7 +29,6 @@ struct ToolbarView : public View, public ToolbarViewInterface {
   };
 
   vector<ToolbarViewItem> data;
-  DrawableBoxArray *out=0;
   string theme;
   Font *font=0, *selected_font=0;
   Color *selected_outline=0;
@@ -56,10 +55,10 @@ struct CollectionView : public View, public CollectionViewInterface {
   vector<CollectionViewSection> data;
   ToolbarViewInterface *toolbar=0;
   string title, style, theme;
+  Font *font=0;
   Widget::Slider scrollbar;
-  DrawableBoxArray *out=0;
   int row_height=0, decay_box_line=-1, decay_box_left=0, selected_section=-1, selected_row=-1, scrolled=0;
-  CollectionView(Window *w, const string &title, const string &style, const string &theme, vector<CollectionItem> items);
+  CollectionView(Window *w, const string &title, const string &style, const string &theme, vector<CollectionItem> items, Font *F=0);
 
   View *Layout(Flow*) override;
   void Draw(const point &p) override;
@@ -88,10 +87,10 @@ struct TableView : public View, public TableViewInterface {
   TableViewItem nav_left, nav_right;
   ToolbarViewInterface *toolbar=0;
   string title, style, theme;
+  Font *font=0;
   Widget::Slider scrollbar;
-  DrawableBoxArray *out=0;
   int row_height=0, decay_box_line=-1, decay_box_left=0, selected_section=-1, selected_row=-1, scrolled=0;
-  TableView(Window *w, const string &title, const string &style, const string &theme, TableItemVec items);
+  TableView(Window *w, const string &title, const string &style, const string &theme, TableItemVec items, Font *F=0);
 
   View *Layout(Flow*) override;
   void Draw(const point &p) override;

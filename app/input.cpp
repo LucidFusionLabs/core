@@ -443,7 +443,8 @@ int Input::MouseEventDispatchView(InputEvent::Id event, const point &pp, const p
   if (v->NotActive(p)) return 0;
   else (*active_views)++;
   int events = v->mouse.SendMouseEvent(event, p, d, down, 0);
-  for (auto i=v->child_view.begin(), e=v->child_view.end(); !events && i != e; ++i)
+  InputDebugIfDown("Input::MouseEventDispatchView %s fired=%d, view=%s", p.DebugString().c_str(), events, v->name);
+  for (auto i=v->child_view.begin(), e=v->child_view.end(); i != e; ++i)
     events += MouseEventDispatchView(event, p, d, down, *i, active_views);
   return events;
 }

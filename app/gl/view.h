@@ -30,14 +30,16 @@ DECLARE_int(console_font_flag);
 DECLARE_FLAG(testbox, Box);
 
 struct View : public Drawable {
+  const char *name;
   Window *root;
   Box box;
   MouseController mouse;
   DrawableBoxArray child_box;
   vector<View*> child_view;
-  bool active=0;
+  View *parent=0;
+  bool visible=1, active=0;
 
-  View(Window *R, const Box &B=Box()) : root(R), box(B), mouse(this) {}
+  View(Window *R, const char *n, const Box &B=Box()) : name(n), root(R), box(B), mouse(this) {}
   virtual ~View() {}
 
   DrawableBoxArray *ResetView() { ClearView(); return &child_box; }
@@ -51,13 +53,17 @@ struct View : public Drawable {
   virtual bool Deactivate() { if (!active) return 0; active = 0; return 1; }
   virtual bool NotActive(const point &p) const { return !active; }
   virtual bool ToggleActive() { if ((active = !active)) Activate(); else Deactivate(); return active; }
+  virtual void SetParentView(View *v) { parent = v; }
+  virtual void AppendChildView(View *v) { child_view.push_back(v); v->SetParentView(this); }
   virtual point RelativePosition(const point &p) const { return p - box.TopLeft(); }
+  virtual point RootPosition(const point &p) const;
+  virtual void HandleTextMessage(const string &s) {}
+
   virtual void SetLayoutDirty() { child_box.Clear(); child_view.clear(); }
   virtual View *Layout(Flow *flow=nullptr) { return this; }
   virtual void Draw(GraphicsContext*, const LFL::Box &b) const override { const_cast<View*>(this)->Draw(b.TopLeft()); }
   virtual void Draw(const point &p);
   virtual void ResetGL(int flag) {}
-  virtual void HandleTextMessage(const string &s) {}
 };
 
 struct Widget {
@@ -115,20 +121,21 @@ struct Widget {
     float scrolled=0, last_scrolled=0, increment=20;
     Color color=Color(15, 15, 15, 55), *outline_topleft=&Color::grey80, *outline_bottomright=&Color::grey50;
     FontRef menuicon;
-    bool dragging=0, dirty=0, arrows=1;
+    bool changed=0, arrows=1;
     virtual ~Slider() {}
     Slider(View *V, int f=Flag::Attached);
 
     float Percent() const { return scrolled * doc_height; }
-    void LayoutFixed(const Box &w) { track = w; Layout(dot_size, dot_size, flag & Flag::Horizontal); }
+    bool HasChanged() { return changed ? !(changed=false) : false; }
+    void LayoutFixed(const Box &w);
     void LayoutAttached(const Box &w);
     void Layout(int aw, int ah, bool flip);
-    void Update(bool force=false);
+    void UpdateDotPosition();
     void SetDocHeight(int v) { doc_height = v; }
-    void DragScrollDot() { dragging = true; dirty = true; }
-    void ScrollUp  () { scrolled -= increment / doc_height; Clamp(&scrolled, 0, 1); dirty=true; }
-    void ScrollDown() { scrolled += increment / doc_height; Clamp(&scrolled, 0, 1); dirty=true; }
-    float ScrollDelta() { float ret=scrolled-last_scrolled; last_scrolled=scrolled; return ret; }
+    void DragScrollDot(int, point, point, int);
+    void ScrollUp();
+    void ScrollDown();
+    float ScrollDelta();
     float AddScrollDelta(float cur_val);
     static void AttachContentBox(Box *b, Slider *vs, Slider *hs);
   };
@@ -648,7 +655,7 @@ struct SliderDialog : public Dialog {
   SliderDialog(Window *w, const string &title="", const UpdatedCB &cb=UpdatedCB(),
                float scrolled=0, float total=100, float inc=1);
   View *Layout(Flow *flow=nullptr) override { Dialog::Layout(flow); slider.LayoutFixed(content); return this; }
-  void Draw(const point &p) override { Dialog::Draw(p); if (slider.dirty) { slider.Update(); if (updated) updated(&slider); } }
+  void Draw(const point &p) override { Dialog::Draw(p); if (updated && slider.HasChanged()) updated(&slider); }
 };
 
 struct FlagSliderDialog : public SliderDialog {
@@ -678,8 +685,8 @@ template <class X> struct TextViewDialogT  : public Dialog {
     if (1)     Dialog::Draw(p);
     if (1)     view.Draw(content + box.TopLeft(), TextArea::DrawFlag::CheckResized |
                          (view.cursor_enabled ? TextArea::DrawFlag::DrawCursor : 0));
-    if (1)     v_scrollbar.Update();
-    if (!wrap) h_scrollbar.Update();
+    if (1)     v_scrollbar.UpdateDotPosition();
+    if (!wrap) h_scrollbar.UpdateDotPosition();
   }
   void TakeFocus() override { view.Activate(); }
   void LoseFocus() override { view.Deactivate(); }
@@ -695,7 +702,7 @@ struct DirectoryTreeDialog : public TextViewDialogT<DirectoryTree> {
 
 struct HelperView : public View {
   FontRef font;
-  HelperView(Window *W) : View(W), font(W, FontDesc(FLAGS_font, "", 9, Color::white)) {}
+  HelperView(Window *W) : View(W, "HelperView"), font(W, FontDesc(FLAGS_font, "", 9, Color::white)) {}
   struct Hint { enum { UP, UPLEFT, UPRIGHT, DOWN, DOWNLEFT, DOWNRIGHT }; };
   struct Label {
     Box target, label;

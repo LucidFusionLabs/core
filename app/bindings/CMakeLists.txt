@@ -10,5 +10,6 @@ endif()
 if(LFL_V8JS)
   lfl_add_target(app_v8_js STATIC_LIBRARY SOURCES v8_js.cpp
                  INCLUDE_DIRECTORIES ${V8JS_INCLUDE} LINK_LIBRARIES ${V8JS_LIB})
+  add_dependencies(app_v8_js v8)
 endif()
 

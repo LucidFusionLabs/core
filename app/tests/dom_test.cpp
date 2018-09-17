@@ -86,7 +86,7 @@ TEST(DOMTest, DOMNode) {
 }
 
 TEST(DOMTest, DOMTree) {
-  View sb_view(app->focused);
+  View sb_view(app->focused, "DOMTestView");
   Browser sb(app, app->focused, app, app->fonts.get(), app->net.get(), nullptr, app,
              &sb_view, app->focused->Box());
   sb.doc.parser->OpenHTML("<html>\n"

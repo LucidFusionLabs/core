@@ -47,7 +47,7 @@ template <class X> inline X CastV8InternalFieldTo(v8::Local<v8::Object> &self, i
   args.GetReturnValue().Set(ret_obj);
 
 #define GET_V8_PROPERTY_STRING() \
-  string n = BlankNull(*v8::String::Utf8Value(name)); \
+  string n = BlankNull(*v8::String::Utf8Value(args.GetIsolate(), name)); \
   if (n == "toString" || n == "valueOf" || n == "length" || n == "item") return;
 
 template <typename X, int       (*f)(const X*)> void IntGetter   (v8::Local<v8::String> property, const v8::PropertyCallbackInfo<v8::Value>& args) { RETURN_V8_TYPE(X, v8::Integer::New, f(inst)); }
@@ -55,21 +55,22 @@ template <typename X, DOMString (*f)(const X*)> void StringGetter(v8::Local<v8::
 
 template <typename X, DOMString (*f)(const X*, int)> void IndexedStringFunc(const v8::FunctionCallbackInfo<v8::Value> &args) {
   if (!args.Length()) { args.GetReturnValue().Set(v8::Null(args.GetIsolate())); return; }
-  RETURN_V8_TYPE(X, NewV8String, f(inst, args[0]->Int32Value()).c_str());
+  RETURN_V8_TYPE(X, NewV8String, f(inst, args[0]->Int32Value(args.GetIsolate()->GetCurrentContext()).FromJust()).c_str());
 }
 template <typename X, DOMString (*f)(const X*, int)> void IndexedStringProperty(uint32_t index, const v8::PropertyCallbackInfo<v8::Value>& args) {
   RETURN_V8_TYPE(X, NewV8String, f(inst, index).c_str());
 }
 template <typename X, DOMString (*f)(const X*, const DOMString &)>
-void NamedStringProperty(v8::Local<v8::String> name, const v8::PropertyCallbackInfo<v8::Value>& args) {
+void NamedStringProperty(v8::Local<v8::Name> name, const v8::PropertyCallbackInfo<v8::Value>& args) {
   GET_V8_PROPERTY_STRING();
   RETURN_V8_TYPE(X, NewV8String, f(inst, DOMString(n)).c_str());
 }
 template <typename X, void (*f)(X*, const DOMString &, const DOMString&)>
-void SetNamedStringProperty(v8::Local<v8::String> name, v8::Local<v8::Value> value, const v8::PropertyCallbackInfo<v8::Value> &args) {
+void SetNamedStringProperty(v8::Local<v8::Name> name, v8::Local<v8::Value> value, const v8::PropertyCallbackInfo<v8::Value> &args) {
   GET_V8_PROPERTY_STRING();
   GET_V8_SELF();
-  string v = BlankNull(*v8::String::Utf8Value(value->ToString()));
+  auto isolate = args.GetIsolate();
+  string v = BlankNull(*v8::String::Utf8Value(isolate, value->ToString(isolate->GetCurrentContext()).ToLocalChecked()));
   f(inst, n, v);
 }
 
@@ -93,28 +94,28 @@ template <class X> DOM::CSSStyleDeclaration* GetInlineStyle(X *x) {
 struct MyV8JSInit { MyV8JSInit() { v8::V8::Initialize(); } };
 
 struct MyV8JSContext : public JSContext {
-  template <typename X, typename Y, Y* (*f)(X*), v8::Handle<v8::ObjectTemplate> (MyV8JSContext::*OT)>
+  template <typename X, typename Y, Y* (*f)(X*), v8::Local<v8::ObjectTemplate> (MyV8JSContext::*OT)>
   static void ObjectGetter(v8::Local<v8::String> property, const v8::PropertyCallbackInfo<v8::Value>& args) {
     RETURN_V8_OBJECT(X, OT, f(CastV8InternalFieldTo<X*>(self, 1)));
   }
-  template <typename X, typename Y, Y* (*f)(X*, int), v8::Handle<v8::ObjectTemplate> (MyV8JSContext::*OT)>
+  template <typename X, typename Y, Y* (*f)(X*, int), v8::Local<v8::ObjectTemplate> (MyV8JSContext::*OT)>
   static void IndexedObjectFunc(const v8::FunctionCallbackInfo<v8::Value> &args) {
     if (!args.Length()) { args.GetReturnValue().Set(v8::Null(args.GetIsolate())); return; }
-    RETURN_V8_OBJECT(X, OT, f(CastV8InternalFieldTo<X*>(self, 1), args[0]->Int32Value()));
+    RETURN_V8_OBJECT(X, OT, f(CastV8InternalFieldTo<X*>(self, 1), args[0]->Int32Value(args.GetIsolate()->GetCurrentContext()).FromJust()));
   }
-  template <typename X, typename Y, Y* (*f)(X*), v8::Handle<v8::ObjectTemplate> (MyV8JSContext::*OT)>
+  template <typename X, typename Y, Y* (*f)(X*), v8::Local<v8::ObjectTemplate> (MyV8JSContext::*OT)>
   static void ArgumentObjectFunc(const v8::FunctionCallbackInfo<v8::Value> &args) {
     if (args.Length() < 1 || !args[0]->IsObject()) { args.GetReturnValue().Set(v8::Null(args.GetIsolate())); return; }
-    v8::Local<v8::Object> arg_obj = args[0]->ToObject();
+    v8::Local<v8::Object> arg_obj = args[0]->ToObject(args.GetIsolate()->GetCurrentContext()).ToLocalChecked();
     RETURN_V8_OBJECT(X, OT, f(CastV8InternalFieldTo<X*>(arg_obj, 1)));
   }
-  template <typename X, typename Y, Y *(*f)(X*, int), v8::Handle<v8::ObjectTemplate> (MyV8JSContext::*OT)>
+  template <typename X, typename Y, Y *(*f)(X*, int), v8::Local<v8::ObjectTemplate> (MyV8JSContext::*OT)>
   static void IndexedObjectProperty(uint32_t index, const v8::PropertyCallbackInfo<v8::Value>& args) {
     RETURN_V8_OBJECT(X, OT, f(CastV8InternalFieldTo<X*>(self, 1), index));
   }
-  template <typename X, typename Y, Y *(*f)(X*, const DOMString&), v8::Handle<v8::ObjectTemplate> (MyV8JSContext::*OT)>
-  static void NamedObjectProperty(v8::Local<v8::String> name, const v8::PropertyCallbackInfo<v8::Value>& args) {
-    string v = BlankNull(*v8::String::Utf8Value(name));
+  template <typename X, typename Y, Y *(*f)(X*, const DOMString&), v8::Local<v8::ObjectTemplate> (MyV8JSContext::*OT)>
+  static void NamedObjectProperty(v8::Local<v8::Name> name, const v8::PropertyCallbackInfo<v8::Value>& args) {
+    string v = BlankNull(*v8::String::Utf8Value(args.GetIsolate(), name));
     if (v == "toString" || v == "valueOf" || v == "length" || v == "item") return;
     RETURN_V8_OBJECT(X, OT, f(CastV8InternalFieldTo<X*>(self, 1), DOMString(v)));
   }
@@ -122,16 +123,16 @@ struct MyV8JSContext : public JSContext {
   v8::Isolate*                   isolate;
   v8::Isolate::Scope             isolate_scope;
   v8::HandleScope                handle_scope;
-  v8::Handle<v8::Context>        context;
+  v8::Local<v8::Context>         context;
   v8::Context::Scope             context_scope;
-  v8::Handle<v8::ObjectTemplate> global, console, window, node, node_list, named_node_map, css_style_declaration;
+  v8::Local<v8::ObjectTemplate>  global, console, window, node, node_list, named_node_map, css_style_declaration;
   Console*                       js_console;
 
   virtual ~MyV8JSContext() {}
-  MyV8JSContext(Console *C, DOM::Node *D) : isolate(v8::Isolate::New()), isolate_scope(isolate),
-  handle_scope(isolate), context(v8::Context::New(isolate)), context_scope(context), global(v8::ObjectTemplate::New()),
-  console(v8::ObjectTemplate::New()), window(v8::ObjectTemplate::New()), node(v8::ObjectTemplate::New()),
-  node_list(v8::ObjectTemplate::New()), named_node_map(v8::ObjectTemplate::New()), css_style_declaration(v8::ObjectTemplate::New()),
+  MyV8JSContext(Console *C, DOM::Node *D) : isolate(v8::Isolate::New(v8::Isolate::CreateParams())), isolate_scope(isolate),
+  handle_scope(isolate), context(v8::Context::New(isolate)), context_scope(context), global(v8::ObjectTemplate::New(isolate)),
+  console(v8::ObjectTemplate::New(isolate)), window(v8::ObjectTemplate::New(isolate)), node(v8::ObjectTemplate::New(isolate)),
+  node_list(v8::ObjectTemplate::New(isolate)), named_node_map(v8::ObjectTemplate::New(isolate)), css_style_declaration(v8::ObjectTemplate::New(isolate)),
   js_console(C) {
     console->SetInternalFieldCount(1);
     console->Set(v8::String::NewFromUtf8(isolate, "log"), v8::FunctionTemplate::New(isolate, consoleLog));
@@ -178,8 +179,10 @@ struct MyV8JSContext : public JSContext {
                                                   CallIndexedObjectMember<DOM::NamedNodeMap, DOM::Node, &DOM::NamedNodeMap::item>, &MyV8JSContext::node>));
     named_node_map->SetIndexedPropertyHandler(IndexedObjectProperty<DOM::NamedNodeMap, DOM::Node,
                                               &CallIndexedObjectMember<DOM::NamedNodeMap, DOM::Node, &DOM::NamedNodeMap::item>, &MyV8JSContext::node>);
-    named_node_map->SetNamedPropertyHandler(NamedObjectProperty<DOM::NamedNodeMap, DOM::Node,
-                                            &CallNamedObjectMember<DOM::NamedNodeMap, DOM::Node, &DOM::NamedNodeMap::getNamedItem>, &MyV8JSContext::node>);
+    named_node_map->SetHandler
+      (v8::NamedPropertyHandlerConfiguration
+       (NamedObjectProperty<DOM::NamedNodeMap, DOM::Node,
+        &CallNamedObjectMember<DOM::NamedNodeMap, DOM::Node, &DOM::NamedNodeMap::getNamedItem>, &MyV8JSContext::node>));
 
     css_style_declaration->SetInternalFieldCount(3);
     css_style_declaration->SetAccessor(v8::String::NewFromUtf8(isolate, "length"),
@@ -187,8 +190,10 @@ struct MyV8JSContext : public JSContext {
     css_style_declaration->Set(v8::String::NewFromUtf8(isolate, "item"),
                                v8::FunctionTemplate::New(isolate, IndexedStringFunc<DOM::CSSStyleDeclaration, CallIndexedStringMember<DOM::CSSStyleDeclaration, &DOM::CSSStyleDeclaration::item>>));
     css_style_declaration->SetIndexedPropertyHandler(IndexedStringProperty<DOM::CSSStyleDeclaration, &CallIndexedStringMember<DOM::CSSStyleDeclaration, &DOM::CSSStyleDeclaration::item>>);
-    css_style_declaration->SetNamedPropertyHandler(   NamedStringProperty<DOM::CSSStyleDeclaration, &CallNamedStringMember<DOM::CSSStyleDeclaration, &DOM::CSSStyleDeclaration::getPropertyValue>>,
-                                                   SetNamedStringProperty<DOM::CSSStyleDeclaration, &CallNamedSetterMember<DOM::CSSStyleDeclaration, &DOM::CSSStyleDeclaration::setPropertyValue>>);
+    css_style_declaration->SetHandler
+      (v8::NamedPropertyHandlerConfiguration
+       (   NamedStringProperty<DOM::CSSStyleDeclaration, &CallNamedStringMember<DOM::CSSStyleDeclaration, &DOM::CSSStyleDeclaration::getPropertyValue>>,
+        SetNamedStringProperty<DOM::CSSStyleDeclaration, &CallNamedSetterMember<DOM::CSSStyleDeclaration, &DOM::CSSStyleDeclaration::setPropertyValue>>));
 
     if (D) {
       v8::Local<v8::Object> node_obj = node->NewInstance();
@@ -199,21 +204,23 @@ struct MyV8JSContext : public JSContext {
     }
   }
   string Execute(const string &s) {
-    v8::Handle<v8::String> source = v8::String::NewFromUtf8(isolate, s.c_str());
-    v8::Handle<v8::Script> script = v8::Script::Compile(source);
-    { v8::TryCatch trycatch;
-      v8::Handle<v8::Value> result = script->Run();
-      if (!result.IsEmpty()) {
+    v8::Local<v8::String> source = v8::String::NewFromUtf8(isolate, s.c_str());
+    v8::Local<v8::Script> script = v8::Script::Compile(isolate->GetCurrentContext(), source).ToLocalChecked();
+    { v8::TryCatch trycatch(isolate);
+      v8::Local<v8::Value> result;
+      auto maybe_result = script->Run(isolate->GetCurrentContext());
+      if (maybe_result.ToLocal(&result) && !result.IsEmpty()) {
         if (result->IsObject() && js_console) {
-          v8::Local<v8::Object> obj = result->ToObject();
-          if (obj->InternalFieldCount() >= 3) {
+          v8::Local<v8::Object> obj;
+          auto maybe_obj = result->ToObject(isolate->GetCurrentContext());
+          if (maybe_obj.ToLocal(&obj) && obj->InternalFieldCount() >= 3) {
             if (CastV8InternalFieldTo<Void>(obj, 2) == TypeId<DOM::Node*>()) {
               js_console->Write(CastV8InternalFieldTo<DOM::Node*>(obj, 1)->DebugString());
             }
           }
         }
       } else result = trycatch.Exception();
-      return BlankNull(*v8::String::Utf8Value(result));
+      return BlankNull(*v8::String::Utf8Value(isolate, result));
     }
   }
   static void donothingSetter(v8::Local<v8::String> property, v8::Local<v8::Value> value, const v8::PropertyCallbackInfo<void>& args) {}
@@ -223,7 +230,7 @@ struct MyV8JSContext : public JSContext {
   static void consoleLog(const v8::FunctionCallbackInfo<v8::Value> &args) {
     v8::Local<v8::Object> self = args.Holder(); string msg;
     MyV8JSContext *js_context = CastV8InternalFieldTo<MyV8JSContext*>(self, 0);
-    for (int i=0; i < args.Length(); i++) StrAppend(&msg, BlankNull(*v8::String::Utf8Value(args[i]->ToString())));
+    for (int i=0; i < args.Length(); i++) StrAppend(&msg, BlankNull(*v8::String::Utf8Value(args.GetIsolate(), args[i]->ToString(js_context->isolate->GetCurrentContext()).ToLocalChecked())));
     if (js_context->js_console) js_context->js_console->Write(msg);
     else INFO("VSJ8(", Void(js_context), ") console.log: ", msg);
     args.GetReturnValue().Set(v8::Null(args.GetIsolate()));

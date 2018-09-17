@@ -49,7 +49,7 @@ struct GameMenuGUI : public View, public Connection::Handler {
 
   GameMenuGUI(Window *W, SocketServices *N, ToolkitInterface *TK, Audio *audio,
               const string &master_url, int port, GameSettings *Settings=0, Texture *Title=0) :
-    View(W), settings(Settings), net(N), pinger(N, -1), master_get_url(master_url), topbar(W), title(Title),
+    View(W, "GameMenuGUI"), settings(Settings), net(N), pinger(N, -1), master_get_url(master_url), topbar(W, "TopbarView"), title(Title),
     font       (W, FontDesc(FLAGS_font,                 "", 12, Color::grey80)),
     bright_font(W, FontDesc(FLAGS_font,                 "", 12, Color::white)),
     glow_font  (W, FontDesc(StrCat(FLAGS_font, "Glow"), "", 12, Color::white)), default_port(port),
@@ -229,7 +229,7 @@ struct GameMenuGUI : public View, public Connection::Handler {
 
   void LayoutTopbar() {
     Flow topbarflow(&topbar.box, font, topbar.ResetView());
-    if (auto v = toplevel->Layout(&topbarflow)) topbar.child_view.push_back(v);
+    if (auto v = toplevel->Layout(&topbarflow)) topbar.AppendChildView(v);
   }
 
   void LayoutMenu() {
@@ -239,7 +239,7 @@ struct GameMenuGUI : public View, public Connection::Handler {
 
     int my_selected = toplevel->selected;
     if (my_selected == 1) {
-      if (auto v = sublevel->Layout(&menuflow)) child_view.push_back(v);
+      if (auto v = sublevel->Layout(&menuflow)) AppendChildView(v);
       menuflow.SetFont(bright_font);
       menuflow.AppendNewline();
 
@@ -248,7 +248,7 @@ struct GameMenuGUI : public View, public Connection::Handler {
         bool gplus_signedin = gplus->GetSignedIn();
         if (!gplus_signedin) LayoutGPlusSigninButton(&menuflow, gplus_signedin);
         else {
-          if (auto v = gplus_menu->AppendFlow(&menuflow)) child_view.push_back(v);
+          if (auto v = gplus_menu->AppendFlow(&menuflow)) AppendChildView(v);
           menuflow.AppendNewlines(1);
         }
 #endif
@@ -265,10 +265,10 @@ struct GameMenuGUI : public View, public Connection::Handler {
       }
     }
     if (my_selected == 0) {
-      if (auto v = nav->Layout(&menuflow)) child_view.push_back(v);
+      if (auto v = nav->Layout(&menuflow)) AppendChildView(v);
     }
     else if (my_selected == 2) {
-      if (auto v = nav->Layout(&menuflow)) child_view.push_back(v);
+      if (auto v = nav->Layout(&menuflow)) AppendChildView(v);
       menuflow.AppendNewlines(1);
     }
   }
@@ -306,10 +306,7 @@ struct GameMenuGUI : public View, public Connection::Handler {
       gc.gd->SetColor(Color::grey40); BoxBottomRightOutline().Draw(&gc, titlewin);
     }
 
-    {
-      Scissor s(gc.gd, box + p);
-      View::Draw(p);
-    }
+    View::Draw(p);
     topbar.Draw(p);
 
     if (particles.texture) {
@@ -336,7 +333,7 @@ struct GamePlayerListGUI : public View {
   string titlename, titletext, team1, team2;
   PlayerList playerlist;
   int winning_team=0;
-  GamePlayerListGUI(Window *W, const char *TitleName, const char *Team1, const char *Team2) : View(W),
+  GamePlayerListGUI(Window *W, const char *TitleName, const char *Team1, const char *Team2) : View(W, "GamePlayerListGUI"),
     font(W, FontDesc(FLAGS_font, "", 12, Color::white)), titlename(TitleName), team1(Team1), team2(Team2) {}
 
   void HandleTextMessage(const string &in) {

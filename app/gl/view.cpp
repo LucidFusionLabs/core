@@ -32,6 +32,11 @@ DEFINE_bool(draw_grid, false, "Draw lines intersecting mouse x,y");
 DEFINE_FLAG(testbox, Box, Box(), "Test box; change via console: testbox x,y,w,h");
 DEFINE_FLAG(testcolor, Color, Color::red, "Test color; change via console: testcolor hexval");
 
+point View::RootPosition(const point &p) const {
+  if (!parent) return p - root->Box().TopLeft() - box.TopLeft();
+  else         return parent->RootPosition(p) - box.TopLeft();
+}
+
 void View::UpdateBox(const Box &b, int draw_box_ind, int input_box_ind) {
   if (draw_box_ind  >= 0) child_box.data[draw_box_ind ].box = b;
   if (input_box_ind >= 0) mouse.hit     [input_box_ind].box = b;
@@ -114,6 +119,7 @@ void Widget::Button::LayoutComplete(Flow *flow, Font *f, const Box &b) {
 
 Widget::Slider::Slider(View *V, int f) : Interface(V), flag(f) {}
 
+void Widget::Slider::LayoutFixed(const Box &w) { track = w; Layout(dot_size, dot_size, flag & Flag::Horizontal); }
 void Widget::Slider::LayoutAttached(const Box &w) {
   track = w;
   int aw = dot_size, ah = dot_size;
@@ -152,30 +158,34 @@ void Widget::Slider::Layout(int, int, bool flip) {
     if (arrows) view->child_box.PushBack(arrow_down, attr_id, menuicon->FindGlyph(flip ? 3 : 1));
     if (1)      view->child_box.PushBack(scroll_dot, attr_id, menuicon->FindGlyph(           5), &drawbox_ind);
 
-    if (1)      AddDragBox (scroll_dot, MouseController::CB(bind(&Slider::DragScrollDot, this)));
+    if (1)      AddDragBox (scroll_dot, MouseController::CoordCB(bind(&Slider::DragScrollDot, this, _1, _2, _3, _4)));
     if (arrows) AddClickBox(arrow_up,   MouseController::CB(bind(flip ? &Slider::ScrollDown : &Slider::ScrollUp,   this)));
     if (arrows) AddClickBox(arrow_down, MouseController::CB(bind(flip ? &Slider::ScrollUp   : &Slider::ScrollDown, this)));
   }
-  Update(true);
+  UpdateDotPosition();
 }
 
-void Widget::Slider::Update(bool force) {
-  Input *input = view->root->parent->input.get();
-  if (!input || !input->MouseButton1Down()) dragging = false;
-  if (!dragging && !dirty && !force) return;
+void Widget::Slider::UpdateDotPosition() {
   bool flip = flag & Flag::Horizontal;
-  if (dragging) {
-    if (flip) scrolled = Clamp(    float(view->RelativePosition(view->root->mouse).x - track.x) / track.w, 0.0f, 1.0f);
-    else      scrolled = Clamp(1 - float(view->RelativePosition(view->root->mouse).y - track.y) / track.h, 0.0f, 1.0f);
-  }
   if (flip) { int aw = arrows ? dot_size : 0; view->UpdateBoxX(track.x          + int((track.w - aw) * scrolled), drawbox_ind, IndexOrDefault(hitbox, 0, -1)); }
   else      { int ah = arrows ? dot_size : 0; view->UpdateBoxY(track.top() - ah - int((track.h - ah) * scrolled), drawbox_ind, IndexOrDefault(hitbox, 0, -1)); }
-  dirty = false;
+  changed = true;
 }
+
+void Widget::Slider::DragScrollDot(int button, point p, point d, int down) {
+  bool flip = flag & Flag::Horizontal;
+  if (flip) scrolled = Clamp(    float(p.x - track.x) / track.w, 0.0f, 1.0f);
+  else      scrolled = Clamp(1 - float(p.y - track.y) / track.h, 0.0f, 1.0f);
+  UpdateDotPosition();
+}
+
+void Widget::Slider::ScrollUp  () { scrolled -= increment / doc_height; Clamp(&scrolled, 0.0f, 1.0f); UpdateDotPosition(); }
+void Widget::Slider::ScrollDown() { scrolled += increment / doc_height; Clamp(&scrolled, 0.0f, 1.0f); UpdateDotPosition(); }
+float Widget::Slider::ScrollDelta() { float ret=scrolled-last_scrolled; last_scrolled=scrolled; return ret; }
 
 float Widget::Slider::AddScrollDelta(float cur_val) {
   scrolled = Clamp(cur_val + ScrollDelta(), 0.0f, 1.0f);
-  if (EqualChanged(&last_scrolled, scrolled)) dirty = 1;
+  if (EqualChanged(&last_scrolled, scrolled)) changed = true;
   return scrolled;
 }
   
@@ -500,7 +510,7 @@ TextBox::LineUpdate::~LineUpdate() {
 }
 
 TextBox::TextBox(Window *W, const FontRef &F, int LC) :
-  View(W), TextboxController(W->parent), style(F), cmd_fb(W?W->parent:0), cmd_last(LC) {
+  View(W, "TextBox"), TextboxController(W->parent), style(F), cmd_fb(W?W->parent:0), cmd_last(LC) {
   if (style.font.Load(W)) cmd_line.GetAttrId(Drawable::Attr(style.font));
   layout.pad_wide_chars = 1;
   cmd_line.Init(this, 0);
@@ -1218,7 +1228,7 @@ void Console::Draw(const Box &b, int flag, Shader *shader) {
 
 /* Dialog */
 
-Dialog::Dialog(Window *W, float w, float h, int flag) : View(W),
+Dialog::Dialog(Window *W, float w, float h, int flag) : View(W, "Dialog"),
   color(85,85,85,220), title_gradient{Color(127,0,0), Color(0,0,127), Color(0,0,178), Color(208,0,127)},
   font    (W, FontDesc(FLAGS_font, "", 14, Color(Color::white,.8), Color::clear, FLAGS_font_flag)),
   menuicon(W, FontDesc("MenuAtlas", "", 0, Color::white, Color::clear, 0)), deleted_cb([=]{ deleted=true; })

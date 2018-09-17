@@ -113,3 +113,6 @@
 [submodule "imports/windows/ActiveTcl-for-Windows"]
 	path = imports/windows/ActiveTcl-for-Windows
 	url = https://github.com/LucidFusionLabs/ActiveTcl-for-Windows
+[submodule "imports/v8/depot_tools"]
+	path = imports/v8/depot_tools
+	url = https://chromium.googlesource.com/chromium/tools/depot_tools

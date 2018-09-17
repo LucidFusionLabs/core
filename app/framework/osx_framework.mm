@@ -157,7 +157,8 @@
     [context update];
     _screen->parent->SetFocusedWindow(_screen);
     float screen_w = [self frame].size.width, screen_h = [self frame].size.height;
-    _screen->Reshaped(LFL::point(screen_w, screen_h), LFL::Box(0, 0, int(screen_w), int(screen_h)));
+    if (_screen->gl_w != screen_w || _screen->gl_h != screen_h)
+      _screen->Reshaped(LFL::point(screen_w, screen_h), LFL::Box(0, 0, int(screen_w), int(screen_h)));
   }
 
   - (void)addMainWaitSocket:(int)fd callback:(std::function<bool()>)cb {

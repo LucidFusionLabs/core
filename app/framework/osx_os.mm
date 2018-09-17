@@ -30,7 +30,9 @@ string ApplicationInfo::GetSystemDeviceName() {
   string ret(1024, 0);
   if (gethostname(&ret[0], ret.size())) return "";
   ret.resize(strlen(ret.c_str()));
-  return ret;
+  vector<string> word;
+  Split(ret, isdot, &word);
+  return word.size() ? word[0] : ret;
 }
 
 string ApplicationInfo::GetSystemDeviceId() {

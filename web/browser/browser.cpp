@@ -116,8 +116,8 @@ void Browser::Draw(const Box &b) {
 
 void Browser::UpdateScrollbar() {
   v_scrollbar.SetDocHeight(doc.height);
-  v_scrollbar.Update();
-  h_scrollbar.Update();
+  v_scrollbar.UpdateDotPosition();
+  h_scrollbar.UpdateDotPosition();
 }
 
 void Browser::Render(bool screen_coords, int v_scrolled) {

@@ -24,23 +24,26 @@ namespace LFL {
 static FreeListVector<Texture> app_images([](Texture *t) { t->Clear(); });
 
 ToolbarView::ToolbarView(Window *w, const string &t, MenuItemVec items, Font *F, Font *SF, Color *SO, int flag) :
-  View(w), theme(t), font(F), selected_font(SF), selected_outline(SO) {
+  View(w, "ToolbarView"), theme(t), font(F), selected_font(SF), selected_outline(SO) {
   for (auto &i : items) data.emplace_back(move(i));
   if (flag) align = flag & Align::Mask;
   Activate();
 }
 
-void ToolbarView::Draw(const point &p) { View::Draw(p); }
-void ToolbarView::Show(bool show_or_hide) {}
-void ToolbarView::SetTheme(const string &t) { theme=t; }
+void ToolbarView::Draw(const point &p) { Activate(); View::Draw(p); }
+void ToolbarView::Show(bool show_or_hide) { if (show_or_hide) Activate(); else Deactivate(); }
+void ToolbarView::SetTheme(const string &t) { theme = t; }
 void ToolbarView::ToggleButton(const string &n) {
   for (auto &i : data) if (i.shortcut == n) i.down = !i.down;
 }
 
-View *ToolbarView::Layout(Flow *flow) {
-  ClearView();
-  box = *flow->container;
-  out = flow->out;
+View *ToolbarView::Layout(Flow *flow_in) {
+  if (flow_in) {
+    box = flow_in->container->RelativeCoordinatesBox();
+    font = flow_in->cur_attr.font;
+  }
+  Flow child_flow(&box, font, ResetView()), *flow = &child_flow;
+
   for (int ind=0, l=data.size(); ind != l; ++ind) {
     auto &i = data[ind];
     if (!i.button) {
@@ -55,21 +58,28 @@ View *ToolbarView::Layout(Flow *flow) {
     i.button->outline = (selected_outline && selected == ind) ? selected_outline : nullptr;
     i.button->Layout(flow, (selected_font && selected == ind) ? selected_font : (font ? font : flow->cur_attr.font));
   }
+  child_flow.Complete();
   return this;
 }
 
-CollectionView::CollectionView(Window *w, const string &t, const string &s, const string &th, vector<CollectionItem> items) :
-  View(w), data(CollectionViewSection::Convert(move(items))), title(t), style(s), theme(th), scrollbar(this) { Activate(); }
+CollectionView::CollectionView(Window *w, const string &t, const string &s, const string &th, vector<CollectionItem> items, Font *F) :
+  View(w, "CollectionView"), data(CollectionViewSection::Convert(move(items))), title(t), style(s), theme(th), scrollbar(this) { Activate(); }
 
 void CollectionView::CheckExists(int section, int row) {
   CHECK_RANGE(section, 0, data.size());
   CHECK_RANGE(row, 0, data[section].item.size());
 }
 
-void CollectionView::OnClick(int but, point p, point d, int down) {}
+void CollectionView::SetToolbar(ToolbarViewInterface *tb) { toolbar = tb; }
+void CollectionView::OnClick(int but, point p, point d, int down) { /**/ }
+void CollectionView::Show(bool show_or_hide) { if (show_or_hide) Activate(); else Deactivate(); }
+
 void CollectionView::Draw(const point &p) {
-  View::Draw(p);
+  if (scrollbar.HasChanged()) ClearView();
+  Activate();
+  Scissor scissor(root->gd, box + p);
   GraphicsContext gc(root->gd);
+  View::Draw(p);
   if (selected_section >=0 && selected_row >= 0) {
     auto b = data[selected_section].item[selected_row].button->box + p + box.TopLeft();
     gc.gd->SetColor(Color::grey20); BoxTopLeftOutline    ().Draw(&gc, b);
@@ -78,10 +88,12 @@ void CollectionView::Draw(const point &p) {
 }
 
 View *CollectionView::Layout(Flow *flow_in) {
-  Flow child_flow(flow_in->container, flow_in->cur_attr.font, ResetView()), *flow = &child_flow;
+  if (flow_in) {
+    box = flow_in->container->RelativeCoordinatesBox();
+    font = flow_in->cur_attr.font;
+  }
+  Flow child_flow(&box, font, ResetView()), *flow = &child_flow;
   if (!(row_height = flow->cur_attr.font->Height())) row_height = 16;
-  box = flow->container->RelativeCoordinatesBox();
-  out = flow->out;
 
   auto font = flow->cur_attr.font;
   scrollbar.LayoutAttached(Box(0, -box.h, box.w, box.h - row_height));
@@ -114,15 +126,16 @@ View *CollectionView::Layout(Flow *flow_in) {
   }
 
   if (toolbar) {
-    Box tb_box = box; // (0, -box.h, box.w, box.h);
+    Box tb_box = box;
     if (toolbar->align & Align::Top) tb_box.y = tb_box.TopLeft().y - row_height;
     else tb_box.y = tb_box.BottomLeft().y;
     tb_box.h = row_height;
     Flow toolbarflow(&tb_box, font, dynamic_cast<ToolbarView*>(toolbar)->ResetView());
     toolbarflow.layout.align_center = 1;
+
     if (auto v = toolbar->Layout(&toolbarflow)) {
       v->box = tb_box;
-      child_view.push_back(v);
+      AppendChildView(v);
     }
   }
 
@@ -133,16 +146,13 @@ View *CollectionView::Layout(Flow *flow_in) {
   return this;
 }
 
-void CollectionView::SetToolbar(ToolbarViewInterface *tb) { toolbar = tb; }
-void CollectionView::Show(bool show_or_hide) {}
-
-TableView::TableView(Window *w, const string &t, const string &s, const string &th, TableItemVec items) :
-  View(w), data(TableViewSection::Convert(move(items))), title(t), style(s), theme(th), scrollbar(this) { Activate(); }
+TableView::TableView(Window *w, const string &t, const string &s, const string &th, TableItemVec items, Font *F) :
+  View(w, "TableView"), data(TableViewSection::Convert(move(items))), title(t), style(s), theme(th), scrollbar(this) { Activate(); }
 
 void TableView::DelNavigationButton(int id) { nav_left.type=0; }
 void TableView::AddNavigationButton(int id, const TableItem &item) { nav_left = item; }
 void TableView::SetToolbar(ToolbarViewInterface *tb) { toolbar = tb; }
-void TableView::Show(bool show_or_hide) {}
+void TableView::Show(bool show_or_hide) { if (show_or_hide) Activate(); else Deactivate(); }
 
 string        TableView::GetKey   (int s, int r) { CheckExists(s, r); return data[s].item[r].key; }
 string        TableView::GetValue (int s, int r) { CheckExists(s, r); return data[s].item[r].val; }
@@ -234,9 +244,12 @@ void TableView::OnClick(int but, point p, point d, int down) {
 }
 
 void TableView::Draw(const point &p) {
+  if (scrollbar.HasChanged()) ClearView();
+  Activate();
+  Scissor scissor(root->gd, box + p);
   View::Draw(p);
-  if (out && decay_box_line >= 0 && decay_box_line < out->line.size() && decay_box_left > 0) {
-      BoxOutline().DrawGD(root->gd, out->line[decay_box_line] + p + box.TopLeft());
+  if (decay_box_line >= 0 && decay_box_line < child_box.line.size() && decay_box_left > 0) {
+      BoxOutline().DrawGD(root->gd, child_box.line[decay_box_line] + p + box.TopLeft());
       decay_box_left--;
   }
   // browser.Paint(&menuflow, box.TopLeft() + point(0, 0 /*scrolled*/));
@@ -245,10 +258,12 @@ void TableView::Draw(const point &p) {
 }
 
 View *TableView::Layout(Flow *flow_in) {
-  Flow child_flow(flow_in->container, flow_in->cur_attr.font, ResetView()), *flow = &child_flow;
+  if (flow_in) {
+    box = flow_in->container->RelativeCoordinatesBox();
+    font = flow_in->cur_attr.font;
+  }
+  Flow child_flow(&box, font, ResetView()), *flow = &child_flow;
   if (!(row_height = flow->cur_attr.font->Height())) row_height = 16;
-  box = flow->container->RelativeCoordinatesBox();
-  out = flow->out;
 
   scrollbar.LayoutAttached(Box(0, -box.h, box.w, box.h - row_height));
   flow->p.y += (scrolled = int(scrollbar.scrolled * scrollbar.doc_height));
@@ -279,7 +294,6 @@ View *TableView::Layout(Flow *flow_in) {
           if (!i.slider) i.slider = make_unique<Widget::Slider>(this, Widget::Slider::Flag::Horizontal);
           flow->AppendRow(.6, .35, &i.val_box);
           i.slider->LayoutFixed(i.val_box);
-          i.slider->Update();
         }; break;
 
         case TableItem::Selector: {
@@ -318,7 +332,7 @@ View *TableView::Layout(Flow *flow_in) {
   scrollbar.SetDocHeight(flow->Height());
   if (toolbar) {
     Box b(box.x, box.h, box.w, row_height);
-    Flow toolbarflow(&b, flow->cur_attr.font, out);
+    Flow toolbarflow(&b, flow->cur_attr.font, &child_box);
     if (auto v = toolbar->Layout(&toolbarflow)) child_view.push_back(v);
   }
 
@@ -334,9 +348,9 @@ View *TableView::Layout(Flow *flow_in) {
   return this;
 }
 
-NavigationView::NavigationView(Window *w, const string &s, const string &t) : View(w) {}
+NavigationView::NavigationView(Window *w, const string &s, const string &t) : View(w, "NavigationView") {}
 TableViewInterface *NavigationView::Back() { return stack.size() ? dynamic_cast<TableViewInterface*>(stack.back()) : nullptr; }
-void NavigationView::Show(bool show_or_hide) {}
+void NavigationView::Show(bool show_or_hide) { if (show_or_hide) Activate(); else Deactivate(); }
 
 void NavigationView::PushTableView(TableViewInterface *t) { if (t->show_cb) t->show_cb(); stack.push_back(t); }
 void NavigationView::PushTextView (TextViewInterface  *t) { if (t->show_cb) t->show_cb(); stack.push_back(t); }
@@ -369,7 +383,7 @@ void NavigationView::PopAll() {
 }
 
 void NavigationView::SetTheme(const string &t) { theme = t; }
-void NavigationView::Draw(const point &p) {}
+void NavigationView::Draw(const point &p) { /*if (stack.size()) stack.back()->Draw(p);*/ }
 View *NavigationView::Layout(Flow *flow) { return stack.size() ? stack.back()->Layout(flow) : nullptr; }
 
 void Toolkit::UnloadImage(int n) { app_images.Erase(n-1); }
