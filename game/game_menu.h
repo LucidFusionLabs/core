@@ -111,8 +111,8 @@ struct GameMenuGUI : public View, public Connection::Handler {
       TableItem("Promotions",          TableItem::WebView,   "http://lucidfusionlabs.com/apps.html"),
     };
     float max_volume = audio->GetMaxVolume();
-    options_items[1].CheckAssignValues("Control Sensitivity", FLAGS_msens/10.0, 0, 10, .1);
-    options_items[2].CheckAssignValues("Volume", audio->GetVolume() / max_volume, 0, max_volume, .5);
+    options_items[1].CheckAssignValues("Control Sensitivity", FLAGS_msens, 0, 5, .1);
+    options_items[2].CheckAssignValues("Volume", audio->GetVolume(), 0, max_volume, .5);
     options = TK->CreateTableView(root, "Options", "", "Clear", move(options_items));
 
 #ifdef LFL_ANDROID
@@ -150,6 +150,7 @@ struct GameMenuGUI : public View, public Connection::Handler {
     auto settings = options->GetSectionText(0);
     root->shell->Run(StrCat("name ", settings[0].second));
     root->shell->Run(StrCat("msens ", settings[1].second));
+    root->parent->audio->SetVolume(atoi(settings[2].second));
   }
 
   void MenuQuit() { toplevel->selected=3; root->parent->Shutdown(); }

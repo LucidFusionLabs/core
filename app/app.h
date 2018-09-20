@@ -791,6 +791,7 @@ struct Application : public ::LFApp, public ApplicationInfo, public ApplicationS
   bool MainProcess() const { return !main_process; }
   Window *GetWindow(void *id) const { return FindOrNull(windows, id); }
   int LoadModule(Module *m) { return m ? PushBack(modules, m)->Init() : 0; }
+  void UnloadModule(unique_ptr<Module> m) { VectorEraseByValue(&modules, m.get()); }
   void Shutdown() { run=0; Wakeup(); }
   string PrintCallStack();
 

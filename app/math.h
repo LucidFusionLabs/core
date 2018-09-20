@@ -20,7 +20,7 @@
 #define LFL_CORE_APP_MATH_H__
 
 namespace LFL {
-template <class X> X    Clamp(X  x, X floor, X ceil) { return x < floor ? floor : (ceil < x ? ceil : x); }
+template <class X> X    Clamp(X  x, X floor, X ceil) { return isnan(x) || x < floor ? floor : (ceil < x ? ceil : x); }
 template <class X> void Clamp(X *x, X floor, X ceil) { *x = Clamp(*x, floor, ceil); }
 float Decimals(float n);
 int Sign(float f);
@@ -476,7 +476,7 @@ template <class T=double> struct matrix {
   void AddRows(int rows, bool prepend=false) {
     CHECK_GE(M+rows, 0);
     M += rows;
-    bytes = M*N*sizeof(T)*((flag&Flag::Complex)?2:1);
+    if (!(bytes = M*N*sizeof(T)*((flag&Flag::Complex)?2:1))) return;
     void *pre = m;
     if (!alloc) FATAL("null alloc: ", alloc, ", ", rows, ", ", bytes);
     if (!(m = reinterpret_cast<T*>(alloc->Realloc(m, bytes))))
@@ -524,6 +524,7 @@ template <class T=double> struct matrix {
     if (m) { alloc->Free(m); m=0; }
     Assign(nm->M, nm->N, nm->M*nm->N*sizeof(T), nm->flag, nm->alloc);
     m = nm->m;
+    nm->m = nullptr;
   }
 
   void AssignDataPtr(int nm, int nn, T *nv, Allocator *Alloc=0) {

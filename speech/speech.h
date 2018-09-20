@@ -384,7 +384,7 @@ struct Decoder {
 };
 
 #ifdef LFL_CORE_APP_GL_VIEW_H__
-struct PhoneticSegmentationGUI : public View {
+struct PhoneticSegmentationView : public View {
   struct Segment {
     string name; int beg, end; Box win; bool hover;
     Segment(const string &n, int b, int e) : name(n), beg(b), end(e), hover(0) {}
@@ -394,15 +394,15 @@ struct PhoneticSegmentationGUI : public View {
   string sound_asset_name;
   int sound_asset_len;
 
-  PhoneticSegmentationGUI(Window *W, FeatureSink::DecodedWords &decoded, int len, const string &AN) :
-    View(W), sound_asset_name(AN), sound_asset_len(len) {
+  PhoneticSegmentationView(Window *W, FeatureSink::DecodedWords &decoded, int len, const string &AN) :
+    View(W, "PhoneticSegmentationView"), sound_asset_name(AN), sound_asset_len(len) {
     Activate();
     for (int i=0, l=decoded.size(); i<l; i++)
       segments.push_back(Segment(decoded[i].text, decoded[i].beg, decoded[i].end));
   }
 
-  PhoneticSegmentationGUI(Window *W, AcousticModel::Compiled *model, Matrix *decoded, const string &AN) :
-    View(W), sound_asset_name(AN), sound_asset_len(decoded ? decoded->M : 0) {
+  PhoneticSegmentationView(Window *W, AcousticModel::Compiled *model, Matrix *decoded, const string &AN) :
+    View(W, "PhoneticSegmentationView"), sound_asset_name(AN), sound_asset_len(decoded ? decoded->M : 0) {
     Activate();
     for (Decoder::PhoneIter iter(model, decoded); !iter.Done(); iter.Next()) {
       if (!iter.phone) continue;

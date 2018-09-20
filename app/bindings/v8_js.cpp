@@ -18,6 +18,7 @@
 
 #include "core/app/gl/view.h"
 #include "core/web/browser/browser.h"
+#include <libplatform/libplatform.h>
 #include <v8.h>
 
 namespace LFL {
@@ -91,9 +92,23 @@ template <class X> DOM::CSSStyleDeclaration* GetInlineStyle(X *x) {
   return &x->render->inline_style;
 }
 
-struct MyV8JSInit { MyV8JSInit() { v8::V8::Initialize(); } };
+struct MyV8JSInit {
+  std::unique_ptr<v8::Platform> platform;
+  MyV8JSInit() {
+    // v8::V8::InitializeICUDefaultLocation("");
+    // v8::V8::InitializeExternalStartupData("");
+    platform = v8::platform::NewDefaultPlatform();
+    v8::V8::InitializePlatform(platform.get());
+    v8::V8::Initialize();
+  }
+  virtual ~MyV8JSInit() {
+    v8::V8::Dispose();
+    v8::V8::ShutdownPlatform();
+  }
+};
 
 struct MyV8JSContext : public JSContext {
+  struct IsolateDeleter { void operator()(v8::Isolate *isolate) { isolate->Dispose(); } };
   template <typename X, typename Y, Y* (*f)(X*), v8::Local<v8::ObjectTemplate> (MyV8JSContext::*OT)>
   static void ObjectGetter(v8::Local<v8::String> property, const v8::PropertyCallbackInfo<v8::Value>& args) {
     RETURN_V8_OBJECT(X, OT, f(CastV8InternalFieldTo<X*>(self, 1)));
@@ -120,22 +135,29 @@ struct MyV8JSContext : public JSContext {
     RETURN_V8_OBJECT(X, OT, f(CastV8InternalFieldTo<X*>(self, 1), DOMString(v)));
   }
 
-  v8::Isolate*                   isolate;
-  v8::Isolate::Scope             isolate_scope;
-  v8::HandleScope                handle_scope;
-  v8::Local<v8::Context>         context;
-  v8::Context::Scope             context_scope;
-  v8::Local<v8::ObjectTemplate>  global, console, window, node, node_list, named_node_map, css_style_declaration;
-  Console*                       js_console;
+  unique_ptr<v8::ArrayBuffer::Allocator>  allocator;
+  unique_ptr<v8::Isolate, IsolateDeleter> isolate_holder;
+  v8::Isolate*                            isolate;
+  v8::Isolate::Scope                      isolate_scope;
+  v8::HandleScope                         handle_scope;
+  v8::Local<v8::Context>                  context;
+  v8::Context::Scope                      context_scope;
+  v8::Local<v8::ObjectTemplate>           global, console, window, node, node_list, named_node_map, css_style_declaration;
+  Console*                                js_console;
 
   virtual ~MyV8JSContext() {}
-  MyV8JSContext(Console *C, DOM::Node *D) : isolate(v8::Isolate::New(v8::Isolate::CreateParams())), isolate_scope(isolate),
-  handle_scope(isolate), context(v8::Context::New(isolate)), context_scope(context), global(v8::ObjectTemplate::New(isolate)),
-  console(v8::ObjectTemplate::New(isolate)), window(v8::ObjectTemplate::New(isolate)), node(v8::ObjectTemplate::New(isolate)),
-  node_list(v8::ObjectTemplate::New(isolate)), named_node_map(v8::ObjectTemplate::New(isolate)), css_style_declaration(v8::ObjectTemplate::New(isolate)),
-  js_console(C) {
+  MyV8JSContext(Console *C, DOM::Node *D) :
+    allocator(v8::ArrayBuffer::Allocator::NewDefaultAllocator()),
+    isolate_holder(v8::Isolate::New(IsolateCreateParams(allocator.get()))), isolate(isolate_holder.get()),
+    isolate_scope(isolate), handle_scope(isolate), context(v8::Context::New(isolate)), context_scope(context),
+    global(v8::ObjectTemplate::New(isolate)), console(v8::ObjectTemplate::New(isolate)),
+    window(v8::ObjectTemplate::New(isolate)), node(v8::ObjectTemplate::New(isolate)),
+    node_list(v8::ObjectTemplate::New(isolate)), named_node_map(v8::ObjectTemplate::New(isolate)),
+    css_style_declaration(v8::ObjectTemplate::New(isolate)),
+    js_console(C) {
+
     console->SetInternalFieldCount(1);
-    console->Set(v8::String::NewFromUtf8(isolate, "log"), v8::FunctionTemplate::New(isolate, consoleLog));
+    console->Set(v8::String::NewFromUtf8(isolate, "log"), v8::FunctionTemplate::New(isolate, ConsoleLog));
     v8::Local<v8::Object> console_obj = console->NewInstance();
     console_obj->SetInternalField(0, v8::External::New(isolate, this));
     context->Global()->Set(v8::String::NewFromUtf8(isolate, "console"), console_obj);
@@ -150,21 +172,21 @@ struct MyV8JSContext : public JSContext {
 
     node->SetInternalFieldCount(3);
     node->SetAccessor(v8::String::NewFromUtf8(isolate, "nodeName"),
-                      StringGetter<DOM::Node, CallStringMember<DOM::Node, &DOM::Node::nodeName>>, donothingSetter);
+                      StringGetter<DOM::Node, CallStringMember<DOM::Node, &DOM::Node::nodeName>>, DoNothingSetter);
     node->SetAccessor(v8::String::NewFromUtf8(isolate, "nodeValue"),
-                      StringGetter<DOM::Node, CallStringMember<DOM::Node, &DOM::Node::nodeValue>>, donothingSetter);
+                      StringGetter<DOM::Node, CallStringMember<DOM::Node, &DOM::Node::nodeValue>>, DoNothingSetter);
     node->SetAccessor(v8::String::NewFromUtf8(isolate, "childNodes"),
                       ObjectGetter<DOM::Node, DOM::NodeList, &GetObjectMember<DOM::Node, DOM::NodeList, &DOM::Node::childNodes>, &MyV8JSContext::node_list>,
-                      donothingSetter);
+                      DoNothingSetter);
     node->SetAccessor(v8::String::NewFromUtf8(isolate, "attributes"), 
                       ObjectGetter<DOM::Node, DOM::NamedNodeMap, &GetObjectFromElement<DOM::Node, DOM::NamedNodeMap, &DOM::Element::attributes>, &MyV8JSContext::named_node_map>,
-                      donothingSetter);
+                      DoNothingSetter);
     node->SetAccessor(v8::String::NewFromUtf8(isolate, "style"),
                       ObjectGetter<DOM::Node, DOM::CSSStyleDeclaration, &GetInlineStyle<DOM::Node>, &MyV8JSContext::css_style_declaration>,
-                      donothingSetter);
+                      DoNothingSetter);
     node_list->SetInternalFieldCount(3);
     node_list->SetAccessor(v8::String::NewFromUtf8(isolate, "length"),
-                           IntGetter<DOM::NodeList, &CallIntMember<DOM::NodeList, &DOM::NodeList::length>>, donothingSetter);
+                           IntGetter<DOM::NodeList, &CallIntMember<DOM::NodeList, &DOM::NodeList::length>>, DoNothingSetter);
     node_list->Set(v8::String::NewFromUtf8(isolate, "item"),
                    v8::FunctionTemplate::New(isolate, IndexedObjectFunc<DOM::NodeList, DOM::Node, 
                                              &CallIndexedObjectMember<DOM::NodeList, DOM::Node, &DOM::NodeList::item>, &MyV8JSContext::node>));
@@ -173,7 +195,7 @@ struct MyV8JSContext : public JSContext {
 
     named_node_map->SetInternalFieldCount(3);
     named_node_map->SetAccessor(v8::String::NewFromUtf8(isolate, "length"),
-                                IntGetter<DOM::NamedNodeMap, &CallIntMember<DOM::NamedNodeMap, &DOM::NamedNodeMap::length>>, donothingSetter);
+                                IntGetter<DOM::NamedNodeMap, &CallIntMember<DOM::NamedNodeMap, &DOM::NamedNodeMap::length>>, DoNothingSetter);
     named_node_map->Set(v8::String::NewFromUtf8(isolate, "item"),
                         v8::FunctionTemplate::New(isolate, IndexedObjectFunc<DOM::NamedNodeMap, DOM::Node, 
                                                   CallIndexedObjectMember<DOM::NamedNodeMap, DOM::Node, &DOM::NamedNodeMap::item>, &MyV8JSContext::node>));
@@ -186,7 +208,7 @@ struct MyV8JSContext : public JSContext {
 
     css_style_declaration->SetInternalFieldCount(3);
     css_style_declaration->SetAccessor(v8::String::NewFromUtf8(isolate, "length"),
-                                       IntGetter<DOM::CSSStyleDeclaration, &CallIntMember<DOM::CSSStyleDeclaration, &DOM::CSSStyleDeclaration::length>>, donothingSetter);
+                                       IntGetter<DOM::CSSStyleDeclaration, &CallIntMember<DOM::CSSStyleDeclaration, &DOM::CSSStyleDeclaration::length>>, DoNothingSetter);
     css_style_declaration->Set(v8::String::NewFromUtf8(isolate, "item"),
                                v8::FunctionTemplate::New(isolate, IndexedStringFunc<DOM::CSSStyleDeclaration, CallIndexedStringMember<DOM::CSSStyleDeclaration, &DOM::CSSStyleDeclaration::item>>));
     css_style_declaration->SetIndexedPropertyHandler(IndexedStringProperty<DOM::CSSStyleDeclaration, &CallIndexedStringMember<DOM::CSSStyleDeclaration, &DOM::CSSStyleDeclaration::item>>);
@@ -203,6 +225,7 @@ struct MyV8JSContext : public JSContext {
       context->Global()->Set(v8::String::NewFromUtf8(isolate, "document"), node_obj);
     }
   }
+
   string Execute(const string &s) {
     v8::Local<v8::String> source = v8::String::NewFromUtf8(isolate, s.c_str());
     v8::Local<v8::Script> script = v8::Script::Compile(isolate->GetCurrentContext(), source).ToLocalChecked();
@@ -223,11 +246,20 @@ struct MyV8JSContext : public JSContext {
       return BlankNull(*v8::String::Utf8Value(isolate, result));
     }
   }
-  static void donothingSetter(v8::Local<v8::String> property, v8::Local<v8::Value> value, const v8::PropertyCallbackInfo<void>& args) {}
-  static void windowGetter(v8::Local<v8::String> property, const v8::PropertyCallbackInfo<v8::Value>& args) {
+
+  static v8::Isolate::CreateParams IsolateCreateParams(v8::ArrayBuffer::Allocator *alloc) {
+    v8::Isolate::CreateParams create_params;
+    create_params.array_buffer_allocator = alloc;
+    return create_params;
+  }
+
+  static void DoNothingSetter(v8::Local<v8::String> property, v8::Local<v8::Value> value, const v8::PropertyCallbackInfo<void>& args) {}
+
+  static void WindowGetter(v8::Local<v8::String> property, const v8::PropertyCallbackInfo<v8::Value>& args) {
     args.GetReturnValue().Set(args.Holder());
   }
-  static void consoleLog(const v8::FunctionCallbackInfo<v8::Value> &args) {
+
+  static void ConsoleLog(const v8::FunctionCallbackInfo<v8::Value> &args) {
     v8::Local<v8::Object> self = args.Holder(); string msg;
     MyV8JSContext *js_context = CastV8InternalFieldTo<MyV8JSContext*>(self, 0);
     for (int i=0; i < args.Length(); i++) StrAppend(&msg, BlankNull(*v8::String::Utf8Value(args.GetIsolate(), args[i]->ToString(js_context->isolate->GetCurrentContext()).ToLocalChecked())));
@@ -236,5 +268,10 @@ struct MyV8JSContext : public JSContext {
     args.GetReturnValue().Set(v8::Null(args.GetIsolate()));
   };
 };
-unique_ptr<JSContext> JSContext::Create(Console *js_console, DOM::Node *doc) { Singleton<MyV8JSInit>::Get(); return make_unique<MyV8JSContext>(js_console, doc); }
+
+unique_ptr<JSContext> JSContext::Create(Console *js_console, DOM::Node *doc) {
+  Singleton<MyV8JSInit>::Get();
+  return make_unique<MyV8JSContext>(js_console, doc);
+}
+
 }; // namespace LFL

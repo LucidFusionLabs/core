@@ -119,6 +119,12 @@ void Widget::Button::LayoutComplete(Flow *flow, Font *f, const Box &b) {
 
 Widget::Slider::Slider(View *V, int f) : Interface(V), flag(f) {}
 
+bool Widget::Slider::HasChanged() { return changed ? !(changed=false) : false; }
+float Widget::Slider::Percent() const { 
+  if (max_value <= min_value) return scrolled * doc_height;
+  else return min_value + scrolled * (max_value - min_value);
+}
+
 void Widget::Slider::LayoutFixed(const Box &w) { track = w; Layout(dot_size, dot_size, flag & Flag::Horizontal); }
 void Widget::Slider::LayoutAttached(const Box &w) {
   track = w;
@@ -165,11 +171,15 @@ void Widget::Slider::Layout(int, int, bool flip) {
   UpdateDotPosition();
 }
 
+void Widget::Slider::OnChanged() {
+  if (changed_cb) changed_cb(StrCat(Percent()));
+  else changed = true;
+}
+
 void Widget::Slider::UpdateDotPosition() {
   bool flip = flag & Flag::Horizontal;
   if (flip) { int aw = arrows ? dot_size : 0; view->UpdateBoxX(track.x          + int((track.w - aw) * scrolled), drawbox_ind, IndexOrDefault(hitbox, 0, -1)); }
   else      { int ah = arrows ? dot_size : 0; view->UpdateBoxY(track.top() - ah - int((track.h - ah) * scrolled), drawbox_ind, IndexOrDefault(hitbox, 0, -1)); }
-  changed = true;
 }
 
 void Widget::Slider::DragScrollDot(int button, point p, point d, int down) {
@@ -177,10 +187,16 @@ void Widget::Slider::DragScrollDot(int button, point p, point d, int down) {
   if (flip) scrolled = Clamp(    float(p.x - track.x) / track.w, 0.0f, 1.0f);
   else      scrolled = Clamp(1 - float(p.y - track.y) / track.h, 0.0f, 1.0f);
   UpdateDotPosition();
+  OnChanged();
 }
 
-void Widget::Slider::ScrollUp  () { scrolled -= increment / doc_height; Clamp(&scrolled, 0.0f, 1.0f); UpdateDotPosition(); }
-void Widget::Slider::ScrollDown() { scrolled += increment / doc_height; Clamp(&scrolled, 0.0f, 1.0f); UpdateDotPosition(); }
+void Widget::Slider::SetScrolled(float v) {
+  if (max_value <= min_value) scrolled = Clamp(v / doc_height, 0.0f, 1.0f);
+  else scrolled = Clamp((v - min_value) / (max_value - min_value), 0.0f, 1.0f);
+}
+
+void Widget::Slider::ScrollUp  () { scrolled -= increment / doc_height; Clamp(&scrolled, 0.0f, 1.0f); UpdateDotPosition(); OnChanged(); }
+void Widget::Slider::ScrollDown() { scrolled += increment / doc_height; Clamp(&scrolled, 0.0f, 1.0f); UpdateDotPosition(); OnChanged(); }
 float Widget::Slider::ScrollDelta() { float ret=scrolled-last_scrolled; last_scrolled=scrolled; return ret; }
 
 float Widget::Slider::AddScrollDelta(float cur_val) {
@@ -525,7 +541,7 @@ point TextBox::RelativePosition(const point &in) const {
 
 void TextBox::Enter() {
   string cmd = String::ToUTF8(Text16());
-  AssignInput("");
+  if (clear_on_enter) AssignInput("");
   if (!cmd.empty()) AddHistory(cmd);
   if (!cmd.empty() || run_blank_cmd) Run(cmd);
   if (deactivate_on_enter) Deactivate();

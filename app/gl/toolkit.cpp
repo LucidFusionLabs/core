@@ -27,7 +27,6 @@ ToolbarView::ToolbarView(Window *w, const string &t, MenuItemVec items, Font *F,
   View(w, "ToolbarView"), theme(t), font(F), selected_font(SF), selected_outline(SO) {
   for (auto &i : items) data.emplace_back(move(i));
   if (flag) align = flag & Align::Mask;
-  Activate();
 }
 
 void ToolbarView::Draw(const point &p) { Activate(); View::Draw(p); }
@@ -63,7 +62,7 @@ View *ToolbarView::Layout(Flow *flow_in) {
 }
 
 CollectionView::CollectionView(Window *w, const string &t, const string &s, const string &th, vector<CollectionItem> items, Font *F) :
-  View(w, "CollectionView"), data(CollectionViewSection::Convert(move(items))), title(t), style(s), theme(th), scrollbar(this) { Activate(); }
+  View(w, "CollectionView"), data(CollectionViewSection::Convert(move(items))), title(t), style(s), theme(th), scrollbar(this) {}
 
 void CollectionView::CheckExists(int section, int row) {
   CHECK_RANGE(section, 0, data.size());
@@ -147,7 +146,13 @@ View *CollectionView::Layout(Flow *flow_in) {
 }
 
 TableView::TableView(Window *w, const string &t, const string &s, const string &th, TableItemVec items, Font *F) :
-  View(w, "TableView"), data(TableViewSection::Convert(move(items))), title(t), style(s), theme(th), scrollbar(this) { Activate(); }
+  View(w, "TableView"), data(TableViewSection::Convert(move(items))), title(t), style(s), theme(th), scrollbar(this) {
+  int count=0, data_rows=0; 
+  for (auto &i : data) {
+    i.start_row = ++count + data_rows;
+    data_rows += i.item.size();
+  }
+}
 
 void TableView::DelNavigationButton(int id) { nav_left.type=0; }
 void TableView::AddNavigationButton(int id, const TableItem &item) { nav_left = item; }
@@ -155,9 +160,22 @@ void TableView::SetToolbar(ToolbarViewInterface *tb) { toolbar = tb; }
 void TableView::Show(bool show_or_hide) { if (show_or_hide) Activate(); else Deactivate(); }
 
 string        TableView::GetKey   (int s, int r) { CheckExists(s, r); return data[s].item[r].key; }
-string        TableView::GetValue (int s, int r) { CheckExists(s, r); return data[s].item[r].val; }
 int           TableView::GetTag   (int s, int r) { CheckExists(s, r); return data[s].item[r].tag; }
 PickerItem   *TableView::GetPicker(int s, int r) { CheckExists(s, r); return data[s].item[r].picker; }
+
+string TableView::GetValue (int s, int r) {
+  CheckExists(s, r);
+  auto &i = data[s].item[r];
+  switch(i.type) {
+    case TableItem::Slider: 
+      if (i.slider) return StrCat(i.slider->Percent());
+      break;
+
+    default:
+      break;
+  }
+  return i.val; 
+}
 
 StringPairVec TableView::GetSectionText(int ind) {
   StringPairVec ret;
@@ -229,16 +247,17 @@ void TableView::CheckExists(int section, int row) {
 
 void TableView::OnClick(int but, point p, point d, int down) {
   if (!down) return;
-  int line_clicked = -p.y / row_height, section_id = -1, row = -1;
+  int line_clicked = (-p.y + scrolled) / row_height, section_id = -1, row = -1;
   if (line_clicked < 0) return;
   decay_box_line = line_clicked;
   decay_box_left = 10;
   TableViewSection::FindSectionOffset(data, line_clicked, &section_id, &row);
+  row++;
   if (section_id < 0 || section_id >= data.size() || row < 0 || row >= data[section_id].item.size()) return;
   TableViewSection &section = data[section_id];
   TableViewItem &item = section.item[row];
   if (item.type == TableItem::TextInput) {
-    // app->OpenTouchKeyboard();
+    root->parent->OpenTouchKeyboard();
     if (item.textbox) item.textbox->Activate();
   }
 }
@@ -252,9 +271,6 @@ void TableView::Draw(const point &p) {
       BoxOutline().DrawGD(root->gd, child_box.line[decay_box_line] + p + box.TopLeft());
       decay_box_left--;
   }
-  // browser.Paint(&menuflow, box.TopLeft() + point(0, 0 /*scrolled*/));
-  // // browser.doc.gui.Draw();
-  // browser.UpdateScrollbar();
 }
 
 View *TableView::Layout(Flow *flow_in) {
@@ -280,6 +296,7 @@ View *TableView::Layout(Flow *flow_in) {
             i.textbox->cursor.type = TextBox::Cursor::Underline;
             i.textbox->bg_color = Color::clear;
             i.textbox->deactivate_on_enter = true;
+            i.textbox->clear_on_enter = false;
             i.textbox->cmd_prefix.clear();
             i.textbox->SetToggleKey(0, true);
             i.textbox->UpdateCursor();
@@ -293,6 +310,10 @@ View *TableView::Layout(Flow *flow_in) {
         case TableItem::Slider: {
           if (!i.slider) i.slider = make_unique<Widget::Slider>(this, Widget::Slider::Flag::Horizontal);
           flow->AppendRow(.6, .35, &i.val_box);
+          i.slider->min_value = i.minval;
+          i.slider->max_value = i.maxval;
+          i.slider->increment = i.incrval;
+          i.slider->SetScrolled(atof(i.val));
           i.slider->LayoutFixed(i.val_box);
         }; break;
 
@@ -318,8 +339,13 @@ View *TableView::Layout(Flow *flow_in) {
         }; break;
 
         case TableItem::WebView: {
-          // if (!i.browser) i.browser = make_unique<Browser>(nullptr, nullptr, nullptr, nullptr, nullptr, this, box);
-          // i.browser->Open(i.val);
+          auto app = root->parent;
+          if (!i.browser) i.browser = make_unique<Browser>(app, root, app, app->fonts.get(), app->net.get(),
+                                                           nullptr, app, this, box);
+          if (i.browser->GetURL() != i.val) i.browser->Open(i.val);
+          i.browser->Paint(flow, box.TopLeft() + point(0, 0 /*scrolled*/));
+          // // browser.doc.gui.Draw();
+          // browser.UpdateScrollbar();
         }; break;
 
         default: {
@@ -336,12 +362,6 @@ View *TableView::Layout(Flow *flow_in) {
     if (auto v = toolbar->Layout(&toolbarflow)) child_view.push_back(v);
   }
 
-#if 0
-      if (tab3_volume.dirty) {
-        tab3_volume.dirty = false;
-        app->SetVolume(int(tab3_volume.scrolled * tab3_volume.doc_height));
-      }
-#endif
   mouse.AddClickBox(Box(0, -box.h, box.w - scrollbar.dot_size, box.h),
                     MouseController::CoordCB(bind(&TableView::OnClick, this, _1, _2, _3, _4)));
   child_flow.Complete();

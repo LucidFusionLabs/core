@@ -118,21 +118,24 @@ struct Widget {
       AttachedNoCorner=Attached|NoCorner, AttachedHorizontalNoCorner=AttachedHorizontal|NoCorner }; };
     Box track;
     int flag=0, doc_height=200, dot_size=15, outline_w=1;
-    float scrolled=0, last_scrolled=0, increment=20;
+    float scrolled=0, last_scrolled=0, min_value=0, max_value=0, increment=20;
     Color color=Color(15, 15, 15, 55), *outline_topleft=&Color::grey80, *outline_bottomright=&Color::grey50;
     FontRef menuicon;
     bool changed=0, arrows=1;
+    StringCB changed_cb;
     virtual ~Slider() {}
     Slider(View *V, int f=Flag::Attached);
 
-    float Percent() const { return scrolled * doc_height; }
-    bool HasChanged() { return changed ? !(changed=false) : false; }
+    float Percent() const;
+    bool HasChanged();
     void LayoutFixed(const Box &w);
     void LayoutAttached(const Box &w);
     void Layout(int aw, int ah, bool flip);
+    void OnChanged();
     void UpdateDotPosition();
     void SetDocHeight(int v) { doc_height = v; }
     void DragScrollDot(int, point, point, int);
+    void SetScrolled(float v);
     void ScrollUp();
     void ScrollDown();
     float ScrollDelta();
@@ -321,7 +324,7 @@ struct TextBox : public View, public TextboxController {
   RingVector<string> cmd_last;
   vector<int> resize_gui_ind;
   Color cmd_color=Color::white, selection_color=Color(Color::grey70, 0.5);
-  bool needs_redraw=0, deactivate_on_enter=0, token_processing=0, insert_mode=1, run_blank_cmd=0;
+  bool needs_redraw=0, deactivate_on_enter=0, clear_on_enter=1, token_processing=0, insert_mode=1, run_blank_cmd=0;
   int start_line=0, end_line=0, start_line_adjust=0, skip_last_lines=0, default_attr=0, cmd_last_ind=-1;
   function<void(const Selection::Point&)> selection_cb;
   function<void(const shared_ptr<Control>&)> new_link_cb;

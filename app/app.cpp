@@ -659,6 +659,7 @@ int Application::Init() {
 
   if (FLAGS_enable_camera && !camera) {
     if (LoadModule((camera = make_unique<Camera>()).get())) return ERRORv(-1, "camera init failed");
+    if (!camera->impl) UnloadModule(move(camera));
   }
 
   scheduler.Init();

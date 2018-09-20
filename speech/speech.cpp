@@ -1337,11 +1337,11 @@ string Decoder::Transcript(const AcousticModel::Compiled *model, const Matrix *v
 }
 
 void Decoder::VisualizeFeatures(Window *w, AcousticModel::Compiled *model, Matrix *MFCC, Matrix *viterbi, double vprob, Time vtime, bool interactive) {
-  static unique_ptr<PhoneticSegmentationGUI> segments; 
+  static unique_ptr<PhoneticSegmentationView> segments; 
   static bool interactive_done;
 
   auto app = w->parent;
-  segments = make_unique<PhoneticSegmentationGUI>(w, model, viterbi, "visbuf");
+  segments = make_unique<PhoneticSegmentationView>(w, model, viterbi, "visbuf");
   interactive_done = 0;
 
   GraphicsContext gc(segments->root->gd);
