@@ -55,6 +55,10 @@ struct View : public Drawable {
   virtual bool ToggleActive() { if ((active = !active)) Activate(); else Deactivate(); return active; }
   virtual void SetParentView(View *v) { parent = v; }
   virtual void AppendChildView(View *v) { child_view.push_back(v); v->SetParentView(this); }
+  virtual void AppendChildView(View *v, const Box &b) { v->box = b; AppendChildView(v); }
+  virtual MouseControllerInterface *GetMouseController() { return &mouse; }
+  virtual KeyboardControllerInterface *GetKeyboardController() { return nullptr; }
+
   virtual point RelativePosition(const point &p) const { return p - box.TopLeft(); }
   virtual point RootPosition(const point &p) const;
   virtual void HandleTextMessage(const string &s) {}
@@ -580,7 +584,7 @@ struct Dialog : public View {
   string title_text;
   int zsort=0;
 
-  Dialog(Window*, float w, float h, int flag=0);
+  Dialog(Window*, const char *n, float w, float h, int flag=0);
   virtual ~Dialog() {}
   virtual void TakeFocus() {}
   virtual void LoseFocus() {}
@@ -638,7 +642,7 @@ struct MessageBoxDialog : public Dialog {
   string message;
   Box message_size;
   MessageBoxDialog(Window *w, const string &m) :
-    Dialog(w, .25, .2), message(m) { font->Size(message, &message_size); }
+    Dialog(w, "MessageBoxDialog", .25, .2), message(m) { font->Size(message, &message_size); }
   View *Layout(Flow *flow=nullptr) override;
   void Draw(const point &p) override;
 };
@@ -646,7 +650,7 @@ struct MessageBoxDialog : public Dialog {
 struct TextureBoxDialog : public Dialog {
   Texture tex;
   TextureBoxDialog(Window *w, const string &m) :
-    Dialog(w, .33, .33), tex(w->parent) { tex.ID = ::atoi(m.c_str()); tex.owner = false; }
+    Dialog(w, "TextureBoxDialog", .33, .33), tex(w->parent) { tex.ID = ::atoi(m.c_str()); tex.owner = false; }
   void Draw(const point &p) override { Dialog::Draw(p); tex.DrawGD(root->gd, content + box.TopLeft()); }
 };
 
@@ -671,8 +675,8 @@ struct FlagSliderDialog : public SliderDialog {
 template <class X> struct TextViewDialogT  : public Dialog {
   X view;
   Widget::Slider v_scrollbar, h_scrollbar;
-  TextViewDialogT(Window *W, const FontRef &F, float w=0.5, float h=.5, int flag=0) :
-    Dialog(W, w, h, flag), view(W, F), v_scrollbar(this, Widget::Slider::Flag::AttachedNoCorner),
+  TextViewDialogT(Window *W, const char *n, const FontRef &F, float w=0.5, float h=.5, int flag=0) :
+    Dialog(W, n, w, h, flag), view(W, F), v_scrollbar(this, Widget::Slider::Flag::AttachedNoCorner),
     h_scrollbar(this, Widget::Slider::Flag::AttachedHorizontalNoCorner) {}
   View *Layout(Flow *flow=nullptr) override {
     Dialog::Layout(flow);
@@ -696,11 +700,13 @@ template <class X> struct TextViewDialogT  : public Dialog {
 };
 
 struct PropertyTreeDialog : public TextViewDialogT<PropertyTree> {
-  using TextViewDialogT::TextViewDialogT;
+  PropertyTreeDialog(Window *W, const FontRef &F, float w=0.5, float h=.5, int flag=0) :
+    TextViewDialogT(W, "PropertyTreeDialog", F, w, h, flag) {}
 };
 
 struct DirectoryTreeDialog : public TextViewDialogT<DirectoryTree> {
-  using TextViewDialogT::TextViewDialogT;
+  DirectoryTreeDialog(Window *W, const FontRef &F, float w=0.5, float h=.5, int flag=0) :
+    TextViewDialogT(W, "DirectoryTreeDialog", F, w, h, flag) {}
 };
 
 struct HelperView : public View {
@@ -719,6 +725,25 @@ struct HelperView : public View {
   bool Activate() override { if (active) return 0; active=1; /* ForceDirectedLayout(); */ return 1; }
   void ForceDirectedLayout();
   void Draw(const point &p) override;
+};
+
+struct BindMap : public View, public MouseControllerInterface, public KeyboardControllerInterface {
+  unordered_set<Bind> data, down;
+  function<void(point, point)> move_cb;
+  BindMap(Window *w) : View(w, "BindMap") { Activate(); }
+
+  template <class... Args> void Add(Args&&... args) { AddBind(Bind(forward<Args>(args)...)); }
+  void AddBind(const Bind &b) { data.insert(b); }
+  void Repeat(unsigned clicks) { for (auto b : down) b.Run(clicks); }
+  void Button(InputEvent::Id event, bool d);
+  string DebugString() const override { string v="{ "; for (auto b : data) StrAppend(&v, b.key, " "); return v + "}"; }
+
+  MouseControllerInterface    *GetMouseController   () override { return this; }
+  KeyboardControllerInterface *GetKeyboardController() override { return this; }
+
+  int SendKeyEvent(InputEvent::Id, bool down)                                            override;
+  int SendMouseEvent(InputEvent::Id, const point &p, const point &d, int down, int flag) override;
+  int SendWheelEvent(InputEvent::Id, const v2    &p, const v2    &d, bool begin)         override;
 };
 
 }; // namespace LFL

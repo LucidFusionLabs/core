@@ -566,9 +566,7 @@ struct Window : public ::LFAppWindow, public GraphicsDeviceHolder, public Wakeup
   RollingAvg<unsigned> fps;
   unique_ptr<Console> console;
   vector<View*> view;
-  vector<InputController*> input;
   vector<unique_ptr<View>> my_view;
-  vector<unique_ptr<InputController>> my_input;
   vector<unique_ptr<Dialog>> dialogs;
   FontRef default_font;
   function<MouseController*()> default_controller = []{ return nullptr; };
@@ -604,9 +602,6 @@ struct Window : public ::LFAppWindow, public GraphicsDeviceHolder, public Wakeup
 
   template <class X> X* GetView(size_t i) { return i < view.size() ? dynamic_cast<X*>(view[i]) : nullptr; }
   template <class X> X* GetOwnView(size_t i) { return i < my_view.size() ? dynamic_cast<X*>(my_view[i].get()) : nullptr; }
-  template <class X> X* GetInputController(size_t i) { return i < input.size() ? dynamic_cast<X*>(input[i]) : nullptr; }
-  template <class X> X* GetOwnInputController(size_t i) { return i < my_input.size() ? dynamic_cast<X*>(my_input[i].get()) : nullptr; }
-  template <class X> X* AddInputController(unique_ptr<X> g) { auto gp = VectorAddUnique(&my_input, move(g)); input.push_back(gp); return gp; }
   template <class X> void DelViewPointer(X **g) { DelView(*g); *g = nullptr; }
 
   template <class X> X* AddView(unique_ptr<X> g) {
@@ -623,8 +618,6 @@ struct Window : public ::LFAppWindow, public GraphicsDeviceHolder, public Wakeup
     return gp;
   }
 
-  void DelInputController(InputController *g) { RemoveInputController(g); VectorRemoveUnique(&my_input, g); }
-  void RemoveInputController(InputController *g) { VectorEraseByValue(&input, g); }
   void RemoveView(View *v) { VectorEraseByValue(&view, v); }
   void DelView(View *v);
   size_t NewView();

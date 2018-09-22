@@ -213,7 +213,7 @@ int MovieAsset::Play(int seek) {
 
 /* asset impls */
 
-void glLine(GraphicsDevice *gd, const point &p1, const point &p2, const Color *color) {
+void Line2DAsset::Draw(GraphicsDevice *gd) {
   static int verts_ind = gd->RegisterBuffer(&verts_ind);
   gd->DisableTexture();
 
@@ -224,7 +224,7 @@ void glLine(GraphicsDevice *gd, const point &p1, const point &p2, const Color *c
   gd->DrawArrays(gd->c.LineLoop, 0, 2);
 }
 
-void glAxis(GraphicsDevice *gd, Asset*, Entity*) {
+void Axis3DAsset::Draw(GraphicsDevice *gd, Asset*, Entity*) {
   static int vert_id = gd->RegisterBuffer(&vert_id);
   const float scaleFactor = 1;
   const float range = powf(10, scaleFactor);
@@ -260,7 +260,7 @@ void glAxis(GraphicsDevice *gd, Asset*, Entity*) {
   gd->DrawArrays(gd->c.Lines, 0, 5);
 }
 
-void glRoom(GraphicsDevice *gd, Asset*, Entity*) {
+void Room3DAsset::Draw(GraphicsDevice *gd, Asset*, Entity*) {
   gd->DisableNormals();
   gd->DisableTexture();
 
@@ -282,8 +282,8 @@ void glRoom(GraphicsDevice *gd, Asset*, Entity*) {
   gd->DrawArrays(gd->c.Triangles, 6, 3);;
 }
 
-void glIntersect(GraphicsDevice *gd, int x, int y, Color *c) {
-  unique_ptr<Geometry> geom = make_unique<Geometry>(gd->c.Lines, 4, NullPointer<v2>(), NullPointer<v3>(), NullPointer<v2>(), *c);
+void Intersect2DAsset::Draw(GraphicsDevice *gd) {
+  unique_ptr<Geometry> geom = make_unique<Geometry>(gd->c.Lines, 4, NullPointer<v2>(), NullPointer<v3>(), NullPointer<v2>(), *color);
   v2 *vert = reinterpret_cast<v2*>(&geom->vert[0]);
 
   vert[0] = v2(0, y);
@@ -296,7 +296,7 @@ void glIntersect(GraphicsDevice *gd, int x, int y, Color *c) {
   Scene::Draw(gd, geom.get(), 0);
 }
 
-void glShadertoyShader(GraphicsDevice *gd, Shader *shader, const Texture *tex) {
+void ShaderToyAsset::Draw(GraphicsDevice *gd) {
   Window *screen = gd->parent;
   Application *a = screen->parent;
   float scale = shader->scale;
@@ -311,9 +311,9 @@ void glShadertoyShader(GraphicsDevice *gd, Shader *shader, const Texture *tex) {
   }
 }
 
-void glShadertoyShaderWindows(GraphicsDevice *gd, Shader *shader, const Color &backup_color, const Box &w,                   const Texture *tex) { glShadertoyShaderWindows(gd, shader, backup_color, vector<const Box*>(1, &w), tex); }
-void glShadertoyShaderWindows(GraphicsDevice *gd, Shader *shader, const Color &backup_color, const vector<const Box*> &wins, const Texture *tex, point p) {
-  if (shader) glShadertoyShader(gd, shader, tex);
+void ShaderToyAsset::DrawWindows(GraphicsDevice *gd, const Box &w) { DrawWindows(gd, vector<const Box*>(1, &w)); }
+void ShaderToyAsset::DrawWindows(GraphicsDevice *gd, const vector<const Box*> &wins, point p) {
+  if (shader) Draw(gd);
   else gd->SetColor(backup_color);
   if (tex) { gd->EnableLayering(); tex->Bind(); }
   else gd->DisableTexture();
@@ -435,7 +435,7 @@ Waveform Waveform::Decimated(point dim, const Color *c, const RingSampler::Handl
   return WF;
 }
 
-void glSpectogram(GraphicsDevice *gd, Matrix *m, unsigned char *data, int pf, int width, int height, int hjump, float vmax, float clip, bool interpolate, int pd) {
+void SpectogramAsset::Draw(GraphicsDevice *gd, Matrix *m, unsigned char *data, int pf, int width, int height, int hjump, float vmax, float clip, bool interpolate, int pd) {
   int ps = Pixel::Size(pf);
   unsigned char pb[4];
   double v;
@@ -462,7 +462,7 @@ void glSpectogram(GraphicsDevice *gd, Matrix *m, unsigned char *data, int pf, in
   }
 }
 
-void glSpectogram(GraphicsDevice *gd, Matrix *m, Texture *t, float *max, float clip, int pd) {
+void SpectogramAsset::Draw(GraphicsDevice *gd, Matrix *m, Texture *t, float *max, float clip, int pd) {
   if (!t->ID) t->CreateBacked(m->N, m->M);
   else {
     if (t->width < m->N || t->height < m->M) t->Resize(m->N, m->M);
@@ -475,17 +475,17 @@ void glSpectogram(GraphicsDevice *gd, Matrix *m, Texture *t, float *max, float c
   float Max = Matrix::Max(m);
   if (max) *max = Max;
 
-  glSpectogram(gd, m, t->buf, t->pf, m->M, m->N, t->width, Max, clip, 0, pd);
+  Draw(gd, m, t->buf, t->pf, m->M, m->N, t->width, Max, clip, 0, pd);
 
   gd->BindTexture(gd->c.Texture2D, t->ID);
   t->UpdateGL();
 }
 
-void glSpectogram(GraphicsDevice *gd, const RingSampler::Handle *in, Texture *t, Matrix *transform, float *max, float clip) {
+void SpectogramAsset::Draw(GraphicsDevice *gd, const RingSampler::Handle *in, Texture *t, Matrix *transform, float *max, float clip) {
   /* 20*log10(abs(specgram(y,2048,sr,hamming(512),256))) */
   unique_ptr<Matrix> m(Spectogram(in, 0, 512, 256, 512, vector<double>(), PowerDomain::abs));
   if (transform) m = Matrix::Mult(move(m), transform);
-  glSpectogram(gd, m.get(), t, max, clip, PowerDomain::abs);
+  Draw(gd, m.get(), t, max, clip, PowerDomain::abs);
 }
 
 /* Cube */

@@ -28,6 +28,24 @@
 #endif
 
 namespace LFL {
+
+int BrowserController::SendMouseEvent(InputEvent::Id event, const point &p, const point &d, int down, int flag) {
+  if (event == Mouse::Event::Motion) { return 0; if (active) browser->MouseMoved((last_mx = p.x), (last_my = p.y)); }
+  else                               {           if (active) Button(event, down, p); }
+  return 0;
+}
+
+void BrowserController::Button(InputEvent::Id event, bool down, const point &p) {
+  int key = InputEvent::GetKey(event);
+  if (key)                                browser->KeyEvent(key, down);
+  else if (event == Mouse::Event::Wheel)  browser->MouseWheel(0, down*32);
+  else if (event == Mouse::Event::Click2) browser->MouseButton(2, down, last_mx, last_my);
+  else if (event == Mouse::Event::Click) {
+    if (down) root->active_textbox = 0;
+    browser->MouseButton(1, down, p.x, p.y);
+  }
+}
+
 Browser::Browser(ThreadDispatcher *d, Window *w, AssetLoading *l, Fonts *f, SocketServices *n, ProcessAPI *A, SystemBrowser *B, View *v, const Box &b) :
   doc(d, l, f, w->parent, n, b), dispatch(d), window(w), missing_image(w->parent), v_scrollbar(v), h_scrollbar(v, Widget::Slider::Flag::AttachedHorizontal), system_browser(B) {
   if (Font *maf = f->Get(window->GD()->parent->gl_h, "MenuAtlas", "", 0, Color::white, Color::clear, 0, 0)) {
@@ -63,14 +81,14 @@ void Browser::KeyEvent(int key, bool down) {
 }
 
 void Browser::MouseMoved(int x, int y) {
-  if (dispatch->render_process || (!dispatch->render_process && !dispatch->main_process)) y -= window->GD()->parent->gl_h+viewport.top()+VScrolled();
+  if (dispatch->render_process || (!dispatch->render_process && !dispatch->main_process)) y -= VScrolled();
   if (dispatch->render_process) { dispatch->RunInNetworkThread(bind(&ProcessAPIClient::MouseMove, dispatch->render_process.get(), x, y, x-mouse.x, y-mouse.y)); mouse=point(x,y); }
   else if (auto n = doc.node->documentElement()) { mouse=point(x,y); EventNode(n, initial_displacement, Mouse::Event::Motion); }
 }
 
 void Browser::MouseButton(int b, bool d, int x, int y) {
   // doc.gui.Input(b, mouse, d, 1);
-  if (dispatch->render_process || (!dispatch->render_process && !dispatch->main_process)) y -= window->GD()->parent->gl_h+viewport.top()+VScrolled();
+  if (dispatch->render_process || (!dispatch->render_process && !dispatch->main_process)) y -= VScrolled();
   if (dispatch->render_process) { dispatch->RunInNetworkThread(bind(&ProcessAPIClient::MouseClick, dispatch->render_process.get(), b, d, x, y)); mouse=point(x,y); }
   else if (auto n = doc.node->documentElement()) { mouse=point(x,y); EventNode(n, initial_displacement, Mouse::ButtonID(b)); }
 }

@@ -84,33 +84,20 @@ namespace std {
 }; // namespace std;
 namespace LFL {
 
-struct InputController {
-  bool active=0;
-  virtual ~InputController() {}
-  virtual void Activate  () { active = 1; }
-  virtual void Deactivate() { active = 0; }
-  virtual void Button(InputEvent::Id event, bool down) {}
-  virtual void Move(InputEvent::Id event, point p, point d) {}
+struct KeyboardControllerInterface {
+  virtual int SendKeyEvent(InputEvent::Id, bool down) = 0;
 };
 
-struct BindMap : public InputController {
-  unordered_set<Bind> data, down;
-  function<void(point, point)> move_cb;
-  BindMap() { active = 1; }
-
-  template <class... Args> void Add(Args&&... args) { AddBind(Bind(forward<Args>(args)...)); }
-  void AddBind(const Bind &b) { data.insert(b); }
-  void Repeat(unsigned clicks) { for (auto b : down) b.Run(clicks); }
-  void Button(InputEvent::Id event, bool d) override;
-  void Move(InputEvent::Id event, point p, point d) override { if (move_cb) move_cb(p, d); }
-  string DebugString() const { string v="{ "; for (auto b : data) StrAppend(&v, b.key, " "); return v + "}"; }
+struct MouseControllerInterface {
+  virtual int SendMouseEvent(InputEvent::Id, const point &p, const point &d, int down, int flag) = 0;
+  virtual int SendWheelEvent(InputEvent::Id, const v2    &p, const v2    &d, bool begin)         = 0;
 };
 
-struct KeyboardController {
+struct KeyboardController : public KeyboardControllerInterface {
   Bind toggle_bind;
-  bool toggle_once=0, keydown_events_only=1;
+  bool toggle_enabled=0, keydown_events_only=1;
   virtual ~KeyboardController() {}
-  virtual void SetToggleKey(int TK, bool TO=0) { toggle_bind.key=TK; toggle_once=TO; }
+  virtual void SetToggleKey(int TK) { toggle_bind.key=TK; toggle_enabled=true; }
   virtual int SendKeyEvent(InputEvent::Id, bool down) { return 0; }
 };
 
@@ -167,7 +154,7 @@ struct MouseControllerCallback {
   template <class X> bool Run(X p, X d, int button, int down, bool wrote=false);
 };
 
-struct MouseController {
+struct MouseController : public MouseControllerInterface {
   typedef MouseControllerCallback::CB CB;
   typedef MouseControllerCallback::BoolCB BoolCB;
   typedef MouseControllerCallback::CoordCB CoordCB;
@@ -251,6 +238,7 @@ struct Input : public Module {
 
   int KeyPress(int key, int mod, bool down);
   int KeyEventDispatch(InputEvent::Id event, bool down);
+  int KeyEventDispatchView(InputEvent::Id event, int down, View *v, int *active_guis);
 
   int MouseMove(const point &p, const point &d);
   int MouseSwipe(const point &p, const point &d);

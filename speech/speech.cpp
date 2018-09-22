@@ -1355,7 +1355,7 @@ void Decoder::VisualizeFeatures(Window *w, AcousticModel::Compiled *model, Matri
 
   auto spect = Spectogram(&B, 0, FLAGS_feat_window, FLAGS_feat_hop, FLAGS_feat_window, vector<double>(), PowerDomain::dB);
   Asset *snap = app->asset("snap");
-  glSpectogram(gc.gd, spect.get(), &snap->tex, 0);
+  SpectogramAsset().Draw(gc.gd, spect.get(), &snap->tex, 0);
 
   if (FLAGS_enable_audio) app->audio->QueueMixBuf(&B);
   INFO("vprob=", vprob, " vtime=", vtime.count());

@@ -113,7 +113,7 @@ struct Editor : public TextView {
 struct EditorDialog : public TextViewDialogT<Editor> {
   struct Flag { enum { Wrap=Dialog::Flag::Next }; };
   EditorDialog(Window *W, const FontRef &F, unique_ptr<File> I, float w=.5, float h=.5, int flag=0) :
-    TextViewDialogT(W, F, w, h, flag) {
+    TextViewDialogT(W, "EditorDialog", F, w, h, flag) {
     if (I) { title_text = BaseName(I->Filename()); view.Init(move(I)); }
     view.line_fb.wrap = flag & Flag::Wrap; 
   }

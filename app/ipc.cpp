@@ -759,12 +759,14 @@ int ProcessAPIServer::HandleKeyPressRequest(int seq, const IPC::KeyPressRequest 
 }
 
 int ProcessAPIServer::HandleMouseClickRequest(int seq, const IPC::MouseClickRequest *req, Void) {
-  input->MouseClick(req->button(), req->down(), point(req->x(), req->y()));
+  auto focused = input->window->focused;
+  input->MouseClick(req->button(), req->down(), point(req->x(), req->y()) + (focused ? focused->Box().TopLeft() : point()));
   return IPC::Done;
 }
 
 int ProcessAPIServer::HandleMouseMoveRequest(int seq, const IPC::MouseMoveRequest *req, Void) {
-  input->MouseMove(point(req->x(), req->y()), point(req->dx(), req->y()));
+  auto focused = input->window->focused;
+  input->MouseMove(point(req->x(), req->y()), point(req->dx(), req->y()) + (focused ? focused->Box().TopLeft() : point()));
   return IPC::Done;
 }
 

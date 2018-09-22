@@ -173,7 +173,8 @@ struct CodeCompletionsView : public PropertyView {
 };
 
 struct CodeCompletionsViewDialog : public TextViewDialogT<CodeCompletionsView> {
-  using TextViewDialogT::TextViewDialogT;
+  CodeCompletionsViewDialog(Window *W, const FontRef &F, float w=0.5, float h=.5, int flag=0) :
+    TextViewDialogT(W, "CodeCompletionsViewDialog", F, w, h, flag) {}
 };
 
 }; // namespace LFL

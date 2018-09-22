@@ -163,13 +163,6 @@ void Bind::Run(unsigned t) const {
   }
 }
 
-void BindMap::Button(InputEvent::Id event, bool d) {
-  auto b = data.find(event);
-  if (b == data.end()) return;
-  if (b->cb_type == Bind::CB_TIME) { Bind r=*b; r.key=InputEvent::GetKey(r.key); InsertOrErase(&down, r, d); }
-  else if (d) b->Run(0);
-}
-
 int TextboxController::HandleSpecialKey(InputEvent::Id event) {
   if      (event == Key::Backspace) { Erase();       return 1; }
   else if (event == Key::Delete)    { Erase();       return 1; }
@@ -194,7 +187,7 @@ int TextboxController::SendKeyEvent(InputEvent::Id event, bool down) {
   InputDebugIfDown("TextboxController::Input %s %d %d %d %d",
                    InputEvent::Name(event), key, shift_down, ctrl_down, cmd_down);
 
-  if (toggle_bind.key == event && !toggle_once) return 0;
+  if (toggle_enabled && toggle_bind.key == event) return 0;
 
   if (clipboard && event == clipboard->paste_bind.key) { InputString(clipboard->GetClipboardText()); return 1; }
   if (HandleSpecialKey(event)) return 1;
@@ -319,32 +312,48 @@ int Input::KeyPress(int key, int mod, bool down) {
     if (ShiftKeyDown()) event |= Key::Modifier::Shift;
   }
 
-  int fired = KeyEventDispatch(event, down);
-  if (fired) return fired;
-
-  Window *screen = window->focused;
-  for (auto &g : screen->input)
-    if (g->active) g->Button(event, down); 
-
-  return 0;
+  return KeyEventDispatch(event, down);
 }
 
 int Input::KeyEventDispatch(InputEvent::Id event, bool down) {
-  KeyboardController *g = window->focused ? window->focused->active_textbox : 0;
-  if (!g || (!down && g->keydown_events_only)) return 0;
-  return g->SendKeyEvent(event, down);
+  auto w = window->focused;
+  if (!w) return 0;
+  if (auto kc = window->focused->active_textbox) {
+    if (!down && kc->keydown_events_only) return 0;
+    int events = kc->SendKeyEvent(event, down);
+    if (events) return events;
+  } 
+
+  int active_views = 0;
+  for (auto b = w->view.begin(), e = w->view.end(), i = b; i != e; ++i) {
+    if (int events = KeyEventDispatchView(event, down, *i, &active_views)) {
+      InputDebug("Input::KeyEventDispatch sent View[%d] %s events = %d", i - b, InputEvent::Name(event), events);
+      return events;
+    }
+  }
+  return 0;
+}
+
+int Input::KeyEventDispatchView(InputEvent::Id event, int down, View *v, int *active_views) {
+  if (!v->active) return 0;
+  else (*active_views)++;
+
+  if (auto kc = v->GetKeyboardController()) {
+    int events = kc->SendKeyEvent(event, down);
+    InputDebugIfDown("Input::KeyEventDispatchView fired=%d, view=%s", events, v->name);
+    if (events) return events;
+  }
+
+  int events = 0;
+  for (auto i=v->child_view.begin(), e=v->child_view.end(); i != e; ++i)
+    events += KeyEventDispatchView(event, down, *i, active_views);
+  return events;
 }
 
 int Input::MouseMove(const point &p, const point &d) {
   if (!dispatcher->run) return 0;
   Window *screen = window->focused;
-  int fired = MouseEventDispatch(Mouse::Event::Motion, p, d, MouseButton1Down());
-  if (!screen->grab_mode.Enabled()) return fired;
-
-  for (auto &g : screen->input)
-    if (g->active) g->Move(Mouse::Event::Motion, p, d); 
-
-  return fired;
+  return MouseEventDispatch(Mouse::Event::Motion, p, d, MouseButton1Down());
 }
 
 int Input::MouseSwipe(const point &p, const point &d) {
@@ -390,14 +399,7 @@ int Input::MouseClick(int button, bool down, const point &p) {
   else if (event == Mouse::Button::_2) mouse_but2_down = down;
   // event |= (CtrlKeyDown() ? Key::Modifier::Ctrl : 0) | (CmdKeyDown() ? Key::Modifier::Cmd : 0);
 
-  int fired = MouseEventDispatch(event, p, point(), down);
-  if (fired) return fired;
-
-  Window *screen = window->focused;
-  for (auto i = screen->input.begin(), e = screen->input.end(); i != e; ++i)
-    if ((*i)->active) (*i)->Button(event, down);
-
-  return fired;
+  return MouseEventDispatch(event, p, point(), down);
 }
 
 int Input::MouseEventDispatch(InputEvent::Id event, const point &pp, const point &d, int down) {
@@ -442,8 +444,10 @@ int Input::MouseEventDispatchView(InputEvent::Id event, const point &pp, const p
   point p = v->RelativePosition(pp);
   if (v->NotActive(p)) return 0;
   else (*active_views)++;
-  int events = v->mouse.SendMouseEvent(event, p, d, down, 0);
+  int events = v->GetMouseController()->SendMouseEvent(event, p, d, down, 0);
   InputDebugIfDown("Input::MouseEventDispatchView %s fired=%d, view=%s", p.DebugString().c_str(), events, v->name);
+  if (events) return events;
+
   for (auto i=v->child_view.begin(), e=v->child_view.end(); i != e; ++i)
     events += MouseEventDispatchView(event, p, d, down, *i, active_views);
   return events;

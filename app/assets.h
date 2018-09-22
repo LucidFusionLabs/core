@@ -181,16 +181,44 @@ struct MapAsset {
   virtual void Draw(GraphicsDevice*, const Entity &camera) = 0;
 };
 
-void glLine(GraphicsDevice*, const point &p1, const point &p2, const Color *color);
-void glAxis(GraphicsDevice*, Asset*, Entity*);
-void glRoom(GraphicsDevice*, Asset*, Entity*);
-void glIntersect(GraphicsDevice*, int x, int y, Color *c);
-void glShadertoyShader(GraphicsDevice*, Shader *shader, const Texture *tex=0);
-void glShadertoyShaderWindows(GraphicsDevice*, Shader *shader, const Color &backup_color, const Box                &win, const Texture *tex=0);
-void glShadertoyShaderWindows(GraphicsDevice*, Shader *shader, const Color &backup_color, const vector<const Box*> &win, const Texture *tex=0, point p=point());
-void glSpectogram(GraphicsDevice*, Matrix *m, unsigned char *data, int pf, int width, int height, int hjump, float max, float clip, bool interpolate, int pd=PowerDomain::dB);
-void glSpectogram(GraphicsDevice*, Matrix *m, Texture *t, float *max=0, float clip=-INFINITY, int pd=PowerDomain::dB);
-void glSpectogram(GraphicsDevice*, const RingSampler::Handle *in, Texture *t, Matrix *transform=0, float *max=0, float clip=-INFINITY);
+struct Axis3DAsset {
+  static void Draw(GraphicsDevice*, Asset*, Entity*);
+};
+
+struct Room3DAsset {
+  static void Draw(GraphicsDevice*, Asset*, Entity*);
+};
+
+struct Line2DAsset {
+  point p1, p2;
+  const Color *color;
+  Line2DAsset(point P1, point P2, const Color *c) : p1(P1), p2(P2), color(c) {}
+  void Draw(GraphicsDevice*);
+};
+
+struct Intersect2DAsset {
+  int x, y;
+  const Color *color;
+  Intersect2DAsset(int X, int Y, const Color *c) : x(X), y(Y), color(c) {}
+  void Draw(GraphicsDevice*);
+};
+
+struct ShaderToyAsset {
+  Shader *shader;
+  const Texture *tex;
+  Color backup_color;
+  ShaderToyAsset(Shader *S, const Texture *T=0, const Color &C=Color()) : shader(S), tex(T), backup_color(C) {}
+
+  void Draw(GraphicsDevice*);
+  void DrawWindows(GraphicsDevice*, const Box                &win);
+  void DrawWindows(GraphicsDevice*, const vector<const Box*> &win, point p=point());
+};
+
+struct SpectogramAsset {
+  void Draw(GraphicsDevice*, Matrix *m, unsigned char *data, int pf, int width, int height, int hjump, float max, float clip, bool interpolate, int pd=PowerDomain::dB);
+  void Draw(GraphicsDevice*, Matrix *m, Texture *t, float *max=0, float clip=-INFINITY, int pd=PowerDomain::dB);
+  void Draw(GraphicsDevice*, const RingSampler::Handle *in, Texture *t, Matrix *transform=0, float *max=0, float clip=-INFINITY);
+};
 
 struct BoxFilled             : public Drawable { void Draw(GraphicsContext*, const LFL::Box &b) const override; };
 struct BoxOutline            : public Drawable { void Draw(GraphicsContext*, const LFL::Box &b) const override; };

@@ -296,7 +296,7 @@ struct GameMenuGUI : public View, public Connection::Handler {
     vector<const Box*> bgwins;
     bgwins.push_back(&topbar.box);
     if (toplevel->selected >= 0) bgwins.push_back(&box);
-    glShadertoyShaderWindows(gc.gd, MyShader, Color(25, 60, 130, 120), bgwins, nullptr, p);
+    ShaderToyAsset(MyShader, nullptr, Color(25, 60, 130, 120)).DrawWindows(gc.gd, bgwins, p);
 
     if (title && toplevel->selected >= 0) {
       gc.gd->DisableBlend();
@@ -368,7 +368,7 @@ struct GamePlayerListGUI : public View {
     GraphicsContext gc(root->gd);
     gc.gd->EnableBlend();
     Box win = root->Box().Scale(.1, .1, .8, .8, false);
-    glShadertoyShaderWindows(gc.gd, MyShader, Color(255, 255, 255, 120), win);
+    ShaderToyAsset(MyShader, nullptr, Color(255, 255, 255, 120)).DrawWindows(gc.gd, win);
 
     int fh = win.h/2-font->Height()*2;
     DrawableBoxArray outgeom1, outgeom2;
@@ -405,7 +405,7 @@ struct GameChatGUI : public TextArea {
     TextArea(W, FontRef(W, FontDesc(FLAGS_font, "", 10, Color::grey80)), 100, 10), server(s) { 
     write_timestamp = deactivate_on_enter = true;
     line_fb.align_top_or_bot = false;
-    SetToggleKey(key, true);
+    SetToggleKey(key);
     bg_color = Color::clear;
     cursor.type = Cursor::Underline;
   }

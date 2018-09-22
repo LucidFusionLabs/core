@@ -852,7 +852,6 @@ Window::~Window() {
 void Window::ClearChildren() {
   dialogs.clear();
   my_view.clear();
-  my_input.clear();
 }
 
 void Window::SetBox(const point &wd, const LFL::Box &b) {
@@ -895,7 +894,7 @@ void Window::DrawDialogs() {
   if (console) console->Draw(point());
   if (FLAGS_draw_grid) {
     Color c(.7, .7, .7);
-    glIntersect(gd, mouse.x, mouse.y, &c);
+    Intersect2DAsset(mouse.x, mouse.y, &c).Draw(gd);
     default_font->Draw(gd, StrCat("draw_grid ", mouse.x, " , ", mouse.y), point(0,0));
   }
 }

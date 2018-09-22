@@ -25,24 +25,18 @@
 
 namespace LFL {
 
-struct BrowserController : public InputController {
-  Window *window;
+struct BrowserController : public View, public MouseControllerInterface, public KeyboardControllerInterface {
   BrowserInterface *browser;
   int last_mx=0, last_my=0;
-  BrowserController(Window *W, BrowserInterface *B) : window(W), browser(B) { active=1; }
-  void Button(InputEvent::Id event, bool down) {
-    int key = InputEvent::GetKey(event);
-    if (key)                                browser->KeyEvent(key, down);
-    else if (event == Mouse::Event::Wheel)  browser->MouseWheel(0, down*32);
-    else if (event == Mouse::Event::Click2) browser->MouseButton(2, down, last_mx, last_my);
-    else if (event == Mouse::Event::Click) {
-      if (down) window->active_textbox = 0;
-      browser->MouseButton(1, down, window->mouse.x, window->mouse.y);
-    }
-  }
-  void Moved(InputEvent::Id event, point p, point d) {
-    if (event == Mouse::Event::Motion) browser->MouseMoved((last_mx = p.x), (last_my = p.y));
-  }
+  BrowserController(Window *W, BrowserInterface *B) : View(W, "BrowserController"), browser(B) { Activate(); }
+
+  MouseControllerInterface    *GetMouseController   () override { return this; }
+  KeyboardControllerInterface *GetKeyboardController() override { return this; }
+
+  int SendKeyEvent  (InputEvent::Id e,                       bool d) override { if (active) Button(e, d); return 0; }
+  int SendWheelEvent(InputEvent::Id e, const v2&, const v2&, bool b) override { if (active) Button(e, b); return 0; }
+  int SendMouseEvent(InputEvent::Id event, const point &p, const point &d, int down, int flag) override;
+  void Button(InputEvent::Id event, bool down, const point &p=point());
 };
 
 namespace DOM {

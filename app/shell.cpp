@@ -161,7 +161,7 @@ void Shell::snap(const vector<string> &arg) {
   if (a && sa) {
     audio->Snapshot(sa);
     RingSampler::Handle H(sa->wav.get());
-    glSpectogram(parent->gd, &H, &a->tex);
+    SpectogramAsset().Draw(parent->gd, &H, &a->tex);
   }
 }
 
@@ -353,7 +353,7 @@ void Shell::cmds(const vector<string>&) {
 void Shell::flags(const vector<string>&) { Singleton<FlagMap>::Get()->Print(); }
 
 void Shell::binds(const vector<string>&) {
-  auto bm = parent->GetInputController<BindMap>(0);
+  auto bm = parent->GetOwnView<BindMap>(0);
   if (!bm) return;
   for (auto &b : bm->data) {}
 }

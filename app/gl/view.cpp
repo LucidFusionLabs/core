@@ -843,7 +843,7 @@ void TextArea::Draw(const Box &b, int flag, Shader *shader) {
   GraphicsContext gc(root->gd);
   if (shader) {
     scale = shader->scale;
-    glShadertoyShader(gc.gd, shader);
+    ShaderToyAsset(shader).Draw(gc.gd);
     shader->SetUniform1i("iChannelFlip", 0);
     shader->SetUniform4f("iTargetBox", 0, 0,   XY_or_Y(scale, gc.gd->TextureDim(line_fb.w)), 
                                                XY_or_Y(scale, gc.gd->TextureDim(line_fb.h)));
@@ -874,7 +874,7 @@ void TextArea::DrawHoverLink(const Box &b) {
     if (!i.w || !i.h) continue;
     point p = i.BottomLeft();
     p.y = outside_scroll_region ? (p.y + fb_h) : RingIndex::Wrap(p.y + line_fb.scroll.y * fb_h, fb_h);
-    glLine(root->gd, p + point(b.x, b.y), point(i.BottomRight().x, p.y) + point(b.x, b.y), &Color::white);
+    Line2DAsset(p + point(b.x, b.y), point(i.BottomRight().x, p.y) + point(b.x, b.y), &Color::white).Draw(root->gd);
   }
   if (hover_control_cb) hover_control_cb(hover_control);
 }
@@ -1244,7 +1244,7 @@ void Console::Draw(const Box &b, int flag, Shader *shader) {
 
 /* Dialog */
 
-Dialog::Dialog(Window *W, float w, float h, int flag) : View(W, "Dialog"),
+Dialog::Dialog(Window *W, const char *n, float w, float h, int flag) : View(W, n),
   color(85,85,85,220), title_gradient{Color(127,0,0), Color(0,0,127), Color(0,0,178), Color(208,0,127)},
   font    (W, FontDesc(FLAGS_font, "", 14, Color(Color::white,.8), Color::clear, FLAGS_font_flag)),
   menuicon(W, FontDesc("MenuAtlas", "", 0, Color::white, Color::clear, 0)), deleted_cb([=]{ deleted=true; })
@@ -1374,7 +1374,7 @@ void MessageBoxDialog::Draw(const point &p) {
 }
 
 SliderDialog::SliderDialog(Window *w, const string &t, const SliderDialog::UpdatedCB &cb, float scrolled, float total, float inc) :
-  Dialog(w, .33, .09), updated(cb), slider(this, Widget::Slider::Flag::Horizontal) {
+  Dialog(w, "SliderDialog", .33, .09), updated(cb), slider(this, Widget::Slider::Flag::Horizontal) {
   title_text = t;
   slider.scrolled = scrolled;
   slider.doc_height = total;
@@ -1483,12 +1483,35 @@ HelperView::Label::Label(const Box &w, const string &d, int h, Font *f, const po
 void HelperView::Draw(const point &p) {
   GraphicsContext gc(root->gd);
   for (auto i = label.begin(); i != label.end(); ++i) {
-    glLine(root->gd, point(i->label_center.x, i->label_center.y),
-                     point(i->target_center.x, i->target_center.y), &font->fg);
+    Line2DAsset(point(i->label_center.x, i->label_center.y),
+                point(i->target_center.x, i->target_center.y), &font->fg).Draw(root->gd);
     gc.gd->FillColor(Color::black);
     gc.DrawTexturedBox(Box::AddBorder(i->label, 4, 0));
     font->Draw(root->gd, i->description, point(i->label.x, i->label.y));
   }
+}
+
+int BindMap::SendKeyEvent(InputEvent::Id event, bool down) {
+  if (active) Button(event, down); 
+  return 0;
+}
+
+int BindMap::SendMouseEvent(InputEvent::Id event, const point &p, const point &d, int down, int flag) {
+  if (event == Mouse::Event::Motion) { if (active && root->grab_mode.Enabled() && move_cb) move_cb(p, d); }
+  else                               { if (active) Button(event, down); }
+  return 0;
+}
+
+int BindMap::SendWheelEvent(InputEvent::Id event, const v2 &p, const v2 &d, bool begin) {
+  if (active) Button(event, begin); 
+  return 0;
+}
+
+void BindMap::Button(InputEvent::Id event, bool d) {
+  auto b = data.find(event);
+  if (b == data.end()) return;
+  if (b->cb_type == Bind::CB_TIME) { Bind r=*b; r.key=InputEvent::GetKey(r.key); InsertOrErase(&down, r, d); }
+  else if (d) b->Run(0);
 }
 
 }; // namespace LFL

@@ -124,11 +124,12 @@ View *CollectionView::Layout(Flow *flow_in) {
     }
   }
 
+  int tb_h = 0;
   if (toolbar) {
     Box tb_box = box;
     if (toolbar->align & Align::Top) tb_box.y = tb_box.TopLeft().y - row_height;
     else tb_box.y = tb_box.BottomLeft().y;
-    tb_box.h = row_height;
+    tb_h = tb_box.h = row_height;
     Flow toolbarflow(&tb_box, font, dynamic_cast<ToolbarView*>(toolbar)->ResetView());
     toolbarflow.layout.align_center = 1;
 
@@ -138,7 +139,7 @@ View *CollectionView::Layout(Flow *flow_in) {
     }
   }
 
-  mouse.AddClickBox(Box(0, -box.h, box.w - scrollbar.dot_size, box.h),
+  mouse.AddClickBox(Box(0, -box.h + tb_h, box.w - scrollbar.dot_size, box.h - tb_h),
                     MouseController::CoordCB(bind(&CollectionView::OnClick, this, _1, _2, _3, _4)));
   scrollbar.SetDocHeight(flow->Height());
   child_flow.Complete();
@@ -298,7 +299,6 @@ View *TableView::Layout(Flow *flow_in) {
             i.textbox->deactivate_on_enter = true;
             i.textbox->clear_on_enter = false;
             i.textbox->cmd_prefix.clear();
-            i.textbox->SetToggleKey(0, true);
             i.textbox->UpdateCursor();
           } else i.textbox->style.font = flow->cur_attr.font;
           i.textbox->AssignInput(i.val);
