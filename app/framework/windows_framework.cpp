@@ -163,7 +163,7 @@ LRESULT APIENTRY WindowsWindow::WndProc(HWND hWnd, UINT message, WPARAM wParam, 
   switch (message) {
   case WM_CREATE:                      return 0;
   case WM_DESTROY:                     parent->Shutdown(); PostQuitMessage(0); return 0;
-  case WM_SIZE:                        w = LOWORD(lParam); h = HIWORD(lParam); if (w != gl_w || h != gl_h) { Reshaped(point(w, h), Box(0, 0, w, h)); Wakeup(); } return 0;
+  case WM_SIZE:                        w = LOWORD(lParam); h = HIWORD(lParam); if (w != gl_w || h != gl_h) { Reshaped(point(w, h), LFL::Box(0, 0, w, h)); Wakeup(); } return 0;
   case WM_KEYUP:   case WM_SYSKEYUP:   if (parent->input->KeyPress(WindowsFrameworkModule::GetKeyCode(wParam), 0, 0) && frame_on_keyboard_input) Wakeup(); return 0;
   case WM_KEYDOWN: case WM_SYSKEYDOWN: if (parent->input->KeyPress(WindowsFrameworkModule::GetKeyCode(wParam), 0, 1) && frame_on_keyboard_input) Wakeup(); return 0;
   case WM_LBUTTONDOWN:                 if (parent->input->MouseClick(1, 1, point(prev_mouse_pos.x, prev_mouse_pos.y)) && frame_on_mouse_input) Wakeup(); return 0;

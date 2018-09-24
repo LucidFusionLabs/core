@@ -20,7 +20,8 @@
 #define LFL_CORE_APP_MATH_H__
 
 namespace LFL {
-template <class X> X    Clamp(X  x, X floor, X ceil) { return isnan(x) || x < floor ? floor : (ceil < x ? ceil : x); }
+template <typename X> typename enable_if<!is_floating_point<X>::value, X>::type Clamp(X x, X floor, X ceil) { return             x < floor ? floor : (ceil < x ? ceil : x); }
+template <typename X> typename enable_if< is_floating_point<X>::value, X>::type Clamp(X x, X floor, X ceil) { return isnan(x) || x < floor ? floor : (ceil < x ? ceil : x); }
 template <class X> void Clamp(X *x, X floor, X ceil) { *x = Clamp(*x, floor, ceil); }
 float Decimals(float n);
 int Sign(float f);

@@ -491,7 +491,8 @@ bool HTTPClient::WPost(SocketServices *net, const string &url, const string &mim
 static bool HTTPClientWPostLocal(unique_ptr<HTTPClientHandler::WPost> handler, const string &endpoint, const string &path) {
   handler->host = endpoint;
   handler->path = path;
-  auto c = handler->svc->ConnectLocal(endpoint, move(handler));
+  auto svc = handler->svc;
+  auto c = svc->ConnectLocal(endpoint, move(handler));
   return true;
 }
 

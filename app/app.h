@@ -85,6 +85,7 @@ extern char *optarg;
 extern int optind;
 #undef ERROR
 #undef CreateWindow
+#undef LoadImage
 #define S_IFDIR _S_IFDIR
 #define strcasecmp(a,b) _stricmp(a,b)
 #define strncasecmp(a,b,c) _strnicmp(a,b,c)

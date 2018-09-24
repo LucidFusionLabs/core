@@ -33,8 +33,12 @@ struct WindowsToolbarView : public ToolbarViewInterface {
 
 struct WindowsCollectionView : public CollectionViewInterface {
   vector<TableSection<CollectionItem>> data;
+  int selected_section = -1, selected_row = -1;
   WindowsCollectionView(const string &title, const string &style, vector<CollectionItem> items) :
     data(TableSection<CollectionItem>::Convert(move(items))) {}
+
+  pair<int, int> GetSelectedRow() { return make_pair(selected_section, selected_row); }
+  void SelectRow(int section, int row) { selected_section = section; selected_row = row; }
   void SetToolbar(ToolbarViewInterface *t) {}
   void Show(bool show_or_hide) {}
 };
