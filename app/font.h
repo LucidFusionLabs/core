@@ -108,7 +108,7 @@ struct GlyphCache {
 #endif
   vector<const Glyph*> glyph;
   int max_width=128, max_height=128;
-  GlyphCache(GraphicsDeviceHolder*, unsigned T, int W, int H=0);
+  GlyphCache(GraphicsDeviceHolder*, const GraphicsDevice::TextureRef&, int W, int H=0);
   ~GlyphCache();
 
   bool ShouldCacheGlyph(const Texture &t) const {
@@ -467,7 +467,7 @@ struct Fonts {
   void LoadDefaultFonts();
   void LoadConsoleFont(const string &name, const vector<int> &sizes = vector<int>(1, 32));
   shared_ptr<GlyphCache> GetGlyphCache() {
-    if (!rgba_glyph_cache) rgba_glyph_cache = make_shared<GlyphCache>(parent, 0, 512);
+    if (!rgba_glyph_cache) rgba_glyph_cache = make_shared<GlyphCache>(parent, GraphicsDevice::TextureRef(), 512);
     if (!rgba_glyph_cache->tex.ID) rgba_glyph_cache->tex.Create(rgba_glyph_cache->tex.width, rgba_glyph_cache->tex.height);
     return rgba_glyph_cache;
   }

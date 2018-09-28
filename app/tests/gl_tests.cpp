@@ -14,7 +14,7 @@ int CompareTextureToBuffer(const Texture &test, const unsigned char *buf, int h,
   return 0;
 }
 
-int CompareTextureToBuffer(GraphicsDeviceHolder *gd, int tex_id, const unsigned char *buf, int h, int linesize, const char *fn=0, bool debug=0) {
+int CompareTextureToBuffer(GraphicsDeviceHolder *gd, const GraphicsDevice::TextureRef &tex_id, const unsigned char *buf, int h, int linesize, const char *fn=0, bool debug=0) {
 #ifdef LFL_MOBILE
   INFO("skipping ", BlankNull(fn));
   return 0;
@@ -98,7 +98,7 @@ TEST(GLTest, Texture) {
   fb.Release(false);
   EXPECT_EQ(0, CompareTextureToBuffer(w, fb.tex.ID, zero_pdata, dim, lsize));
 
-  fb.Attach(0, 0, false);
+  fb.Attach(GraphicsDevice::TextureRef(), GraphicsDevice::DepthRef(), false);
   gc.gd->Clear();
   tex.Bind();
   gc.DrawTexturedBox(Box(dim, dim), tex.coord);

@@ -74,7 +74,8 @@
   - (void)update { [context update]; }
   - (void)lockFocus {
     [super lockFocus];
-    CGLLockContext([context CGLContextObj]);
+    //CGLLockContext([context CGLContextObj]);
+    [[self openGLContext] lock];
     if ([context view] != self) [context setView:self];
     _screen->parent->SetFocusedWindow(_screen);
     if (needs_reshape) { [self reshape]; needs_reshape=NO; }
@@ -82,7 +83,8 @@
 
   - (void)unlockFocus {
     [super unlockFocus];
-    CGLUnlockContext([context CGLContextObj]);
+    //CGLUnlockContext([context CGLContextObj]);
+    [[self openGLContext] unlock];
   }
 
   - (void)prepareOpenGL {
@@ -761,8 +763,8 @@ void OSXWindow::Wakeup(int flag) {
 
 int OSXWindow::Swap() {
   gd->Flush();
+  //CGLFlushDrawable([[view openGLContext] CGLContextObj]);
   // [[view openGLContext] flushBuffer];
-  CGLFlushDrawable([[view openGLContext] CGLContextObj]);
   gd->CheckForError(__FILE__, __LINE__);
   return 0;
 }

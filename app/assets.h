@@ -114,7 +114,8 @@ struct Asset {
   int translate=0, rotate=0;
   Geometry *geometry=0, *hull=0;
   Texture tex;
-  unsigned texgen=0, typeID=0, particleTexID=0, blends, blendt;
+  unsigned texgen=0, typeID=0, blends, blendt;
+  GraphicsDevice::TextureRef particleTexID;
   Color col;
   bool color=0, zsort=0;
 

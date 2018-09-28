@@ -170,17 +170,28 @@ struct DrawableNop : public Drawable {
   void Draw(GraphicsContext*, const LFL::Box &B) const override {}
 };
 
+struct GraphicsDeviceInterface {
+  struct TextureRef  { unsigned v= 0, w=0, h=0, t=0, f=0; operator unsigned() const { return v; } };
+  struct DepthRef    { unsigned v= 0, w=0, h=0;           operator unsigned() const { return v; } };
+  struct ShaderRef   { unsigned v= 0;                     operator unsigned() const { return v; } };
+  struct AttribRef   { int      v=-1;                     operator int     () const { return v; } };
+  struct UniformRef  { int      v=-1;                     operator int     () const { return v; } };
+  struct ProgramRef  { unsigned v= 0;                     operator unsigned() const { return v; } };
+  struct FrameBufRef { unsigned v= 0, w=0, h=0;           operator unsigned() const { return v; } };
+};
+
 struct Texture : public Drawable {
+  typedef GraphicsDeviceInterface::TextureRef TextureRef;
   static const int preferred_pf, updatesystemimage_pf;
   GraphicsDeviceHolder *parent;
-  unsigned ID;
+  TextureRef ID;
   unsigned char *buf;
   bool owner, buf_owner;
   int width, height, pf, cubemap;
   float coord[4] = { unit_texcoord[0], unit_texcoord[1], unit_texcoord[2], unit_texcoord[3] };
 
-  Texture(GraphicsDeviceHolder *P, int w=0, int h=0, int PF=preferred_pf, unsigned id=0) : parent(P), ID(id), buf(0), owner(1), buf_owner(1), width(w), height(h), pf(PF), cubemap(0) {}
-  Texture(GraphicsDeviceHolder *P, int w,   int h,   int PF,           unsigned char *B) : parent(P), ID(0),  buf(B), owner(1), buf_owner(0), width(w), height(h), pf(PF), cubemap(0) {}
+  Texture(GraphicsDeviceHolder *P, int w=0, int h=0, int PF=preferred_pf, const TextureRef &id=TextureRef()) : parent(P), ID(id), buf(0), owner(1), buf_owner(1), width(w), height(h), pf(PF), cubemap(0) {}
+  Texture(GraphicsDeviceHolder *P, int w,   int h,   int PF,              unsigned char *B)                  : parent(P),         buf(B), owner(1), buf_owner(0), width(w), height(h), pf(PF), cubemap(0) {}
   Texture(const Texture &t) : parent(t.parent), ID(t.ID), buf(t.buf), owner(ID?0:1), buf_owner(buf?0:1), width(t.width), height(t.height), pf(t.pf), cubemap(t.cubemap) { memcpy(&coord, t.coord, sizeof(coord)); }
   virtual ~Texture() { Clear(); }
 
@@ -193,15 +204,13 @@ struct Texture : public Drawable {
   int PixelSize() const { return Pixel::Size(pf); }
   int LineSize() const { return width * PixelSize(); }
   int BufferSize() const { return height * LineSize(); }
-  int GDPixelType(GraphicsDevice*) const;
-  int GDTexType(GraphicsDevice*) const;
   int GDBufferType(GraphicsDevice*) const;
 
   /// ClearGL() is thread-safe.
   void ClearGL();
   void ResetGL(int flag);
   void RenewGL() { ClearGL(); Create(width, height); }
-  unsigned ReleaseGL() { unsigned ret = ID; ID = 0; return ret; }
+  TextureRef ReleaseGL() { auto ret = ID; ID = TextureRef(); return ret; }
 
   void ClearBuffer() { if (buf_owner) delete [] buf; buf = 0; buf_owner = 1; }
   unsigned char *RenewBuffer() { ClearBuffer(); buf = NewBuffer().release(); return buf; }
@@ -255,11 +264,12 @@ struct TextureArray {
 };
 
 struct DepthTexture {
+  typedef GraphicsDeviceInterface::DepthRef DepthRef;
   GraphicsDeviceHolder *parent;
-  unsigned ID;
+  DepthRef ID;
   int width, height, df;
   bool owner=true;
-  DepthTexture(GraphicsDeviceHolder *p, int w=0, int h=0, int DF=Depth::_16, unsigned id=0) :
+  DepthTexture(GraphicsDeviceHolder *p, int w=0, int h=0, int DF=Depth::_16, const DepthRef &id=DepthRef()) :
     parent(p), ID(id), width(w), height(h), df(DF) {}
   virtual ~DepthTexture() { if (owner) ClearGL(); }
 
@@ -271,14 +281,18 @@ struct DepthTexture {
 };
 
 struct FrameBuffer {
+  typedef GraphicsDeviceInterface::FrameBufRef FrameBufRef;
+  typedef GraphicsDeviceInterface::TextureRef TextureRef;
+  typedef GraphicsDeviceInterface::DepthRef DepthRef;
   GraphicsDeviceHolder *parent;
-  unsigned ID;
+  FrameBufRef ID;
   int width, height;
   Texture tex;
   DepthTexture depth;
   bool owner=true;
 
-  FrameBuffer(GraphicsDeviceHolder *p, int w=0, int h=0, unsigned id=0) : parent(p), ID(id), width(w), height(h), tex(p), depth(p) {}
+  FrameBuffer(GraphicsDeviceHolder *p, int w=0, int h=0, const FrameBufRef &id=FrameBufRef()) :
+    parent(p), ID(id), width(w), height(h), tex(p), depth(p) {}
   virtual ~FrameBuffer() { if (owner) ClearGL(); }
 
   struct Flag { enum { CreateGL=1, CreateTexture=2, CreateDepthTexture=4, ReleaseFB=8, RepeatGL=16 }; };
@@ -286,10 +300,10 @@ struct FrameBuffer {
   void Resize(int W, int H, int flag=0);
 
   void AllocTexture(Texture *out);
-  void AllocTexture(unsigned *out);
+  void AllocTexture(TextureRef *out);
   void AllocDepthTexture(DepthTexture *out);
 
-  void Attach(int ct=0, int dt=0, bool update_viewport=1);
+  void Attach(const TextureRef &t=TextureRef(), const DepthRef &d=DepthRef(), bool update_viewport=1);
   void Release(bool update_viewport=1);
   void ClearGL();
   void ResetGL(int flag);
@@ -314,18 +328,19 @@ struct Shader {
   float scale=0;
   int unused_attrib_slot[MaxVertexAttrib];
   bool dirty_material=0, dirty_light_pos[4], dirty_light_color[4], owner=true;
-  int ID=0, slot_position=-1, slot_normal=-1, slot_tex=-1, slot_color=-1,
-    uniform_model=-1, uniform_invview=-1, uniform_modelview=-1, uniform_modelviewproj=-1, uniform_campos=-1,
-    uniform_tex=-1, uniform_cubetex=-1, uniform_normalon=-1, uniform_texon=-1, uniform_coloron=-1, uniform_cubeon=-1,
-    uniform_colordefault=-1, uniform_material_ambient=-1, uniform_material_diffuse=-1, uniform_material_specular=-1,
-    uniform_material_emission=-1, uniform_light0_pos=-1, uniform_light0_ambient=-1, uniform_light0_diffuse=-1,
-    uniform_light0_specular=-1;
+  GraphicsDeviceInterface::ProgramRef ID;
+  GraphicsDeviceInterface::AttribRef slot_position, slot_normal, slot_tex, slot_color;
+  GraphicsDeviceInterface::UniformRef uniform_model, uniform_invview, uniform_modelview, uniform_modelviewproj,
+    uniform_campos, uniform_tex, uniform_cubetex, uniform_normalon, uniform_texon, uniform_coloron, uniform_cubeon,
+    uniform_colordefault, uniform_material_ambient, uniform_material_diffuse, uniform_material_specular,
+    uniform_material_emission, uniform_light0_pos, uniform_light0_ambient, uniform_light0_diffuse,
+    uniform_light0_specular;
   Shader(GraphicsDeviceHolder *P) : parent(P) { memzeros(dirty_light_pos); memzeros(dirty_light_color); }
   virtual ~Shader() { if (owner) ClearGL(); }
 
   static int Create(GraphicsDeviceHolder*, const string &name, const string &vertex_shader, const string &fragment_shader, const ShaderDefines&, Shader *out);
   static int CreateShaderToy(GraphicsDeviceHolder*, const string &name, const string &fragment_shader, Shader *out);
-  int GetUniformIndex(const string &name);
+  GraphicsDeviceInterface::UniformRef GetUniformIndex(const string &name);
   void SetUniform1i(const string &name, float v);
   void SetUniform1f(const string &name, float v);
   void SetUniform2f(const string &name, float v1, float v2);
@@ -343,12 +358,12 @@ struct Shaders {
   void SetGlobalUniform2f(GraphicsDevice*, const string &name, float v1, float v2);
 };
 
-struct GraphicsDevice {
-  struct Type { enum { OPENGL = 1, DIRECTX = 2, METAL = 3 }; };
+struct GraphicsDevice : public GraphicsDeviceInterface {
+  struct Type { enum { OPENGL = 1, DIRECTX = 2, METAL = 3, BGFX = 4 }; };
   struct Constants {
     int Float, Points, Lines, LineLoop, Triangles, TriangleStrip, Polygon;
     int Texture2D, TextureCubeMap, UnsignedByte, UnsignedInt, FramebufferComplete, FramebufferBinding, FramebufferUndefined;
-    int Ambient, Diffuse, Specular, Emission, Position;
+    int Ambient, Diffuse, Specular, Emission, Position, AmbientAndDiffuse;
     int One, SrcAlpha, OneMinusSrcAlpha, OneMinusDstColor, TextureWrapS, TextureWrapT, ClampToEdge;
     int VertexShader, FragmentShader, ShaderVersion, Extensions;
     int GLEWVersion, Version, Vendor, DepthBits, ScissorTest;
@@ -359,7 +374,8 @@ struct GraphicsDevice {
   Constants c;
   Window *parent;
   const int type, version;
-  int default_draw_mode = DrawMode::_2D, draw_mode = 0, default_framebuffer = 0;
+  FrameBufRef default_framebuffer;
+  int default_draw_mode = DrawMode::_2D, draw_mode = 0;
   bool done_init = 0, have_framebuffer = 1, have_cubemap = 1, have_npot_textures = 1;
   bool blend_enabled = 0, invert_view_matrix = 0, track_model_matrix = 0, dont_clear_deferred = 0;
   CategoricalVariable<int> tex_mode, fill_mode;
@@ -377,12 +393,22 @@ struct GraphicsDevice {
 
   GraphicsDevice(int T, const Constants &cs, Window *W, int V, Shaders *S) : 
     c(cs), parent(W), type(T), version(V), tex_mode(2, 1, 0), fill_mode(3, c.Fill, c.Line, c.Point), shaders(S), scissor_stack(1) {}
-
   virtual ~GraphicsDevice() {}
+
   virtual void Init(AssetLoading*, const Box&) = 0;
-  virtual bool ShaderSupport() = 0;
+  virtual void Finish() = 0;
   virtual void MarkDirty() = 0;
+  virtual void Clear() = 0;
+  virtual void ClearDepth() = 0;
+  virtual void Flush() = 0;
+  
   virtual bool GetEnabled(int) = 0;
+  virtual bool GetShaderSupport() = 0;
+  virtual void GetIntegerv(int t, int *out) = 0;
+  virtual const char *GetString(int t) = 0;
+  virtual const char *GetGLEWString(int t) = 0;
+  virtual void CheckForError(const char *file, int line) = 0;
+
   virtual void EnableTexture() = 0;
   virtual void DisableTexture() = 0;
   virtual void EnableLighting() = 0;
@@ -394,19 +420,14 @@ struct GraphicsDevice {
   virtual void EnableLight(int n) = 0;
   virtual void DisableLight(int n) = 0;
   virtual void DisableCubeMap() = 0;
-  virtual void BindCubeMap(int n) = 0;
-  virtual void TextureGenLinear() = 0;
-  virtual void TextureGenReflection() = 0;
-  virtual void Material(int t, float *color) = 0;
-  virtual void Light(int n, int t, float *color) = 0;
-  virtual void BindTexture(int t, int n) = 0;
-  virtual void ActiveTexture(int n) = 0;
-  virtual bool VertexPointer(int m, int t, int w, int o, float *verts, int l, int *out, bool dirty, int pt=0) = 0;
-  virtual void TexPointer   (int m, int t, int w, int o, float *tex,   int l, int *out, bool dirty) = 0;
-  virtual void ColorPointer (int m, int t, int w, int o, float *verts, int l, int *out, bool dirty) = 0;
-  virtual void NormalPointer(int m, int t, int w, int o, float *verts, int l, int *out, bool dirty) = 0;
-  virtual void Color4f(float r, float g, float b, float a) = 0;
-  virtual void UpdateColor() = 0;
+  virtual void EnableScissor() = 0;
+  virtual void DisableScissor() = 0;
+  virtual void EnableDepthTest() = 0;
+  virtual void DisableDepthTest() = 0;
+  virtual void EnableBlend() = 0;
+  virtual void DisableBlend() = 0;
+  virtual void BlendMode(int sm, int tm) = 0;
+  
   virtual void MatrixProjection() = 0;
   virtual void MatrixModelview() = 0;
   virtual void LoadIdentity() = 0;
@@ -420,76 +441,75 @@ struct GraphicsDevice {
   virtual void Frustum(float l, float r, float b, float t, float nv, float fv) = 0;
   virtual void Mult(const float *m) = 0;
   virtual void Translate(float x, float y, float z) = 0;
+
+  virtual void ViewPort(Box w) = 0;
+  virtual void Scissor(Box w) = 0;
+  virtual void ClearColor(const Color &c) = 0;
+  virtual void Color4f(float r, float g, float b, float a) = 0;
+  virtual void Light(int n, int t, float *color) = 0;
+  virtual void Material(int t, float *color) = 0;
+  virtual void PointSize(float n) = 0;
+  virtual void LineWidth(float n) = 0;
+
+  virtual TextureRef CreateTexture(int t, unsigned w, unsigned h, int f) = 0;
+  virtual void DelTexture(TextureRef id) = 0;
+  virtual void UpdateTexture(const TextureRef&, int targ, int l, int fi, int b, int t, const void*) = 0;
+  virtual void UpdateSubTexture(const TextureRef&, int targ, int l, int xo, int yo, int w, int h, int t, const void*) = 0;
+  virtual void CopyTexImage2D(int targ, int l, int fi, int x, int y, int w, int h, int b) = 0;
+  virtual void CopyTexSubImage2D(int targ, int l, int xo, int yo, int x, int y, int w, int h) = 0;
+  virtual void BindTexture(const TextureRef &n) = 0;
+  virtual void BindCubeMap(const TextureRef &n) = 0;
+  virtual void ActiveTexture(int n) = 0;
+  virtual void TextureGenLinear() = 0;
+  virtual void TextureGenReflection() = 0;
+  virtual void TexParameter(int, int, int) = 0;
+
+  virtual FrameBufRef CreateFrameBuffer(unsigned w, unsigned h) = 0;
+  virtual void DelFrameBuffer(FrameBufRef id) = 0;
+  virtual void BindFrameBuffer(const FrameBufRef&) = 0;
+  virtual void FrameBufferTexture(const TextureRef&) = 0;
+  virtual void FrameBufferDepthTexture(const DepthRef&) = 0;
+  virtual int CheckFrameBufferStatus() = 0;
+  
+  virtual DepthRef CreateDepthBuffer(unsigned w, unsigned h, int f) = 0;
+  virtual void DelDepthBuffer(DepthRef id) = 0;
+  virtual void BindDepthBuffer(const DepthRef &) = 0;
+
+  virtual ProgramRef CreateProgram() = 0;
+  virtual void DelProgram(ProgramRef) = 0;
+  virtual ShaderRef CreateShader(int t) = 0;
+  virtual void CompileShader(const ShaderRef&, vector<const char*> source) = 0;
+  virtual void AttachShader(const ProgramRef&, const ShaderRef&) = 0;
+  virtual void DelShader(const ShaderRef&) = 0;
+  virtual void BindAttribLocation(const ProgramRef&, int loc, const string &name) = 0;
+  virtual bool LinkProgram(const ProgramRef&) = 0;
+  virtual void GetProgramiv(const ProgramRef&, int t, int *out) = 0;
+  virtual AttribRef GetAttribLocation(const ProgramRef&, const string &name) = 0;
+  virtual UniformRef GetUniformLocation(const ProgramRef&, const string &name) = 0;
+  virtual void Uniform1i(const UniformRef&, int v) = 0;
+  virtual void Uniform1f(const UniformRef&, float v) = 0;
+  virtual void Uniform2f(const UniformRef&, float v1, float v2) = 0;
+  virtual void Uniform3f(const UniformRef&, float v1, float v2, float v3) = 0;
+  virtual void Uniform4f(const UniformRef&, float v1, float v2, float v3, float v4) = 0;
+  virtual void Uniform3fv(const UniformRef&, int n, const float *v) = 0;
+  virtual void Uniform4fv(const UniformRef&, int n, const float *v) = 0;
+  virtual void UniformMatrix4fv(const UniformRef&, int n, const float *v) = 0;
+
   virtual void UseShader(Shader *shader) = 0;
+  virtual void Screenshot(Texture *out) = 0;
+  virtual void ScreenshotBox(Texture *out, const Box &b, int flag) = 0;
+  virtual void DumpTexture(Texture *out, const TextureRef &t=TextureRef()) = 0;
+
+  virtual bool VertexPointer(int m, int t, int w, int o, float *verts, int l, int *out, bool dirty, int pt=0) = 0;
+  virtual void TexPointer   (int m, int t, int w, int o, float *tex,   int l, int *out, bool dirty) = 0;
+  virtual void ColorPointer (int m, int t, int w, int o, float *verts, int l, int *out, bool dirty) = 0;
+  virtual void NormalPointer(int m, int t, int w, int o, float *verts, int l, int *out, bool dirty) = 0;
   virtual void DrawElements(int pt, int np, int it, int o, void *index, int l, int *out, bool dirty) = 0;
   virtual void DrawArrays(int t, int o, int n) = 0;
   virtual void DeferDrawArrays(int t, int o, int n) = 0;
   virtual void SetDontClearDeferred(bool v) {}
   virtual void ClearDeferred() {}
 
-  virtual void Finish() = 0;
-  virtual void Flush() = 0;
-  virtual void Clear() = 0;
-  virtual void ClearDepth() = 0;
-  virtual void ClearColor(const Color &c) = 0;
-  virtual void PointSize(float n) = 0;
-  virtual void LineWidth(float n) = 0;
-  virtual void GenTextures(int t, int n, unsigned *out) = 0;
-  virtual void DelTextures(int n, const unsigned *id) = 0;
-  virtual void TexImage2D(int targ, int l, int fi, int w, int h, int b, int f, int t, const void*) = 0;
-  virtual void TexSubImage2D(int targ, int l, int xo, int yo, int w, int h, int f, int t, const void*) = 0;
-  virtual void CopyTexImage2D(int targ, int l, int fi, int x, int y, int w, int h, int b) = 0;
-  virtual void CopyTexSubImage2D(int targ, int l, int xo, int yo, int x, int y, int w, int h) = 0;
-  virtual void CheckForError(const char *file, int line) = 0;
-  virtual void EnableScissor() = 0;
-  virtual void DisableScissor() = 0;
-  virtual void EnableDepthTest() = 0;
-  virtual void DisableDepthTest() = 0;
-  virtual void EnableBlend() = 0;
-  virtual void DisableBlend() = 0;
-  virtual void BlendMode(int sm, int tm) = 0;
-  virtual void ViewPort(Box w) = 0;
-  virtual void Scissor(Box w) = 0;
-  virtual void TexParameter(int, int, int) = 0;
-  virtual void GenRenderBuffers(int n, unsigned *out) = 0;
-  virtual void DelRenderBuffers(int n, const unsigned *id) = 0;
-  virtual void BindRenderBuffer(int id) = 0;
-  virtual void RenderBufferStorage(int d, int w, int h) = 0;
-  virtual void GenFrameBuffers(int n, unsigned *out) = 0;
-  virtual void DelFrameBuffers(int n, const unsigned *id) = 0;
-  virtual void BindFrameBuffer(int id) = 0;
-  virtual void FrameBufferTexture(int id) = 0;
-  virtual void FrameBufferDepthTexture(int id) = 0;
-  virtual int CheckFrameBufferStatus() = 0;
-  virtual void Screenshot(Texture *out) = 0;
-  virtual void ScreenshotBox(Texture *out, const Box &b, int flag) = 0;
-  virtual void DumpTexture(Texture *out, unsigned tex_id=0) = 0;
-  virtual const char *GetString(int t) = 0;
-  virtual const char *GetGLEWString(int t) = 0;
-
-  virtual int CreateProgram() = 0;
-  virtual void DelProgram(int p) = 0;
-  virtual int CreateShader(int t) = 0;
-  virtual void CompileShader(int shader, vector<const char*> source) = 0;
-  virtual void AttachShader(int prog, int shader) = 0;
-  virtual void DelShader(int shader) = 0;
-  virtual void BindAttribLocation(int prog, int loc, const string &name) = 0;
-  virtual bool LinkProgram(int prog) = 0;
-  virtual void GetProgramiv(int p, int t, int *out) = 0;
-  virtual void GetIntegerv(int t, int *out) = 0;
-  virtual int GetAttribLocation(int prog, const string &name) = 0;
-  virtual int GetUniformLocation(int prog, const string &name) = 0;
-  virtual void Uniform1i(int u, int v) = 0;
-  virtual void Uniform1f(int u, float v) = 0;
-  virtual void Uniform2f(int u, float v1, float v2) = 0;
-  virtual void Uniform3f(int u, float v1, float v2, float v3) = 0;
-  virtual void Uniform4f(int u, float v1, float v2, float v3, float v4) = 0;
-  virtual void Uniform3fv(int u, int n, const float *v) = 0;
-  virtual int GetCubeMap(int cubemap_face) = 0;
-  virtual int GetPixel(int pixel_format) = 0;
-  virtual int GetDepth(int depth_format) = 0;
-
-  void DelTexture(unsigned id) { DelTextures(1, &id); }
   int TextureDim(int x) { return have_npot_textures ? x : NextPowerOfTwo(x); }
   int RegisterBuffer(int *b) { buffers.push_back(b); return -1; }
   void FillColor(const Color &c) { DisableTexture(); SetColor(c); };
@@ -512,8 +532,80 @@ struct GraphicsDevice {
   Box GetScissorBox();
   int GetPrimitive(int geometry_primtype);
   void DrawPixels(const Box &b, const Texture &tex);
+  void InitDefaultLight();
 
   static unique_ptr<GraphicsDevice> Create(Window*, Shaders*);
+};
+
+struct ShaderBasedGraphicsDevice : public GraphicsDevice {
+  using GraphicsDevice::GraphicsDevice;
+  struct BoundTexture {
+    unsigned t, n; int l;
+    bool operator!=(const BoundTexture &x) const { return t != x.t || n != x.n || l != x.l; };
+  };
+  struct VertexAttribute {
+    int m, t, w, o;
+    bool operator!=(const VertexAttribute &x) const { return m != x.m || t != x.t || w != x.w || o != x.o; };
+  };
+  struct Deferred {
+    int prim_type=0, vertex_size=0, vertexbuffer=-1, vertexbuffer_size=1024*4*4, vertexbuffer_len=0, vertexbuffer_appended=0, draw_calls=0;
+  };
+
+  vector<m44> modelview_matrix, projection_matrix;
+  bool dirty_matrix=1, dirty_color=1, cubemap_on=0, normals_on=0, texture_on=0, colorverts_on=0, lighting_on=0;
+  int matrix_target=-1, bound_vertexbuffer=-1, bound_indexbuffer=-1;
+  VertexAttribute vertex_attr, tex_attr, color_attr, normal_attr;
+  BoundTexture bound_texture;
+  LFL::Material material;
+  LFL::Light light[4];
+  Deferred deferred;
+
+  virtual void UpdateTexture()    = 0;
+  virtual void UpdateNormals()    = 0;
+  virtual void UpdateColorVerts() = 0;
+
+  void MarkDirty() override { dirty_matrix = dirty_color = 1; }
+  bool GetShaderSupport() override { return true; }
+
+  void EnableTexture()      override;
+  void DisableTexture()     override;
+  void EnableLighting()     override;
+  void DisableLighting()    override;
+  void EnableNormals()      override;
+  void DisableNormals()     override;
+  void EnableVertexColor()  override;
+  void DisableVertexColor() override;
+  void EnableLight(int n)   override;
+  void DisableLight(int n)  override;
+  void DisableCubeMap()     override;
+  
+  void MatrixProjection()                                              override;
+  void MatrixModelview()                                               override;
+  void LoadIdentity()                                                  override;
+  void PushMatrix()                                                    override;
+  void PopMatrix()                                                     override;
+  void GetMatrix(m44 *out)                                             override;
+  void PrintMatrix()                                                   override;
+  void Scalef(float x, float y, float z)                               override;
+  void Rotatef(float angle, float x, float y, float z)                 override;
+  void Ortho  (float l, float r, float b, float t, float nv, float fv) override;
+  void Frustum(float l, float r, float b, float t, float nv, float fv) override;
+  void Mult(const float *m)                                            override;
+  void Translate(float x, float y, float z)                            override;
+
+  void Color4f(float r, float g, float b, float a) override;
+  void Light(int n, int t, float *v)               override;
+  void Material(int t, float *v)                   override;
+
+  void SetDontClearDeferred(bool v) override;
+  int AddDeferredVertexSpace(int l);
+
+  vector<m44> *TargetMatrix();
+  void UpdateShader();
+  void UpdateMatrix();
+  void UpdateColor();
+  void UpdateMaterial();
+  void PushDirtyState();
 };
 
 struct Scissor {

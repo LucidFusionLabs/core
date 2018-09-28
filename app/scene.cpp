@@ -114,7 +114,7 @@ void Scene::Select(GraphicsDevice *gd, const Asset *a) {
     } else {
       gd->DisableCubeMap();
       gd->EnableTexture();
-      gd->BindTexture(gd->c.Texture2D, a->tex.ID);
+      gd->BindTexture(a->tex.ID);
     }
 
     gd->EnableBlend();

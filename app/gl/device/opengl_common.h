@@ -23,28 +23,28 @@ void ClearDepth() { glClear(GL_DEPTH_BUFFER_BIT); }
 void ClearColor(const Color &c) { clear_color=c; glClearColor(c.r(), c.g(), c.b(), c.a()); GDDebug("ClearColor=", c.DebugString()); }
 void PointSize(float n) { glPointSize(n); }
 void LineWidth(float n) { glLineWidth(n); }
-void DelTextures(int n, const unsigned *id) {
+void DelTexture(TextureRef id) {
   ClearDeferred();
-  if (FLAGS_gd_debug) for (int i=0; i<n; i++) GDLogRef("DelTexture ", id[i]);
-  glDeleteTextures(n, id);
+  glDeleteTextures(1, &id.v);
+  if (FLAGS_gd_debug) GDLogRef("DelTexture ", id.v);
 }
 
-void TexImage2D(int targ, int l, int fi, int w, int h, int b, int f, int t, const void *data) { glTexImage2D(targ, l, fi, w, h, b, f, t, data); } 
-void TexSubImage2D(int targ, int l, int xo, int yo, int w, int h, int f, int t, const void *data) { glTexSubImage2D(targ, l, xo, yo, w, h, f, t, data); }
+void UpdateTexture(const TextureRef &id, int targ, int l, int fi, int b, int t, const void *data) { glTexImage2D(GetCubeMap(targ), l, fi, id.w, id.h, b, id.f, t, data); } 
+void UpdateSubTexture(const TextureRef &id, int targ, int l, int xo, int yo, int w, int h, int t, const void *data) { glTexSubImage2D(GetCubeMap(targ), l, xo, yo, w, h, id.f, t, data); }
+
 void CopyTexImage2D(int targ, int l, int fi, int x, int y, int w, int h, int b) { glCopyTexImage2D(targ, l, fi, x, y, w, h, b); }
 void CopyTexSubImage2D(int targ, int l, int xo, int yo, int x, int y, int w, int h) { glCopyTexSubImage2D(targ, l, xo, yo, x, y, w, h); }
 
-void GenTextures(int t, int n, unsigned *out) {
+TextureRef CreateTexture(int t, unsigned w, unsigned h, int f) {
+  TextureRef ret = {0, w, h, GetCubeMap(t), GetPixel(f) };
   ClearDeferred();
-  for (int i=0; i<n; i++) CHECK_EQ(0, out[i]);
-  if (t == GL_TEXTURE_CUBE_MAP) glEnable(GL_TEXTURE_CUBE_MAP);
-  glGenTextures(n, out);
-  for (int i=0; i<n; i++) {
-    glBindTexture(t, out[i]);
-    glTexParameteri(t, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(t, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    GDLogRef("GenTexture ", t, ",", out[i]);
-  }
+  if (ret.t == GL_TEXTURE_CUBE_MAP) glEnable(GL_TEXTURE_CUBE_MAP);
+  glGenTextures(1, &ret.v);
+  glBindTexture(ret.t, ret.v);
+  glTexParameteri(ret.t, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glTexParameteri(ret.t, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  GDLogRef("GenTexture ", t, ",", ret.v);
+  return ret;
 }
 
 void CheckForError(const char *file, int line) {
@@ -95,31 +95,37 @@ void TexParameter(int t, int p, int v) {
   GDDebug("TexParameter ", t, " ", p, " ", v);
 }
 
-void GenRenderBuffers(int n, unsigned *out) {
-  glGenRenderbuffersEXT(n, out);
-  if (FLAGS_gd_debug) for (int i=0; i<n; i++) GDDebug("GenRenderBuffer ", out[i]);
+DepthRef CreateDepthBuffer(unsigned w, unsigned h, int f) {
+  DepthRef ret = {0, w, h};
+  glGenRenderbuffersEXT(1, &ret.v);
+  glBindRenderbufferEXT(GL_RENDERBUFFER, ret.v);
+  glRenderbufferStorageEXT(GL_RENDERBUFFER, GetDepth(f), w, h);
+  if (FLAGS_gd_debug) GDDebug("GenRenderBuffer ", ret.v);
+  return ret;
 }
 
-void DelRenderBuffers(int n, const unsigned *id) { 
-  if (FLAGS_gd_debug) for (int i=0; i<n; i++) GDDebug("DelRenderBuffer ", id[i]);
-  glDeleteRenderbuffersEXT(n, id);
+void DelDepthBuffer(DepthRef id) { 
+  if (FLAGS_gd_debug) GDDebug("DelRenderBuffer ", id[i]);
+  glDeleteRenderbuffersEXT(1, &id.v);
 }
 
-void BindRenderBuffer(int id) { glBindRenderbufferEXT(GL_RENDERBUFFER, id); }
-void RenderBufferStorage(int d, int w, int h) { glRenderbufferStorageEXT(GL_RENDERBUFFER, d, w, h); }
-void GenFrameBuffers(int n, unsigned *out) {
-  glGenFramebuffersEXT(n, out);
-  if (FLAGS_gd_debug) for (int i=0; i<n; i++) GDLogRef("GenFrameBuffer ", out[i]);
+void BindDepthBuffer(const DepthRef &id) { glBindRenderbufferEXT(GL_RENDERBUFFER, id); }
+
+FrameBufRef CreateFrameBuffer(unsigned w, unsigned h) {
+  FrameBufRef ret = {0, w, h};
+  glGenFramebuffersEXT(1, &ret.v);
+  if (FLAGS_gd_debug) GDLogRef("GenFrameBuffer ", ret.v);
+  return ret;
 }
 
-void DelFrameBuffers(int n, const unsigned *id) {
-  if (FLAGS_gd_debug) for (int i=0; i<n; i++) GDLogRef("DelFrameBuffer ", id[i]);
-  glDeleteFramebuffersEXT(n, id);
+void DelFrameBuffer(FrameBufRef id) {
+  if (FLAGS_gd_debug) GDLogRef("DelFrameBuffer ", ret.v);
+  glDeleteFramebuffersEXT(1, &id.v);
 }
 
-void BindFrameBuffer(int id) { ClearDeferred(); glBindFramebufferEXT(GL_FRAMEBUFFER, id); GDDebug("BindFrameBuffer ", id, " default_fb=", default_framebuffer); }
-void FrameBufferTexture(int id) { glFramebufferTexture2DEXT(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, id, 0); }
-void FrameBufferDepthTexture(int id) { glFramebufferRenderbufferEXT(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, id); }
+void BindFrameBuffer(const FrameBufRef &id) { ClearDeferred(); glBindFramebufferEXT(GL_FRAMEBUFFER, id); GDDebug("BindFrameBuffer ", id, " default_fb=", default_framebuffer); }
+void FrameBufferTexture(const TextureRef &id) { glFramebufferTexture2DEXT(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, id, 0); }
+void FrameBufferDepthTexture(const DepthRef &id) { glFramebufferRenderbufferEXT(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, id); }
 int CheckFrameBufferStatus() { return glCheckFramebufferStatusEXT(GL_FRAMEBUFFER); }
 
 void Screenshot(Texture *out) { ScreenshotBox(out, Box(parent->gl_w, parent->gl_h), Texture::Flag::FlipY); }
@@ -127,23 +133,23 @@ void ScreenshotBox(Texture *out, const Box &b, int flag) {
   ClearDeferred();
   out->Resize(b.w, b.h, Texture::preferred_pf, Texture::Flag::CreateBuf);
   auto pixels = out->NewBuffer();
-  glReadPixels(b.x, b.y, b.w, b.h, out->GDPixelType(this), out->GDBufferType(this), pixels.get());
+  glReadPixels(b.x, b.y, b.w, b.h, GetPixel(out->pf), out->GDBufferType(this), pixels.get());
   out->UpdateBuffer(pixels.get(), point(b.w, b.h), out->pf, b.w*4, flag);
   GDDebug("ScreenshotBox");
 }
 
-void DumpTexture(Texture *out, unsigned tex_id) {
+void DumpTexture(Texture *out, const TextureRef &tex_id) {
 #if !defined(LFL_MOBILE) && !defined(LFL_EMSCRIPTEN)
   if (tex_id) {
-    GLint gl_tt = out->GDTexType(this), tex_w = 0, tex_h = 0;
-    BindTexture(gl_tt, tex_id);
+    GLint gl_tt = GetCubeMap(out->cubemap), tex_w = 0, tex_h = 0;
+    BindTexture(tex_id);
     glGetTexLevelParameteriv(gl_tt, 0, GL_TEXTURE_WIDTH, &tex_w);
     glGetTexLevelParameteriv(gl_tt, 0, GL_TEXTURE_WIDTH, &tex_h);
     CHECK_GT((out->width  = tex_w), 0);
     CHECK_GT((out->height = tex_h), 0);
   }
   out->RenewBuffer();
-  glGetTexImage(out->GDTexType(this), 0, out->GDPixelType(this), out->GDBufferType(this), out->buf);
+  glGetTexImage(GetCubeMap(out->cubemap), 0, GetPixel(out->pf), out->GDBufferType(this), out->buf);
 #endif
 }
 
@@ -156,10 +162,11 @@ const char *GetGLEWString(int t) {
 #endif
 }
 
-int CreateProgram() { int p=glCreateProgram(); GDDebug("CreateProgram ", p); return p; }
-void DelProgram(int p) { glDeleteProgram(p); GDDebug("DelProgram ", p); }
-int CreateShader(int t) { return glCreateShader(t); }
-void CompileShader(int shader, vector<const char*> source) {
+ProgramRef CreateProgram() { ProgramRef p = { glCreateProgram() }; GDDebug("CreateProgram ", p); return p; }
+void DelProgram(ProgramRef p) { glDeleteProgram(p); GDDebug("DelProgram ", p); }
+
+ShaderRef CreateShader(int t) { ShaderRef p = { glCreateShader(t) }; return p; }
+void CompileShader(const ShaderRef &shader, vector<const char*> source) {
   GLint success = 0;
   glShaderSource(shader, source.size(), &source[0], nullptr);
   glCompileShader(shader);
@@ -178,10 +185,11 @@ void CompileShader(int shader, vector<const char*> source) {
     }
   }
 }
-void AttachShader(int prog, int shader) { glAttachShader(prog, shader); }
-void DelShader(int shader) { glDeleteShader(shader); }
-void BindAttribLocation(int prog, int loc, const string &name) { glBindAttribLocation(prog, loc, name.c_str()); }
-bool LinkProgram(int prog) {
+
+void DelShader(const ShaderRef &shader) { glDeleteShader(shader); }
+void AttachShader(const ProgramRef &prog, const ShaderRef &shader) { glAttachShader(prog, shader); }
+void BindAttribLocation(const ProgramRef &prog, int loc, const string &name) { glBindAttribLocation(prog, loc, name.c_str()); }
+bool LinkProgram(const ProgramRef &prog) {
   char buf[1024] = {0}; int l=0;
   glLinkProgram(prog);
   glGetProgramInfoLog(prog, sizeof(buf), &l, buf);
@@ -190,27 +198,20 @@ bool LinkProgram(int prog) {
   glGetProgramiv(prog, GL_LINK_STATUS, &link_status);
   return link_status == GL_TRUE;
 }
-void GetProgramiv(int p, int t, int *out) { glGetProgramiv(p, t, out); }
+void GetProgramiv(const ProgramRef &p, int t, int *out) { glGetProgramiv(p, t, out); }
 void GetIntegerv(int t, int *out) { glGetIntegerv(t, out); }
-int GetAttribLocation (int prog, const string &name) { return glGetAttribLocation (prog, name.c_str()); }
-int GetUniformLocation(int prog, const string &name) { return glGetUniformLocation(prog, name.c_str()); }
-void Uniform1i(int u, int v) { glUniform1i(u, v); }
-void Uniform1f(int u, float v) { glUniform1f(u, v); }
-void Uniform2f(int u, float v1, float v2) { glUniform2f(u, v1, v2); }
-void Uniform3f(int u, float v1, float v2, float v3) { glUniform3f(u, v1, v2, v3); }
-void Uniform4f(int u, float v1, float v2, float v3, float v4) { glUniform4f(u, v1, v2, v3, v4); }
-void Uniform3fv(int u, int n, const float *v) { glUniform3fv(u, n, v); }
 
-void InitDefaultLight() {
-  float pos[]={-.5,1,-.3f,0}, grey20[]={.2f,.2f,.2f,1}, white[]={1,1,1,1}, black[]={0,0,0,1};
-  EnableLight(0);
-  Light(0, c.Position, pos);
-  Light(0, c.Ambient,  grey20);
-  Light(0, c.Diffuse,  white);
-  Light(0, c.Specular, white);
-  Material(c.Emission, black);
-  Material(c.Specular, grey20);
-}
+AttribRef  GetAttribLocation (const ProgramRef &prog, const string &name) { AttribRef  l = { glGetAttribLocation (prog, name.c_str()) }; return l; }
+UniformRef GetUniformLocation(const ProgramRef &prog, const string &name) { UniformRef l = { glGetUniformLocation(prog, name.c_str()) }; return l; }
+
+void Uniform1i(const UniformRef &u, int v) { glUniform1i(u, v); }
+void Uniform1f(const UniformRef &u, float v) { glUniform1f(u, v); }
+void Uniform2f(const UniformRef &u, float v1, float v2) { glUniform2f(u, v1, v2); }
+void Uniform3f(const UniformRef &u, float v1, float v2, float v3) { glUniform3f(u, v1, v2, v3); }
+void Uniform4f(const UniformRef &u, float v1, float v2, float v3, float v4) { glUniform4f(u, v1, v2, v3, v4); }
+void Uniform3fv(const UniformRef &u, int n, const float *v) { glUniform3fv(u, n, v); }
+void Uniform4fv(const UniformRef &u, int n, const float *v) { glUniform4fv(u, n, v); }
+void UniformMatrix4fv(const UniformRef &u, int n, const float *v) { glUniformMatrix4fv(u, n, 0, v); }
 
 void LogVersion() {
   const char *glslver = GetString(c.ShaderVersion);
@@ -238,14 +239,14 @@ void LogVersion() {
 #endif
 }
 
-int GetDepth(int id) {
+unsigned GetDepth(int id) {
   switch (id) {
   case Depth::_16: return GL_DEPTH_COMPONENT16;
   default: return 0;
   }
 }
 
-int GetCubeMap(int id) {
+unsigned GetCubeMap(int id) {
   switch (id) {
   case CubeMap::NX: return GL_TEXTURE_CUBE_MAP_NEGATIVE_X;
   case CubeMap::PX: return GL_TEXTURE_CUBE_MAP_POSITIVE_X;
@@ -257,7 +258,7 @@ int GetCubeMap(int id) {
   }
 }
 
-int GetPixel(int p) {
+unsigned GetPixel(int p) {
   switch (p) {
   case Pixel::RGBA:   case Pixel::RGB32: return GL_RGBA;
   case Pixel::RGB24:                     return GL_RGB;

@@ -58,7 +58,7 @@ void Glyph::FromArray(const double *in, int l) {
 void Glyph::FromMetrics(const GlyphMetrics &m) {
   id=m.id; tex.width=m.width; tex.height=m.height;
   bearing_x=m.bearing_x; bearing_y=m.bearing_y; advance=m.advance;
-  wide=m.wide; space=m.space; tex.ID=m.tex_id;
+  wide=m.wide; space=m.space; tex.ID.v=m.tex_id;
 }
 
 int Glyph::ToArray(double *out, int l) {
@@ -134,7 +134,7 @@ void FillColor::Draw(GraphicsContext *gc, const LFL::Box &b) const {
 }
 
 GlyphCache::~GlyphCache() {}
-GlyphCache::GlyphCache(GraphicsDeviceHolder *p, unsigned T, int W, int H) :
+GlyphCache::GlyphCache(GraphicsDeviceHolder *p, const GraphicsDevice::TextureRef &T, int W, int H) :
   dim(W, H ? H : W), tex(p, dim.w, dim.h, Texture::preferred_pf, T), flow(make_unique<Flow>(&dim)) {}
 
 void GlyphCache::Clear(bool reopen) {
@@ -368,7 +368,7 @@ FakeFontEngine::FakeFontEngine(Fonts *p) :
   fake_font.fixed_width = fake_font.max_width = fixed_width;
   fake_font.ascender = ascender;
   fake_font.descender = descender;
-  fake_font.glyph = make_shared<GlyphMap>(parent->parent, make_shared<GlyphCache>(parent->parent, 0, 0));
+  fake_font.glyph = make_shared<GlyphMap>(parent->parent, make_shared<GlyphCache>(parent->parent, GraphicsDevice::TextureRef(), 0));
   InitGlyphs(&fake_font, &fake_font.glyph->table[0], fake_font.glyph->table.size());
   for (char16_t wide_glyph_id = wide_glyph_begin, e = wide_glyph_end + 1; wide_glyph_id != e; ++wide_glyph_id) {
     Glyph *wg = fake_font.FindGlyph(wide_glyph_id);

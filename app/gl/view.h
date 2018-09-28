@@ -650,7 +650,7 @@ struct MessageBoxDialog : public Dialog {
 struct TextureBoxDialog : public Dialog {
   Texture tex;
   TextureBoxDialog(Window *w, const string &m) :
-    Dialog(w, "TextureBoxDialog", .33, .33), tex(w->parent) { tex.ID = ::atoi(m.c_str()); tex.owner = false; }
+    Dialog(w, "TextureBoxDialog", .33, .33), tex(w->parent) { tex.ID.v = ::atoi(m.c_str()); tex.owner = false; }
   void Draw(const point &p) override { Dialog::Draw(p); tex.DrawGD(root->gd, content + box.TopLeft()); }
 };
 

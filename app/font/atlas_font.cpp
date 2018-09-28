@@ -158,7 +158,7 @@ void AtlasFontEngine::WriteGlyphFile(ApplicationInfo *appinfo, const string &nam
 
 unique_ptr<Font> AtlasFontEngine::MakeFromPNGFiles(Fonts *fonts, const string &name, const vector<string> &png, const point &atlas_dim) {
   unique_ptr<Font> ret = make_unique<Font>(fonts->atlas_engine.get(fonts), FontDesc(name), shared_ptr<FontEngine::Resource>());
-  ret->glyph = make_shared<GlyphMap>(fonts->loader->window, make_shared<GlyphCache>(fonts->loader->window, 0, atlas_dim.x, atlas_dim.y));
+  ret->glyph = make_shared<GlyphMap>(fonts->loader->window, make_shared<GlyphCache>(fonts->loader->window, GraphicsDevice::TextureRef(), atlas_dim.x, atlas_dim.y));
   for (int i=ret->glyph->table.size(), l=png.size(); i < l; ++i) ret->glyph->table.emplace_back(fonts->loader->window);
 
   GlyphCache *cache = ret->glyph->cache.get();

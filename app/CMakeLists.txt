@@ -59,10 +59,10 @@ add_subdirectory(db)
 
 add_library(app_core ${LFL_APP_TYPE} gl/view.h gl/view.cpp gl/terminal.h gl/terminal.cpp gl/editor.h gl/editor.cpp
             gl/toolkit.h gl/toolkit.cpp font.h font.cpp flow.h flow.cpp app.h app.cpp types/types.h types/types.cpp
-			types/string.h types/string.cpp types/time.h types/time.cpp "file.h" "file.cpp" assets.h assets.cpp
-			loader.h loader.cpp audio.h audio.cpp gl.h gl.cpp input.h input.cpp math.h math.cpp ipc.h ipc.cpp
-            network.h network.cpp net/http.h net/http.cpp net/resolver.h net/resolver.cpp camera.h camera.cpp
-			scene.h scene.cpp shell.h shell.cpp crypto.h crypto.cpp rpc.h export.h ${FLATBUFFERS_SRC_OUTPUTS})
+            types/string.h types/string.cpp types/time.h types/time.cpp "file.h" "file.cpp" assets.h assets.cpp
+            loader.h loader.cpp audio.h audio.cpp gl.h gl.cpp gl/device/shader_graphics.cpp input.h input.cpp
+            math.h math.cpp ipc.h ipc.cpp network.h network.cpp net/http.h net/http.cpp net/resolver.h net/resolver.cpp
+            camera.h camera.cpp scene.h scene.cpp shell.h shell.cpp crypto.h crypto.cpp rpc.h export.h ${FLATBUFFERS_SRC_OUTPUTS})
 
 set(_include ${LFL_APP_INCLUDE})
 if(LFL_GLOG)

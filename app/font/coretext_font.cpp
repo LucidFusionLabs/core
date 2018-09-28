@@ -197,7 +197,7 @@ unique_ptr<Font> CoreTextFontEngine::Open(const FontDesc &d) {
   bool new_cache = false, pre_load = false;
   ret->glyph->cache =
     (!new_cache ? parent->GetGlyphCache() :
-     make_shared<GlyphCache>(parent->parent, 0, AtlasFontEngine::Dimension(ret->max_width, ret->Height(), count)));
+     make_shared<GlyphCache>(parent->parent, GraphicsDevice::TextureRef(), AtlasFontEngine::Dimension(ret->max_width, ret->Height(), count)));
   GlyphCache *cache = ret->glyph->cache.get();
 
   if (new_cache) {

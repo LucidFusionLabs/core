@@ -368,8 +368,6 @@ void Drawable::DrawGD(GraphicsDevice *gd, const LFL::Box &b) const { GraphicsCon
 
 /* Texture */
 
-int Texture::GDPixelType(GraphicsDevice *gd) const { return gd->GetPixel(pf); }
-int Texture::GDTexType(GraphicsDevice *gd) const { return gd->GetCubeMap(cubemap); }
 int Texture::GDBufferType(GraphicsDevice *gd) const {
   return pf == preferred_pf ? gd->c.GLPreferredBuffer : gd->c.UnsignedByte;
 }
@@ -391,16 +389,23 @@ void Texture::Coordinates(float *texcoord, const Box &b, int wd, int hd) {
 
 void Texture::Resize(int W, int H, int PF, int flag) {
   auto gd = parent->GD();
+  bool changed_pf = PF && PF != pf;
   if (PF) pf = PF;
-  width=W; height=H;
+  Assign(&width, &height, W, H);
   if (buf || (flag & Flag::CreateBuf)) RenewBuffer();
+
+  int gl_width = gd->TextureDim(width), gl_height = gd->TextureDim(height);
+  if (ID && (ID.w != gl_width || ID.h != gl_height || changed_pf)) {
+    ClearGL();
+    flag |= Flag::CreateGL;
+  }
   if (!ID && (flag & Flag::CreateGL)) {
     if (!cubemap) {
       gd->DisableCubeMap();
-      gd->GenTextures(gd->c.Texture2D, 1, &ID);
+      ID = gd->CreateTexture(gd->c.Texture2D, gl_width, gl_height, pf);
     } else if (cubemap == CubeMap::PX) {
       gd->ActiveTexture(0);
-      gd->GenTextures(gd->c.TextureCubeMap, 1, &ID);
+      ID = gd->CreateTexture(gd->c.TextureCubeMap, gl_width, gl_height, pf);
     }
     if (!(flag & Flag::RepeatGL)) {
       gd->TexParameter(gd->c.Texture2D, gd->c.TextureWrapS, gd->c.ClampToEdge);
@@ -408,11 +413,9 @@ void Texture::Resize(int W, int H, int PF, int flag) {
     }
   }
   if (ID || cubemap) {
-    int opengl_width = gd->TextureDim(width), opengl_height = gd->TextureDim(height);
-    int gl_tt = GDTexType(gd), gl_pt = GDPixelType(gd), gl_bt = GDBufferType(gd);
-    if (ID) gd->BindTexture(gl_tt, ID);
-    gd->TexImage2D(gl_tt, 0, gd->c.GLInternalFormat, opengl_width, opengl_height, 0, gl_pt, gl_bt, 0);
-    Coordinates(coord, width, height, opengl_width, opengl_height);
+    if (ID) gd->BindTexture(ID);
+    gd->UpdateTexture(ID, cubemap, 0, gd->c.GLInternalFormat, 0, GDBufferType(gd), 0);
+    Coordinates(coord, width, height, gl_width, gl_height);
   }
 }
 
@@ -435,7 +438,7 @@ void Texture::UpdateBuffer(const unsigned char *B, const ::LFL::Box &box, int PF
   SimpleVideoResampler::Blit(B, buf, box.w, box.h, PF, linesize, 0, 0, pf, LineSize(), box.x, box.y, blit_flag);
 }
 
-void Texture::Bind() const { auto gd = parent->GD(); gd->BindTexture(GDTexType(gd), ID); }
+void Texture::Bind() const { parent->GD()->BindTexture(ID); }
 void Texture::ClearGL() { 
   if (ID) {
     auto gd = parent->GD();
@@ -443,7 +446,7 @@ void Texture::ClearGL() {
     auto a = gd->parent->parent;
     if (!a->MainThread()) { a->RunInMainThread(bind(&GraphicsDevice::DelTexture, gd, ID)); }
     else gd->DelTexture(ID);
-    ID = 0;
+    ID = TextureRef();
   }
 }
 
@@ -456,17 +459,17 @@ void Texture::LoadGL(const unsigned char *B, const point &dim, int PF, int lines
   this->UpdateGL(temp.buf, LFL::Box(dim), 0, flag);
 }
 
-void Texture::UpdateGL(const unsigned char *B, const ::LFL::Box &box, int pf, int flag) {
+void Texture::UpdateGL(const unsigned char *B, const ::LFL::Box &box, int npf, int flag) {
+  if (npf) CHECK_EQ(pf, npf); // else blit
   auto gd = parent->GD();
-  int gl_tt = GDTexType(gd), gl_y = (flag & Flag::FlipY) ? (height - box.y - box.h) : box.y;
-  gd->BindTexture(gl_tt, ID);
-  gd->TexSubImage2D(gl_tt, 0, box.x, gl_y, box.w, box.h,
-                    pf ? gd->GetPixel(pf) : GDPixelType(gd), GDBufferType(gd), B);
+  int gl_y = (flag & Flag::FlipY) ? (height - box.y - box.h) : box.y;
+  gd->BindTexture(ID);
+  gd->UpdateSubTexture(ID, cubemap, 0, box.x, gl_y, box.w, box.h, GDBufferType(gd), B);
 }
 
 void Texture::ResetGL(int flag) {
   bool reload = flag & ResetGLFlag::Reload, forget = (flag & ResetGLFlag::Delete) == 0;
-  if (forget) ID = 0;
+  if (forget) ID = TextureRef();
   if (reload && width && height) RenewGL();
   else ClearGL();
 }
@@ -519,27 +522,28 @@ void TextureArray::DrawSequence(Asset *out, Entity *e, int *ind) {
 void DepthTexture::Resize(int W, int H, int DF, int flag) {
   auto gd = parent->GD();
   if (DF) df = DF;
-  width=W; height=H;
-  if (!ID && (flag & Flag::CreateGL)) gd->GenRenderBuffers(1, &ID);
-  int opengl_width = gd->TextureDim(width), opengl_height = gd->TextureDim(height);
-  if (ID) {
-    gd->BindRenderBuffer(ID);
-    gd->RenderBufferStorage(gd->GetDepth(df), opengl_width, opengl_height);
+  Assign(&width, &height, W, H);
+  int gl_width = gd->TextureDim(width), gl_height = gd->TextureDim(height);
+  if (ID && (ID.w != gl_width || ID.h != gl_height)) {
+    ClearGL();
+    flag |= Flag::CreateGL;
   }
+  if (!ID && (flag & Flag::CreateGL)) ID = gd->CreateDepthBuffer(W, H, DF);
+  else if (ID) gd->BindDepthBuffer(ID);
 }
 
 void DepthTexture::ClearGL() {
   if (ID) {
     auto gd = parent->GD();
-    if (gd) gd->DelRenderBuffers(1, &ID);
+    if (gd) gd->DelDepthBuffer(ID);
     else if (FLAGS_gd_debug) ERROR("DelRenderBuffer no device ", ID);
-    ID = 0;
+    ID = DepthRef();
   }
 }
 
 void DepthTexture::ResetGL(int flag) {
   bool reload = flag & ResetGLFlag::Reload, forget = (flag & ResetGLFlag::Delete) == 0;
-  if (forget) ID = 0;
+  if (forget) ID = DepthRef();
   ClearGL();
   if (reload && width && height) Create(width, height);
 }
@@ -548,9 +552,13 @@ void DepthTexture::ResetGL(int flag) {
 
 void FrameBuffer::Resize(int W, int H, int flag) {
   auto gd = parent->GD();
-  width=W; height=H;
+  Assign(&width, &height, W, H);
+  if (ID && (ID.w != width || ID.h != height)) {
+    ClearGL();
+    flag |= Flag::CreateGL;
+  }
   if (!ID && (flag & Flag::CreateGL)) {
-    gd->GenFrameBuffers(1, &ID);
+    ID = gd->CreateFrameBuffer(W, H);
     if (flag & Flag::CreateTexture)      AllocTexture(&tex);
     if (flag & Flag::CreateDepthTexture) AllocDepthTexture(&depth);
   } else {
@@ -570,7 +578,7 @@ void FrameBuffer::Resize(int W, int H, int flag) {
 }
 
 void FrameBuffer::AllocDepthTexture(DepthTexture *out) { CHECK_EQ(out->ID, 0); out->Create(width, height); }
-void FrameBuffer::AllocTexture(unsigned *out) { Texture t(parent); AllocTexture(&t); *out = t.ReleaseGL(); } 
+void FrameBuffer::AllocTexture(TextureRef *out) { Texture t(parent); AllocTexture(&t); *out = t.ReleaseGL(); } 
 void FrameBuffer::AllocTexture(Texture *out) {
   CHECK_EQ(out->ID, 0);
   out->Create(width, height); 
@@ -583,7 +591,7 @@ void FrameBuffer::Release(bool update_viewport) {
   if (update_viewport) gd->RestoreViewport(DrawMode::_2D);
 }
 
-void FrameBuffer::Attach(int ct, int dt, bool update_viewport) {
+void FrameBuffer::Attach(const TextureRef &ct, const DepthRef &dt, bool update_viewport) {
   auto gd = parent->GD();
   gd->attached_framebuffer = this;
   gd->BindFrameBuffer(ID);
@@ -599,15 +607,15 @@ void FrameBuffer::Attach(int ct, int dt, bool update_viewport) {
 void FrameBuffer::ClearGL() {
   if (ID) {
     auto gd = parent->GD();
-    if (gd) gd->DelFrameBuffers(1, &ID);
+    if (gd) gd->DelFrameBuffer(ID);
     else if (FLAGS_gd_debug) ERROR("DelFrameBuffer no device ", ID);
-    ID = 0;
+    ID = FrameBufRef();
   }
 }
 
 void FrameBuffer::ResetGL(int flag) {
   bool reload = flag & ResetGLFlag::Reload, forget = (flag & ResetGLFlag::Delete) == 0;
-  if (forget) ID = 0;
+  if (forget) ID = FrameBufRef();
   ClearGL();
   tex.ResetGL(flag);
   depth.ResetGL(flag);
@@ -635,7 +643,7 @@ void Shaders::SetGlobalUniform2f(GraphicsDevice *gd, const string &name, float v
 int Shader::Create(GraphicsDeviceHolder *parent, const string &name, const string &vertex_shader, const string &fragment_shader, const ShaderDefines &defines, Shader *out) {
   if (out) *out = Shader(parent);
   auto gd = parent->GD();
-  int p = gd->CreateProgram();
+  auto p = gd->CreateProgram();
 
   string hdr =
     "#ifdef GL_ES\r\n"
@@ -648,14 +656,14 @@ int Shader::Create(GraphicsDeviceHolder *parent, const string &name, const strin
   hdr += defines.text + string("\r\n");
 
   if (vertex_shader.size()) {
-    int vs = gd->CreateShader(gd->c.VertexShader);
+    auto vs = gd->CreateShader(gd->c.VertexShader);
     gd->CompileShader(vs, { hdr.c_str(), vertex_shader.c_str() });
     gd->AttachShader(p, vs);
     gd->DelShader(vs);
   }
 
   if (fragment_shader.size()) {
-    int fs = gd->CreateShader(gd->c.FragmentShader);
+    auto fs = gd->CreateShader(gd->c.FragmentShader);
     gd->CompileShader(fs, { hdr.c_str(), fragment_shader.c_str() });
     gd->AttachShader(p, fs);
     gd->DelShader(fs);
@@ -744,7 +752,7 @@ int Shader::CreateShaderToy(GraphicsDeviceHolder *parent, const string &name, co
   return Shader::Create(parent, name, gd->vertex_shader, StrCat(header, pixel_shader, footer), ShaderDefines(1,0,1,0), out);
 }
 
-int Shader::GetUniformIndex(const string &name) { return parent->GD()->GetUniformLocation(ID, name); }
+GraphicsDevice::UniformRef Shader::GetUniformIndex(const string &name) { return parent->GD()->GetUniformLocation(ID, name); }
 void Shader::SetUniform1i(const string &name, float v)                                { parent->GD()->Uniform1i (GetUniformIndex(name), v); }
 void Shader::SetUniform1f(const string &name, float v)                                { parent->GD()->Uniform1f (GetUniformIndex(name), v); }
 void Shader::SetUniform2f(const string &name, float v1, float v2)                     { parent->GD()->Uniform2f (GetUniformIndex(name), v1, v2); }
@@ -757,16 +765,16 @@ void Shader::ClearGL() {
     auto gd = parent->GD();
     if (gd) gd->DelProgram(ID);
     else if (FLAGS_gd_debug) ERROR("DelProgram no device ", ID);
-    ID = 0;
+    ID = GraphicsDevice::ProgramRef();
   }
 }
 
-void GraphicsDevice::PushColor() { default_color.push_back(default_color.back()); UpdateColor();  }
+void GraphicsDevice::PushColor() { default_color.push_back(default_color.back()); SetColor(default_color.back());  }
 void GraphicsDevice::PopColor() {
   if      (default_color.size() >  1) default_color.pop_back();
   else if (default_color.size() == 1) default_color.back() = Color(1.0, 1.0, 1.0, 1.0);
   else FATAL("no color state");
-  UpdateColor();
+  SetColor(default_color.back());
 }
 
 void GraphicsDevice::RestoreViewport(int dm) { ViewPort(Box(parent->gl_x + parent->gl_w, parent->gl_y + parent->gl_h)); DrawMode(dm); }
@@ -872,6 +880,17 @@ void GraphicsDevice::DrawPixels(const Box &b, const Texture &tex) {
   temp.UpdateGL(tex.buf, LFL::Box(tex.width, tex.height), 0, Texture::Flag::FlipY); 
   GraphicsContext::DrawTexturedBox1(this, b, temp.coord);
   temp.ClearGL();
+}
+
+void GraphicsDevice::InitDefaultLight() {
+  float pos[]={-.5,1,-.3f,0}, grey20[]={.2f,.2f,.2f,1}, white[]={1,1,1,1}, black[]={0,0,0,1};
+  EnableLight(0);
+  Light(0, c.Position, pos);
+  Light(0, c.Ambient,  grey20);
+  Light(0, c.Diffuse,  white);
+  Light(0, c.Specular, white);
+  Material(c.Emission, black);
+  Material(c.Specular, grey20);
 }
 
 Shaders::Shaders(GraphicsDeviceHolder *p) : shader_default(p), shader_normals(p), shader_cubemap(p),

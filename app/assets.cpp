@@ -147,7 +147,7 @@ void Asset::ResetGL(int flag) {
   bool reload = flag & ResetGLFlag::Reload, forget = (flag & ResetGLFlag::Delete) == 0;
   if (!texture.empty()) {
     if (tex.ID) {
-      if (forget) tex.ID = 0;
+      if (forget) tex.ID = GraphicsDevice::TextureRef();
       else        tex.ClearGL();
     }
     if (reload) parent->LoadTexture(texture, &tex, nullptr);
@@ -477,7 +477,7 @@ void SpectogramAsset::Draw(GraphicsDevice *gd, Matrix *m, Texture *t, float *max
 
   Draw(gd, m, t->buf, t->pf, m->M, m->N, t->width, Max, clip, 0, pd);
 
-  gd->BindTexture(gd->c.Texture2D, t->ID);
+  gd->BindTexture(t->ID);
   t->UpdateGL();
 }
 

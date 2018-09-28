@@ -148,7 +148,8 @@ struct LayersInterface {
 template<class CB, class CBL, class CBLI, class CBLCA> struct TilesT : public TilesInterface {
   struct Tile {
     CBL cb;
-    unsigned id=0, prepend_depth=0;
+    GraphicsDevice::TextureRef id;
+    unsigned prepend_depth=0;
     bool dirty=0;
     Tile(CBLCA ca) : cb(ca) {}
   };
@@ -240,7 +241,7 @@ template<class CB, class CBL, class CBLI, class CBLCA> struct TilesT : public Ti
     auto gd = fb.parent->GD();
     GetSpaceCoords(i, j, &current_tile.x, &current_tile.y);
     if (!tile->id) fb.AllocTexture(&tile->id);
-    fb.Attach(tile->id, false);
+    fb.Attach(tile->id, GraphicsDeviceInterface::DepthRef(), false);
     gd->MatrixProjection();
     if (!(flag & RunFlag::DontClear)) gd->Clear();
     gd->LoadIdentity();
@@ -265,7 +266,7 @@ template<class CB, class CBL, class CBLI, class CBLCA> struct TilesT : public Ti
         Tile *tile = GetTile(x, y);
         if (!tile || !tile->id) continue;
         GetSpaceCoords(y, x, &sx, &sy);
-        gd->BindTexture(gd->c.Texture2D, tile->id);
+        gd->BindTexture(tile->id);
         GraphicsContext::DrawTexturedBox1
           (gd, Box(sx - doc_to_view.x, sy - doc_to_view.y, W, H), Texture::unit_texcoord);
       }

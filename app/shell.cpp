@@ -135,7 +135,7 @@ void Shell::screenshot(const vector<string> &a) {
   if (a.empty()) return INFO("usage: screenshot <file> [tex_id]");
   Texture tex(gd);
   if (a.size() == 1) parent->gd->Screenshot(&tex);
-  else               parent->gd->DumpTexture(&tex, atoi(a[1]));
+  else { GraphicsDevice::TextureRef t = { unsigned(atoi(a[1])) }; parent->gd->DumpTexture(&tex, t); }
   LocalFile lf(a[0], "w");
   PngWriter::Write(&lf, tex);
 }

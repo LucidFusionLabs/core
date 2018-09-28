@@ -107,7 +107,8 @@ template <int MP, int MH, bool PerParticleColor> struct Particles : public Parti
     }
   };
 
-  int num_particles, nops=0, texture=0, verts_id=-1, trailverts_id=-1, num_trailverts, emitter_type=0, blend_mode_s=0, blend_mode_t=0, burst=0;
+  GraphicsDevice::TextureRef texture;
+  int num_particles, nops=0, verts_id=-1, trailverts_id=-1, num_trailverts, emitter_type=0, blend_mode_s=0, blend_mode_t=0, burst=0;
   float floorval=0, gravity=0, radius_min, radius_max, age_min=.05, age_max=1, rand_initpos, rand_initvel, emitter_angle=0, color_fade=0;
   long long ticks_seen=0, ticks_processed=0, ticks_step=0;
   float verts[NumFloats], trailverts[NumTrailFloats];
@@ -267,7 +268,7 @@ template <int MP, int MH, bool PerParticleColor> struct Particles : public Parti
     if (PerParticleColor) gd->EnableVertexColor();
     if (texture) {
       gd->EnableTexture();
-      gd->BindTexture(gd->c.Texture2D, texture);
+      gd->BindTexture(texture);
     }
 
     int update_size = verts_id < 0 ? sizeof(verts) : num_particles * ParticleSize;

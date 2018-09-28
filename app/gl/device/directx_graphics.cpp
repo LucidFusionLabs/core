@@ -17,22 +17,7 @@
  */
 
 #include <d3dx9core.h>
-
-#ifdef LFL_GDDEBUG
-#define GDDebug(...) { \
-  CheckForError(__FILE__, __LINE__); \
-  if (FLAGS_gd_debug) DebugPrintf("%s", StrCat(__VA_ARGS__).c_str()); }
-#else 
-#define GDDebug(...)
-#endif
-
-#if defined(LFL_GDDEBUG) || defined(LFL_GDLOGREF)
-#define GDLogRef(...) { \
-  if (app->focused) app->focused->gd->CheckForError(__FILE__, __LINE__); \
-  if (FLAGS_gd_debug) DebugPrintf("%s", StrCat(__VA_ARGS__).c_str()); }
-#else 
-#define GDLogRef(...)
-#endif
+#include "gd_common.h"
 
 namespace LFL {
 struct DirectX9GraphicsDeviceConstants : public GraphicsDevice::Constants {
@@ -319,17 +304,6 @@ struct DirectX9GraphicsDevice : public GraphicsDevice {
   void Uniform4f(int u, float v1, float v2, float v3, float v4) {  }
   void Uniform3fv(int u, int n, const float *v) {  }
 
-  void InitDefaultLight() {
-    float pos[] = { -.5,1,-.3f,0 }, grey20[] = { .2f,.2f,.2f,1 }, white[] = { 1,1,1,1 }, black[] = { 0,0,0,1 };
-    EnableLight(0);
-    Light(0, c.Position, pos);
-    Light(0, c.Ambient, grey20);
-    Light(0, c.Diffuse, white);
-    Light(0, c.Specular, white);
-    Material(c.Emission, black);
-    Material(c.Specular, grey20);
-  }
-
   void LogVersion() {
     INFO("DirectX Version: ", GetString(c.Version));
     have_cubemap = 0;
@@ -378,7 +352,7 @@ struct DirectX9GraphicsDevice : public GraphicsDevice {
   }
 };
 
-unique_ptr<GraphicsDevice> CreateDirectXGraphicsDevice(Window *w, Shaders *s) {
+unique_ptr<GraphicsDevice> GraphicsDevice::Create(Window *w, Shaders *s) {
   return make_unique<DirectX9GraphicsDevice>(w, s);
 }
 

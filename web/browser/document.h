@@ -189,7 +189,7 @@ struct DocumentParser {
     }
 
     int LoadTextureResponseCB(const IPC::LoadTextureResponse *res, Void) {
-      if (res) target.get()->ID = res->tex_id();
+      if (res) target.get()->ID.v = res->tex_id();
       Parser::Complete(this);
       return IPC::Done;
     }

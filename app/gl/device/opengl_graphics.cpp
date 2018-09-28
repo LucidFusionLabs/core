@@ -72,21 +72,7 @@
 #undef LFL_GLSL_SHADERS
 #endif
 
-#ifdef LFL_GDDEBUG
-#define GDDebug(...) { \
-  CheckForError(__FILE__, __LINE__); \
-  if (FLAGS_gd_debug) DebugPrintf("%s", StrCat(__VA_ARGS__).c_str()); }
-#else 
-#define GDDebug(...)
-#endif
-
-#if defined(LFL_GDDEBUG) || defined(LFL_GDLOGREF)
-#define GDLogRef(...) { \
-  if (app->focused) app->focused->gd->CheckForError(__FILE__, __LINE__); \
-  if (FLAGS_gd_debug) DebugPrintf("%s", StrCat(__VA_ARGS__).c_str()); }
-#else 
-#define GDLogRef(...)
-#endif
+#include "gd_common.h"
 
 namespace LFL {
 struct OpenGLGraphicsDeviceConstants : public GraphicsDevice::Constants {
@@ -107,6 +93,7 @@ struct OpenGLGraphicsDeviceConstants : public GraphicsDevice::Constants {
     Specular = GL_SPECULAR;
     Position = GL_POSITION;
     Emission = GL_EMISSION;
+    AmbientAndDiffuse = GL_AMBIENT_AND_DIFFUSE;
     One = GL_ONE;
     SrcAlpha = GL_SRC_ALPHA;
     OneMinusSrcAlpha = GL_ONE_MINUS_SRC_ALPHA;
@@ -189,12 +176,13 @@ struct OpenGLES1 : public GraphicsDevice, public QOpenGLFunctions {
     ViewPort(b);
     DrawMode(default_draw_mode);
     InitDefaultLight();
-    INFO("OpenGLES1::Init width=", b.w, ", height=", b.h, ", shaders=", ShaderSupport());
+    INFO("OpenGLES1::Init width=", b.w, ", height=", b.h, ", shaders=", GetShaderSupport());
     LogVersion();
   }
 
-  void UpdateColor() { const Color &c = default_color.back(); glColor4f(c.r(), c.g(), c.b(), c.a()); }
-  bool ShaderSupport() {
+  void MarkDirty() {}
+
+  bool GetShaderSupport() {
 #ifdef LFL_MOBILE
     return false;
 #endif
@@ -202,21 +190,48 @@ struct OpenGLES1 : public GraphicsDevice, public QOpenGLFunctions {
     return ver && *ver == '2';
   }
 
-  void MarkDirty() {}
   void  EnableTexture() {  glEnable(GL_TEXTURE_2D);  glEnableClientState(GL_TEXTURE_COORD_ARRAY); GDDebug("Texture=1"); }
   void DisableTexture() { glDisable(GL_TEXTURE_2D); glDisableClientState(GL_TEXTURE_COORD_ARRAY); GDDebug("Texture=0"); }
   void  EnableLighting() {  glEnable(GL_LIGHTING);  glEnable(GL_COLOR_MATERIAL); GDDebug("Lighting=1"); }
   void DisableLighting() { glDisable(GL_LIGHTING); glDisable(GL_COLOR_MATERIAL); GDDebug("Lighting=0"); }
-  void  EnableVertexColor() {  glEnableClientState(GL_COLOR_ARRAY); GDDebug("VertexColor=1"); }
-  void DisableVertexColor() { glDisableClientState(GL_COLOR_ARRAY); GDDebug("VertexColor=0"); }
   void  EnableNormals() {  glEnableClientState(GL_NORMAL_ARRAY); GDDebug("Normals=1"); }
   void DisableNormals() { glDisableClientState(GL_NORMAL_ARRAY); GDDebug("Normals=0"); }
+  void  EnableVertexColor() {  glEnableClientState(GL_COLOR_ARRAY); GDDebug("VertexColor=1"); }
+  void DisableVertexColor() { glDisableClientState(GL_COLOR_ARRAY); GDDebug("VertexColor=0"); }
   //void TextureEnvReplace()  { glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);  GDDebug("TextureEnv=R"); }
   //void TextureEnvModulate() { glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE); GDDebug("TextureEnv=M"); }
   void  EnableLight(int n) { if (n)  glEnable(GL_LIGHT1); else  glEnable(GL_LIGHT0); GDDebug("Light", n, "=1"); }
   void DisableLight(int n) { if (n) glDisable(GL_LIGHT1); else glDisable(GL_LIGHT0); GDDebug("Light", n, "=0"); }
-  void Material(int t, float *color) { glMaterialfv(GL_FRONT_AND_BACK, t, color); }
+  void DisableCubeMap() { glDisable(GL_TEXTURE_CUBE_MAP); DisableTextureGen(); GDDebug("CubeMap=", 0); }
+
+  void MatrixProjection() { target_matrix=2; glMatrixMode(GL_PROJECTION); }
+  void MatrixModelview() { target_matrix=1; glMatrixMode(GL_MODELVIEW); }
+  void LoadIdentity() { glLoadIdentity(); }
+  void PushMatrix() { glPushMatrix(); }
+  void PopMatrix() { glPopMatrix(); }
+  void GetMatrix(m44 *out) { glGetFloatv(target_matrix == 2 ? GL_PROJECTION_MATRIX : GL_MODELVIEW_MATRIX, &(*out)[0][0]); }
+  void PrintMatrix() {}
+  void Scalef(float x, float y, float z) { glScalef(x, y, z); }
+  void Rotatef(float angle, float x, float y, float z) { glRotatef(angle, x, y, z); }
+  void Ortho(float l, float r, float b, float t, float nv, float fv) { glOrtho(l,r, b,t, nv,fv); }
+  void Frustum(float l, float r, float b, float t, float nv, float fv) { glFrustum(l,r, b,t, nv,fv); }
+  void Mult(const float *m) { glMultMatrixf(m); }
+  void Translate(float x, float y, float z) { glTranslatef(x, y, z); }
+
+  void Color4f(float r, float g, float b, float a) { default_color.back() = Color(r,g,b,a); glColor4f(r,g,b,a); }
   void Light(int n, int t, float *color) { glLightfv(((n) ? GL_LIGHT1 : GL_LIGHT0), t, color); }
+  void Material(int t, float *color) { glMaterialfv(GL_FRONT_AND_BACK, t, color); }
+
+  void BindTexture(const TextureRef &n) { EnableTexture(); glBindTexture(n.t, n); GDDebug("BindTexture=", t, ",", n); }
+  void BindCubeMap(const TextureRef &n) {  glEnable(GL_TEXTURE_CUBE_MAP); glBindTexture(GL_TEXTURE_CUBE_MAP, n); GDDebug("CubeMap=", n); }
+
+  void ActiveTexture(int n) {
+    glClientActiveTexture(GL_TEXTURE0 + n);
+    glActiveTexture(GL_TEXTURE0 + n);
+    // glTexEnvf (GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE);
+    // glTexEnvf (GL_TEXTURE_ENV, GL_COMBINE_RGB_EXT, GL_MODULATE);
+    GDDebug("ActiveTexture=", n);
+  }
 
 #ifdef LFL_MOBILE
   void TextureGenLinear() {}
@@ -245,36 +260,16 @@ struct OpenGLES1 : public GraphicsDevice, public QOpenGLFunctions {
   }
 #endif
 
-  void DisableCubeMap()   { glDisable(GL_TEXTURE_CUBE_MAP); DisableTextureGen();                   GDDebug("CubeMap=", 0); }
-  void BindCubeMap(int n) {  glEnable(GL_TEXTURE_CUBE_MAP); glBindTexture(GL_TEXTURE_CUBE_MAP, n); GDDebug("CubeMap=", n); }
-
-  void ActiveTexture(int n) {
-    glClientActiveTexture(GL_TEXTURE0 + n);
-    glActiveTexture(GL_TEXTURE0 + n);
-    // glTexEnvf (GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE);
-    // glTexEnvf (GL_TEXTURE_ENV, GL_COMBINE_RGB_EXT, GL_MODULATE);
-    GDDebug("ActiveTexture=", n);
+  void UseShader(Shader *S) {
+    shader = X_or_Y(S, &shaders->shader_default); 
+    glUseProgram(shader->ID);
+    GDDebug("Shader=", shader->name);
   }
 
-  void BindTexture(int t, int n) { EnableTexture(); glBindTexture(t, n); GDDebug("BindTexture=", t, ",", n); }
   bool VertexPointer(int m, int t, int w, int o, float *verts, int l, int *out, bool ud, int) { glVertexPointer  (m, t, w, verts + o/sizeof(float)); GDDebug("VertexPointer"); return true; }
   void TexPointer   (int m, int t, int w, int o, float *tex,   int l, int *out, bool ud)      { glTexCoordPointer(m, t, w, tex   + o/sizeof(float)); GDDebug("TexPointer"); }
   void ColorPointer (int m, int t, int w, int o, float *verts, int l, int *out, bool ud)      { glColorPointer   (m, t, w, verts + o/sizeof(float)); GDDebug("ColorPointer"); }
   void NormalPointer(int m, int t, int w, int o, float *verts, int l, int *out, bool ud)      { glNormalPointer  (   t, w, verts + o/sizeof(float)); GDDebug("NormalPointer"); }
-  void Color4f(float r, float g, float b, float a) { default_color.back() = Color(r,g,b,a); UpdateColor(); }
-  void MatrixProjection() { target_matrix=2; glMatrixMode(GL_PROJECTION); }
-  void MatrixModelview() { target_matrix=1; glMatrixMode(GL_MODELVIEW); }
-  void LoadIdentity() { glLoadIdentity(); }
-  void PushMatrix() { glPushMatrix(); }
-  void PopMatrix() { glPopMatrix(); }
-  void GetMatrix(m44 *out) { glGetFloatv(target_matrix == 2 ? GL_PROJECTION_MATRIX : GL_MODELVIEW_MATRIX, &(*out)[0][0]); }
-  void PrintMatrix() {}
-  void Scalef(float x, float y, float z) { glScalef(x, y, z); }
-  void Rotatef(float angle, float x, float y, float z) { glRotatef(angle, x, y, z); }
-  void Ortho(float l, float r, float b, float t, float nv, float fv) { glOrtho(l,r, b,t, nv,fv); }
-  void Frustum(float l, float r, float b, float t, float nv, float fv) { glFrustum(l,r, b,t, nv,fv); }
-  void Mult(const float *m) { glMultMatrixf(m); }
-  void Translate(float x, float y, float z) { glTranslatef(x, y, z); }
 
   void DrawElements(int pt, int np, int it, int o, void *index, int l, int *out, bool dirty) {
     glDrawElements(pt, np, it, static_cast<char*>(index) + o);
@@ -290,52 +285,23 @@ struct OpenGLES1 : public GraphicsDevice, public QOpenGLFunctions {
     glDrawArrays(type, o, n);
     GDDebug("DeferDrawArrays(", type, ", ", o, ", ", n, ") deferred 0");
   }
-
-  void UseShader(Shader *S) {
-    shader = X_or_Y(S, &shaders->shader_default); 
-    glUseProgram(shader->ID);
-    GDDebug("Shader=", shader->name);
-  }
 };
 #endif // LFL_GLES1
 
 #ifdef LFL_GLES2
 #ifndef LFL_QTGL
-struct OpenGLES2 : public GraphicsDevice {
+struct OpenGLES2 : public ShaderBasedGraphicsDevice {
 #else
-struct OpenGLES2 : public GraphicsDevice, public QOpenGLFunctions {
+struct OpenGLES2 : public ShaderBasedGraphicsDevice, public QOpenGLFunctions {
 #endif
 #include "core/app/gl/device/opengl_common.h"
-  struct BoundTexture {
-    int t, n, l;
-    bool operator!=(const BoundTexture &x) const { return t != x.t || n != x.n || l != x.l; };
-  };
-  struct VertexAttribute {
-    int m, t, w, o;
-    bool operator!=(const VertexAttribute &x) const { return m != x.m || t != x.t || w != x.w || o != x.o; };
-  };
-  struct Deferred {
-    int prim_type=0, vertex_size=0, vertexbuffer=-1, vertexbuffer_size=1024*4*4, vertexbuffer_len=0, vertexbuffer_appended=0, draw_calls=0;
-  };
 
-  vector<m44> modelview_matrix, projection_matrix;
-  bool dirty_matrix=1, dirty_color=1, cubemap_on=0, normals_on=0, texture_on=0, colorverts_on=0, lighting_on=0;
-  int matrix_target=-1, bound_vertexbuffer=-1, bound_indexbuffer=-1;
-  VertexAttribute vertex_attr, tex_attr, color_attr, normal_attr;
-  BoundTexture bound_texture;
-  LFL::Material material;
-  LFL::Light light[4];
-  Deferred deferred;
-  OpenGLES2(Window *P, LFL::Shaders *S) : GraphicsDevice(GraphicsDevice::Type::OPENGL, OpenGLGraphicsDeviceConstants(), P, 2, S) {}
+  OpenGLES2(Window *P, LFL::Shaders *S) :
+    ShaderBasedGraphicsDevice(GraphicsDevice::Type::OPENGL, OpenGLGraphicsDeviceConstants(), P, 2, S) {}
 
   void Init(AssetLoading *loader, const Box &b) {
     done_init = true;
     GDDebug("Init");
-    memzero(vertex_attr);
-    memzero(tex_attr);
-    memzero(color_attr);
-    memzero(normal_attr);
-    memzero(bound_texture);
     deferred.prim_type = deferred.vertex_size = deferred.vertexbuffer_len = deferred.draw_calls = 0;
     deferred.vertexbuffer = -1;
     modelview_matrix.clear();
@@ -362,104 +328,37 @@ struct OpenGLES2 : public GraphicsDevice, public QOpenGLFunctions {
     INFO("OpenGLES2::Init width=", b.w, ", height=", b.h);
   }
 
-  bool ShaderSupport() { return true; }
-  void MarkDirty() { dirty_matrix = dirty_color = 1; }
-  void EnableLighting()     { lighting_on=1; GDDebug("Lighting=1"); }
-  void DisableLighting()    { lighting_on=0; GDDebug("Lighting=0"); }
-  void EnableTexture()      { if (Changed(&texture_on,    true))  { ClearDeferred(); UpdateTexture();    } GDDebug("Texture=1"); }
-  void DisableTexture()     { if (Changed(&texture_on,    false)) { ClearDeferred(); UpdateTexture();    } GDDebug("Texture=0"); }
-  void EnableVertexColor()  { if (Changed(&colorverts_on, true))  { ClearDeferred(); UpdateColorVerts(); } GDDebug("VertexColor=1"); }
-  void DisableVertexColor() { if (Changed(&colorverts_on, false)) { ClearDeferred(); UpdateColorVerts(); } GDDebug("VertexColor=0"); }
-  void EnableNormals()      { if (Changed(&normals_on,    true))  { UpdateShader();  UpdateNormals();    } GDDebug("Normals=1"); }
-  void DisableNormals()     { if (Changed(&normals_on,    false)) { UpdateShader();  UpdateNormals();    } GDDebug("Normals=0"); }
-  void DisableCubeMap()     { if (Changed(&cubemap_on,    false)) { UpdateShader(); }                                                                                 GDDebug("CubeMap=", 0); }
-  void BindCubeMap(int n)   { if (Changed(&cubemap_on,    true))  { UpdateShader(); } glUniform1i(shader->uniform_cubetex, 0); glBindTexture(GL_TEXTURE_CUBE_MAP, n); GDDebug("CubeMap=", n); }
-  void ActiveTexture(int n) { if (Changed(&bound_texture.l, n))   { ClearDeferred(); glActiveTexture(n ? GL_TEXTURE1 : GL_TEXTURE0); } GDDebug("ActivteTexture=", n); }
-  void SetDontClearDeferred(bool v) { dont_clear_deferred = v; GDDebug("SetDontClearDeferred = ", v); }
-  void EnableLight(int n) {}
-  void DisableLight(int n) {}
-  void TextureGenLinear() {}
-  void TextureGenReflection() {}
-
-  void BindTexture(int t, int n) {
-    if (!Changed(&bound_texture, BoundTexture{ t, n, 0 })) return;
+  void BindTexture(const TextureRef &n) {
+    if (!Changed(&bound_texture, BoundTexture{ n.t, n, 0 })) return;
     ClearDeferred();
     if (!texture_on) EnableTexture();
     glActiveTexture(GL_TEXTURE0); 
-    glBindTexture(t, n);
+    glBindTexture(n.t, n);
     glUniform1i(shader->uniform_tex, 0);
     GDDebug("BindTexture=", t, ",", n);
   }
 
-  void Color4f(float r, float g, float b, float a) {
-    if (lighting_on) {
-      float c[] = { r, g, b, a };
-      Material(GL_AMBIENT_AND_DIFFUSE, c);
-    } else if (Changed(&default_color.back(), Color(r,g,b,a))) UpdateColor();
-  }
+  void BindCubeMap(const TextureRef &n) { if (Changed(&cubemap_on, true)) { UpdateShader(); } glUniform1i(shader->uniform_cubetex, 0); glBindTexture(GL_TEXTURE_CUBE_MAP, n); GDDebug("CubeMap=", n); }
+  void ActiveTexture(int n) { if (Changed(&bound_texture.l, n)) { ClearDeferred(); glActiveTexture(n ? GL_TEXTURE1 : GL_TEXTURE0); } GDDebug("ActivteTexture=", n); }
 
-  void Material(int t, float *v) {
-    if      (t == GL_AMBIENT)             material.ambient  = Color(v);
-    else if (t == GL_DIFFUSE)             material.diffuse  = Color(v);
-    else if (t == GL_SPECULAR)            material.specular = Color(v);
-    else if (t == GL_EMISSION)            material.emissive = Color(v);
-    else if (t == GL_AMBIENT_AND_DIFFUSE) material.ambient = material.diffuse = Color(v);
-    UpdateMaterial();
-  }
+  void TextureGenLinear() {}
+  void TextureGenReflection() {}
 
-  void Light(int n, int t, float *v) {
-    bool light_pos = 0, light_color = 0;
-    if (n != 0) return ERROR("ignoring Light(", n, ")");
-
-    if      (t == GL_POSITION) { light_pos=1;   light[n].pos = modelview_matrix.back().Transform(v4(v)); }
-    else if (t == GL_AMBIENT)  { light_color=1; light[n].color.ambient  = Color(v); }
-    else if (t == GL_DIFFUSE)  { light_color=1; light[n].color.diffuse  = Color(v); }
-    else if (t == GL_SPECULAR) { light_color=1; light[n].color.specular = Color(v); }
-
-    if (light_pos)   { shader->dirty_light_pos  [n] = shaders->shader_cubenorm.dirty_light_pos  [n] = shaders->shader_normals.dirty_light_pos  [n] = 1; }
-    if (light_color) { shader->dirty_light_color[n] = shaders->shader_cubenorm.dirty_light_color[n] = shaders->shader_normals.dirty_light_color[n] = 1; }
-  }
-
-  void Scalef(float x, float y, float z) {
-    m44 &m = TargetMatrix()->back();
-    m[0].x *= x; m[0].y *= x; m[0].z *= x;
-    m[1].x *= y; m[1].y *= y; m[1].z *= y;
-    m[2].x *= z; m[2].y *= z; m[2].z *= z;
-    UpdateMatrix();
-  }
-
-  void Translate(float x, float y, float z) { 
-    m44 &m = TargetMatrix()->back();
-    m[3].x += m[0].x * x + m[1].x * y + m[2].x * z;
-    m[3].y += m[0].y * x + m[1].y * y + m[2].y * z;
-    m[3].z += m[0].z * x + m[1].z * y + m[2].z * z;
-    m[3].w += m[0].w * x + m[1].w * y + m[2].w * z;
-    UpdateMatrix();
-  }
-
-  void Rotatef(float angle, float x, float y, float z) { TargetMatrix()->back().Mult(m44::Rotate(DegreeToRadian(angle), x, y, z)); UpdateMatrix(); }
-  void Ortho  (float l, float r, float b, float t, float nv, float fv) { TargetMatrix()->back().Mult(m44::Ortho  (l, r, b, t, nv, fv)); UpdateMatrix(); }
-  void Frustum(float l, float r, float b, float t, float nv, float fv) { TargetMatrix()->back().Mult(m44::Frustum(l, r, b, t, nv, fv)); UpdateMatrix(); }
-  
-  void MatrixModelview()  { matrix_target=1; }
-  void MatrixProjection() { matrix_target=2; }
-  void PopMatrix() {
-    vector<m44> *target = TargetMatrix();
-    if      (target->size() >= 1) target->pop_back();
-    else if (target->size() == 1) target->back().Assign(m44::Identity());
-    UpdateMatrix();
-  }
-
-  void PushMatrix()         { TargetMatrix()->push_back(TargetMatrix()->back()); UpdateMatrix(); }
-  void LoadIdentity()       { TargetMatrix()->back().Assign(m44::Identity());    UpdateMatrix(); }
-  void Mult(const float *m) { TargetMatrix()->back().Mult(m44(m));               UpdateMatrix(); }
-  void PrintMatrix()        { TargetMatrix()->back().Print(StrCat("mt", matrix_target)); }
-  void GetMatrix(m44 *out)  { *out = TargetMatrix()->back(); }
-
-  vector<m44> *TargetMatrix() {
-    if      (matrix_target == 1) return &modelview_matrix;
-    else if (matrix_target == 2) return &projection_matrix;
-    else FATAL("uknown matrix ", matrix_target);
+  void UseShader(Shader *S) {
+    if (!S) return UpdateShader();
+    if (shader == S || !S->ID) return;
+    ClearDeferred();
+    glUseProgram((shader = S)->ID);
+    GDDebug("Shader=", shader->name);
+    dirty_matrix = dirty_color = true;
+    for (int i=0, s; i<shader->MaxVertexAttrib; i++) {
+      if ((s = shader->unused_attrib_slot[i]) < 0) break;
+      glDisableVertexAttribArray(s);
+    }
+    UpdateVertex();
+    UpdateNormals();
+    UpdateColorVerts();
+    UpdateTexture();
   }
 
   bool VertexPointer(int m, int t, int w, int o, float *verts, int l, int *out, bool dirty, int prim_type) {
@@ -515,73 +414,6 @@ struct OpenGLES2 : public GraphicsDevice, public QOpenGLFunctions {
     GDDebug("NormalPointer");
   }
 
-  void VertexAttribPointer(int slot, const VertexAttribute &attr) { 
-    glVertexAttribPointer(slot, attr.m, attr.t, GL_FALSE, attr.w, Void(long(attr.o)));
-  }
-
-  void UseShader(Shader *S) {
-    if (!S) return UpdateShader();
-    if (shader == S || !S->ID) return;
-    ClearDeferred();
-    glUseProgram((shader = S)->ID);
-    GDDebug("Shader=", shader->name);
-    dirty_matrix = dirty_color = true;
-    for (int i=0, s; i<shader->MaxVertexAttrib; i++) {
-      if ((s = shader->unused_attrib_slot[i]) < 0) break;
-      glDisableVertexAttribArray(s);
-    }
-    UpdateVertex();
-    UpdateNormals();
-    UpdateColorVerts();
-    UpdateTexture();
-  }
-
-  void UpdateShader() {
-    if (cubemap_on && normals_on) UseShader(&shaders->shader_cubenorm);
-    else if          (cubemap_on) UseShader(&shaders->shader_cubemap);
-    else if          (normals_on) UseShader(&shaders->shader_normals);
-    else                          UseShader(&shaders->shader_default);
-  }
-
-  void UpdateColor()  { ClearDeferred(); dirty_color = true;  GDDebug("UpdateColor"); }
-  void UpdateMatrix() { ClearDeferred(); dirty_matrix = true; GDDebug("UpdateMatrix"); }
-  void UpdateMaterial() {
-    ClearDeferred();
-    shader->dirty_material = shaders->shader_cubenorm.dirty_material = shaders->shader_normals.dirty_material = true;
-    GDDebug("UpdateMaterial");
-  }
-
-  void UpdateVertex() {
-    glEnableVertexAttribArray(shader->slot_position);
-    VertexAttribPointer(shader->slot_position, vertex_attr);
-  }
-
-  void UpdateNormals() {
-    bool supports = shader->slot_normal >= 0;
-    if (supports) {
-      if (normals_on) {  glEnableVertexAttribArray(shader->slot_normal); VertexAttribPointer(shader->slot_normal, normal_attr); }
-      else            { glDisableVertexAttribArray(shader->slot_normal); }
-    } else if (normals_on) ERROR("shader doesnt support normals");
-  }
-
-  void UpdateColorVerts() {
-    bool supports = shader->slot_color >= 0;
-    glUniform1i(shader->uniform_coloron, colorverts_on && supports);
-    if (supports) {
-      if (colorverts_on) {  glEnableVertexAttribArray(shader->slot_color); VertexAttribPointer(shader->slot_color, color_attr); }
-      else               { glDisableVertexAttribArray(shader->slot_color); }
-    } else if (colorverts_on) ERROR("shader doesnt support vertex color");
-  }
-
-  void UpdateTexture() {
-    bool supports = shader->slot_tex >= 0;
-    glUniform1i(shader->uniform_texon, texture_on && supports);
-    if (supports) {
-      if (texture_on) {  glEnableVertexAttribArray(shader->slot_tex); VertexAttribPointer(shader->slot_tex, tex_attr); }
-      else            { glDisableVertexAttribArray(shader->slot_tex); }
-    } else if (texture_on && FLAGS_gd_debug) ERROR("shader doesnt support texture");
-  }
-
   void DrawElements(int pt, int np, int it, int o, void *index, int l, int *out, bool dirty) {
     bool input_dirty = dirty;
     if (*out == -1) { glGenBuffers(1, MakeUnsigned(out)); dirty = true; }
@@ -635,47 +467,39 @@ struct OpenGLES2 : public GraphicsDevice, public QOpenGLFunctions {
     GDDebug("ClearDeferred");
   }
 
-  int AddDeferredVertexSpace(int l) {
-    if (l + deferred.vertexbuffer_len > deferred.vertexbuffer_size) ClearDeferred();
-    int ret = deferred.vertexbuffer_len;
-    deferred.vertexbuffer_len += l;
-    CHECK_LE(deferred.vertexbuffer_len, deferred.vertexbuffer_size);
-    return ret;
+  void VertexAttribPointer(int slot, const VertexAttribute &attr) { 
+    glVertexAttribPointer(slot, attr.m, attr.t, GL_FALSE, attr.w, Void(long(attr.o)));
   }
 
-  void PushDirtyState() {
-    if (dirty_matrix) {
-      dirty_matrix = false;
-      m44 m = projection_matrix.back();
-      m.Mult(modelview_matrix.back());
-      if (1)                  glUniformMatrix4fv(shader->uniform_modelviewproj, 1, 0, m[0]);
-      if (1)                  glUniformMatrix4fv(shader->uniform_modelview,     1, 0, modelview_matrix.back()[0]);
-      if (1)                  glUniform3fv      (shader->uniform_campos,        1,    camera_pos);
-      if (invert_view_matrix) glUniformMatrix4fv(shader->uniform_invview,       1, 0, invview_matrix[0]);
-      if (track_model_matrix) glUniformMatrix4fv(shader->uniform_model,         1, 0, model_matrix[0]);
-    }
-    if (dirty_color && shader->uniform_colordefault >= 0) {
-      dirty_color = false;
-      glUniform4fv(shader->uniform_colordefault, 1, default_color.back().x);
-    }
-    if (shader->dirty_material) {
-      glUniform4fv(shader->uniform_material_ambient,  1, material.ambient.x);
-      glUniform4fv(shader->uniform_material_diffuse,  1, material.diffuse.x);
-      glUniform4fv(shader->uniform_material_specular, 1, material.specular.x);
-      glUniform4fv(shader->uniform_material_emission, 1, material.emissive.x);
-    }
-    for (int i=0; i<sizeofarray(light) && i<sizeofarray(shader->dirty_light_pos); i++) {
-      if (shader->dirty_light_pos[i]) {
-        shader->dirty_light_pos[i] = 0;
-        glUniform4fv(shader->uniform_light0_pos, 1, light[i].pos);
-      }
-      if (shader->dirty_light_color[i]) {
-        shader->dirty_light_color[i] = 0;
-        glUniform4fv(shader->uniform_light0_ambient,  1, light[i].color.ambient.x);
-        glUniform4fv(shader->uniform_light0_diffuse,  1, light[i].color.diffuse.x);
-        glUniform4fv(shader->uniform_light0_specular, 1, light[i].color.specular.x);
-      }
-    }
+  void UpdateVertex() {
+    glEnableVertexAttribArray(shader->slot_position);
+    VertexAttribPointer(shader->slot_position, vertex_attr);
+  }
+
+  void UpdateNormals() {
+    bool supports = shader->slot_normal >= 0;
+    if (supports) {
+      if (normals_on) {  glEnableVertexAttribArray(shader->slot_normal); VertexAttribPointer(shader->slot_normal, normal_attr); }
+      else            { glDisableVertexAttribArray(shader->slot_normal); }
+    } else if (normals_on) ERROR("shader doesnt support normals");
+  }
+
+  void UpdateColorVerts() {
+    bool supports = shader->slot_color >= 0;
+    glUniform1i(shader->uniform_coloron, colorverts_on && supports);
+    if (supports) {
+      if (colorverts_on) {  glEnableVertexAttribArray(shader->slot_color); VertexAttribPointer(shader->slot_color, color_attr); }
+      else               { glDisableVertexAttribArray(shader->slot_color); }
+    } else if (colorverts_on) ERROR("shader doesnt support vertex color");
+  }
+
+  void UpdateTexture() {
+    bool supports = shader->slot_tex >= 0;
+    glUniform1i(shader->uniform_texon, texture_on && supports);
+    if (supports) {
+      if (texture_on) {  glEnableVertexAttribArray(shader->slot_tex); VertexAttribPointer(shader->slot_tex, tex_attr); }
+      else            { glDisableVertexAttribArray(shader->slot_tex); }
+    } else if (texture_on && FLAGS_gd_debug) ERROR("shader doesnt support texture");
   }
 };
 #endif // LFL_GLES2
